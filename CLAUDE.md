@@ -33,9 +33,10 @@ dagster-component search <query>                # find by id, name, description,
 dagster-component info <id>                     # show details + URLs
 dagster-component schema <id>                   # show full attribute schema (use when generating YAML!)
 dagster-component schema <id> --format json     # raw schema.json — pipe to jq
-dagster-component add <id>                      # install into current project
+dagster-component add <id>                      # install into current project (file copy)
 dagster-component add <id>@v1.2.0               # install pinned to a tag
 dagster-component add <id>@a1b2c3d              # install pinned to a commit SHA
+dagster-component add <id> --as-package         # via dagster-community-components PyPI pkg (no file copy)
 dagster-component list                          # list installed in current project
 dagster-component list --available              # list all in registry
 dagster-component remove <id>                   # uninstall (only removes CLI-installed dirs)

@@ -403,3 +403,82 @@ def test_inject_schema_comment_idempotent(tmp_path: Path):
     first = yaml.read_text()
     _inject_schema_comment(yaml, component)
     assert yaml.read_text() == first  # not double-injected
+
+
+# ── --as-package flag ─────────────────────────────────────────────────────────
+
+
+def test_cli_add_as_package_writes_stub(tmp_path: Path):
+    """--as-package should write a stub defs.yaml with the dotted type, no file copy."""
+    runner = CliRunner()
+    with patch("dagster_component_cli.cli.Registry") as MockReg, patch(
+        "dagster_component_cli.cli.importlib"
+    ) as mock_importlib, patch(
+        "dagster_component_cli.cli.find_project_root"
+    ) as mock_root:
+        MockReg.return_value = _registry_with({
+            "version": "1.0.0",
+            "components": [
+                {
+                    "id": "postgres_resource",
+                    "name": "PostgreSQL Resource",
+                    "category": "resource",
+                    "description": "Connect to PostgreSQL.",
+                    "component_url": "https://raw.example.com/resources/postgres_resource/component.py",
+                    "schema_url": "https://raw.example.com/resources/postgres_resource/schema.json",
+                    "component_type": "dagster_component_templates.PostgresResourceComponent",
+                }
+            ],
+        })
+        # Pretend the package IS installed so we skip pip install
+        mock_importlib.import_module.return_value = object()
+        mock_root.return_value = tmp_path
+        result = runner.invoke(
+            main,
+            ["add", "postgres_resource", "--as-package", "--auto-install"],
+        )
+    assert result.exit_code == 0, result.output
+    stub = tmp_path / "components" / "resource" / "postgres_resource" / "defs.yaml"
+    assert stub.exists()
+    text = stub.read_text()
+    # Type is rewritten to the published-package namespace
+    assert "dagster_community_components.PostgresResourceComponent" in text
+    # Schema header for autocomplete
+    assert "yaml-language-server" in text
+    # NO files were copied — only the stub yaml + marker should exist
+    assert (stub.parent / ".dg-community.json").exists()
+    assert not (stub.parent / "component.py").exists()
+    assert not (stub.parent / "README.md").exists()
+
+
+def test_cli_add_as_package_marker_records_mode(tmp_path: Path):
+    runner = CliRunner()
+    with patch("dagster_component_cli.cli.Registry") as MockReg, patch(
+        "dagster_component_cli.cli.importlib"
+    ) as mock_importlib, patch(
+        "dagster_component_cli.cli.find_project_root"
+    ) as mock_root:
+        MockReg.return_value = _registry_with({
+            "version": "1.0.0",
+            "components": [
+                {
+                    "id": "postgres_resource",
+                    "name": "PostgreSQL Resource",
+                    "category": "resource",
+                    "component_url": "https://raw.example.com/resources/postgres_resource/component.py",
+                    "schema_url": "https://raw.example.com/resources/postgres_resource/schema.json",
+                    "component_type": "dagster_component_templates.PostgresResourceComponent",
+                }
+            ],
+        })
+        mock_importlib.import_module.return_value = object()
+        mock_root.return_value = tmp_path
+        result = runner.invoke(
+            main, ["add", "postgres_resource", "--as-package", "--auto-install"]
+        )
+    assert result.exit_code == 0
+    marker = tmp_path / "components" / "resource" / "postgres_resource" / ".dg-community.json"
+    import json as _json
+    data = _json.loads(marker.read_text())
+    assert data["mode"] == "as_package"
+    assert data["component_type"].startswith("dagster_community_components.")

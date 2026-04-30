@@ -2,7 +2,10 @@
 
 from __future__ import annotations
 
+import importlib
+import json
 import sys
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -83,6 +86,15 @@ def main(ctx: click.Context, registry_url: Optional[str], refresh: bool) -> None
     show_default=True,
     help="Package manager to use for requirements install.",
 )
+@click.option(
+    "--as-package",
+    is_flag=True,
+    help=(
+        "Install via the dagster-community-components PyPI package instead of "
+        "copying files into the project. Writes a stub defs.yaml that uses "
+        "`type: dagster_community_components.<X>Component`."
+    ),
+)
 @click.pass_context
 def add(
     ctx: click.Context,
@@ -92,15 +104,40 @@ def add(
     no_install: bool,
     auto_install: bool,
     manager: str,
+    as_package: bool,
 ) -> None:
     """Install a component into your project.
 
+    Two modes:
+
+      Default (file-copy):
+        Files land at <project>/components/<category>/<id>/. Self-contained,
+        easy to inspect or modify in-place, no pypi dependency.
+
+      --as-package:
+        Verifies dagster-community-components is installed, then writes a stub
+        defs.yaml that references the component via its dotted Python type.
+        No file copy. Best when you don't want hundreds of vendored files in
+        version control.
+
     Examples:
 
-        dagster-component add s3_parquet_io_manager           # latest
-        dagster-component add s3_parquet_io_manager@v1.2.0    # pinned to a tag
-        dagster-component add one_hot_encoding@a1b2c3d        # pinned to a commit SHA
+        dagster-component add s3_parquet_io_manager                 # latest
+        dagster-component add s3_parquet_io_manager@v1.2.0           # pinned to a tag
+        dagster-component add one_hot_encoding@a1b2c3d               # pinned to a commit SHA
+        dagster-component add postgres_resource --as-package         # use the pypi package
     """
+    if as_package:
+        _add_as_package(
+            ctx,
+            component_id,
+            target_dir=target_dir,
+            force=force,
+            no_install=no_install,
+            auto_install=auto_install,
+            manager=manager,
+        )
+        return
     cid, ref = parse_component_ref(component_id)
     registry: Registry = ctx.obj["registry"]
     component = registry.get(cid)
@@ -567,6 +604,121 @@ def _guess_component_type(component: dict) -> Optional[str]:
     cid = component.get("id", "")
     parts = [p.capitalize() for p in cid.split("_")]
     return f"dagster_component_templates.{''.join(parts)}Component"
+
+
+def _add_as_package(
+    ctx: click.Context,
+    component_id: str,
+    *,
+    target_dir: Optional[str],
+    force: bool,
+    no_install: bool,
+    auto_install: bool,
+    manager: str,
+) -> None:
+    """Install a component via the `dagster-community-components` PyPI package.
+
+    Writes only a stub defs.yaml referencing the component's dotted import path.
+    Verifies (or installs) the umbrella PyPI package as a precondition.
+    """
+    cid, ref = parse_component_ref(component_id)
+    if ref:
+        err.print(
+            "[yellow]⚠[/yellow] --as-package ignores @ref pinning — pin the "
+            "PyPI package version instead with `pip install dagster-community-components==<ver>`."
+        )
+
+    registry: Registry = ctx.obj["registry"]
+    component = registry.get(cid)
+    if not component:
+        err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
+        sys.exit(1)
+
+    component_type = component.get("component_type") or _guess_component_type(component)
+    # Convert from `dagster_component_templates.X` to `dagster_community_components.X`
+    if component_type and component_type.startswith("dagster_component_templates."):
+        component_type = component_type.replace(
+            "dagster_component_templates.", "dagster_community_components.", 1
+        )
+
+    # Check if dagster-community-components is installed
+    try:
+        importlib.import_module("dagster_community_components")
+        installed = True
+    except ImportError:
+        installed = False
+
+    if not installed:
+        console.print(
+            "[yellow]·[/yellow] [bold]dagster-community-components[/bold] is not installed."
+        )
+        if auto_install or click.confirm(
+            "Install it now (pip install dagster-community-components)?", default=True
+        ):
+            rc = install_requirements(["dagster-community-components"], manager=manager)
+            if rc != 0:
+                err.print(
+                    f"[red]✗[/red] pip install failed (exit {rc}). Resolve manually:\n"
+                    f"   pip install dagster-community-components"
+                )
+                sys.exit(1)
+            console.print("[green]✓[/green] Installed dagster-community-components")
+        else:
+            console.print("[yellow]Aborted.[/yellow]")
+            sys.exit(1)
+
+    # Resolve target directory for the stub defs.yaml.
+    project_root = find_project_root()
+    if target_dir:
+        stub_dir = Path(target_dir).resolve()
+    else:
+        stub_dir = (project_root or Path.cwd()) / "components" / component.get(
+            "category", "other"
+        ) / cid
+
+    stub_path = stub_dir / "defs.yaml"
+    if stub_path.exists() and not force:
+        err.print(
+            f"[red]✗[/red] {stub_path} already exists. Use --force to overwrite."
+        )
+        sys.exit(1)
+
+    stub_dir.mkdir(parents=True, exist_ok=True)
+
+    schema_url = component.get("schema_url") or ""
+    body_lines: list[str] = []
+    if schema_url:
+        body_lines.append(f"# yaml-language-server: $schema={schema_url}")
+    body_lines.append(f"type: {component_type}")
+    body_lines.append("attributes:")
+    body_lines.append(f"  asset_name: {cid}  # TODO: change to your asset name")
+    body_lines.append("  # See `dagster-component schema " + cid + "` for all fields,")
+    body_lines.append(f"  # or {component.get('readme_url') or 'the README'} for full docs.")
+    stub_path.write_text("\n".join(body_lines) + "\n")
+
+    # Write a marker so list/remove can find it
+    marker = stub_dir / ".dg-community.json"
+    marker.write_text(
+        json.dumps(
+            {
+                "id": cid,
+                "name": component.get("name"),
+                "category": component.get("category"),
+                "mode": "as_package",
+                "component_type": component_type,
+                "registry_url": component.get("component_url"),
+                "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+            },
+            indent=2,
+        )
+        + "\n"
+    )
+
+    console.print(f"[green]✓[/green] Wrote {stub_path}")
+    console.print(
+        f"\nThe component is referenced as [bold]{component_type}[/bold] — "
+        "no files were copied. Run `dagster dev` to load it."
+    )
 
 
 def _inject_schema_comment(
