@@ -1,0 +1,44 @@
+name: publish
+
+# Publishes to PyPI when you push a tag like v0.1.0.
+# Requires a "PYPI_API_TOKEN" repo secret with a PyPI token (https://pypi.org/manage/account/token/).
+# Or, switch to "trusted publishing" — see https://docs.pypi.org/trusted-publishers/
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    permissions:
+      # Required for PyPI trusted publishing (id-token).
+      id-token: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install build tools
+        run: pip install --upgrade build twine
+
+      - name: Build sdist + wheel
+        run: python -m build
+
+      - name: Verify metadata
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        # Trusted publishing — preferred; configure on PyPI side.
+        # Falls back to API token if PYPI_API_TOKEN is set.
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          # If you're using API tokens instead of trusted publishing,
+          # uncomment these and set the secret:
+          # password: ${{ secrets.PYPI_API_TOKEN }}
+          skip-existing: true
