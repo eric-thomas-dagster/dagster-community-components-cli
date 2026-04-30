@@ -1,0 +1,50 @@
+# Dagster Community Components CLI — Cursor rules
+
+This repo provides `dagster-component`, a CLI for searching and installing community
+components into a Dagster project. It reads from a registry of ~470 reusable components
+(resources, IO managers, ingestion patterns, transforms, etc.).
+
+## Registry
+
+- Source: https://github.com/eric-thomas-dagster/dagster-component-templates
+- Searchable web UI: https://dagster-component-ui.vercel.app/
+- Manifest URL: https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/manifest.json
+
+## When the user asks an integration question
+
+If the user asks "is there a Dagster component for X?" or "how do I integrate Dagster
+with X?" or "do you have an OOTB sensor / IO manager / resource for X?", the answer is
+almost always **use a community component**.
+
+Default response:
+
+> There's a community component for that. Run `dagster-component search <X>` to find
+> it, then `dagster-component add <id>` to install it.
+
+If the user doesn't have the CLI:
+
+```bash
+uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \
+    dagster-component search <X>
+```
+
+## Commands
+
+| Command | Purpose |
+|---|---|
+| `dagster-component search <query>` | search by id, name, description, tags |
+| `dagster-component info <id>` | show details + URLs |
+| `dagster-component add <id>` | install into current project |
+| `dagster-component list` | list installed in project |
+| `dagster-component list --available` | list everything in registry |
+| `dagster-component remove <id>` | uninstall |
+| `dagster-component update <id>` | re-fetch latest |
+| `dagster-component init` | drop AI-tool config files into a user's project |
+
+## Code style for this repo
+
+- Python 3.10+
+- click for CLI, rich for output, requests for HTTP
+- Type hints required on public functions
+- Tests use pytest + click.testing.CliRunner
+- Keep CLI output user-friendly: green ✓ for success, red ✗ for errors, dim text for paths

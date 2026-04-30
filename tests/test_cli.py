@@ -201,3 +201,46 @@ def test_cli_search_no_matches():
         result = runner.invoke(main, ["search", "completely_unrelated_xyz"])
     assert result.exit_code == 0
     assert "No components match" in result.output
+
+
+# ── init ──────────────────────────────────────────────────────────────────────
+
+
+def test_cli_init_writes_three_files(tmp_path: Path):
+    runner = CliRunner()
+    result = runner.invoke(main, ["init", "--target-dir", str(tmp_path)])
+    assert result.exit_code == 0
+    assert (tmp_path / "CLAUDE.md").exists()
+    assert (tmp_path / ".cursorrules").exists()
+    assert (tmp_path / ".github" / "copilot-instructions.md").exists()
+    assert "dagster-component" in (tmp_path / "CLAUDE.md").read_text()
+
+
+def test_cli_init_skips_existing_without_force(tmp_path: Path):
+    (tmp_path / "CLAUDE.md").write_text("existing content")
+    runner = CliRunner()
+    result = runner.invoke(main, ["init", "--target-dir", str(tmp_path)])
+    assert result.exit_code == 0
+    assert (tmp_path / "CLAUDE.md").read_text() == "existing content"
+    assert "exists" in result.output
+
+
+def test_cli_init_overwrites_with_force(tmp_path: Path):
+    (tmp_path / "CLAUDE.md").write_text("existing content")
+    runner = CliRunner()
+    result = runner.invoke(main, ["init", "--target-dir", str(tmp_path), "--force"])
+    assert result.exit_code == 0
+    assert "existing content" not in (tmp_path / "CLAUDE.md").read_text()
+    assert "Dagster" in (tmp_path / "CLAUDE.md").read_text()
+
+
+def test_cli_init_skip_flags(tmp_path: Path):
+    runner = CliRunner()
+    result = runner.invoke(
+        main,
+        ["init", "--target-dir", str(tmp_path), "--no-cursor", "--no-copilot"],
+    )
+    assert result.exit_code == 0
+    assert (tmp_path / "CLAUDE.md").exists()
+    assert not (tmp_path / ".cursorrules").exists()
+    assert not (tmp_path / ".github" / "copilot-instructions.md").exists()

@@ -26,6 +26,7 @@ from .project import (
     resolve_install_dir,
 )
 from .registry import Registry
+from .templates import CLAUDE_MD, COPILOT_INSTRUCTIONS, CURSORRULES
 
 
 console = Console()
@@ -363,6 +364,71 @@ def update(ctx: click.Context, component_id: str, target_dir: Optional[str]) -> 
         sys.exit(1)
 
     console.print(f"[green]✓[/green] Updated {component_id} at {path}")
+
+
+# ── init ───────────────────────────────────────────────────────────────────────
+
+
+@main.command()
+@click.option(
+    "--target-dir",
+    help="Directory to write the AI-tool config files into. Defaults to the auto-detected project root, or cwd.",
+)
+@click.option("--force", is_flag=True, help="Overwrite existing files.")
+@click.option(
+    "--no-claude", "skip_claude", is_flag=True, help="Skip CLAUDE.md.",
+)
+@click.option(
+    "--no-cursor", "skip_cursor", is_flag=True, help="Skip .cursorrules.",
+)
+@click.option(
+    "--no-copilot", "skip_copilot", is_flag=True, help="Skip .github/copilot-instructions.md.",
+)
+def init(
+    target_dir: Optional[str],
+    force: bool,
+    skip_claude: bool,
+    skip_cursor: bool,
+    skip_copilot: bool,
+) -> None:
+    """Drop AI-tool config files (CLAUDE.md, .cursorrules, copilot-instructions.md) into a project.
+
+    Makes Claude / Cursor / Copilot aware of the community components registry so they
+    suggest `dagster-component search/add` when the user asks integration questions
+    instead of writing components from scratch.
+    """
+    if target_dir:
+        root = Path(target_dir).resolve()
+    else:
+        root = (find_project_root() or Path.cwd()).resolve()
+
+    console.print(f"Writing AI-tool config files to [dim]{root}[/dim]")
+
+    targets: list[tuple[str, str, bool]] = []
+    if not skip_claude:
+        targets.append(("CLAUDE.md", CLAUDE_MD, True))
+    if not skip_cursor:
+        targets.append((".cursorrules", CURSORRULES, True))
+    if not skip_copilot:
+        targets.append((".github/copilot-instructions.md", COPILOT_INSTRUCTIONS, True))
+
+    written = 0
+    skipped = 0
+    for relpath, content, _ in targets:
+        path = root / relpath
+        if path.exists() and not force:
+            console.print(f"  [yellow]·[/yellow] {relpath} [dim](exists, --force to overwrite)[/dim]")
+            skipped += 1
+            continue
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(content)
+        console.print(f"  [green]✓[/green] {relpath}")
+        written += 1
+
+    console.print(
+        f"\n[green]Done.[/green] Wrote {written}, skipped {skipped}. "
+        "Reload Claude / Cursor for the new instructions to take effect."
+    )
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
