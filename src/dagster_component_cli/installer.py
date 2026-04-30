@@ -8,9 +8,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Iterable
 
-from .registry import Registry, fetch_file
+from .registry import fetch_file
 
 
 # Files that may be present in a component directory in the registry.

@@ -6,7 +6,7 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Iterable, Optional
+from typing import Optional
 
 import requests
 

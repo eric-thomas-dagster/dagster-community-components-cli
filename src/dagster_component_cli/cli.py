@@ -15,7 +15,6 @@ from .installer import (
     InstallError,
     fetch_component_files,
     install_requirements,
-    parse_requirements,
     remove_component,
     write_files,
     write_marker,
@@ -450,7 +449,7 @@ def _print_next_steps(component: dict, install_dir: Path) -> None:
             console.print()
             console.print("[dim]" + snippet + "[/dim]")
     elif component_type:
-        console.print(f"  Add to your defs.yaml:")
+        console.print("  Add to your defs.yaml:")
         console.print(f"    [dim]type:[/dim] {component_type}")
 
     readme_path = install_dir / "README.md"

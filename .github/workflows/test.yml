@@ -6,10 +6,16 @@ on:
   pull_request:
     branches: [main]
 
+# Opt into Node.js 24 for the JavaScript-action runtime (silences the Node 20
+# deprecation warnings). Forward-compat for when GitHub flips the default.
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
 jobs:
   test:
     runs-on: ubuntu-latest
     strategy:
+      fail-fast: false
       matrix:
         python-version: ["3.10", "3.11", "3.12"]
 
