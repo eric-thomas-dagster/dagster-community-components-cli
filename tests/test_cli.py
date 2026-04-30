@@ -243,3 +243,163 @@ def test_cli_init_skip_flags(tmp_path: Path):
     assert (tmp_path / "CLAUDE.md").exists()
     assert not (tmp_path / ".cursorrules").exists()
     assert not (tmp_path / ".github" / "copilot-instructions.md").exists()
+
+
+# ── id@ref pinning ────────────────────────────────────────────────────────────
+
+
+def test_parse_component_ref_no_ref():
+    from dagster_component_cli.installer import parse_component_ref
+    assert parse_component_ref("postgres_resource") == ("postgres_resource", None)
+
+
+def test_parse_component_ref_with_tag():
+    from dagster_component_cli.installer import parse_component_ref
+    assert parse_component_ref("s3_parquet_io_manager@v1.2.0") == (
+        "s3_parquet_io_manager",
+        "v1.2.0",
+    )
+
+
+def test_parse_component_ref_with_sha():
+    from dagster_component_cli.installer import parse_component_ref
+    assert parse_component_ref("one_hot_encoding@a1b2c3d") == (
+        "one_hot_encoding",
+        "a1b2c3d",
+    )
+
+
+def test_parse_component_ref_strips_whitespace():
+    from dagster_component_cli.installer import parse_component_ref
+    assert parse_component_ref("  postgres_resource @ v1.2.0 ") == (
+        "postgres_resource",
+        "v1.2.0",
+    )
+
+
+def test_file_url_for_no_ref_returns_main():
+    component = {
+        "id": "x",
+        "component_url": "https://raw.githubusercontent.com/eric/repo/main/path/component.py",
+    }
+    assert file_url_for(component, "schema.json") == (
+        "https://raw.githubusercontent.com/eric/repo/main/path/schema.json"
+    )
+
+
+def test_file_url_for_with_ref_swaps_main():
+    component = {
+        "id": "x",
+        "component_url": "https://raw.githubusercontent.com/eric/repo/main/path/component.py",
+    }
+    assert file_url_for(component, "schema.json", ref="v1.2.0") == (
+        "https://raw.githubusercontent.com/eric/repo/v1.2.0/path/schema.json"
+    )
+
+
+def test_file_url_for_only_swaps_first_main():
+    """Only the branch segment should be swapped, not literal 'main' in any subpath."""
+    component = {
+        "id": "x",
+        "component_url": "https://raw.githubusercontent.com/eric/repo/main/main_pipeline/component.py",
+    }
+    out = file_url_for(component, "schema.json", ref="v1.2.0")
+    assert out == "https://raw.githubusercontent.com/eric/repo/v1.2.0/main_pipeline/schema.json"
+
+
+# ── schema subcommand ─────────────────────────────────────────────────────────
+
+
+def test_cli_schema_pretty():
+    runner = CliRunner()
+    fake_schema = {
+        "name": "Postgres Resource",
+        "description": "Connect to PostgreSQL.",
+        "attributes": {
+            "host": {"type": "string", "required": True, "description": "Database host"},
+            "port": {
+                "type": "integer",
+                "required": False,
+                "default": 5432,
+                "description": "Port number",
+            },
+        },
+    }
+    import json as _json
+    with patch("dagster_component_cli.cli.Registry") as MockReg, patch(
+        "dagster_component_cli.cli.fetch_file"
+    ) as mock_fetch:
+        MockReg.return_value = _registry_with(SAMPLE_MANIFEST)
+        mock_fetch.return_value = _json.dumps(fake_schema).encode("utf-8")
+        result = runner.invoke(main, ["schema", "postgres_resource"])
+    assert result.exit_code == 0
+    assert "Postgres Resource" in result.output
+    assert "host" in result.output
+    assert "port" in result.output
+
+
+def test_cli_schema_json_format():
+    runner = CliRunner()
+    fake_schema = {"name": "X", "attributes": {}}
+    import json as _json
+    with patch("dagster_component_cli.cli.Registry") as MockReg, patch(
+        "dagster_component_cli.cli.fetch_file"
+    ) as mock_fetch:
+        MockReg.return_value = _registry_with(SAMPLE_MANIFEST)
+        mock_fetch.return_value = _json.dumps(fake_schema).encode("utf-8")
+        result = runner.invoke(main, ["schema", "postgres_resource", "--format", "json"])
+    assert result.exit_code == 0
+    parsed = _json.loads(result.output)
+    assert parsed["name"] == "X"
+
+
+def test_cli_schema_not_found():
+    runner = CliRunner()
+    with patch("dagster_component_cli.cli.Registry") as MockReg:
+        MockReg.return_value = _registry_with(SAMPLE_MANIFEST)
+        result = runner.invoke(main, ["schema", "does_not_exist"])
+    assert result.exit_code == 1
+
+
+# ── _inject_schema_comment ────────────────────────────────────────────────────
+
+
+def test_inject_schema_comment_prepends(tmp_path: Path):
+    from dagster_component_cli.cli import _inject_schema_comment
+    yaml = tmp_path / "example.yaml"
+    yaml.write_text("type: foo.Bar\nattributes:\n  x: 1\n")
+    component = {
+        "id": "x",
+        "schema_url": "https://raw.githubusercontent.com/eric/repo/main/path/schema.json",
+    }
+    _inject_schema_comment(yaml, component)
+    text = yaml.read_text()
+    assert text.startswith("# yaml-language-server: $schema=")
+    assert "main/path/schema.json" in text
+    assert "type: foo.Bar" in text  # original preserved
+
+
+def test_inject_schema_comment_with_ref(tmp_path: Path):
+    from dagster_component_cli.cli import _inject_schema_comment
+    yaml = tmp_path / "example.yaml"
+    yaml.write_text("type: foo.Bar\n")
+    component = {
+        "id": "x",
+        "schema_url": "https://raw.githubusercontent.com/eric/repo/main/path/schema.json",
+    }
+    _inject_schema_comment(yaml, component, ref="v1.2.0")
+    assert "v1.2.0/path/schema.json" in yaml.read_text()
+
+
+def test_inject_schema_comment_idempotent(tmp_path: Path):
+    from dagster_component_cli.cli import _inject_schema_comment
+    yaml = tmp_path / "example.yaml"
+    yaml.write_text("type: foo.Bar\n")
+    component = {
+        "id": "x",
+        "schema_url": "https://example.com/schema.json",
+    }
+    _inject_schema_comment(yaml, component)
+    first = yaml.read_text()
+    _inject_schema_comment(yaml, component)
+    assert yaml.read_text() == first  # not double-injected

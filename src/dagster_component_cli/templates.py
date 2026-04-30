@@ -10,25 +10,62 @@ CLAUDE_MD = """\
 This project can pull from the Dagster community components registry.
 
 - **Registry:** <https://dagster-component-ui.vercel.app/>
-- **CLI:** `dagster-component` (this project; install via `pip install dagster-community-components-cli`)
+- **CLI:** `dagster-component` (install via `pip install dagster-community-components-cli` or run with `uvx`)
 
 ## When to use community components
 
 If you need an integration, sensor, IO manager, transform, or asset pattern that
-isn't already in this project — first check the registry. There are ~470 community
+isn't already in this project — check the registry first. There are ~470 community
 components covering most common services and patterns.
 
 ```bash
-dagster-component search <keyword>           # find what's available
-dagster-component info <id>                  # see details before installing
-dagster-component add <id>                   # install into this project
-dagster-component list                       # what's already installed here
+dagster-component search <keyword>             # find what's available
+dagster-component info <id>                    # see details + URLs
+dagster-component schema <id>                  # show full attribute schema (use this when writing YAML)
+dagster-component add <id>                     # install into this project
+dagster-component add <id>@v1.2.0              # install pinned to a tag
+dagster-component list                         # what's already installed here
 ```
 
 `add` auto-detects this project's root and installs to `components/<category>/<id>/`,
 including the component's pip dependencies. Each install drops a `.dg-community.json`
 marker so the CLI can later list / update / remove only its own installs without
 touching hand-written code.
+
+## Generating YAML for a component
+
+When you (an AI assistant) write component YAML for the user, fetch the schema first
+so the YAML reflects real fields, types, and requireds — not guesses:
+
+```bash
+dagster-component schema <id>                  # human-readable
+dagster-component schema <id> --format json    # for piping into jq, etc.
+```
+
+After `add`, the installed `example.yaml` gets a `# yaml-language-server: $schema=<url>`
+header prepended automatically. The YAML language server (VSCode, Cursor, Neovim with
+yamlls) uses this to give the user **autocomplete + hover docs + validation** for that
+component's fields — with no plugin config and no local server. Tell users to install
+the YAML language server in their editor if they want this; it's the highest-leverage
+editor integration available.
+
+## Reading from the registry without the CLI
+
+The registry is static GitHub raw content — no auth, no server. If you can't run the
+CLI, you can fetch directly:
+
+- **Full manifest:** https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/manifest.json
+- **Per-component schema / README:** swap `component.py` in the manifest entry's `component_url` for `schema.json` or `README.md`.
+
+## Version pinning (`id@ref`)
+
+Component attributes can change over time. For production, prefer pinning:
+
+| Spec | Resolves to |
+|---|---|
+| `postgres_resource` | latest (HEAD of main) |
+| `postgres_resource@v1.2.0` | tag `v1.2.0` |
+| `postgres_resource@a1b2c3d` | commit `a1b2c3d` |
 
 ## Common categories
 

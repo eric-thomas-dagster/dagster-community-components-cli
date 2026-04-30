@@ -29,17 +29,51 @@ uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-componen
 ## Commands you should know
 
 ```bash
-dagster-component search <query>             # find by id, name, description, tags
-dagster-component info <id>                  # show component details + URLs before installing
-dagster-component add <id>                   # install into current project
-dagster-component add <id> --no-install      # skip pip install of dependencies
-dagster-component add <id> --target-dir DIR  # install to a non-default location
-dagster-component list                       # list installed in current project
-dagster-component list --available           # list all in registry
-dagster-component remove <id>                # uninstall (only removes CLI-installed dirs)
-dagster-component update <id>                # re-fetch latest version from registry
-dagster-component init                       # drop AI-tool instruction files into a user's project
+dagster-component search <query>                # find by id, name, description, tags
+dagster-component info <id>                     # show details + URLs
+dagster-component schema <id>                   # show full attribute schema (use when generating YAML!)
+dagster-component schema <id> --format json     # raw schema.json — pipe to jq
+dagster-component add <id>                      # install into current project
+dagster-component add <id>@v1.2.0               # install pinned to a tag
+dagster-component add <id>@a1b2c3d              # install pinned to a commit SHA
+dagster-component list                          # list installed in current project
+dagster-component list --available              # list all in registry
+dagster-component remove <id>                   # uninstall (only removes CLI-installed dirs)
+dagster-component update <id>[@<ref>]           # re-fetch / repin
+dagster-component init                          # drop AI-tool instruction files into a user's project
 ```
+
+## Generating component YAML
+
+When a user asks to use a component, the high-quality flow is:
+
+1. **Check the schema first** — `dagster-component schema <id>` (or `WebFetch` the `schema_url` from the manifest). This gives authoritative field names, types, requireds, defaults, descriptions.
+2. **Generate YAML based on the schema**, not guesses.
+3. **Install with the CLI** so the project gets the schema-aware autocomplete header injected automatically.
+
+`add` automatically prepends a `# yaml-language-server: $schema=<url>` comment to the installed `example.yaml`. The YAML language server (VSCode YAML extension, Cursor, Neovim's yamlls) reads this and provides autocomplete + hover docs + schema validation in the user's editor — **no plugin config, no local server**. Recommend this to users.
+
+## Reading from the registry without the CLI
+
+If the CLI isn't installed and `uvx` isn't an option, you can also read directly:
+
+- **Manifest:** `WebFetch` https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/manifest.json — gives you all components, their categories, tags, URLs.
+- **Schema for any component:** `WebFetch` `<component>/schema.json` (URL pattern: replace `component.py` with `schema.json` in the manifest entry's `component_url`).
+- **README for any component:** same pattern, `README.md`.
+
+This is **all static GitHub raw content** — no auth, no server.
+
+## Version pinning (`id@ref` syntax)
+
+Components evolve over time. For production, prefer pinning:
+
+| Spec | Resolves to |
+|---|---|
+| `postgres_resource` | `main` (latest) |
+| `postgres_resource@v1.2.0` | tag `v1.2.0` |
+| `postgres_resource@a1b2c3d` | commit `a1b2c3d` |
+
+The `.dg-community.json` marker records which ref was installed, so future tooling can detect drift between pinned and latest.
 
 ## Categories in the registry
 

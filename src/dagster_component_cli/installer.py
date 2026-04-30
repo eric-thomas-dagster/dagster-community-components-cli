@@ -8,6 +8,7 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
+from typing import Optional
 
 from .registry import fetch_file
 
@@ -29,34 +30,61 @@ class InstallError(Exception):
     pass
 
 
-def file_url_for(component: dict, filename: str) -> str:
+def parse_component_ref(spec: str) -> tuple[str, Optional[str]]:
+    """Split an `id@ref` spec into (id, ref).
+
+    Examples:
+        "postgres_resource"             -> ("postgres_resource", None)
+        "s3_parquet_io_manager@v1.2.0"  -> ("s3_parquet_io_manager", "v1.2.0")
+        "one_hot_encoding@a1b2c3d"      -> ("one_hot_encoding", "a1b2c3d")
+    """
+    if "@" in spec:
+        cid, ref = spec.split("@", 1)
+        return cid.strip(), ref.strip() or None
+    return spec.strip(), None
+
+
+def file_url_for(component: dict, filename: str, ref: Optional[str] = None) -> str:
     """Build the raw-content URL for a file inside a component directory.
 
     The manifest has `<file>_url` for component.py, README.md, etc. — but we
     can't rely on every file being listed. Instead, derive the URL from the
     `component_url` (which we know exists) by swapping the trailing filename.
+
+    If `ref` is provided, the `/main/` segment in the URL is replaced with
+    `/<ref>/` so files are pulled from the pinned commit / tag / branch.
     """
     base = component.get("component_url")
     if not base:
         raise InstallError(f"Component '{component.get('id')}' has no component_url in manifest")
+    if ref:
+        base = base.replace("/main/", f"/{ref}/", 1)
     # base ends in `.../component.py` — strip it, append the requested filename
     prefix = base.rsplit("/", 1)[0]
     return f"{prefix}/{filename}"
 
 
-def fetch_component_files(component: dict) -> dict[str, bytes]:
-    """Download every known file for a component. Returns {filename: bytes}."""
+def fetch_component_files(
+    component: dict, *, ref: Optional[str] = None
+) -> dict[str, bytes]:
+    """Download every known file for a component. Returns {filename: bytes}.
+
+    If `ref` is provided, files are pulled from that commit / tag / branch
+    instead of `main`.
+    """
     out: dict[str, bytes] = {}
     for filename in COMPONENT_FILES:
-        url = file_url_for(component, filename)
+        url = file_url_for(component, filename, ref=ref)
         try:
             out[filename] = fetch_file(url)
         except Exception:
             # File doesn't exist for this component — skip
             continue
     if "component.py" not in out:
+        ref_msg = f" at ref '{ref}'" if ref else ""
         raise InstallError(
-            f"Could not fetch component.py for '{component['id']}' — registry may be stale"
+            f"Could not fetch component.py for '{component['id']}'{ref_msg} — "
+            f"the registry may be stale or the ref may not exist"
         )
     return out
 
@@ -78,16 +106,20 @@ def write_files(target_dir: Path, files: dict[str, bytes], *, force: bool = Fals
     return written
 
 
-def write_marker(target_dir: Path, component: dict) -> Path:
+def write_marker(
+    target_dir: Path, component: dict, *, ref: Optional[str] = None
+) -> Path:
     """Write a marker file recording install metadata.
 
-    Used by `dagster-component list` to detect components installed by us.
+    Used by `dagster-component list` to detect components installed by us, and
+    by future `outdated` tooling to compare a pinned ref against latest.
     """
     marker = target_dir / ".dg-community.json"
     payload = {
         "id": component.get("id"),
         "name": component.get("name"),
         "category": component.get("category"),
+        "ref": ref or "main",
         "version": component.get("version", "1.0.0"),
         "registry_url": component.get("component_url"),
         "installed_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),

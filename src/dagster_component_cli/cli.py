@@ -14,7 +14,9 @@ from . import __version__
 from .installer import (
     InstallError,
     fetch_component_files,
+    file_url_for,
     install_requirements,
+    parse_component_ref,
     remove_component,
     write_files,
     write_marker,
@@ -24,7 +26,7 @@ from .project import (
     installed_components,
     resolve_install_dir,
 )
-from .registry import Registry
+from .registry import Registry, fetch_file
 from .templates import CLAUDE_MD, COPILOT_INSTRUCTIONS, CURSORRULES
 
 
@@ -93,13 +95,18 @@ def add(
 ) -> None:
     """Install a component into your project.
 
-    Example: dagster-component add s3_parquet_io_manager
+    Examples:
+
+        dagster-component add s3_parquet_io_manager           # latest
+        dagster-component add s3_parquet_io_manager@v1.2.0    # pinned to a tag
+        dagster-component add one_hot_encoding@a1b2c3d        # pinned to a commit SHA
     """
+    cid, ref = parse_component_ref(component_id)
     registry: Registry = ctx.obj["registry"]
-    component = registry.get(component_id)
+    component = registry.get(cid)
     if not component:
-        err.print(f"[red]✗[/red] Component not found: [bold]{component_id}[/bold]")
-        suggestions = registry.search(component_id)[:5]
+        err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
+        suggestions = registry.search(cid)[:5]
         if suggestions:
             err.print("\nDid you mean:")
             for s in suggestions:
@@ -109,14 +116,15 @@ def add(
     project_root = find_project_root()
     install_dir = resolve_install_dir(project_root, component, target_dir=target_dir)
 
-    console.print(f"[green]✓[/green] Found [bold]{component_id}[/bold] in the registry")
+    pin_label = f"[bold]{cid}[/bold]" + (f" [dim]@ {ref}[/dim]" if ref else "")
+    console.print(f"[green]✓[/green] Found {pin_label} in the registry")
     if project_root:
         console.print(f"[green]✓[/green] Detected project at [dim]{project_root}[/dim]")
     console.print(f"[green]✓[/green] Will install to: [dim]{install_dir}[/dim]")
 
-    # Fetch files
+    # Fetch files (at the pinned ref if specified)
     try:
-        files = fetch_component_files(component)
+        files = fetch_component_files(component, ref=ref)
     except InstallError as e:
         err.print(f"[red]✗[/red] {e}")
         sys.exit(1)
@@ -143,10 +151,15 @@ def add(
         console.print("[yellow]Aborted.[/yellow]")
         sys.exit(1)
 
-    # Write files + marker
+    # Write files + marker (records pinned ref so future tooling can compare)
     try:
         written = write_files(install_dir, files, force=force)
-        write_marker(install_dir, component)
+        write_marker(install_dir, component, ref=ref)
+        # Inject yaml-language-server schema link into example.yaml so editors
+        # give autocomplete + validation against the component's schema.json
+        # without any plugin or local server.
+        if "example.yaml" in files and "schema.json" in files:
+            _inject_schema_comment(install_dir / "example.yaml", component, ref=ref)
     except InstallError as e:
         err.print(f"[red]✗[/red] {e}")
         sys.exit(1)
@@ -207,11 +220,15 @@ def search(ctx: click.Context, query: str, category: Optional[str], limit: int) 
 @click.argument("component_id")
 @click.pass_context
 def info(ctx: click.Context, component_id: str) -> None:
-    """Show details for a registry component (description, deps, files)."""
+    """Show details for a registry component (description, deps, files).
+
+    Accepts `id@ref` to display URLs at a specific commit / tag / branch.
+    """
+    cid, ref = parse_component_ref(component_id)
     registry: Registry = ctx.obj["registry"]
-    c = registry.get(component_id)
+    c = registry.get(cid)
     if not c:
-        err.print(f"[red]✗[/red] Component not found: [bold]{component_id}[/bold]")
+        err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
         sys.exit(1)
 
     console.print(f"\n[bold cyan]{c.get('id')}[/bold cyan]  [dim]({c.get('category')})[/dim]")
@@ -221,10 +238,82 @@ def info(ctx: click.Context, component_id: str) -> None:
     if c.get("tags"):
         console.print(f"\n[dim]Tags:[/dim] {', '.join(c['tags'])}")
 
-    console.print("\n[dim]URLs:[/dim]")
+    console.print(f"\n[dim]Ref:[/dim] {ref or 'main'}")
+    console.print("[dim]URLs:[/dim]")
     for key in ("readme_url", "component_url", "schema_url", "example_url", "requirements_url"):
-        if c.get(key):
-            console.print(f"  {key}: [dim]{c[key]}[/dim]")
+        url = c.get(key)
+        if url:
+            if ref:
+                url = url.replace("/main/", f"/{ref}/", 1)
+            console.print(f"  {key}: [dim]{url}[/dim]")
+
+
+# ── schema ─────────────────────────────────────────────────────────────────────
+
+
+@main.command()
+@click.argument("component_id")
+@click.option(
+    "--format",
+    "fmt",
+    type=click.Choice(["json", "pretty"]),
+    default="pretty",
+    show_default=True,
+    help="Output format. 'json' is jq-friendly; 'pretty' is human-readable.",
+)
+@click.pass_context
+def schema(ctx: click.Context, component_id: str, fmt: str) -> None:
+    """Print a component's attribute schema (the contents of its schema.json).
+
+    Useful for AI coding assistants generating YAML — pipe to your favorite
+    JSON tool, or just read it. Accepts `id@ref` to fetch the schema at a
+    specific commit / tag / branch.
+
+        dagster-component schema postgres_resource | jq .attributes
+        dagster-component schema s3_parquet_io_manager@v1.2.0
+    """
+    import json as _json
+
+    cid, ref = parse_component_ref(component_id)
+    registry: Registry = ctx.obj["registry"]
+    c = registry.get(cid)
+    if not c:
+        err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
+        sys.exit(1)
+    try:
+        url = file_url_for(c, "schema.json", ref=ref)
+        raw = fetch_file(url)
+        data = _json.loads(raw)
+    except Exception as e:
+        err.print(f"[red]✗[/red] Could not fetch schema for {cid}: {e}")
+        sys.exit(1)
+
+    if fmt == "json":
+        click.echo(_json.dumps(data, indent=2))
+        return
+
+    # Pretty mode
+    console.print(f"\n[bold cyan]{data.get('name', cid)}[/bold cyan]  [dim]({cid})[/dim]")
+    if data.get("description"):
+        console.print(data["description"])
+    attrs = data.get("attributes", {}) or {}
+    if attrs:
+        console.print(f"\n[bold]Attributes ({len(attrs)})[/bold]")
+        table = Table(show_lines=False)
+        table.add_column("Field", style="cyan", no_wrap=True)
+        table.add_column("Type", style="magenta")
+        table.add_column("Required", style="yellow")
+        table.add_column("Default", style="dim")
+        table.add_column("Description")
+        for name, spec in attrs.items():
+            table.add_row(
+                name,
+                str(spec.get("type", "?")),
+                "yes" if spec.get("required") else "",
+                "" if spec.get("default") in (None, "null") else str(spec.get("default")),
+                (spec.get("description") or "")[:80],
+            )
+        console.print(table)
 
 
 # ── list ───────────────────────────────────────────────────────────────────────
@@ -337,32 +426,43 @@ def remove(ctx: click.Context, component_id: str, target_dir: Optional[str], yes
 @click.option("--target-dir", help="Path to the component directory (skips auto-locate).")
 @click.pass_context
 def update(ctx: click.Context, component_id: str, target_dir: Optional[str]) -> None:
-    """Re-fetch a component's files from the registry, overwriting in place."""
+    """Re-fetch a component's files from the registry, overwriting in place.
+
+    Accepts `id@ref` to bump or change the pinned ref:
+
+        dagster-component update postgres_resource              # → main
+        dagster-component update postgres_resource@v1.3.0        # → bump pin
+    """
+    cid, ref = parse_component_ref(component_id)
     registry: Registry = ctx.obj["registry"]
-    component = registry.get(component_id)
+    component = registry.get(cid)
     if not component:
-        err.print(f"[red]✗[/red] Component not found: [bold]{component_id}[/bold]")
+        err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
         sys.exit(1)
 
     if target_dir:
         path = Path(target_dir).resolve()
     else:
         project_root = find_project_root() or Path.cwd()
-        matches = [c for c in installed_components(project_root) if c.get("id") == component_id]
+        matches = [c for c in installed_components(project_root) if c.get("id") == cid]
         if not matches:
-            err.print(f"[red]✗[/red] '{component_id}' is not installed in this project.")
+            err.print(f"[red]✗[/red] '{cid}' is not installed in this project.")
             sys.exit(1)
         path = project_root / matches[0]["_path"]
 
     try:
-        files = fetch_component_files(component)
+        files = fetch_component_files(component, ref=ref)
         write_files(path, files, force=True)
-        write_marker(path, component)
+        write_marker(path, component, ref=ref)
+        if "example.yaml" in files and "schema.json" in files:
+            _inject_schema_comment(path / "example.yaml", component, ref=ref)
     except InstallError as e:
         err.print(f"[red]✗[/red] {e}")
         sys.exit(1)
 
-    console.print(f"[green]✓[/green] Updated {component_id} at {path}")
+    console.print(
+        f"[green]✓[/green] Updated {cid}{('@' + ref) if ref else ''} at {path}"
+    )
 
 
 # ── init ───────────────────────────────────────────────────────────────────────
@@ -467,6 +567,31 @@ def _guess_component_type(component: dict) -> Optional[str]:
     cid = component.get("id", "")
     parts = [p.capitalize() for p in cid.split("_")]
     return f"dagster_component_templates.{''.join(parts)}Component"
+
+
+def _inject_schema_comment(
+    yaml_path: Path, component: dict, *, ref: Optional[str] = None
+) -> None:
+    """Prepend a `yaml-language-server: $schema=<url>` comment to a YAML file.
+
+    This makes editors with the YAML language server (VSCode YAML extension,
+    Cursor, Neovim's nvim-lspconfig with yamlls) provide autocomplete, hover
+    docs, and validation against the component's schema.json — with no plugin
+    config and no local server. The schema URL is fetched directly by the LSP.
+    """
+    if not yaml_path.exists():
+        return
+    schema_url = component.get("schema_url")
+    if not schema_url:
+        return
+    if ref:
+        schema_url = schema_url.replace("/main/", f"/{ref}/", 1)
+
+    text = yaml_path.read_text()
+    if "yaml-language-server" in text:
+        return  # already injected, don't double up
+    header = f"# yaml-language-server: $schema={schema_url}\n"
+    yaml_path.write_text(header + text)
 
 
 if __name__ == "__main__":
