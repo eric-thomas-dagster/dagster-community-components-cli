@@ -25,6 +25,7 @@ from .installer import (
     write_marker,
 )
 from .project import (
+    detect_canonical_layout,
     find_project_root,
     installed_components,
     resolve_install_dir,
@@ -152,6 +153,13 @@ def add(
 
     project_root = find_project_root()
     install_dir = resolve_install_dir(project_root, component, target_dir=target_dir)
+    # Canonical layout = the install_dir was auto-routed to <root>/src/<pkg>/defs/<id>.
+    # We detect it by re-running the layout check on the project_root so we can
+    # apply the dg-canonical post-processing (rename example.yaml → defs.yaml,
+    # rewrite type to local module path) only in that case.
+    canonical_pkg: Optional[str] = (
+        detect_canonical_layout(project_root) if project_root and not target_dir else None
+    )
 
     pin_label = f"[bold]{cid}[/bold]" + (f" [dim]@ {ref}[/dim]" if ref else "")
     console.print(f"[green]✓[/green] Found {pin_label} in the registry")
@@ -197,6 +205,11 @@ def add(
         # without any plugin or local server.
         if "example.yaml" in files and "schema.json" in files:
             _inject_schema_comment(install_dir / "example.yaml", component, ref=ref)
+        # In a create-dagster project, dg autoloads anything in src/<pkg>/defs/.
+        # Rename example.yaml → defs.yaml (the autoloader's expected filename)
+        # and rewrite the `type:` line to the local module path.
+        if canonical_pkg:
+            _canonicalize_install(install_dir, canonical_pkg, cid)
     except InstallError as e:
         err.print(f"[red]✗[/red] {e}")
         sys.exit(1)
@@ -212,7 +225,7 @@ def add(
         else:
             console.print("[green]✓[/green] Dependencies installed")
 
-    _print_next_steps(component, install_dir)
+    _print_next_steps(component, install_dir, canonical_pkg=canonical_pkg)
 
 
 # ── search ─────────────────────────────────────────────────────────────────────
@@ -570,18 +583,25 @@ def init(
 # ── helpers ────────────────────────────────────────────────────────────────────
 
 
-def _print_next_steps(component: dict, install_dir: Path) -> None:
+def _print_next_steps(
+    component: dict,
+    install_dir: Path,
+    *,
+    canonical_pkg: Optional[str] = None,
+) -> None:
     """Print a friendly 'now what?' block after a successful install."""
     console.print("\n[bold]Next steps[/bold]")
     component_type = component.get("component_type") or _guess_component_type(component)
 
-    example_path = install_dir / "example.yaml"
-    if example_path.exists():
+    # In canonical layout, the file is `defs.yaml`; otherwise `example.yaml`.
+    yaml_name = "defs.yaml" if canonical_pkg else "example.yaml"
+    yaml_path = install_dir / yaml_name
+    if yaml_path.exists():
         console.print(
-            f"  1. Open [dim]{example_path.relative_to(install_dir.parent)}[/dim] "
-            "for a ready-to-use YAML snippet."
+            f"  1. Open [dim]{yaml_path.relative_to(install_dir.parent)}[/dim] "
+            "and edit the attributes for your use case."
         )
-        snippet = example_path.read_text().rstrip()
+        snippet = yaml_path.read_text().rstrip()
         if snippet:
             console.print()
             console.print("[dim]" + snippet + "[/dim]")
@@ -596,7 +616,50 @@ def _print_next_steps(component: dict, install_dir: Path) -> None:
             "for full configuration reference."
         )
 
-    console.print("\n  3. Run [bold]dagster dev[/bold] to load the new component.")
+    if canonical_pkg:
+        console.print("\n  3. Run [bold]dg dev[/bold] to load the new component "
+                      "(or [bold]dg launch --assets '*'[/bold] to materialize headlessly).")
+    else:
+        console.print("\n  3. Run [bold]dg dev[/bold] (or [bold]dagster dev[/bold]) "
+                      "to load the new component.")
+
+
+def _canonicalize_install(install_dir: Path, pkg: str, component_id: str) -> None:
+    """Adapt an installed component for `dg`'s autoloader in `src/<pkg>/defs/`.
+
+    Two things happen:
+      1. `example.yaml` is renamed to `defs.yaml` — that's the filename `dg`
+         picks up when it walks the defs/ tree.
+      2. The `type:` line is rewritten from the registry's package reference
+         (`dagster_component_templates.<ClassName>` or
+         `dagster_community_components.<ClassName>`) to a local module path
+         (`<pkg>.defs.<id>.component.<ClassName>`) so dg imports the
+         component class from the file we just copied next to defs.yaml,
+         rather than requiring the user to also pip-install the umbrella package.
+    """
+    src = install_dir / "example.yaml"
+    if not src.exists():
+        return
+
+    text = src.read_text()
+    new_lines: list[str] = []
+    rewritten = False
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if not rewritten and stripped.startswith("type:"):
+            # Capture indentation and the value, keeping the rest of the line.
+            indent = line[: len(line) - len(stripped)]
+            value = stripped[len("type:"):].strip()
+            class_name = value.rsplit(".", 1)[-1] if "." in value else value
+            local_type = f"{pkg}.defs.{component_id}.component.{class_name}"
+            new_lines.append(f"{indent}type: {local_type}")
+            rewritten = True
+        else:
+            new_lines.append(line)
+
+    dest = install_dir / "defs.yaml"
+    dest.write_text("\n".join(new_lines) + ("\n" if text.endswith("\n") else ""))
+    src.unlink()
 
 
 def _guess_component_type(component: dict) -> Optional[str]:

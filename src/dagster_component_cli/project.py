@@ -42,6 +42,50 @@ def find_project_root(start: Optional[Path] = None) -> Optional[Path]:
     return None
 
 
+def detect_canonical_layout(project_root: Path) -> Optional[str]:
+    """If project_root looks like a `create-dagster` project, return the package name.
+
+    Recognizes the layout produced by `uvx create-dagster project ...`:
+
+        <root>/
+        ├── pyproject.toml      # contains [tool.dg.project] root_module = "<pkg>"
+        └── src/
+            └── <pkg>/
+                └── defs/
+
+    Returns the package name (so callers can build `<root>/src/<pkg>/defs/<id>/`),
+    or None if the layout doesn't match.
+    """
+    pyproject = project_root / "pyproject.toml"
+    if not pyproject.exists():
+        return None
+
+    try:
+        import tomllib
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[no-redef]
+        except ImportError:
+            return None
+
+    try:
+        data = tomllib.loads(pyproject.read_text())
+    except (OSError, ValueError):
+        return None
+
+    pkg = (
+        data.get("tool", {})
+            .get("dg", {})
+            .get("project", {})
+            .get("root_module")
+    )
+    if not pkg:
+        return None
+    if not (project_root / "src" / pkg / "defs").is_dir():
+        return None
+    return pkg
+
+
 def installed_components(project_root: Path) -> list[dict]:
     """Scan a project for components installed by this CLI.
 
@@ -71,17 +115,22 @@ def resolve_install_dir(
 
     Priority:
       1. Explicit `--target-dir` overrides everything.
-      2. If project_root is found, use `<root>/components/<category-dir>/<id>/`.
-         (`components/` is a stable, predictable location regardless of how
-          the user has organized their `defs/` tree.)
-      3. Otherwise, install relative to cwd at `./components/<category-dir>/<id>/`.
+      2. Canonical `create-dagster` layout — install to
+         `<root>/src/<pkg>/defs/<id>/` so `dg` autoloads it without glue code.
+      3. Other project — install to `<root>/components/<category-dir>/<id>/`.
+      4. No project root — install relative to cwd at the same path.
     """
     if target_dir:
         return Path(target_dir).resolve()
 
     component_id = component["id"]
+    base = (project_root or Path.cwd()).resolve()
+
+    if project_root is not None:
+        pkg = detect_canonical_layout(project_root)
+        if pkg:
+            return base / "src" / pkg / "defs" / component_id
+
     category = component.get("category", "unknown")
     category_dir = CATEGORY_DIRS.get(category, category)
-
-    base = (project_root or Path.cwd()).resolve()
     return base / "components" / category_dir / component_id
