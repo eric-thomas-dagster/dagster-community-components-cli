@@ -23,14 +23,19 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 | [Titanic — Data Quality](titanic_quality.md) | csv → cleansing → dedup → outlier_clipper → csv | Composable cleanup pipeline |
 | [Iris — K-Means Clustering](iris_clusters.md) | csv → scale → k_means → csv | Unsupervised clustering on a classic dataset |
 | [SpaceX — Multi-Source Join](spacex_join.md) | rest × 2 → dataframe_join → select → csv | Fan-in two REST sources, join on a FK |
+| [Stocks — Anomaly Detection](stocks_anomaly.md) | csv → anomaly_detection → csv | Per-ticker z-score outlier flagging |
+| [Iris — PCA](iris_pca.md) | csv → pca → csv | Dimensionality reduction (4D → 2D) |
+| [Titanic — Logistic Regression](titanic_logreg.md) | csv → impute → onehot → logreg → csv | Binary classification + class probabilities |
+| [Books — Partitioned Web Scraper](books_scraper.md) | rest (text) → html_parser → json | Multi-page HTML scrape, one partition per page |
+| [UCI Retail — LTV (CDP)](retail_ltv.md) | csv → cleanse → formula → ltv → csv | Customer lifetime value on 542k real transactions |
 
 ## Component coverage
 
-Across the 14 demos, this hits **27 distinct components** in 5 categories:
+Across the 19 demos, this hits **34 distinct components** in 5 categories:
 
 - **ingestion** — `csv_file_ingestion`, `rest_api_fetcher`
-- **transformation** — `filter`, `summarize`, `imputation`, `one_hot_encoding`, `feature_scaler`, `json_flatten`, `select_columns`, `sort`, `datetime_parser`, `rank`, `formula`, `running_total`, `transpose`, `data_cleansing`, `unique_dedup`, `outlier_clipper`, `ets_forecast`, `dataframe_join`
-- **analytics** — `random_forest_model`, `k_means_clustering`
+- **transformation** — `filter`, `summarize`, `imputation`, `one_hot_encoding`, `feature_scaler`, `json_flatten`, `select_columns`, `sort`, `datetime_parser`, `rank`, `formula`, `running_total`, `transpose`, `data_cleansing`, `unique_dedup`, `outlier_clipper`, `ets_forecast`, `dataframe_join`, `html_parser`
+- **analytics** — `random_forest_model`, `k_means_clustering`, `anomaly_detection`, `pca`, `logistic_regression_model`, `ltv_prediction`
 - **sink** — `dataframe_to_csv`, `dataframe_to_parquet`, `dataframe_to_json`, `dataframe_to_excel`, `dataframe_to_table`
 
 ## How they're built

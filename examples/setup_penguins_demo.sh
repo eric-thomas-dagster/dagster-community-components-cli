@@ -46,8 +46,8 @@ type: $PKG.defs.imputation.component.ImputationComponent
 attributes:
   asset_name: penguins_imputed
   upstream_asset_key: penguins_raw
-  numeric_strategy: mean
-  categorical_strategy: most_frequent
+  strategy: mean
+  columns: [bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g]
   group_name: transform
 EOF
 
