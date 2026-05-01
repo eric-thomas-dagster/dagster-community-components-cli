@@ -34,36 +34,16 @@ Next steps
 
 ## Install
 
-Three options, pick whichever fits your workflow.
-
-### Option 1 — `uvx` (zero-install, recommended)
-
-[`uv`](https://docs.astral.sh/uv/) is the modern Python package manager. `uvx` runs a CLI without installing it permanently:
-
 ```bash
-# from PyPI (once published):
-uvx dagster-community-components-cli add s3_parquet_io_manager
+# Zero-install via uvx (recommended):
+uvx --from dagster-community-components-cli dagster-component add postgres_resource
 
-# from this GitHub repo (works today):
-uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \
-    dagster-component add s3_parquet_io_manager
-```
-
-### Option 2 — `pip install` from GitHub
-
-```bash
-pip install git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git
-dagster-component add s3_parquet_io_manager
-```
-
-### Option 3 — `pip install` from PyPI *(once published)*
-
-```bash
+# Or pip install:
 pip install dagster-community-components-cli
-dagster-component add s3_parquet_io_manager
+dagster-component add postgres_resource
 ```
 
-> Don't have `uv` yet? Install it: `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS / Linux) or see the [uv docs](https://docs.astral.sh/uv/getting-started/installation/) for Windows.
+Don't have `uv`? `curl -LsSf https://astral.sh/uv/install.sh | sh` (macOS / Linux) — see [uv docs](https://docs.astral.sh/uv/getting-started/installation/) for Windows.
 
 ## Commands
 
