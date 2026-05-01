@@ -27,10 +27,32 @@ dagster-component add <id>@v1.2.0              # install pinned to a tag
 dagster-component list                         # what's already installed here
 ```
 
-`add` auto-detects this project's root and installs to `components/<category>/<id>/`,
-including the component's pip dependencies. Each install drops a `.dg-community.json`
-marker so the CLI can later list / update / remove only its own installs without
-touching hand-written code.
+## Where `add` installs
+
+The CLI auto-detects the project layout:
+
+- **Canonical `create-dagster` project** (has `[tool.dg.project]` in `pyproject.toml`
+  and a `src/<pkg>/defs/` folder): installs to `src/<pkg>/defs/<id>/`. The
+  `example.yaml` is renamed to `defs.yaml` and the `type:` line is rewritten to the
+  local module path so `dg`'s autoloader picks it up with no glue code.
+- **Plain project**: installs to `<project-root>/components/<category>/<id>/`.
+
+Either way, pip dependencies are installed automatically and a `.dg-community.json`
+marker is dropped so the CLI can later list / update / remove only its own installs.
+
+## After installing — running with `dg`
+
+In a canonical project, every installed component is auto-discovered. Edit the
+attributes in the new `defs.yaml`, then:
+
+```bash
+dg launch --assets '*'                         # materialize headlessly (one-shot)
+dg dev                                         # interactive UI at http://localhost:3000
+dg list defs                                   # show what's discovered
+dg check defs                                  # validate every defs.yaml against its schema
+```
+
+In a plain project, the user wires components into their own `definitions.py`.
 
 ## Generating YAML for a component
 
@@ -42,12 +64,13 @@ dagster-component schema <id>                  # human-readable
 dagster-component schema <id> --format json    # for piping into jq, etc.
 ```
 
-After `add`, the installed `example.yaml` gets a `# yaml-language-server: $schema=<url>`
-header prepended automatically. The YAML language server (VSCode, Cursor, Neovim with
-yamlls) uses this to give the user **autocomplete + hover docs + validation** for that
-component's fields — with no plugin config and no local server. Tell users to install
-the YAML language server in their editor if they want this; it's the highest-leverage
-editor integration available.
+After `add`, the installed `defs.yaml` (or `example.yaml` in plain projects) gets a
+`# yaml-language-server: $schema=<url>` header prepended automatically. The YAML
+language server (VSCode, Cursor, Neovim with yamlls) uses this to give the user
+**autocomplete + hover docs + validation** for that component's fields — with no
+plugin config and no local server. Tell users to install the YAML language server
+in their editor if they want this; it's the highest-leverage editor integration
+available.
 
 ## Reading from the registry without the CLI
 
@@ -103,13 +126,16 @@ over hand-writing a component from scratch.
 If the CLI isn't installed, use the zero-install form:
 
 ```bash
-uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \\
-    dagster-component search <X>
+uvx --from dagster-community-components-cli dagster-component search <X>
 ```
 
-`add` installs to `<project-root>/components/<category>/<id>/` and runs
-`pip install` on the component's `requirements.txt`. Each install drops a
-`.dg-community.json` marker file.
+`add` auto-detects layout: canonical `create-dagster` projects get installs in
+`src/<pkg>/defs/<id>/` (auto-discovered by `dg dev` / `dg launch` — no glue code);
+plain projects get `<root>/components/<category>/<id>/`. Either way, pip
+dependencies are installed and a `.dg-community.json` marker is dropped.
+
+After install in a canonical project: edit `defs.yaml`, then `dg launch --assets '*'`
+to materialize or `dg dev` for the UI.
 
 Categories: resource, io_manager, sensor, observation, external, integration,
 check, transformation, ingestion, ai, analytics, infrastructure, source, sink.
@@ -131,5 +157,7 @@ dagster-component add <id>
 
 Registry: https://dagster-component-ui.vercel.app/
 
-The CLI auto-detects this project root and installs to `components/<category>/<id>/`.
+The CLI auto-detects layout: canonical `create-dagster` projects (`src/<pkg>/defs/`)
+get installs auto-discovered by `dg dev` / `dg launch`; plain projects install to
+`components/<category>/<id>/`.
 """
