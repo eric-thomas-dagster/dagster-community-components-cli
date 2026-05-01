@@ -21,14 +21,16 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 | [Vintage Cars → SQL](cars_sql.md) | rest → datetime → formula → dataframe_to_table | Land a DataFrame in SQLite (or any SQLAlchemy DB) |
 | [Airline Passengers — Forecast](passengers_forecast.md) | csv → datetime → ets_forecast → csv | Time-series forecasting (ETS / Holt-Winters) |
 | [Titanic — Data Quality](titanic_quality.md) | csv → cleansing → dedup → outlier_clipper → csv | Composable cleanup pipeline |
+| [Iris — K-Means Clustering](iris_clusters.md) | csv → scale → k_means → csv | Unsupervised clustering on a classic dataset |
+| [SpaceX — Multi-Source Join](spacex_join.md) | rest × 2 → dataframe_join → select → csv | Fan-in two REST sources, join on a FK |
 
 ## Component coverage
 
-Across the 12 demos, this hits **25 distinct components** in 5 categories:
+Across the 14 demos, this hits **27 distinct components** in 5 categories:
 
 - **ingestion** — `csv_file_ingestion`, `rest_api_fetcher`
-- **transformation** — `filter`, `summarize`, `imputation`, `one_hot_encoding`, `feature_scaler`, `json_flatten`, `select_columns`, `sort`, `datetime_parser`, `rank`, `formula`, `running_total`, `transpose`, `data_cleansing`, `unique_dedup`, `outlier_clipper`, `ets_forecast`
-- **analytics** — `random_forest_model`
+- **transformation** — `filter`, `summarize`, `imputation`, `one_hot_encoding`, `feature_scaler`, `json_flatten`, `select_columns`, `sort`, `datetime_parser`, `rank`, `formula`, `running_total`, `transpose`, `data_cleansing`, `unique_dedup`, `outlier_clipper`, `ets_forecast`, `dataframe_join`
+- **analytics** — `random_forest_model`, `k_means_clustering`
 - **sink** — `dataframe_to_csv`, `dataframe_to_parquet`, `dataframe_to_json`, `dataframe_to_excel`, `dataframe_to_table`
 
 ## How they're built

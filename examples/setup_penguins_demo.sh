@@ -67,7 +67,7 @@ attributes:
   asset_name: penguins_scaled
   upstream_asset_key: penguins_encoded
   columns: [bill_length_mm, bill_depth_mm, flipper_length_mm, body_mass_g]
-  method: standard
+  strategy: standard
   group_name: transform
 EOF
 
