@@ -23,7 +23,7 @@ csv_file_ingestion → imputation → one_hot_encoding → feature_scaler → da
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_penguins_demo.sh | bash
 cd penguins-demo
-uv run dagster asset materialize --select '*' -m definitions
+uv run dg launch --assets '*'
 ```
 
 ## Output

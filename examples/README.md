@@ -30,19 +30,20 @@ Across the 8 demos, this hits **18 distinct components** in 4 categories:
 
 Each demo is a single Bash script (`setup_*.sh`) that:
 
-1. `uv init`s a fresh project
-2. `uv add`s the runtime deps (dagster + format-specific libs like pyarrow / openpyxl)
-3. `dagster-component add <id> --auto-install`s each component into `components/`
-4. Writes a `definitions.py` that wires the components together via
-   `Definitions.merge(...)`
-5. Prints the run command + an inspect snippet
+1. `uvx create-dagster project <name>` — scaffolds a canonical Dagster project
+2. `uv add`s any format-specific libs (pyarrow, openpyxl, etc.)
+3. `dagster-component add <id> --auto-install`s each component into
+   `src/<pkg>/defs/<id>/` (the CLI auto-detects the canonical layout)
+4. Writes a `defs.yaml` per component with demo-specific attributes —
+   `dg`'s autoloader picks them up; no `definitions.py` glue
+5. Prints the run command (`dg launch --assets '*'`) + an inspect snippet
 
 Run any demo:
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_<name>_demo.sh | bash
 cd <name>-demo
-uv run dagster asset materialize --select '*' -m definitions
+uv run dg launch --assets '*'
 ```
 
 ## Why these exist

@@ -24,7 +24,7 @@ rest_api_fetcher → select_columns → datetime_parser → filter → sort → 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_releases_demo.sh | bash
 cd releases-demo
-uv run dagster asset materialize --select '*' -m definitions
+uv run dg launch --assets '*'
 ```
 
 ## Output

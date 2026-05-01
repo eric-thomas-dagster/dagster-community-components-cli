@@ -23,7 +23,7 @@ rest_api_fetcher → datetime_parser → running_total → transpose → datafra
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_weather_demo.sh | bash
 cd weather-demo
-uv run dagster asset materialize --select '*' -m definitions
+uv run dg launch --assets '*'
 ```
 
 ## Output

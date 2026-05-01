@@ -21,7 +21,7 @@ csv_file_ingestion → filter → summarize → dataframe_to_csv
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_titanic_demo.sh | bash
 cd titanic-demo
-uv run dagster asset materialize --select '*' -m definitions
+uv run dg launch --assets '*'
 ```
 
 ## Output

@@ -22,7 +22,7 @@ rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_j
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_earthquakes_demo.sh | bash
 cd earthquakes-demo
-uv run dagster asset materialize --select '*' -m definitions
+uv run dg launch --assets '*'
 ```
 
 ## Output

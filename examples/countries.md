@@ -22,7 +22,7 @@ rest_api_fetcher → formula → summarize → dataframe_to_json
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_countries_demo.sh | bash
 cd countries-demo
-uv run dagster asset materialize --select '*' -m definitions
+uv run dg launch --assets '*'
 ```
 
 ## Output

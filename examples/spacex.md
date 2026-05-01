@@ -22,7 +22,7 @@ rest_api_fetcher → select_columns → datetime_parser → rank → dataframe_t
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_spacex_demo.sh | bash
 cd spacex-demo
-uv run dagster asset materialize --select '*' -m definitions
+uv run dg launch --assets '*'
 ```
 
 ## Output
