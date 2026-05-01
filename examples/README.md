@@ -28,14 +28,20 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 | [Titanic — Logistic Regression](titanic_logreg.md) | csv → impute → onehot → logreg → csv | Binary classification + class probabilities |
 | [Books — Partitioned Web Scraper](books_scraper.md) | rest (text) → html_parser → json | Multi-page HTML scrape, one partition per page |
 | [UCI Retail — LTV (CDP)](retail_ltv.md) | csv → cleanse → formula → ltv → csv | Customer lifetime value on 542k real transactions |
+| [Airports — Spatial Clustering](airports_cluster.md) | csv → spatial_cluster → csv | DBSCAN on lat/lng (haversine, real km) |
+| [Hacker News — RSS Parsing](hn_rss.md) | rest (text) → regex (split) → regex (extract) → filter → csv | XML feed → structured rows |
+| [arXiv — PDF Extraction](arxiv_pdf.md) | csv → pdf_text_extractor → formula → csv | Document → text → word counts |
+| [UCI Retail — Customer Segments (RFM)](retail_segments.md) | csv → cleanse → formula → select → customer_segmentation → csv | RFM scoring + named segments |
+| [SaaS Metrics (synthetic Stripe)](saas_metrics.md) | csv → subscription_metrics → csv | MRR / ARR / churn / LTV / ARPU |
+| [Revenue Attribution](revenue_attribution.md) | csv × 2 → revenue_attribution → csv | Linear attribution across marketing channels |
 
 ## Component coverage
 
-Across the 19 demos, this hits **34 distinct components** in 5 categories:
+Across the 25 demos, this hits **42 distinct components** in 5 categories:
 
 - **ingestion** — `csv_file_ingestion`, `rest_api_fetcher`
-- **transformation** — `filter`, `summarize`, `imputation`, `one_hot_encoding`, `feature_scaler`, `json_flatten`, `select_columns`, `sort`, `datetime_parser`, `rank`, `formula`, `running_total`, `transpose`, `data_cleansing`, `unique_dedup`, `outlier_clipper`, `ets_forecast`, `dataframe_join`, `html_parser`
-- **analytics** — `random_forest_model`, `k_means_clustering`, `anomaly_detection`, `pca`, `logistic_regression_model`, `ltv_prediction`
+- **transformation** — `filter`, `summarize`, `imputation`, `one_hot_encoding`, `feature_scaler`, `json_flatten`, `select_columns`, `sort`, `datetime_parser`, `rank`, `formula`, `running_total`, `transpose`, `data_cleansing`, `unique_dedup`, `outlier_clipper`, `ets_forecast`, `dataframe_join`, `html_parser`, `regex_parser`, `pdf_text_extractor`
+- **analytics** — `random_forest_model`, `k_means_clustering`, `anomaly_detection`, `pca`, `logistic_regression_model`, `ltv_prediction`, `spatial_cluster`, `customer_segmentation`, `subscription_metrics`, `revenue_attribution`
 - **sink** — `dataframe_to_csv`, `dataframe_to_parquet`, `dataframe_to_json`, `dataframe_to_excel`, `dataframe_to_table`
 
 ## How they're built
