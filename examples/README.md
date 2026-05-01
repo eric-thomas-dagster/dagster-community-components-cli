@@ -17,13 +17,15 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 | [REST Countries](countries.md) | rest → formula → summarize → json | Computed columns + rollup |
 | [NYC Weather](weather.md) | rest → datetime → running_total → transpose → csv | Columnar API + cumulative + pivot |
 | [Dagster GitHub Releases](releases.md) | rest → select → datetime → filter → sort → parquet | Filter + sort + parquet |
+| [Wine Quality (ML)](wine.md) | csv → random_forest_model × 2 → csv | Train a real model + emit predictions and feature importance |
 
 ## Component coverage
 
-Across the 8 demos, this hits **18 distinct components** in 4 categories:
+Across the 9 demos, this hits **19 distinct components** in 5 categories:
 
 - **ingestion** — `csv_file_ingestion`, `rest_api_fetcher`
 - **transformation** — `filter`, `summarize`, `imputation`, `one_hot_encoding`, `feature_scaler`, `json_flatten`, `select_columns`, `sort`, `datetime_parser`, `rank`, `formula`, `running_total`, `transpose`
+- **analytics** — `random_forest_model`
 - **sink** — `dataframe_to_csv`, `dataframe_to_parquet`, `dataframe_to_json`, `dataframe_to_excel`
 
 ## How they're built
