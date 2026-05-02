@@ -25,7 +25,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 4 distinct components into src/$PKG/defs/ (regex_parser used twice)"
+echo ">>> Installing 4 distinct components into src/$PKG/components/ + defs/ (regex_parser used twice)"
 $CLI add rest_api_fetcher    --auto-install
 $CLI add regex_parser        --auto-install
 $CLI add filter              --auto-install

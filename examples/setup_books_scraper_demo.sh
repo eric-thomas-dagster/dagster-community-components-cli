@@ -24,7 +24,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components into src/$PKG/defs/"
+echo ">>> Installing 3 community components into src/$PKG/components/ + defs/"
 $CLI add rest_api_fetcher    --auto-install
 $CLI add html_parser         --auto-install
 $CLI add dataframe_to_json   --auto-install

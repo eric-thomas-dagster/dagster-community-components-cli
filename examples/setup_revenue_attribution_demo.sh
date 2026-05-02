@@ -70,7 +70,7 @@ PY
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing components into src/$PKG/defs/"
+echo ">>> Installing components into src/$PKG/components/ + defs/"
 $CLI add csv_file_ingestion       --auto-install
 $CLI add revenue_attribution      --auto-install
 $CLI add dataframe_to_csv         --auto-install

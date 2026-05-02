@@ -26,7 +26,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 4 components into src/$PKG/defs/"
+echo ">>> Installing 4 components into src/$PKG/components/ + defs/"
 $CLI add rest_api_fetcher    --auto-install
 $CLI add xml_parser          --auto-install
 $CLI add array_exploder      --auto-install

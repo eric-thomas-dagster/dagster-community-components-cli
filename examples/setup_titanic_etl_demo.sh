@@ -25,7 +25,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 9 community components into src/$PKG/defs/"
+echo ">>> Installing 9 community components into src/$PKG/components/ + defs/"
 $CLI add csv_file_ingestion    --auto-install
 $CLI add type_coercer          --auto-install
 $CLI add data_cleansing        --auto-install

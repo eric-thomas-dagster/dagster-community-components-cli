@@ -36,7 +36,7 @@ EOF
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 4 community components into src/$PKG/defs/"
+echo ">>> Installing 4 community components into src/$PKG/components/ + defs/"
 $CLI add csv_file_ingestion    --auto-install
 $CLI add pdf_text_extractor    --auto-install
 $CLI add formula               --auto-install
