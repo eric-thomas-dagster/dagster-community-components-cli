@@ -1,14 +1,16 @@
 #!/usr/bin/env bash
 # Revenue attribution demo — split conversions across marketing channels.
 #
-# Generates two synthetic CSVs (marketing campaigns + Stripe revenue),
-# fans them in to revenue_attribution, computes campaign-level metrics
-# (spend, conversions, ROI, ROAS, CAC), writes a per-campaign report.
+# Marketing campaigns are a 5-row literal table (no synthesis needed).
+# Revenue is generated as 120 synthetic Stripe charges via the registry's
+# synthetic_data_generator (schema_type: stripe_charges). Both fan in to
+# revenue_attribution, which computes per-campaign metrics
+# (spend, conversions, ROI, ROAS, CAC) and writes a per-campaign report.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
-#     csv_file_ingestion (marketing) ┐
-#                                     ├─→ revenue_attribution → dataframe_to_csv
-#     csv_file_ingestion (revenue)   ┘
+#     csv_file_ingestion (marketing)        ┐
+#                                             ├─→ revenue_attribution → dataframe_to_csv
+#     synthetic_data_generator (stripe rev) ┘
 
 set -euo pipefail
 
@@ -23,78 +25,47 @@ echo ">>> Adding runtime + dev deps"
 uv add -q pandas
 uv add --dev -q dagster-dg-cli dagster-webserver
 
-echo ">>> Generating synthetic marketing + revenue CSVs"
-uv run python - <<'PY'
-import csv, random, time
-random.seed(42)
-now = int(time.time())
-
-# Marketing campaigns — 5 campaigns over the last 90 days
-campaigns = [
-    ("Spring_Sale",      8000,  150_000, 4_500, 320),
-    ("Brand_Awareness",  12000, 300_000, 3_000, 80),
-    ("Retargeting",      4500,   80_000, 6_500, 410),
-    ("Black_Friday",     15000, 200_000, 8_000, 580),
-    ("Newsletter",       1500,   25_000, 1_200, 210),
-]
-mrows = []
-for name, spend, impr, clicks, conv in campaigns:
-    mrows.append({
-        'campaign_name': name,
-        'spend': spend,
-        'impressions': impr,
-        'clicks': clicks,
-        'conversions': conv,
-    })
-with open('/tmp/marketing_campaigns.csv', 'w', newline='') as f:
-    w = csv.DictWriter(f, fieldnames=mrows[0].keys()); w.writeheader(); w.writerows(mrows)
-
-# Revenue: synthetic Stripe charges
-plans = [29, 49, 99, 199, 499]
-rrows = []
-for i in range(1, 121):
-    rrows.append({
-        'id': f'ch_{i:04d}',
-        '_resource_type': 'charges',
-        'customer_id': f'cus_{random.randint(1, 100):03d}',
-        'amount': random.choice(plans) * 100,
-        'created': now - random.randint(0, 90) * 86400,
-        'status': 'succeeded',
-    })
-with open('/tmp/stripe_revenue.csv', 'w', newline='') as f:
-    w = csv.DictWriter(f, fieldnames=rrows[0].keys()); w.writeheader(); w.writerows(rrows)
-
-print(f"wrote /tmp/marketing_campaigns.csv ({len(mrows)} campaigns)")
-print(f"wrote /tmp/stripe_revenue.csv ({len(rrows)} charges)")
-PY
+echo ">>> Writing the 5-row marketing campaigns literal table"
+cat > /tmp/marketing_campaigns.csv <<'EOF'
+campaign_name,spend,impressions,clicks,conversions
+Spring_Sale,8000,150000,4500,320
+Brand_Awareness,12000,300000,3000,80
+Retargeting,4500,80000,6500,410
+Black_Friday,15000,200000,8000,580
+Newsletter,1500,25000,1200,210
+EOF
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing components into src/$PKG/components/ + defs/"
 $CLI add csv_file_ingestion       --auto-install
+$CLI add synthetic_data_generator --auto-install
 $CLI add revenue_attribution      --auto-install
 $CLI add dataframe_to_csv         --auto-install
-# Second csv ingest (different target_dir) for the revenue source
-$CLI add csv_file_ingestion       --auto-install --target-dir "src/$PKG/defs/csv_revenue"
 
 echo ">>> Writing demo defs.yaml for each component"
 
-# 1a. Ingest marketing
+# 1a. Ingest marketing — literal CSV
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: marketing_data
   file_path: /tmp/marketing_campaigns.csv
-  description: Synthetic marketing campaigns (5 campaigns, 90-day window)
+  description: Marketing campaigns (5 campaigns, 90-day window)
   group_name: ingest
 EOF
 
-# 1b. Ingest revenue
-cat > "src/$PKG/defs/csv_revenue/defs.yaml" <<EOF
-type: $PKG.components.csv_revenue.component.CSVFileIngestionComponent
+# 1b. Generate Stripe-shaped revenue from the registry
+cat > "src/$PKG/defs/synthetic_data_generator/defs.yaml" <<EOF
+type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
 attributes:
   asset_name: revenue_data
-  file_path: /tmp/stripe_revenue.csv
+  schema_type: stripe_charges
+  row_count: 120
+  random_seed: 42
+  schema_options:
+    plans: [29, 49, 99, 199, 499]
+    lookback_days: 90
   description: Synthetic Stripe charges (120 events, 90-day window)
   group_name: ingest
 EOF

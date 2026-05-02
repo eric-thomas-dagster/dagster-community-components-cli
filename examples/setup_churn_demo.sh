@@ -7,7 +7,7 @@
 # `is_at_risk` flag + risk score.
 #
 # Pipeline (3 components, all autoloaded by `dg`):
-#     csv_file_ingestion → churn_prediction → dataframe_to_csv
+#     synthetic_data_generator → churn_prediction → dataframe_to_csv
 
 set -euo pipefail
 
@@ -22,49 +22,24 @@ echo ">>> Adding runtime + dev deps"
 uv add -q pandas
 uv add --dev -q dagster-dg-cli dagster-webserver
 
-echo ">>> Generating synthetic customer-level CSV"
-uv run python - <<'PY'
-import csv, random
-from datetime import datetime, timedelta
-random.seed(42)
-today = datetime(2026, 5, 1)
-rows = []
-for i in range(1, 201):
-    # Mix of fresh, dormant, and churned customers
-    days_since = random.choices(
-        [random.randint(0, 30), random.randint(31, 90), random.randint(91, 365)],
-        weights=[5, 3, 2],
-    )[0]
-    last_activity = today - timedelta(days=days_since)
-    lifetime_days = random.randint(60, 800)
-    total_orders = max(1, int(random.gauss(15, 8)))
-    total_revenue = round(total_orders * random.uniform(20, 250), 2)
-    rows.append({
-        'customer_id': f'cus_{i:04d}',
-        'last_activity': last_activity.strftime('%Y-%m-%d'),
-        'total_orders': total_orders,
-        'total_revenue': total_revenue,
-        'lifetime_days': lifetime_days,
-    })
-with open('/tmp/customer_metrics.csv', 'w', newline='') as f:
-    w = csv.DictWriter(f, fieldnames=rows[0].keys()); w.writeheader(); w.writerows(rows)
-print(f"wrote /tmp/customer_metrics.csv with {len(rows)} customers")
-PY
-
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 3 community components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion    --auto-install
-$CLI add churn_prediction      --auto-install
-$CLI add dataframe_to_csv      --auto-install
+$CLI add synthetic_data_generator --auto-install
+$CLI add churn_prediction         --auto-install
+$CLI add dataframe_to_csv         --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/synthetic_data_generator/defs.yaml" <<EOF
+type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
 attributes:
   asset_name: customer_metrics
-  file_path: /tmp/customer_metrics.csv
+  schema_type: customer_churn_metrics
+  row_count: 200
+  random_seed: 42
+  schema_options:
+    reference_date: "2026-05-01"
   description: 200 synthetic customer aggregates (last_activity, total_orders, revenue, lifetime)
   group_name: ingest
 EOF
