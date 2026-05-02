@@ -56,8 +56,10 @@ Each demo is a single Bash script (`setup_*.sh`) that:
 
 1. `uvx create-dagster project <name>` — scaffolds a canonical Dagster project
 2. `uv add`s any format-specific libs (pyarrow, openpyxl, etc.)
-3. `dagster-component add <id> --auto-install`s each component into
-   `src/<pkg>/defs/<id>/` (the CLI auto-detects the canonical layout)
+3. `dagster-component add <id> --auto-install`s each component. The
+   class files (`component.py`, `schema.json`, `README.md`) land in
+   `src/<pkg>/components/<id>/`; the configured instance lands in
+   `src/<pkg>/defs/<id>/defs.yaml` — the canonical `create-dagster` split.
 4. Writes a `defs.yaml` per component with demo-specific attributes —
    `dg`'s autoloader picks them up; no `definitions.py` glue
 5. Prints the run command (`dg launch --assets '*'`) + an inspect snippet
