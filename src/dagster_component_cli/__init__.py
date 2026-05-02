@@ -1,6 +1,6 @@
 """CLI to search, install, and manage Dagster community components."""
 
-__version__ = "0.3.1"
+__version__ = "0.4.0"
 
 DEFAULT_REGISTRY_URL = (
     "https://raw.githubusercontent.com/"

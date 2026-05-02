@@ -35,7 +35,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest — UCI Online Retail (UK e-commerce 2010-2011, ~540k transactions)
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: retail_raw
   file_path: https://raw.githubusercontent.com/databricks/Spark-The-Definitive-Guide/master/data/retail-data/all/online-retail-dataset.csv
@@ -45,7 +45,7 @@ EOF
 
 # 2. Cleanse — drop rows where CustomerID is missing (~25% of raw data has no CustomerID)
 cat > "src/$PKG/defs/data_cleansing/defs.yaml" <<EOF
-type: $PKG.defs.data_cleansing.component.DataCleansingComponent
+type: $PKG.components.data_cleansing.component.DataCleansingComponent
 attributes:
   asset_name: retail_clean
   upstream_asset_key: retail_raw
@@ -56,7 +56,7 @@ EOF
 
 # 3. Compute per-line revenue: amount = Quantity * UnitPrice
 cat > "src/$PKG/defs/formula/defs.yaml" <<EOF
-type: $PKG.defs.formula.component.FormulaComponent
+type: $PKG.components.formula.component.FormulaComponent
 attributes:
   asset_name: retail_with_amount
   upstream_asset_key: retail_clean
@@ -67,7 +67,7 @@ EOF
 
 # 4. Predict per-customer LTV — auto-detects via specified column names
 cat > "src/$PKG/defs/ltv_prediction/defs.yaml" <<EOF
-type: $PKG.defs.ltv_prediction.component.LTVPredictionComponent
+type: $PKG.components.ltv_prediction.component.LTVPredictionComponent
 attributes:
   asset_name: customer_ltv
   upstream_asset_key: retail_with_amount
@@ -83,7 +83,7 @@ EOF
 
 # 5. Sink
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: customer_ltv_report
   upstream_asset_key: customer_ltv

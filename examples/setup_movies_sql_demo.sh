@@ -33,7 +33,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest — IMDB Top 250 CSV (mirror that's stable + public; subject to host availability)
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: movies_raw
   file_path: https://raw.githubusercontent.com/erajasekar/IMDB-Top-250-Movies-Dataset/refs/heads/master/IMDB%20Top%20250%20Movies.csv
@@ -43,7 +43,7 @@ EOF
 
 # 2. Coerce types — `year` came in as a string; we want it as int for math
 cat > "src/$PKG/defs/type_coercer/defs.yaml" <<EOF
-type: $PKG.defs.type_coercer.component.TypeCoercerComponent
+type: $PKG.components.type_coercer.component.TypeCoercerComponent
 attributes:
   asset_name: movies_typed
   upstream_asset_key: movies_raw
@@ -55,7 +55,7 @@ EOF
 
 # 3. Compute a decade column — formula evaluates pandas expressions
 cat > "src/$PKG/defs/formula/defs.yaml" <<EOF
-type: $PKG.defs.formula.component.FormulaComponent
+type: $PKG.components.formula.component.FormulaComponent
 attributes:
   asset_name: movies_with_decade
   upstream_asset_key: movies_typed
@@ -67,7 +67,7 @@ EOF
 # 4. Write to SQLite — no server needed, just a file. The DATABASE_URL env
 # var is what dataframe_to_table reads; SQLAlchemy URL points at /tmp.
 cat > "src/$PKG/defs/dataframe_to_table/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_table.component.DataframeToTableComponent
+type: $PKG.components.dataframe_to_table.component.DataframeToTableComponent
 attributes:
   asset_name: movies_table
   upstream_asset_key: movies_with_decade

@@ -33,7 +33,7 @@ echo ">>> Writing demo defs.yaml for each component (5 partitions, pages 1-5)"
 
 # 1. Fetch — URL templated with {partition_key}; static partitions for pages 1-5.
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: page_html
   api_url: https://books.toscrape.com/catalogue/page-{partition_key}.html
@@ -48,7 +48,7 @@ EOF
 
 # 2. Parse — extract every <a href> on the page; result is a list-cell of URLs
 cat > "src/$PKG/defs/html_parser/defs.yaml" <<EOF
-type: $PKG.defs.html_parser.component.HtmlParserComponent
+type: $PKG.components.html_parser.component.HtmlParserComponent
 attributes:
   asset_name: page_links
   upstream_asset_key: page_html
@@ -62,7 +62,7 @@ EOF
 
 # 3. Sink — one JSON file per partition (per page)
 cat > "src/$PKG/defs/dataframe_to_json/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_json.component.DataframeToJsonComponent
+type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: page_report
   upstream_asset_key: page_links

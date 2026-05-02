@@ -41,7 +41,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest — UCI red wine, semicolon-separated
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: wine_raw
   file_path: https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv
@@ -52,7 +52,7 @@ EOF
 
 # 2a. Train + predict — adds `predicted` column to the full dataframe
 cat > "src/$PKG/defs/random_forest_model/defs.yaml" <<EOF
-type: $PKG.defs.random_forest_model.component.RandomForestModelComponent
+type: $PKG.components.random_forest_model.component.RandomForestModelComponent
 attributes:
   asset_name: wine_predictions
   upstream_asset_key: wine_raw
@@ -80,7 +80,7 @@ EOF
 
 # 2b. Same training, different output mode — feature importance ranking
 cat > "src/$PKG/defs/random_forest_importance/defs.yaml" <<EOF
-type: $PKG.defs.random_forest_importance.component.RandomForestModelComponent
+type: $PKG.components.random_forest_importance.component.RandomForestModelComponent
 attributes:
   asset_name: wine_feature_importance
   upstream_asset_key: wine_raw
@@ -108,7 +108,7 @@ EOF
 
 # 3a. Sink — predictions to CSV
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: wine_predictions_report
   upstream_asset_key: wine_predictions
@@ -119,7 +119,7 @@ EOF
 
 # 3b. Sink — feature importance to CSV
 cat > "src/$PKG/defs/dataframe_to_csv_importance/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv_importance.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv_importance.component.DataframeToCsvComponent
 attributes:
   asset_name: wine_feature_importance_report
   upstream_asset_key: wine_feature_importance

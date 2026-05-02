@@ -35,7 +35,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Generate — 30 days of hourly metrics with a complex pattern + noise + spikes
 cat > "src/$PKG/defs/time_series_generator/defs.yaml" <<EOF
-type: $PKG.defs.time_series_generator.component.TimeSeriesGeneratorComponent
+type: $PKG.components.time_series_generator.component.TimeSeriesGeneratorComponent
 attributes:
   asset_name: synthetic_metrics
   pattern_type: complex
@@ -52,7 +52,7 @@ EOF
 
 # 2. Detect anomalies — z-score with a 2.5σ threshold
 cat > "src/$PKG/defs/anomaly_detection/defs.yaml" <<EOF
-type: $PKG.defs.anomaly_detection.component.AnomalyDetectionComponent
+type: $PKG.components.anomaly_detection.component.AnomalyDetectionComponent
 attributes:
   asset_name: metrics_with_anomalies
   upstream_asset_key: synthetic_metrics
@@ -64,7 +64,7 @@ EOF
 
 # 3. Sink
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: metrics_report
   upstream_asset_key: metrics_with_anomalies

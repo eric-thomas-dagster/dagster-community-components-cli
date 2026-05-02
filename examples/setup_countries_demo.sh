@@ -31,7 +31,7 @@ $CLI add dataframe_to_json   --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: countries_raw
   api_url: https://restcountries.com/v3.1/all?fields=region,subregion,population,area,cca3
@@ -43,7 +43,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/formula/defs.yaml" <<EOF
-type: $PKG.defs.formula.component.FormulaComponent
+type: $PKG.components.formula.component.FormulaComponent
 attributes:
   asset_name: countries_with_density
   upstream_asset_key: countries_raw
@@ -53,7 +53,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/summarize/defs.yaml" <<EOF
-type: $PKG.defs.summarize.component.SummarizeComponent
+type: $PKG.components.summarize.component.SummarizeComponent
 attributes:
   asset_name: region_summary
   upstream_asset_key: countries_with_density
@@ -66,7 +66,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_json/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_json.component.DataframeToJsonComponent
+type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: region_summary_report
   upstream_asset_key: region_summary

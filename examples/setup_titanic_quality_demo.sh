@@ -35,7 +35,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest — Titanic
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: passengers_raw
   file_path: https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv
@@ -45,7 +45,7 @@ EOF
 
 # 2. Cleanse strings — trim whitespace, fill nulls in string columns
 cat > "src/$PKG/defs/data_cleansing/defs.yaml" <<EOF
-type: $PKG.defs.data_cleansing.component.DataCleansingComponent
+type: $PKG.components.data_cleansing.component.DataCleansingComponent
 attributes:
   asset_name: passengers_clean
   upstream_asset_key: passengers_raw
@@ -58,7 +58,7 @@ EOF
 
 # 3. Dedupe on PassengerId — keeps first
 cat > "src/$PKG/defs/unique_dedup/defs.yaml" <<EOF
-type: $PKG.defs.unique_dedup.component.UniqueDedupComponent
+type: $PKG.components.unique_dedup.component.UniqueDedupComponent
 attributes:
   asset_name: passengers_unique
   upstream_asset_key: passengers_clean
@@ -71,7 +71,7 @@ EOF
 # 4. Clip Fare outliers — Titanic fares range from 0 to ~512; winsorize the
 #    top + bottom whiskers using IQR (default 1.5x multiplier)
 cat > "src/$PKG/defs/outlier_clipper/defs.yaml" <<EOF
-type: $PKG.defs.outlier_clipper.component.OutlierClipperComponent
+type: $PKG.components.outlier_clipper.component.OutlierClipperComponent
 attributes:
   asset_name: passengers_clipped
   upstream_asset_key: passengers_unique
@@ -84,7 +84,7 @@ EOF
 
 # 5. Sink
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: passengers_report
   upstream_asset_key: passengers_clipped

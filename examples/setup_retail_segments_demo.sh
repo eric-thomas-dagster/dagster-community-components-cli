@@ -36,7 +36,7 @@ $CLI add dataframe_to_csv         --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: retail_raw
   file_path: https://raw.githubusercontent.com/databricks/Spark-The-Definitive-Guide/master/data/retail-data/all/online-retail-dataset.csv
@@ -45,7 +45,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/data_cleansing/defs.yaml" <<EOF
-type: $PKG.defs.data_cleansing.component.DataCleansingComponent
+type: $PKG.components.data_cleansing.component.DataCleansingComponent
 attributes:
   asset_name: retail_clean
   upstream_asset_key: retail_raw
@@ -55,7 +55,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/formula/defs.yaml" <<EOF
-type: $PKG.defs.formula.component.FormulaComponent
+type: $PKG.components.formula.component.FormulaComponent
 attributes:
   asset_name: retail_with_amount
   upstream_asset_key: retail_clean
@@ -66,7 +66,7 @@ EOF
 
 # Map UCI column names → the canonical names customer_segmentation expects
 cat > "src/$PKG/defs/select_columns/defs.yaml" <<EOF
-type: $PKG.defs.select_columns.component.SelectColumnsComponent
+type: $PKG.components.select_columns.component.SelectColumnsComponent
 attributes:
   asset_name: transactions
   upstream_asset_key: retail_with_amount
@@ -79,7 +79,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/customer_segmentation/defs.yaml" <<EOF
-type: $PKG.defs.customer_segmentation.component.CustomerSegmentationComponent
+type: $PKG.components.customer_segmentation.component.CustomerSegmentationComponent
 attributes:
   asset_name: customer_segments
   transaction_data_asset: transactions
@@ -95,7 +95,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: customer_segments_report
   upstream_asset_key: customer_segments

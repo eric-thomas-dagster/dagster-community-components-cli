@@ -28,6 +28,7 @@ from .project import (
     detect_canonical_layout,
     find_project_root,
     installed_components,
+    resolve_defs_dir,
     resolve_install_dir,
 )
 from .registry import Registry, fetch_file
@@ -153,12 +154,15 @@ def add(
 
     project_root = find_project_root()
     install_dir = resolve_install_dir(project_root, component, target_dir=target_dir)
-    # Canonical layout = the install_dir was auto-routed to <root>/src/<pkg>/defs/<id>.
-    # We detect it by re-running the layout check on the project_root so we can
-    # apply the dg-canonical post-processing (rename example.yaml → defs.yaml,
-    # rewrite type to local module path) only in that case.
+    # Canonical layout: class files land in `src/<pkg>/components/<id>/`,
+    # instance YAML lands separately in `src/<pkg>/defs/<id>/defs.yaml`.
+    # We detect via the project_root so we can do the post-install split
+    # only when the user is in a `create-dagster` project.
     canonical_pkg: Optional[str] = (
         detect_canonical_layout(project_root) if project_root and not target_dir else None
+    )
+    canonical_defs_dir: Optional[Path] = (
+        resolve_defs_dir(project_root, canonical_pkg, cid) if canonical_pkg else None
     )
 
     pin_label = f"[bold]{cid}[/bold]" + (f" [dim]@ {ref}[/dim]" if ref else "")
@@ -166,6 +170,8 @@ def add(
     if project_root:
         console.print(f"[green]✓[/green] Detected project at [dim]{project_root}[/dim]")
     console.print(f"[green]✓[/green] Will install to: [dim]{install_dir}[/dim]")
+    if canonical_defs_dir:
+        console.print(f"[green]✓[/green] defs.yaml: [dim]{canonical_defs_dir}/defs.yaml[/dim]")
 
     # Fetch files (at the pinned ref if specified)
     try:
@@ -205,11 +211,12 @@ def add(
         # without any plugin or local server.
         if "example.yaml" in files and "schema.json" in files:
             _inject_schema_comment(install_dir / "example.yaml", component, ref=ref)
-        # In a create-dagster project, dg autoloads anything in src/<pkg>/defs/.
-        # Rename example.yaml → defs.yaml (the autoloader's expected filename)
-        # and rewrite the `type:` line to the local module path.
-        if canonical_pkg:
-            _canonicalize_install(install_dir, canonical_pkg, cid)
+        # In a create-dagster project, split the install into the canonical
+        # two-folder layout: class files stay in `src/<pkg>/components/<id>/`
+        # (where install_dir was routed) and the instance defs.yaml lands in
+        # `src/<pkg>/defs/<id>/defs.yaml` so dg autoloads it.
+        if canonical_pkg and canonical_defs_dir is not None:
+            _canonicalize_install(install_dir, canonical_defs_dir, canonical_pkg, cid)
     except InstallError as e:
         err.print(f"[red]✗[/red] {e}")
         sys.exit(1)
@@ -225,7 +232,7 @@ def add(
         else:
             console.print("[green]✓[/green] Dependencies installed")
 
-    _print_next_steps(component, install_dir, canonical_pkg=canonical_pkg)
+    _print_next_steps(component, install_dir, canonical_pkg=canonical_pkg, defs_dir=canonical_defs_dir)
 
 
 # ── search ─────────────────────────────────────────────────────────────────────
@@ -455,7 +462,18 @@ def remove(ctx: click.Context, component_id: str, target_dir: Optional[str], yes
             sys.exit(1)
         path = project_root / matches[0]["_path"]
 
+    # In the canonical split layout, `path` points at the components/<id>/
+    # dir; the paired defs/<id>/ dir holds the instance YAML. Find and
+    # offer to remove both atomically.
+    paired_defs_path: Optional[Path] = None
+    if path.name == component_id and path.parent.name == "components":
+        candidate = path.parent.parent / "defs" / component_id
+        if candidate.is_dir():
+            paired_defs_path = candidate
+
     console.print(f"Will remove: [dim]{path}[/dim]")
+    if paired_defs_path is not None:
+        console.print(f"Will remove: [dim]{paired_defs_path}[/dim]")
     if not yes and not click.confirm("Continue?", default=False):
         console.print("[yellow]Aborted.[/yellow]")
         sys.exit(1)
@@ -466,6 +484,10 @@ def remove(ctx: click.Context, component_id: str, target_dir: Optional[str], yes
         err.print(f"[red]✗[/red] {e}")
         sys.exit(1)
     console.print(f"[green]✓[/green] Removed {path}")
+    if paired_defs_path is not None:
+        import shutil
+        shutil.rmtree(paired_defs_path)
+        console.print(f"[green]✓[/green] Removed {paired_defs_path}")
 
 
 # ── update ─────────────────────────────────────────────────────────────────────
@@ -504,7 +526,15 @@ def update(ctx: click.Context, component_id: str, target_dir: Optional[str]) -> 
         files = fetch_component_files(component, ref=ref)
         write_files(path, files, force=True)
         write_marker(path, component, ref=ref)
-        if "example.yaml" in files and "schema.json" in files:
+        # In split-canonical layout, `path` is `src/<pkg>/components/<id>/`.
+        # The user's defs.yaml lives at `src/<pkg>/defs/<id>/defs.yaml`
+        # — preserve their config, don't clobber on update. The freshly
+        # written example.yaml goes away on the next add or stays as a
+        # reference. In the legacy layout (everything in one dir) we
+        # still inject the schema comment.
+        if path.name == cid and path.parent.name == "components":
+            (path / "example.yaml").unlink(missing_ok=True)
+        elif "example.yaml" in files and "schema.json" in files:
             _inject_schema_comment(path / "example.yaml", component, ref=ref)
     except InstallError as e:
         err.print(f"[red]✗[/red] {e}")
@@ -588,17 +618,27 @@ def _print_next_steps(
     install_dir: Path,
     *,
     canonical_pkg: Optional[str] = None,
+    defs_dir: Optional[Path] = None,
 ) -> None:
     """Print a friendly 'now what?' block after a successful install."""
     console.print("\n[bold]Next steps[/bold]")
     component_type = component.get("component_type") or _guess_component_type(component)
 
-    # In canonical layout, the file is `defs.yaml`; otherwise `example.yaml`.
-    yaml_name = "defs.yaml" if canonical_pkg else "example.yaml"
-    yaml_path = install_dir / yaml_name
+    # In canonical split layout, the editable YAML is `defs.yaml` in the
+    # separate defs/ folder. In the legacy/non-canonical case it's
+    # `example.yaml` next to the class.
+    if canonical_pkg and defs_dir is not None:
+        yaml_path = defs_dir / "defs.yaml"
+    else:
+        yaml_path = install_dir / "example.yaml"
+
     if yaml_path.exists():
+        try:
+            display_path = yaml_path.relative_to(Path.cwd())
+        except ValueError:
+            display_path = yaml_path
         console.print(
-            f"  1. Open [dim]{yaml_path.relative_to(install_dir.parent)}[/dim] "
+            f"  1. Open [dim]{display_path}[/dim] "
             "and edit the attributes for your use case."
         )
         snippet = yaml_path.read_text().rstrip()
@@ -611,8 +651,12 @@ def _print_next_steps(
 
     readme_path = install_dir / "README.md"
     if readme_path.exists():
+        try:
+            readme_display = readme_path.relative_to(Path.cwd())
+        except ValueError:
+            readme_display = readme_path
         console.print(
-            f"\n  2. Read [dim]{readme_path.relative_to(install_dir.parent)}[/dim] "
+            f"\n  2. Read [dim]{readme_display}[/dim] "
             "for full configuration reference."
         )
 
@@ -624,18 +668,27 @@ def _print_next_steps(
                       "to load the new component.")
 
 
-def _canonicalize_install(install_dir: Path, pkg: str, component_id: str) -> None:
-    """Adapt an installed component for `dg`'s autoloader in `src/<pkg>/defs/`.
+def _canonicalize_install(
+    install_dir: Path,
+    defs_dir: Path,
+    pkg: str,
+    component_id: str,
+) -> None:
+    """Split an installed component into the canonical `create-dagster` layout.
 
-    Two things happen:
-      1. `example.yaml` is renamed to `defs.yaml` — that's the filename `dg`
-         picks up when it walks the defs/ tree.
-      2. The `type:` line is rewritten from the registry's package reference
-         (`dagster_component_templates.<ClassName>` or
-         `dagster_community_components.<ClassName>`) to a local module path
-         (`<pkg>.defs.<id>.component.<ClassName>`) so dg imports the
-         component class from the file we just copied next to defs.yaml,
-         rather than requiring the user to also pip-install the umbrella package.
+    Class files (component.py, schema.json, README.md, requirements.txt,
+    .dg-community.json marker, __init__.py) stay in `install_dir`
+    (`src/<pkg>/components/<id>/`).
+
+    The instance YAML moves to `defs_dir` (`src/<pkg>/defs/<id>/defs.yaml`)
+    with two adjustments:
+
+      1. `example.yaml` is renamed to `defs.yaml` — that's the filename
+         `dg` picks up when it walks the defs/ tree.
+      2. The `type:` line is rewritten from the registry's package
+         reference (`dagster_component_templates.<ClassName>` or
+         `dagster_community_components.<ClassName>`) to the local
+         module path (`<pkg>.components.<id>.component.<ClassName>`).
     """
     src = install_dir / "example.yaml"
     if not src.exists():
@@ -647,17 +700,17 @@ def _canonicalize_install(install_dir: Path, pkg: str, component_id: str) -> Non
     for line in text.splitlines():
         stripped = line.lstrip()
         if not rewritten and stripped.startswith("type:"):
-            # Capture indentation and the value, keeping the rest of the line.
             indent = line[: len(line) - len(stripped)]
             value = stripped[len("type:"):].strip()
             class_name = value.rsplit(".", 1)[-1] if "." in value else value
-            local_type = f"{pkg}.defs.{component_id}.component.{class_name}"
+            local_type = f"{pkg}.components.{component_id}.component.{class_name}"
             new_lines.append(f"{indent}type: {local_type}")
             rewritten = True
         else:
             new_lines.append(line)
 
-    dest = install_dir / "defs.yaml"
+    defs_dir.mkdir(parents=True, exist_ok=True)
+    dest = defs_dir / "defs.yaml"
     dest.write_text("\n".join(new_lines) + ("\n" if text.endswith("\n") else ""))
     src.unlink()
 

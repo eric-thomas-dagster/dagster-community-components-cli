@@ -33,7 +33,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest — the canonical Box-Jenkins airline-passengers series
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: passengers_raw
   file_path: https://raw.githubusercontent.com/jbrownlee/Datasets/master/airline-passengers.csv
@@ -43,7 +43,7 @@ EOF
 
 # 2. Parse "1949-01" → first-of-month datetime
 cat > "src/$PKG/defs/datetime_parser/defs.yaml" <<EOF
-type: $PKG.defs.datetime_parser.component.DatetimeParser
+type: $PKG.components.datetime_parser.component.DatetimeParser
 attributes:
   asset_name: passengers_typed
   upstream_asset_key: passengers_raw
@@ -54,7 +54,7 @@ EOF
 
 # 3. Fit ETS (Holt-Winters), forecast 24 months out, append to history
 cat > "src/$PKG/defs/ets_forecast/defs.yaml" <<EOF
-type: $PKG.defs.ets_forecast.component.EtsForecastComponent
+type: $PKG.components.ets_forecast.component.EtsForecastComponent
 attributes:
   asset_name: passengers_with_forecast
   upstream_asset_key: passengers_typed
@@ -70,7 +70,7 @@ EOF
 
 # 4. Write the combined history+forecast CSV
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: passengers_report
   upstream_asset_key: passengers_with_forecast

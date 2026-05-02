@@ -32,7 +32,7 @@ $CLI add dataframe_to_csv      --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: airports_raw
   file_path: https://raw.githubusercontent.com/vega/vega-datasets/main/data/airports.csv
@@ -41,7 +41,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/spatial_cluster/defs.yaml" <<EOF
-type: $PKG.defs.spatial_cluster.component.SpatialClusterComponent
+type: $PKG.components.spatial_cluster.component.SpatialClusterComponent
 attributes:
   asset_name: airports_clustered
   upstream_asset_key: airports_raw
@@ -55,7 +55,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: airports_report
   upstream_asset_key: airports_clustered

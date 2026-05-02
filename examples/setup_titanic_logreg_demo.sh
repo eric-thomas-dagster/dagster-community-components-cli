@@ -34,7 +34,7 @@ $CLI add dataframe_to_csv           --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: titanic_raw
   file_path: https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv
@@ -44,7 +44,7 @@ EOF
 
 # Fill missing Age (only numeric feature with NaNs in Titanic)
 cat > "src/$PKG/defs/imputation/defs.yaml" <<EOF
-type: $PKG.defs.imputation.component.ImputationComponent
+type: $PKG.components.imputation.component.ImputationComponent
 attributes:
   asset_name: titanic_imputed
   upstream_asset_key: titanic_raw
@@ -55,7 +55,7 @@ EOF
 
 # Encode Sex into Sex_male / Sex_female columns the model can consume
 cat > "src/$PKG/defs/one_hot_encoding/defs.yaml" <<EOF
-type: $PKG.defs.one_hot_encoding.component.OneHotEncodingComponent
+type: $PKG.components.one_hot_encoding.component.OneHotEncodingComponent
 attributes:
   asset_name: titanic_encoded
   upstream_asset_key: titanic_imputed
@@ -66,7 +66,7 @@ EOF
 
 # Fit a binary classifier on a small interpretable feature set
 cat > "src/$PKG/defs/logistic_regression_model/defs.yaml" <<EOF
-type: $PKG.defs.logistic_regression_model.component.LogisticRegressionModelComponent
+type: $PKG.components.logistic_regression_model.component.LogisticRegressionModelComponent
 attributes:
   asset_name: titanic_predictions
   upstream_asset_key: titanic_encoded
@@ -82,7 +82,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: titanic_predictions_report
   upstream_asset_key: titanic_predictions

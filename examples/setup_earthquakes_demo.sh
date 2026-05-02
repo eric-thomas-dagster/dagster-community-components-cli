@@ -32,7 +32,7 @@ $CLI add dataframe_to_json   --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: earthquakes_raw
   api_url: https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson
@@ -45,7 +45,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/json_flatten/defs.yaml" <<EOF
-type: $PKG.defs.json_flatten.component.JsonFlattenComponent
+type: $PKG.components.json_flatten.component.JsonFlattenComponent
 attributes:
   asset_name: earthquakes_flat
   upstream_asset_key: earthquakes_raw
@@ -57,7 +57,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/select_columns/defs.yaml" <<EOF
-type: $PKG.defs.select_columns.component.SelectColumnsComponent
+type: $PKG.components.select_columns.component.SelectColumnsComponent
 attributes:
   asset_name: earthquakes_clean
   upstream_asset_key: earthquakes_flat
@@ -72,7 +72,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/sort/defs.yaml" <<EOF
-type: $PKG.defs.sort.component.SortComponent
+type: $PKG.components.sort.component.SortComponent
 attributes:
   asset_name: earthquakes_sorted
   upstream_asset_key: earthquakes_clean
@@ -84,7 +84,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_json/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_json.component.DataframeToJsonComponent
+type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: earthquakes_report
   upstream_asset_key: earthquakes_sorted

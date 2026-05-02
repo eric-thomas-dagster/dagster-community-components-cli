@@ -37,7 +37,7 @@ echo ">>> Writing demo defs.yaml for each component"
 # a 1-row DataFrame with a `content` column. Wikipedia blocks the default
 # python-requests UA, so identify ourselves.
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: page_html
   api_url: https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)
@@ -52,7 +52,7 @@ EOF
 # 2. Parse all <table> elements — extract_tables returns a list of tables,
 # each table is a list of rows, each row is a list of cells.
 cat > "src/$PKG/defs/html_parser/defs.yaml" <<EOF
-type: $PKG.defs.html_parser.component.HtmlParserComponent
+type: $PKG.components.html_parser.component.HtmlParserComponent
 attributes:
   asset_name: page_tables
   upstream_asset_key: page_html
@@ -65,7 +65,7 @@ EOF
 # 3. Explode the list-of-tables into one row per table (then we can pick the
 # largest one downstream). array_exploder turns list-cell rows into multi-row.
 cat > "src/$PKG/defs/array_exploder/defs.yaml" <<EOF
-type: $PKG.defs.array_exploder.component.ArrayExploderComponent
+type: $PKG.components.array_exploder.component.ArrayExploderComponent
 attributes:
   asset_name: tables_exploded
   upstream_asset_key: page_tables
@@ -77,7 +77,7 @@ EOF
 
 # 4. Write the parsed tables as JSON (each row = one table = list-of-rows)
 cat > "src/$PKG/defs/dataframe_to_json/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_json.component.DataframeToJsonComponent
+type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: page_tables_report
   upstream_asset_key: tables_exploded

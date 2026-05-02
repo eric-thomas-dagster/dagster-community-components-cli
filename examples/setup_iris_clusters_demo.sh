@@ -31,7 +31,7 @@ $CLI add dataframe_to_csv      --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: iris_raw
   file_path: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv
@@ -40,7 +40,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/feature_scaler/defs.yaml" <<EOF
-type: $PKG.defs.feature_scaler.component.FeatureScalerComponent
+type: $PKG.components.feature_scaler.component.FeatureScalerComponent
 attributes:
   asset_name: iris_scaled
   upstream_asset_key: iris_raw
@@ -50,7 +50,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/k_means_clustering/defs.yaml" <<EOF
-type: $PKG.defs.k_means_clustering.component.KMeansClusteringComponent
+type: $PKG.components.k_means_clustering.component.KMeansClusteringComponent
 attributes:
   asset_name: iris_clustered
   upstream_asset_key: iris_scaled
@@ -64,7 +64,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: iris_report
   upstream_asset_key: iris_clustered

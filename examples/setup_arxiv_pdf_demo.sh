@@ -45,7 +45,7 @@ $CLI add dataframe_to_csv      --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: papers_manifest
   file_path: /tmp/arxiv_papers/manifest.csv
@@ -54,7 +54,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/pdf_text_extractor/defs.yaml" <<EOF
-type: $PKG.defs.pdf_text_extractor.component.PdfTextExtractorComponent
+type: $PKG.components.pdf_text_extractor.component.PdfTextExtractorComponent
 attributes:
   asset_name: papers_text
   upstream_asset_key: papers_manifest
@@ -64,7 +64,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/formula/defs.yaml" <<EOF
-type: $PKG.defs.formula.component.FormulaComponent
+type: $PKG.components.formula.component.FormulaComponent
 attributes:
   asset_name: papers_summary
   upstream_asset_key: papers_text
@@ -76,7 +76,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: papers_report
   upstream_asset_key: papers_summary

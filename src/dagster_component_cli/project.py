@@ -111,12 +111,15 @@ def resolve_install_dir(
     *,
     target_dir: Optional[str] = None,
 ) -> Path:
-    """Decide where to install a component.
+    """Decide where the component CLASS files (component.py, schema.json,
+    README.md, requirements.txt, marker) should land.
 
     Priority:
       1. Explicit `--target-dir` overrides everything.
-      2. Canonical `create-dagster` layout — install to
-         `<root>/src/<pkg>/defs/<id>/` so `dg` autoloads it without glue code.
+      2. Canonical `create-dagster` layout — install class files into
+         `<root>/src/<pkg>/components/<id>/` (the `[tool.dg.project]
+         registry_modules` location). The instance YAML lives separately
+         at `<root>/src/<pkg>/defs/<id>/defs.yaml` so `dg` autoloads it.
       3. Other project — install to `<root>/components/<category-dir>/<id>/`.
       4. No project root — install relative to cwd at the same path.
     """
@@ -129,8 +132,13 @@ def resolve_install_dir(
     if project_root is not None:
         pkg = detect_canonical_layout(project_root)
         if pkg:
-            return base / "src" / pkg / "defs" / component_id
+            return base / "src" / pkg / "components" / component_id
 
     category = component.get("category", "unknown")
     category_dir = CATEGORY_DIRS.get(category, category)
     return base / "components" / category_dir / component_id
+
+
+def resolve_defs_dir(project_root: Path, pkg: str, component_id: str) -> Path:
+    """Where the instance defs.yaml should land in canonical layout."""
+    return project_root.resolve() / "src" / pkg / "defs" / component_id

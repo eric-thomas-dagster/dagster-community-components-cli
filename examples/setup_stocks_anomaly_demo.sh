@@ -31,7 +31,7 @@ $CLI add dataframe_to_csv      --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: stocks_raw
   file_path: https://raw.githubusercontent.com/vega/vega-datasets/main/data/stocks.csv
@@ -40,7 +40,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/anomaly_detection/defs.yaml" <<EOF
-type: $PKG.defs.anomaly_detection.component.AnomalyDetectionComponent
+type: $PKG.components.anomaly_detection.component.AnomalyDetectionComponent
 attributes:
   asset_name: stocks_with_anomalies
   upstream_asset_key: stocks_raw
@@ -53,7 +53,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: stocks_anomaly_report
   upstream_asset_key: stocks_with_anomalies

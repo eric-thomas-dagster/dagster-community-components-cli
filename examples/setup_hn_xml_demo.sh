@@ -36,7 +36,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Fetch HN RSS as raw XML
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: feed_xml
   api_url: https://hnrss.org/frontpage
@@ -49,7 +49,7 @@ EOF
 
 # 2. xpath findall — title + link → list-cells (one row, two list columns)
 cat > "src/$PKG/defs/xml_parser/defs.yaml" <<EOF
-type: $PKG.defs.xml_parser.component.XmlParser
+type: $PKG.components.xml_parser.component.XmlParser
 attributes:
   asset_name: feed_lists
   upstream_asset_key: feed_xml
@@ -63,7 +63,7 @@ EOF
 
 # 3. Explode both columns in parallel — pandas zips list-of-lists row-wise
 cat > "src/$PKG/defs/array_exploder/defs.yaml" <<EOF
-type: $PKG.defs.array_exploder.component.ArrayExploderComponent
+type: $PKG.components.array_exploder.component.ArrayExploderComponent
 attributes:
   asset_name: feed_items
   upstream_asset_key: feed_lists
@@ -75,7 +75,7 @@ EOF
 
 # 4. Sink — title + link only
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: feed_report
   upstream_asset_key: feed_items

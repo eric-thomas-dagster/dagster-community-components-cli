@@ -33,7 +33,7 @@ $CLI add dataframe_to_excel  --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: launches_raw
   api_url: https://api.spacexdata.com/v4/launches
@@ -45,7 +45,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/select_columns/defs.yaml" <<EOF
-type: $PKG.defs.select_columns.component.SelectColumnsComponent
+type: $PKG.components.select_columns.component.SelectColumnsComponent
 attributes:
   asset_name: launches_clean
   upstream_asset_key: launches_raw
@@ -55,7 +55,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/datetime_parser/defs.yaml" <<EOF
-type: $PKG.defs.datetime_parser.component.DatetimeParser
+type: $PKG.components.datetime_parser.component.DatetimeParser
 attributes:
   asset_name: launches_dated
   upstream_asset_key: launches_clean
@@ -66,7 +66,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/rank/defs.yaml" <<EOF
-type: $PKG.defs.rank.component.RankComponent
+type: $PKG.components.rank.component.RankComponent
 attributes:
   asset_name: launches_ranked
   upstream_asset_key: launches_dated
@@ -78,7 +78,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_excel/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_excel.component.DataframeToExcelComponent
+type: $PKG.components.dataframe_to_excel.component.DataframeToExcelComponent
 attributes:
   asset_name: launches_report
   upstream_asset_key: launches_ranked

@@ -34,7 +34,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest — vega's classic cars.json (it's a list of records, no json_path needed)
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: cars_raw
   api_url: https://raw.githubusercontent.com/vega/vega-datasets/main/data/cars.json
@@ -47,7 +47,7 @@ EOF
 
 # 2. Parse Year — comes in as "YYYY-01-01" strings
 cat > "src/$PKG/defs/datetime_parser/defs.yaml" <<EOF
-type: $PKG.defs.datetime_parser.component.DatetimeParser
+type: $PKG.components.datetime_parser.component.DatetimeParser
 attributes:
   asset_name: cars_typed
   upstream_asset_key: cars_raw
@@ -58,7 +58,7 @@ EOF
 
 # 3. Compute decade column — formula uses pandas dt accessor
 cat > "src/$PKG/defs/formula/defs.yaml" <<EOF
-type: $PKG.defs.formula.component.FormulaComponent
+type: $PKG.components.formula.component.FormulaComponent
 attributes:
   asset_name: cars_with_decade
   upstream_asset_key: cars_typed
@@ -70,7 +70,7 @@ EOF
 # 4. Write to SQLite — DATABASE_URL is read at runtime; drop_timezone=true
 # strips tz from model_year (SQLite has no native tz support).
 cat > "src/$PKG/defs/dataframe_to_table/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_table.component.DataframeToTableComponent
+type: $PKG.components.dataframe_to_table.component.DataframeToTableComponent
 attributes:
   asset_name: cars_table
   upstream_asset_key: cars_with_decade

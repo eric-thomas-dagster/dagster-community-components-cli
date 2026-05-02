@@ -33,7 +33,7 @@ $CLI add dataframe_to_csv    --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: weather_raw
   api_url: "https://api.open-meteo.com/v1/forecast?latitude=40.71&longitude=-74.01&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=UTC&past_days=14&forecast_days=1"
@@ -46,7 +46,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/datetime_parser/defs.yaml" <<EOF
-type: $PKG.defs.datetime_parser.component.DatetimeParser
+type: $PKG.components.datetime_parser.component.DatetimeParser
 attributes:
   asset_name: weather_typed
   upstream_asset_key: weather_raw
@@ -57,7 +57,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/running_total/defs.yaml" <<EOF
-type: $PKG.defs.running_total.component.RunningTotalComponent
+type: $PKG.components.running_total.component.RunningTotalComponent
 attributes:
   asset_name: weather_with_cumulative_precip
   upstream_asset_key: weather_typed
@@ -70,7 +70,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/transpose/defs.yaml" <<EOF
-type: $PKG.defs.transpose.component.TransposeComponent
+type: $PKG.components.transpose.component.TransposeComponent
 attributes:
   asset_name: weather_by_date
   upstream_asset_key: weather_with_cumulative_precip
@@ -80,7 +80,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: weather_report
   upstream_asset_key: weather_by_date

@@ -33,7 +33,7 @@ $CLI add dataframe_to_parquet  --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: penguins_raw
   file_path: https://raw.githubusercontent.com/allisonhorst/palmerpenguins/main/inst/extdata/penguins.csv
@@ -42,7 +42,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/imputation/defs.yaml" <<EOF
-type: $PKG.defs.imputation.component.ImputationComponent
+type: $PKG.components.imputation.component.ImputationComponent
 attributes:
   asset_name: penguins_imputed
   upstream_asset_key: penguins_raw
@@ -52,7 +52,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/one_hot_encoding/defs.yaml" <<EOF
-type: $PKG.defs.one_hot_encoding.component.OneHotEncodingComponent
+type: $PKG.components.one_hot_encoding.component.OneHotEncodingComponent
 attributes:
   asset_name: penguins_encoded
   upstream_asset_key: penguins_imputed
@@ -62,7 +62,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/feature_scaler/defs.yaml" <<EOF
-type: $PKG.defs.feature_scaler.component.FeatureScalerComponent
+type: $PKG.components.feature_scaler.component.FeatureScalerComponent
 attributes:
   asset_name: penguins_scaled
   upstream_asset_key: penguins_encoded
@@ -72,7 +72,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_parquet/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_parquet.component.DataframeToParquetComponent
+type: $PKG.components.dataframe_to_parquet.component.DataframeToParquetComponent
 attributes:
   asset_name: penguins_features
   upstream_asset_key: penguins_scaled

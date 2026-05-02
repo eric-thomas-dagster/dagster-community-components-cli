@@ -33,7 +33,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Search GitHub repos for "orchestrator" — items[] contains nested objects
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: repos_raw
   api_url: "https://api.github.com/search/repositories?q=orchestrator&per_page=10&sort=stars"
@@ -47,7 +47,7 @@ EOF
 
 # 2. nested_field_extractor — dot paths into the `owner` and `license` dicts
 cat > "src/$PKG/defs/nested_field_extractor/defs.yaml" <<EOF
-type: $PKG.defs.nested_field_extractor.component.NestedFieldExtractorComponent
+type: $PKG.components.nested_field_extractor.component.NestedFieldExtractorComponent
 attributes:
   asset_name: repos_with_owner
   upstream_asset_key: repos_raw
@@ -62,7 +62,7 @@ EOF
 # 3. json_path_extractor — JSONPath into `license` (which can be null) plus
 # `topics` which is an array
 cat > "src/$PKG/defs/json_path_extractor/defs.yaml" <<EOF
-type: $PKG.defs.json_path_extractor.component.JsonPathExtractorComponent
+type: $PKG.components.json_path_extractor.component.JsonPathExtractorComponent
 attributes:
   asset_name: repos_flat
   upstream_asset_key: repos_with_owner
@@ -76,7 +76,7 @@ EOF
 
 # 4. Sink — pick the columns worth seeing
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: repos_report
   upstream_asset_key: repos_flat

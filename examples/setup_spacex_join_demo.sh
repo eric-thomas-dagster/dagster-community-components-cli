@@ -40,7 +40,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1a. Fetch launches
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: launches
   api_url: https://api.spacexdata.com/v4/launches
@@ -53,7 +53,7 @@ EOF
 
 # 1b. Fetch rockets (4 of them — Falcon 1, Falcon 9, Falcon Heavy, Starship)
 cat > "src/$PKG/defs/rest_rockets/defs.yaml" <<EOF
-type: $PKG.defs.rest_rockets.component.RestApiFetcherComponent
+type: $PKG.components.rest_rockets.component.RestApiFetcherComponent
 attributes:
   asset_name: rockets
   api_url: https://api.spacexdata.com/v4/rockets
@@ -66,7 +66,7 @@ EOF
 
 # 2. Join — launches.rocket = rockets.id
 cat > "src/$PKG/defs/dataframe_join/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_join.component.DataframeJoin
+type: $PKG.components.dataframe_join.component.DataframeJoin
 attributes:
   asset_name: launches_with_rocket
   left_asset_key: launches
@@ -80,7 +80,7 @@ EOF
 
 # 3. Select human-meaningful columns
 cat > "src/$PKG/defs/select_columns/defs.yaml" <<EOF
-type: $PKG.defs.select_columns.component.SelectColumnsComponent
+type: $PKG.components.select_columns.component.SelectColumnsComponent
 attributes:
   asset_name: launches_clean
   upstream_asset_key: launches_with_rocket
@@ -94,7 +94,7 @@ EOF
 
 # 4. Write
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: launches_report
   upstream_asset_key: launches_clean

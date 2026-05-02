@@ -37,7 +37,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Fetch the RSS feed as raw XML (output_format=text wraps in 1-row df)
 cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.defs.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: feed_xml
   api_url: https://hnrss.org/frontpage
@@ -50,7 +50,7 @@ EOF
 
 # 2. Split on </item> boundary — each item becomes its own row
 cat > "src/$PKG/defs/regex_parser/defs.yaml" <<EOF
-type: $PKG.defs.regex_parser.component.RegexParser
+type: $PKG.components.regex_parser.component.RegexParser
 attributes:
   asset_name: feed_items
   upstream_asset_key: feed_xml
@@ -62,7 +62,7 @@ EOF
 
 # 3. Extract <title>...</title> and <link>...</link> in one regex with two capture groups
 cat > "src/$PKG/defs/regex_extract/defs.yaml" <<EOF
-type: $PKG.defs.regex_extract.component.RegexParser
+type: $PKG.components.regex_extract.component.RegexParser
 attributes:
   asset_name: feed_extracted
   upstream_asset_key: feed_items
@@ -76,7 +76,7 @@ EOF
 
 # 4. Drop the preamble row + any item where the regex didn't match
 cat > "src/$PKG/defs/filter/defs.yaml" <<EOF
-type: $PKG.defs.filter.component.FilterComponent
+type: $PKG.components.filter.component.FilterComponent
 attributes:
   asset_name: feed_clean
   upstream_asset_key: feed_extracted
@@ -86,7 +86,7 @@ EOF
 
 # 5. Sink — title + link only
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: feed_report
   upstream_asset_key: feed_clean

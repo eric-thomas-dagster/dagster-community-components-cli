@@ -58,7 +58,7 @@ echo ">>> Writing demo defs.yaml for each component"
 # 1a + 1b. Both ingests read the same file but produce two distinct assets
 # so the cross join has two inputs to fan into.
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: cities_origin
   file_path: /tmp/cities.csv
@@ -67,7 +67,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/csv_destinations/defs.yaml" <<EOF
-type: $PKG.defs.csv_destinations.component.CSVFileIngestionComponent
+type: $PKG.components.csv_destinations.component.CSVFileIngestionComponent
 attributes:
   asset_name: cities_dest
   file_path: /tmp/cities.csv
@@ -77,7 +77,7 @@ EOF
 
 # 2. Cross-join — every origin paired with every destination (100 rows)
 cat > "src/$PKG/defs/dataframe_join/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_join.component.DataframeJoin
+type: $PKG.components.dataframe_join.component.DataframeJoin
 attributes:
   asset_name: city_pairs
   left_asset_key: cities_origin
@@ -89,7 +89,7 @@ EOF
 
 # 3. Compute haversine distance per pair
 cat > "src/$PKG/defs/distance_calculator/defs.yaml" <<EOF
-type: $PKG.defs.distance_calculator.component.DistanceCalculatorComponent
+type: $PKG.components.distance_calculator.component.DistanceCalculatorComponent
 attributes:
   asset_name: pairs_with_distance
   upstream_asset_key: city_pairs
@@ -105,7 +105,7 @@ EOF
 
 # 4. Drop self-pairs (city == city)
 cat > "src/$PKG/defs/filter/defs.yaml" <<EOF
-type: $PKG.defs.filter.component.FilterComponent
+type: $PKG.components.filter.component.FilterComponent
 attributes:
   asset_name: pairs_unique
   upstream_asset_key: pairs_with_distance
@@ -115,7 +115,7 @@ EOF
 
 # 5. Sort by distance
 cat > "src/$PKG/defs/sort/defs.yaml" <<EOF
-type: $PKG.defs.sort.component.SortComponent
+type: $PKG.components.sort.component.SortComponent
 attributes:
   asset_name: pairs_sorted
   upstream_asset_key: pairs_unique
@@ -125,7 +125,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: pairs_report
   upstream_asset_key: pairs_sorted

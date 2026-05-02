@@ -40,7 +40,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: titanic_raw
   file_path: https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv
@@ -50,7 +50,7 @@ EOF
 
 # 2. Type coercion — Age + Fare numeric, Pclass int
 cat > "src/$PKG/defs/type_coercer/defs.yaml" <<EOF
-type: $PKG.defs.type_coercer.component.TypeCoercerComponent
+type: $PKG.components.type_coercer.component.TypeCoercerComponent
 attributes:
   asset_name: titanic_typed
   upstream_asset_key: titanic_raw
@@ -64,7 +64,7 @@ EOF
 
 # 3. Trim whitespace + normalize casing on string cols
 cat > "src/$PKG/defs/data_cleansing/defs.yaml" <<EOF
-type: $PKG.defs.data_cleansing.component.DataCleansingComponent
+type: $PKG.components.data_cleansing.component.DataCleansingComponent
 attributes:
   asset_name: titanic_clean
   upstream_asset_key: titanic_typed
@@ -77,7 +77,7 @@ EOF
 
 # 4. Median-impute the (now numeric) Age + Fare
 cat > "src/$PKG/defs/imputation/defs.yaml" <<EOF
-type: $PKG.defs.imputation.component.ImputationComponent
+type: $PKG.components.imputation.component.ImputationComponent
 attributes:
   asset_name: titanic_imputed
   upstream_asset_key: titanic_clean
@@ -88,7 +88,7 @@ EOF
 
 # 5. Bucket Age into age_bracket (Child / Teen / Adult / Senior)
 cat > "src/$PKG/defs/tile_binning/defs.yaml" <<EOF
-type: $PKG.defs.tile_binning.component.TileBinningComponent
+type: $PKG.components.tile_binning.component.TileBinningComponent
 attributes:
   asset_name: titanic_binned
   upstream_asset_key: titanic_imputed
@@ -103,7 +103,7 @@ EOF
 
 # 6. Rename to snake_case (and drop the columns we don't want)
 cat > "src/$PKG/defs/field_mapper/defs.yaml" <<EOF
-type: $PKG.defs.field_mapper.component.FieldMapperComponent
+type: $PKG.components.field_mapper.component.FieldMapperComponent
 attributes:
   asset_name: titanic_mapped
   upstream_asset_key: titanic_binned
@@ -127,7 +127,7 @@ EOF
 
 # 7. Reorder columns: identity + outcome up front, derived/categorical later
 cat > "src/$PKG/defs/arrange/defs.yaml" <<EOF
-type: $PKG.defs.arrange.component.ArrangeComponent
+type: $PKG.components.arrange.component.ArrangeComponent
 attributes:
   asset_name: titanic_arranged
   upstream_asset_key: titanic_mapped
@@ -138,7 +138,7 @@ EOF
 
 # 8. Take a 50-row reproducible sample for the preview file
 cat > "src/$PKG/defs/sample/defs.yaml" <<EOF
-type: $PKG.defs.sample.component.SampleComponent
+type: $PKG.components.sample.component.SampleComponent
 attributes:
   asset_name: titanic_sample
   upstream_asset_key: titanic_arranged
@@ -149,7 +149,7 @@ EOF
 
 # 9. Sink — preview CSV
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: titanic_preview_report
   upstream_asset_key: titanic_sample

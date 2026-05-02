@@ -81,7 +81,7 @@ echo ">>> Writing demo defs.yaml for each component"
 
 # 1a. Ingest marketing
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: marketing_data
   file_path: /tmp/marketing_campaigns.csv
@@ -91,7 +91,7 @@ EOF
 
 # 1b. Ingest revenue
 cat > "src/$PKG/defs/csv_revenue/defs.yaml" <<EOF
-type: $PKG.defs.csv_revenue.component.CSVFileIngestionComponent
+type: $PKG.components.csv_revenue.component.CSVFileIngestionComponent
 attributes:
   asset_name: revenue_data
   file_path: /tmp/stripe_revenue.csv
@@ -101,7 +101,7 @@ EOF
 
 # 2. Attribution
 cat > "src/$PKG/defs/revenue_attribution/defs.yaml" <<EOF
-type: $PKG.defs.revenue_attribution.component.RevenueAttributionComponent
+type: $PKG.components.revenue_attribution.component.RevenueAttributionComponent
 attributes:
   asset_name: campaign_attribution
   marketing_data_asset: marketing_data
@@ -114,7 +114,7 @@ EOF
 
 # 3. Sink
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: campaign_attribution_report
   upstream_asset_key: campaign_attribution

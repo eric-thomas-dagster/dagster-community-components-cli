@@ -32,7 +32,7 @@ $CLI add dataframe_to_csv   --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.defs.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: titanic_raw
   file_path: https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv
@@ -41,7 +41,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/filter/defs.yaml" <<EOF
-type: $PKG.defs.filter.component.FilterComponent
+type: $PKG.components.filter.component.FilterComponent
 attributes:
   asset_name: first_class_passengers
   upstream_asset_key: titanic_raw
@@ -50,7 +50,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/summarize/defs.yaml" <<EOF
-type: $PKG.defs.summarize.component.SummarizeComponent
+type: $PKG.components.summarize.component.SummarizeComponent
 attributes:
   asset_name: survival_by_sex
   upstream_asset_key: first_class_passengers
@@ -62,7 +62,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
-type: $PKG.defs.dataframe_to_csv.component.DataframeToCsvComponent
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: survival_report
   upstream_asset_key: survival_by_sex
