@@ -50,10 +50,11 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 | [RSS Sensor](rss_sensor.md) | rss_feed_sensor → rest → xml_parser → csv | Sensor-driven HN frontpage ingestion (no auth) |
 | [NBA Scoreboard](nba_scoreboard.md) | http_poll_sensor → rest → json_path → csv | `http_poll_sensor` with targeted hashing — fires on real score changes, not server-timestamp churn. Hits an undocumented public JSON endpoint. |
 | [Kitchen Sink](kitchen_sink.md) | 21 components | The breadth showcase — ingest × 3 → quality × 4 → join → transform × 3 → analytics × 4 → sink × 5 → schedule. Synthetic data only. |
+| [Dagster+ Audit → SIEM](dagster_plus_audit.md) **(Dagster+)** | dagster_plus_audit_log_ingestion → siem_event_normalizer → CSV | Pull Dagster+ audit log via GraphQL, normalize to OCSF, write to CSV. Swap CSV for any SIEM sink (Splunk/Sentinel/Datadog/etc.) or use the all-in-one compound op job. **Requires a Dagster+ user token.** |
 
 ## Component coverage
 
-Across the **41 demos**, these exercise **75 distinct components** spanning 6 categories:
+Across the **42 demos**, these exercise **78 distinct components** spanning 6 categories:
 
 - **ingestion** (2) — `csv_file_ingestion`, `rest_api_fetcher`
 - **transformation** (31) — `arima_forecast`, `array_exploder`, `create_samples`, `data_cleansing`, `dataframe_join`, `dataframe_union`, `datetime_parser`, `ets_forecast`, `feature_scaler`, `filter`, `formula`, `html_parser`, `imputation`, `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `one_hot_encoding`, `outlier_clipper`, `pdf_text_extractor`, `rank`, `regex_parser`, `running_total`, `select_columns`, `sort`, `summarize`, `tile_binning`, `transpose`, `ts_filler`, `type_coercer`, `unique_dedup`, `xml_parser`
