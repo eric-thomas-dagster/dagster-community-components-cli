@@ -37,7 +37,7 @@ attributes:
   asset_name: subscription_cohort
   schema_type: subscriptions
   row_count: 300
-  random_seed: 42
+  random_state: 42
   description: 300 synthetic SaaS subscriptions across free/pro/enterprise
   group_name: ingest
 EOF

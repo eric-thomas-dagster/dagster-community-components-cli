@@ -89,7 +89,7 @@ attributes:
   asset_name: orders_raw
   schema_type: orders
   row_count: 2000
-  random_seed: 42
+  random_state: 42
   description: 2000 synthetic e-commerce orders across 7 categories with status flags
   group_name: ingest
 EOF
@@ -100,7 +100,7 @@ attributes:
   asset_name: customers_raw
   schema_type: customers
   row_count: 600
-  random_seed: 42
+  random_state: 42
   description: 600 synthetic customers (name, email, city, state)
   group_name: ingest
 EOF
@@ -111,7 +111,7 @@ attributes:
   asset_name: products_raw
   schema_type: products
   row_count: 200
-  random_seed: 42
+  random_state: 42
   description: 200 synthetic products with categories + prices
   group_name: ingest
 EOF

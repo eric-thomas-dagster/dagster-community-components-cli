@@ -67,7 +67,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/csv_destinations/defs.yaml" <<EOF
-type: $PKG.components.csv_destinations.component.CSVFileIngestionComponent
+type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: cities_dest
   file_path: /tmp/cities.csv

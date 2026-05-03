@@ -62,7 +62,7 @@ attributes:
   asset_name: revenue_data
   schema_type: stripe_charges
   row_count: 120
-  random_seed: 42
+  random_state: 42
   schema_options:
     plans: [29, 49, 99, 199, 499]
     lookback_days: 90

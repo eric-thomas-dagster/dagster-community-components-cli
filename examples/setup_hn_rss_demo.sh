@@ -62,7 +62,7 @@ EOF
 
 # 3. Extract <title>...</title> and <link>...</link> in one regex with two capture groups
 cat > "src/$PKG/defs/regex_extract/defs.yaml" <<EOF
-type: $PKG.components.regex_extract.component.RegexParser
+type: $PKG.components.regex_parser.component.RegexParser
 attributes:
   asset_name: feed_extracted
   upstream_asset_key: feed_items

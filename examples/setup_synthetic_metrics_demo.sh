@@ -44,7 +44,7 @@ attributes:
   frequency: 1h
   base_value: 100.0
   noise_level: 0.15
-  random_seed: 42
+  random_state: 42
   metric_name: cpu_pct
   description: 30 days of synthetic hourly CPU% metrics with seasonality + noise
   group_name: synth

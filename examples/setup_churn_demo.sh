@@ -37,7 +37,7 @@ attributes:
   asset_name: customer_metrics
   schema_type: customer_churn_metrics
   row_count: 200
-  random_seed: 42
+  random_state: 42
   schema_options:
     reference_date: "2026-05-01"
   description: 200 synthetic customer aggregates (last_activity, total_orders, revenue, lifetime)

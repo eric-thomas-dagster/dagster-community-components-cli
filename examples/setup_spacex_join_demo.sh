@@ -53,7 +53,7 @@ EOF
 
 # 1b. Fetch rockets (4 of them — Falcon 1, Falcon 9, Falcon Heavy, Starship)
 cat > "src/$PKG/defs/rest_rockets/defs.yaml" <<EOF
-type: $PKG.components.rest_rockets.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: rockets
   api_url: https://api.spacexdata.com/v4/rockets

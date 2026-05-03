@@ -36,7 +36,7 @@ attributes:
   asset_name: stripe_data
   schema_type: stripe_subscriptions
   row_count: 50
-  random_seed: 42
+  random_state: 42
   schema_options:
     plans:
       - [10, "starter"]

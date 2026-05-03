@@ -40,7 +40,7 @@ attributes:
   asset_name: sensor_readings_raw
   schema_type: sparse_sensors
   row_count: 100000   # soft cap, won't truncate this small grid
-  random_seed: 42
+  random_state: 42
   schema_options:
     sensor_count: 3
     duration_hours: 336    # 14 days * 24

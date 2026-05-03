@@ -50,7 +50,7 @@ attributes:
   asset_name: orders_raw
   schema_type: orders
   row_count: 2000
-  random_seed: 42
+  random_state: 42
   description: 2000 synthetic e-commerce orders across many customers
   include_preview_metadata: true
   preview_rows: 25
