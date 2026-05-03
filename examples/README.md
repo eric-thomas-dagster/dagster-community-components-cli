@@ -9,7 +9,6 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
-| [Titanic](titanic.md) | csv → filter → summarize → csv | The simplest end-to-end shape |
 | [Palmer Penguins](penguins.md) | csv → impute → onehot → scale → parquet | Canonical ML preprocessing |
 | [USGS Earthquakes](earthquakes.md) | rest → flatten → select → sort → json | REST + nested JSON |
 | [Earthquakes (partitioned)](partitioned_earthquakes.md) | same, daily-partitioned | Backfillable date range |
@@ -53,12 +52,14 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 
 ## Component coverage
 
-Across the 47 demos, this hits **80+ distinct components** in 6 categories:
+Across the **40 demos**, these exercise **70 distinct components** spanning 6 categories:
 
-- **ingestion** — `csv_file_ingestion`, `rest_api_fetcher`
-- **transformation** — `filter`, `summarize`, `imputation`, `one_hot_encoding`, `feature_scaler`, `json_flatten`, `select_columns`, `sort`, `datetime_parser`, `rank`, `formula`, `running_total`, `transpose`, `data_cleansing`, `unique_dedup`, `outlier_clipper`, `ets_forecast`, `dataframe_join`, `html_parser`, `regex_parser`, `pdf_text_extractor`, `xml_parser`, `array_exploder`, `type_coercer`, `tile_binning`, `field_mapper`, `arrange`, `sample`, `nested_field_extractor`, `json_path_extractor`
-- **analytics** — `random_forest_model`, `k_means_clustering`, `anomaly_detection`, `pca`, `logistic_regression_model`, `ltv_prediction`, `spatial_cluster`, `customer_segmentation`, `subscription_metrics`, `revenue_attribution`, `time_series_generator`, `distance_calculator`, `churn_prediction`
-- **sink** — `dataframe_to_csv`, `dataframe_to_parquet`, `dataframe_to_json`, `dataframe_to_excel`, `dataframe_to_table`
+- **ingestion** (2) — `csv_file_ingestion`, `rest_api_fetcher`
+- **transformation** (31) — `arima_forecast`, `array_exploder`, `create_samples`, `data_cleansing`, `dataframe_join`, `dataframe_union`, `datetime_parser`, `ets_forecast`, `feature_scaler`, `filter`, `formula`, `html_parser`, `imputation`, `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `one_hot_encoding`, `outlier_clipper`, `pdf_text_extractor`, `rank`, `regex_parser`, `running_total`, `select_columns`, `sort`, `summarize`, `tile_binning`, `transpose`, `ts_filler`, `type_coercer`, `unique_dedup`, `xml_parser`
+- **analytics** (29) — `ab_controls`, `ab_test_analysis`, `ab_treatments`, `ab_trend`, `anomaly_detection`, `bounding_box_filter`, `buffer`, `churn_prediction`, `cohort_analysis`, `create_points`, `cross_validation`, `decision_tree_model`, `distance_calculator`, `k_means_clustering`, `logistic_regression_model`, `ltv_prediction`, `make_grid`, `market_basket_rules`, `nearest_neighbors`, `pca`, `revenue_attribution`, `rfm_segmentation`, `smooth`, `spatial_cluster`, `spatial_join`, `subscription_metrics`, `survival_analysis`, `time_series_generator`, `ts_compare`
+- **ai** (1) — `synthetic_data_generator`
+- **sensor** (2) — `http_poll_sensor`, `rss_feed_sensor`
+- **sink** (5) — `dataframe_to_csv`, `dataframe_to_excel`, `dataframe_to_json`, `dataframe_to_parquet`, `dataframe_to_table`
 
 ## How they're built
 
