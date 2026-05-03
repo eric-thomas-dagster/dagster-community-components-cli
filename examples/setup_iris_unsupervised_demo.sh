@@ -1,41 +1,41 @@
 #!/usr/bin/env bash
-# Iris clustering demo — canonical create-dagster + dg.
+# Iris Unsupervised demo — PCA + K-Means on the canonical Iris dataset.
 #
-# Pulls the classic Iris dataset, scales the four numeric features, runs
-# k-means with k=3, writes per-flower cluster assignments to CSV.
-#
-# Pipeline (4 components, all autoloaded by `dg`):
-#     csv_file_ingestion → feature_scaler → k_means_clustering → dataframe_to_csv
+# Replaces the separate iris_clusters and iris_pca demos with one richer
+# pipeline that runs both algorithms in sequence:
+#   - Standard-scale the 4 numeric features
+#   - PCA-project to 2D for visualization
+#   - K-Means cluster on the SCALED features (not the PCA projection — better
+#     when the original features are well-conditioned)
+#   - Output a single DataFrame with both PC coordinates + cluster assignment
 
 set -euo pipefail
-
-PROJECT_DIR="${1:-iris-clusters-demo}"
+PROJECT_DIR="${1:-iris-unsupervised-demo}"
 
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
-echo ">>> Adding runtime + dev deps"
+echo ">>> Adding deps"
 uv add -q pandas scikit-learn requests
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 4 community components into src/$PKG/components/ + defs/"
+echo ">>> Installing 5 community components"
 $CLI add csv_file_ingestion    --auto-install
 $CLI add feature_scaler        --auto-install
+$CLI add pca                   --auto-install
 $CLI add k_means_clustering    --auto-install
 $CLI add dataframe_to_csv      --auto-install
-
-echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: iris_raw
   file_path: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv
-  description: UCI Iris dataset (3 species × 50 flowers, 4 numeric features)
+  description: UCI Iris (3 species × 50 flowers, 4 numeric features)
   group_name: ingest
 EOF
 
@@ -49,15 +49,26 @@ attributes:
   group_name: transform
 EOF
 
+cat > "src/$PKG/defs/pca/defs.yaml" <<EOF
+type: $PKG.components.pca.component.PcaComponent
+attributes:
+  asset_name: iris_pca
+  upstream_asset_key: iris_scaled
+  feature_columns: [sepal_length, sepal_width, petal_length, petal_width]
+  n_components: 2
+  keep_original: true   # so kmeans downstream can still use the 4 original features
+  group_name: model
+EOF
+
 cat > "src/$PKG/defs/k_means_clustering/defs.yaml" <<EOF
 type: $PKG.components.k_means_clustering.component.KMeansClusteringComponent
 attributes:
   asset_name: iris_clustered
-  upstream_asset_key: iris_scaled
+  upstream_asset_key: iris_pca
   feature_columns: [sepal_length, sepal_width, petal_length, petal_width]
   n_clusters: 3
   output_column: cluster
-  normalize: false   # already scaled upstream
+  normalize: false   # already scaled
   random_state: 42
   include_distance: true
   group_name: model
@@ -68,7 +79,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: iris_report
   upstream_asset_key: iris_clustered
-  file_path: /tmp/iris_clusters.csv
+  file_path: /tmp/iris_unsupervised.csv
   include_index: false
   group_name: sink
 EOF
@@ -76,23 +87,15 @@ EOF
 cat <<MSG
 
 >>> Setup complete.
+Materialize:
+    cd $PROJECT_DIR && uv run dg launch --assets '*'
 
-Materialize headlessly:
-    cd $PROJECT_DIR
-    uv run dg launch --assets '*'
+Output: /tmp/iris_unsupervised.csv — every flower with PC1, PC2, cluster, and distance to centroid.
 
-Or open the UI:
-    cd $PROJECT_DIR && uv run dg dev
-
-Output: /tmp/iris_clusters.csv — 150 flowers, each tagged with a
-cluster (0/1/2) and its distance to the nearest centroid.
-
-Inspect the cluster vs species crosstab — k-means should land roughly
-along species lines, since Iris is famously well-separated:
-
+Inspect (kmeans should land roughly along species lines — Iris is famously well-separated):
     uv run python -c "
     import pandas as pd
-    df = pd.read_csv('/tmp/iris_clusters.csv')
+    df = pd.read_csv('/tmp/iris_unsupervised.csv')
     print(pd.crosstab(df.species, df.cluster, margins=True))
     "
 MSG

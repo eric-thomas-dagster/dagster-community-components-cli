@@ -11,6 +11,15 @@ average across the cleaned series.
 Pipeline (4 components, all autoloaded by `dg`):
     synthetic_data_generator → ts_filler → running_total → dataframe_to_csv
 
+## Components used
+
+| # | Component | Category | Role |
+|---|---|---|---|
+| 1 | `synthetic_data_generator` | ai | Generate synthetic data |
+| 2 | `ts_filler` | transformation | Fill time-series gaps |
+| 3 | `running_total` | transformation | Cumulative aggregate |
+| 4 | `dataframe_to_csv` | sink | Write CSV |
+
 ## Run
 
 ```bash

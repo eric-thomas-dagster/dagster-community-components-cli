@@ -1,6 +1,5 @@
 # Multi-region orders union demo
 
-
 Three regions (NA, EU, APAC) export their order extracts as separate
 CSVs with slightly different column sets (NA uses USD, EU uses EUR,
 APAC includes a tax column the others don't). dataframe_union stacks
@@ -9,6 +8,14 @@ dataframe_to_csv writes the unified extract.
 
 Pipeline (5 components, all autoloaded by `dg`):
     csv_file_ingestion x 3 → dataframe_union → dataframe_to_csv
+
+## Components used
+
+| # | Component | Category | Role |
+|---|---|---|---|
+| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 2 | `dataframe_union` | transformation |  |
+| 3 | `dataframe_to_csv` | sink | Write CSV |
 
 ## Run
 

@@ -1,6 +1,5 @@
 # Market Basket demo
 
-
 Generates 200 synthetic shopping baskets with realistic item co-occurrence,
 runs apriori to find frequent itemsets + derive association rules
 (support / confidence / lift), filters to high-lift rules, summarizes by
@@ -10,6 +9,16 @@ Pipeline (7 components, all autoloaded by `dg`):
   csv_file_ingestion → market_basket_rules ─┬─→ filter (lift > 1.5)  → CSV (strong rules)
                                              │
                                              └─→ summarize (top antecedents) → CSV
+
+## Components used
+
+| # | Component | Category | Role |
+|---|---|---|---|
+| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 2 | `market_basket_rules` | analytics | Apriori association rules |
+| 3 | `filter` | transformation | Row filter by predicate |
+| 4 | `summarize` | transformation | Group-by aggregate |
+| 5 | `dataframe_to_csv` | sink | Write CSV |
 
 ## Run
 
