@@ -84,6 +84,43 @@ attributes:
   default_status: STOPPED
 EOF
 
+cat > "$PROJECT_DIR/README.md" <<'README'
+# NBA Scoreboard demo
+
+Live NBA scoreboard ingest — uses `http_poll_sensor` with targeted hashing
+so the sensor only fires when scores or game state actually change (not
+on every server timestamp tick).
+
+## How to run
+
+```bash
+uv run dg launch --assets '*'   # one-shot materialization
+uv run dg dev                   # then enable nba_scores_changed in the UI
+```
+
+## ⚠️ Fragility warning
+
+This demo depends on a **public, undocumented NBA endpoint**:
+`https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json`
+
+If the NBA changes the JSON shape (renames fields, restructures the games
+array, etc.), the `json_path_extractor` config in
+`src/.../defs/json_path_extractor/defs.yaml` will need updating. The
+shape was last validated **2026-05-02** during the BOS-PHI Game 7 East
+First Round.
+
+If you hit a parse failure:
+1. `curl https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json | jq .scoreboard.games[0]`
+2. Compare the keys to the `extractions:` block in the json_path_extractor defs.yaml
+3. Update field names accordingly
+
+## Why this is the demo for `http_poll_sensor`
+
+A naive whole-body hash would fire every minute because the API returns
+a server-side timestamp. By hashing `scoreboard.games` only, the sensor
+fires when there's a real change.
+README
+
 cat <<MSG
 
 >>> Setup complete.
@@ -91,6 +128,10 @@ cat <<MSG
 Materialize the asset graph once (manual seed):
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
+
+⚠️  See $PROJECT_DIR/README.md for a fragility note — if the NBA changes
+    their JSON shape (last validated 2026-05-02), the json_path_extractor
+    config will need updating.
 
 Then enable the sensor in the UI:
     cd $PROJECT_DIR && uv run dg dev
