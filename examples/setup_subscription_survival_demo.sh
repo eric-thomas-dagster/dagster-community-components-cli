@@ -27,6 +27,7 @@ echo ">>> Installing 3 community components into src/$PKG/components/ + defs/"
 $CLI add synthetic_data_generator --auto-install
 $CLI add survival_analysis        --auto-install
 $CLI add dataframe_to_csv         --auto-install
+$CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
@@ -62,6 +63,18 @@ attributes:
   file_path: /tmp/subscription_survival.csv
   include_index: false
   group_name: sink
+EOF
+
+cat > "src/$PKG/defs/cron_schedule/defs.yaml" <<EOF
+type: $PKG.components.cron_schedule.component.CronScheduleComponent
+attributes:
+  schedule_name: weekly_survival_refresh
+  cron_expression: "0 8 * * 1"
+  asset_keys:
+    - survival_report
+  default_status: STOPPED
+  tags:
+    purpose: survival_refresh
 EOF
 
 cat <<MSG

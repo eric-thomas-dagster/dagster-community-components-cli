@@ -32,6 +32,7 @@ $CLI add ts_compare            --auto-install
 $CLI add dataframe_to_csv      --auto-install
 $CLI add dataframe_to_csv      --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_ets"
 $CLI add dataframe_to_csv      --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_compare"
+$CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml"
 
@@ -128,6 +129,20 @@ attributes:
   upstream_asset_key: model_comparison
   file_path: /tmp/forecast_comparison.csv
   include_index: false
+EOF
+
+cat > "src/$PKG/defs/cron_schedule/defs.yaml" <<EOF
+type: $PKG.components.cron_schedule.component.CronScheduleComponent
+attributes:
+  schedule_name: daily_forecast
+  cron_expression: "0 6 * * *"
+  asset_keys:
+    - arima_report
+    - ets_report
+    - comparison_report
+  default_status: STOPPED
+  tags:
+    purpose: forecast
 EOF
 
 cat <<MSG

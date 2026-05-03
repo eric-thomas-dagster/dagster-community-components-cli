@@ -35,6 +35,7 @@ $CLI add synthetic_data_generator --auto-install --target-dir "src/$PKG/defs/exp
 $CLI add dataframe_to_csv         --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_assignments"
 $CLI add dataframe_to_csv         --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_trend"
 $CLI add dataframe_to_csv         --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_sizing"
+$CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml"
 
@@ -152,6 +153,19 @@ attributes:
   upstream_asset_key: next_experiment_sizing
   file_path: /tmp/ab_sizing.csv
   include_index: false
+EOF
+
+cat > "src/$PKG/defs/cron_schedule/defs.yaml" <<EOF
+type: $PKG.components.cron_schedule.component.CronScheduleComponent
+attributes:
+  schedule_name: ab_thirty_min_refresh
+  cron_expression: "*/30 * * * *"
+  asset_keys:
+    - results_report
+    - trend_report
+  default_status: STOPPED
+  tags:
+    purpose: thirty_min_refresh
 EOF
 
 cat <<MSG

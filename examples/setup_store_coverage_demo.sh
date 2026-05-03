@@ -69,6 +69,7 @@ $CLI add dataframe_to_csv   --auto-install
 $CLI add csv_file_ingestion --auto-install --target-dir "src/$PKG/defs/customers_ingest"
 $CLI add create_points      --auto-install --target-dir "src/$PKG/defs/customers_points"
 $CLI add dataframe_to_csv   --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_grid"
+$CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
@@ -188,6 +189,19 @@ attributes:
   file_path: /tmp/nyc_grid_cells.csv
   include_index: false
   group_name: sink
+EOF
+
+cat > "src/$PKG/defs/cron_schedule/defs.yaml" <<EOF
+type: $PKG.components.cron_schedule.component.CronScheduleComponent
+attributes:
+  schedule_name: weekly_coverage_refresh
+  cron_expression: "0 7 * * 1"
+  asset_keys:
+    - coverage_report
+    - grid_report
+  default_status: STOPPED
+  tags:
+    purpose: coverage_refresh
 EOF
 
 cat <<MSG

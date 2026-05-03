@@ -64,6 +64,7 @@ $CLI add filter                --auto-install
 $CLI add summarize             --auto-install
 $CLI add dataframe_to_csv      --auto-install
 $CLI add dataframe_to_csv      --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_top"
+$CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml"
 
@@ -129,6 +130,19 @@ attributes:
   upstream_asset_key: rules_by_antecedent
   file_path: /tmp/rules_by_antecedent.csv
   include_index: false
+EOF
+
+cat > "src/$PKG/defs/cron_schedule/defs.yaml" <<EOF
+type: $PKG.components.cron_schedule.component.CronScheduleComponent
+attributes:
+  schedule_name: weekly_basket_mining
+  cron_expression: "0 9 * * 1"
+  asset_keys:
+    - strong_rules_report
+    - top_antecedents_report
+  default_status: STOPPED
+  tags:
+    purpose: basket_mining
 EOF
 
 cat <<MSG

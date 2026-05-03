@@ -40,6 +40,7 @@ $CLI add dataframe_to_csv         --auto-install
 # Three sinks → three target_dirs
 $CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_cohorts"
 $CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_spend"
+$CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
@@ -140,6 +141,20 @@ attributes:
   file_path: /tmp/retail_running_spend.csv
   include_index: false
   group_name: sink
+EOF
+
+cat > "src/$PKG/defs/cron_schedule/defs.yaml" <<EOF
+type: $PKG.components.cron_schedule.component.CronScheduleComponent
+attributes:
+  schedule_name: nightly_retail_refresh
+  cron_expression: "0 4 * * *"
+  asset_keys:
+    - segments_report
+    - cohorts_report
+    - spend_report
+  default_status: STOPPED
+  tags:
+    purpose: retail_refresh
 EOF
 
 cat <<MSG
