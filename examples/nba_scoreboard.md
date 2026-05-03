@@ -1,9 +1,12 @@
 # NBA Scoreboard
 
-> ⚠️ **Fragile demo.** This depends on a public, undocumented NBA endpoint:
+> **Heads-up.** This demo hits a public, undocumented NBA **JSON endpoint** (not
+> HTML scraping — the same JSON the NBA's own mobile apps consume):
 > `https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json`.
-> If the NBA changes the JSON shape (renames fields, restructures `scoreboard.games`),
-> the `json_path_extractor` config in this demo will need updating.
+>
+> JSON endpoints from major orgs are usually pretty stable, but it isn't a
+> contracted API, so field names could shift. If parsing breaks one day,
+> see the "When it breaks" section below — it's a 5-minute fix.
 > **Last validated:** 2026-05-02 (Celtics-76ers Game 7, East First Round).
 
 End-to-end NBA scoreboard ingest using `http_poll_sensor` with **targeted hashing** so the sensor only fires when scores or game state actually change — not on every server-side timestamp tick.

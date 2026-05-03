@@ -56,7 +56,7 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 | [Store Coverage (geospatial)](store_coverage.md) | 9 components | Buffer + spatial_join + summarize: customer-to-store coverage |
 | [West Coast Cities Filter](west_coast_cities.md) | csv → bounding_box_filter → csv | Geographic filter to a lat/lng bounding box |
 | [RSS Sensor](rss_sensor.md) | rss_feed_sensor → rest → xml_parser → csv | Sensor-driven HN frontpage ingestion (no auth) |
-| [NBA Scoreboard ⚠️](nba_scoreboard.md) | http_poll_sensor → rest → json_path → csv | `http_poll_sensor` with targeted hashing — fires on real score changes, not server-timestamp churn. Fragile (public undocumented endpoint). |
+| [NBA Scoreboard](nba_scoreboard.md) | http_poll_sensor → rest → json_path → csv | `http_poll_sensor` with targeted hashing — fires on real score changes, not server-timestamp churn. Hits an undocumented public JSON endpoint. |
 
 ## Component coverage
 
