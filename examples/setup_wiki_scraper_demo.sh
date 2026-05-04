@@ -44,7 +44,6 @@ attributes:
   method: GET
   auth_type: none
   output_format: text
-  headers: '{"User-Agent": "dagster-community-components-demo/0.3"}'
   description: Wikipedia page — list of countries by GDP (raw HTML)
   group_name: ingest
 EOF
