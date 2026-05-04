@@ -41,6 +41,8 @@ attributes:
   method: GET
   auth_type: none
   output_format: dataframe
+  headers:
+    User-Agent: dagster-community-components-demo/0.3
   json_path: "scoreboard.games"
   description: Today's NBA games + scores (public, no auth)
   group_name: ingest
