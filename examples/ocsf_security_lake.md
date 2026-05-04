@@ -35,14 +35,15 @@ cd ocsf-security-lake-demo && uv run dg launch --assets '*'
 
 ## Expected mapping
 
-The synthetic data uses 7 Dagster+ event types; each maps to a specific OCSF class:
+The synthetic data uses 8 real Dagster+ event types (validated against the live `AuditLogEventType` enum); each maps to a specific OCSF class:
 
 | event_type | class_uid | category_uid | OCSF class |
 |---|---|---|---|
-| LOG_IN, LOG_OUT | 3002 | 3 | Authentication |
-| USER_INVITED, TOKEN_CREATED | 3005 | 3 | Account Change |
-| ROLE_GRANTED | 3006 | 3 | User Access Management |
-| DEPLOYMENT_CREATED, DEPLOYMENT_UPDATED | 6002 | 6 | Application Lifecycle |
+| LOG_IN | 3002 | 3 | Authentication |
+| CREATE_USER_TOKEN, REVOKE_USER_TOKEN | 3005 | 3 | Account Change |
+| CHANGE_USER_PERMISSIONS | 3006 | 3 | User Access Management |
+| CREATE_CODE_LOCATION, UPDATE_CODE_LOCATION, DELETE_CODE_LOCATION | 6002 | 6 | Application Lifecycle |
+| LAUNCH_RUN | 6003 | 6 | API Activity |
 
 Inspect the result:
 

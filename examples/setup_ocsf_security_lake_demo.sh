@@ -29,8 +29,16 @@ uv run python - <<'PY'
 import csv, json, random
 from datetime import datetime, timedelta, timezone
 random.seed(13)
-event_types = ["LOG_IN", "LOG_OUT", "USER_INVITED", "DEPLOYMENT_CREATED",
-               "DEPLOYMENT_UPDATED", "ROLE_GRANTED", "TOKEN_CREATED"]
+event_types = [
+    "LOG_IN",                    # → 3002 Authentication
+    "CREATE_USER_TOKEN",         # → 3005 Account Change
+    "REVOKE_USER_TOKEN",         # → 3005 Account Change
+    "CHANGE_USER_PERMISSIONS",   # → 3006 User Access Management
+    "CREATE_CODE_LOCATION",      # → 6002 Application Lifecycle
+    "UPDATE_CODE_LOCATION",      # → 6002 Application Lifecycle
+    "DELETE_CODE_LOCATION",      # → 6002 Application Lifecycle
+    "LAUNCH_RUN",                # → 6003 API Activity
+]
 emails = [f"u{i}@acme.com" for i in range(1, 9)]
 deployments = ["prod", "staging", "dev"]
 now = datetime.now(timezone.utc)
