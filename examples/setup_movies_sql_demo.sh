@@ -47,7 +47,7 @@ type: $PKG.components.type_coercer.component.TypeCoercerComponent
 attributes:
   asset_name: movies_typed
   upstream_asset_key: movies_raw
-  type_mapping:
+  type_map:
     year: int
     rating: float
   group_name: transform
