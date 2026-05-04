@@ -18,8 +18,40 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
-uv add -q pandas requests sqlalchemy
+uv add -q pandas sqlalchemy
 uv add --dev -q dagster-dg-cli dagster-webserver
+
+mkdir -p /tmp/movies_demo
+echo ">>> Generating synthetic 'top movies' CSV (50 rows; replaces the previously-used IMDB mirror)"
+uv run python - <<'PY'
+import csv, random
+random.seed(42)
+titles = [
+    "The Shawshank Redemption","The Godfather","The Dark Knight","12 Angry Men","Schindler's List",
+    "The Lord of the Rings: The Return of the King","Pulp Fiction","The Good, the Bad and the Ugly",
+    "Fight Club","Forrest Gump","Inception","Interstellar","The Matrix","Goodfellas","Se7en",
+    "It's a Wonderful Life","City of God","Life Is Beautiful","Spirited Away","The Pianist",
+    "Parasite","Whiplash","Gladiator","The Departed","Memento","Apocalypse Now","Alien","Aliens",
+    "American History X","Once Upon a Time in the West","Casablanca","Rear Window","Psycho","Vertigo",
+    "Modern Times","City Lights","Sunset Boulevard","Citizen Kane","Some Like It Hot","Dr. Strangelove",
+    "2001: A Space Odyssey","Lawrence of Arabia","The Bridge on the River Kwai","Singin' in the Rain",
+    "All About Eve","On the Waterfront","Double Indemnity","12 Years a Slave","Coco","Spotlight",
+]
+genres = ["Drama","Crime","Sci-Fi","Action","Comedy","Romance","Thriller","Animation","War"]
+rows = []
+for i, t in enumerate(titles):
+    rows.append({
+        "rank": i + 1,
+        "title": t,
+        "year": random.choice(range(1940, 2025)),
+        "rating": round(random.uniform(8.0, 9.4), 1),
+        "genre": random.choice(genres),
+    })
+with open("/tmp/movies_demo/top_movies.csv", "w", newline="") as f:
+    w = csv.DictWriter(f, fieldnames=rows[0].keys())
+    w.writeheader(); w.writerows(rows)
+print(f"wrote /tmp/movies_demo/top_movies.csv ({len(rows)} rows)")
+PY
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
@@ -31,13 +63,15 @@ $CLI add dataframe_to_table    --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-# 1. Ingest — IMDB Top 250 CSV (mirror that's stable + public; subject to host availability)
+# 1. Ingest — synthetic top-movies CSV (was an IMDB GitHub mirror; that 404'd, so we
+# generate a stable equivalent inline. The pipeline shape — read CSV, coerce types,
+# compute derived column, write to SQL — is what the demo is showcasing.)
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: movies_raw
-  file_path: https://raw.githubusercontent.com/erajasekar/IMDB-Top-250-Movies-Dataset/refs/heads/master/IMDB%20Top%20250%20Movies.csv
-  description: IMDB Top 250 Movies (public CSV mirror)
+  file_path: /tmp/movies_demo/top_movies.csv
+  description: 50 synthetic top-rated movies (rank, title, year, rating, genre)
   group_name: ingest
 EOF
 
