@@ -183,7 +183,7 @@ attributes:
   left_asset_key: orders_clipped
   right_asset_key: customers_cleansed
   how: left
-  on:
+  "on":
     - customer_id
   group_name: enriched
 EOF

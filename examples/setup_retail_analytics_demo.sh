@@ -73,7 +73,7 @@ cat > "src/$PKG/defs/rfm_segmentation/defs.yaml" <<EOF
 type: $PKG.components.rfm_segmentation.component.RFMSegmentationComponent
 attributes:
   asset_name: customer_segments
-  source_asset: orders_typed
+  upstream_asset_key: orders_typed
   scoring_method: quintile
   lookback_days: 365
   customer_id_field: customer_id

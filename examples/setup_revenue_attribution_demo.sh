@@ -75,8 +75,8 @@ cat > "src/$PKG/defs/revenue_attribution/defs.yaml" <<EOF
 type: $PKG.components.revenue_attribution.component.RevenueAttributionComponent
 attributes:
   asset_name: campaign_attribution
-  marketing_data_asset: marketing_data
-  revenue_data_asset: revenue_data
+  marketing_data_asset_key: marketing_data
+  revenue_data_asset_key: revenue_data
   attribution_model: linear
   attribution_window_days: 30
   join_key: customer_id

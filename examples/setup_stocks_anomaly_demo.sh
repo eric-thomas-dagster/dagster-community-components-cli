@@ -47,7 +47,7 @@ attributes:
   metric_column: price
   detection_method: z_score
   threshold: 2.5
-  group_by_field: symbol
+  group_by: symbol
   timestamp_field: date
   group_name: model
 EOF

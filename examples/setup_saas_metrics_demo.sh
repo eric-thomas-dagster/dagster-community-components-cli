@@ -55,7 +55,7 @@ cat > "src/$PKG/defs/subscription_metrics/defs.yaml" <<EOF
 type: $PKG.components.subscription_metrics.component.SubscriptionMetricsComponent
 attributes:
   asset_name: saas_metrics
-  stripe_data_asset: stripe_data
+  stripe_data_asset_key: stripe_data
   calculation_period: monthly
   ltv_method: historical
   lookback_months: 12

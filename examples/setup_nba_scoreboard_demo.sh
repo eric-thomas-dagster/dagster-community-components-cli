@@ -84,7 +84,7 @@ attributes:
   default_status: STOPPED
 EOF
 
-cat > "$PROJECT_DIR/README.md" <<'README'
+cat > "README.md" <<'README'
 # NBA Scoreboard demo
 
 Live NBA scoreboard ingest — uses `http_poll_sensor` with targeted hashing
