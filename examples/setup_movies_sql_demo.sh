@@ -22,35 +22,48 @@ uv add -q pandas sqlalchemy
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 mkdir -p /tmp/movies_demo
-echo ">>> Generating synthetic 'top movies' CSV (50 rows; replaces the previously-used IMDB mirror)"
+echo ">>> Downloading MovieLens (latest-small) — real public ratings dataset hosted by GroupLens"
+if [ ! -f /tmp/movies_demo/ml-latest-small/movies.csv ]; then
+  curl -fsSL https://files.grouplens.org/datasets/movielens/ml-latest-small.zip -o /tmp/movies_demo/ml.zip
+  unzip -oq /tmp/movies_demo/ml.zip -d /tmp/movies_demo/
+fi
+
+echo ">>> Computing the Top 250 by Bayesian-adjusted rating (real MovieLens data)"
 uv run python - <<'PY'
-import csv, random
-random.seed(42)
-titles = [
-    "The Shawshank Redemption","The Godfather","The Dark Knight","12 Angry Men","Schindler's List",
-    "The Lord of the Rings: The Return of the King","Pulp Fiction","The Good, the Bad and the Ugly",
-    "Fight Club","Forrest Gump","Inception","Interstellar","The Matrix","Goodfellas","Se7en",
-    "It's a Wonderful Life","City of God","Life Is Beautiful","Spirited Away","The Pianist",
-    "Parasite","Whiplash","Gladiator","The Departed","Memento","Apocalypse Now","Alien","Aliens",
-    "American History X","Once Upon a Time in the West","Casablanca","Rear Window","Psycho","Vertigo",
-    "Modern Times","City Lights","Sunset Boulevard","Citizen Kane","Some Like It Hot","Dr. Strangelove",
-    "2001: A Space Odyssey","Lawrence of Arabia","The Bridge on the River Kwai","Singin' in the Rain",
-    "All About Eve","On the Waterfront","Double Indemnity","12 Years a Slave","Coco","Spotlight",
-]
-genres = ["Drama","Crime","Sci-Fi","Action","Comedy","Romance","Thriller","Animation","War"]
-rows = []
-for i, t in enumerate(titles):
-    rows.append({
-        "rank": i + 1,
-        "title": t,
-        "year": random.choice(range(1940, 2025)),
-        "rating": round(random.uniform(8.0, 9.4), 1),
-        "genre": random.choice(genres),
-    })
-with open("/tmp/movies_demo/top_movies.csv", "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=rows[0].keys())
-    w.writeheader(); w.writerows(rows)
-print(f"wrote /tmp/movies_demo/top_movies.csv ({len(rows)} rows)")
+import csv, re
+import pandas as pd
+
+movies  = pd.read_csv("/tmp/movies_demo/ml-latest-small/movies.csv")
+ratings = pd.read_csv("/tmp/movies_demo/ml-latest-small/ratings.csv")
+
+# Aggregate per movie
+agg = ratings.groupby("movieId").agg(
+    avg_rating=("rating", "mean"),
+    num_ratings=("rating", "count"),
+).reset_index()
+
+# Bayesian smoothed rating: weight low-vote-count titles toward the global mean.
+# This is the same idea IMDB uses for its Top 250 (m = min votes threshold).
+m = 50  # minimum ratings to qualify
+C = ratings["rating"].mean()
+agg["bayes"] = (agg["num_ratings"] / (agg["num_ratings"] + m)) * agg["avg_rating"] \
+             + (m / (agg["num_ratings"] + m)) * C
+
+merged = movies.merge(agg[agg["num_ratings"] >= m], on="movieId")
+merged = merged.sort_values("bayes", ascending=False).head(250).reset_index(drop=True)
+
+# Extract year from title — MovieLens encodes it as "Title (YYYY)"
+merged["year"] = merged["title"].str.extract(r"\((\d{4})\)$")
+merged["title_clean"] = merged["title"].str.replace(r"\s*\(\d{4}\)$", "", regex=True)
+merged["rank"] = merged.index + 1
+
+out = merged[["rank", "title_clean", "year", "avg_rating", "num_ratings", "genres"]].rename(
+    columns={"title_clean": "title", "avg_rating": "rating"}
+)
+out["rating"] = out["rating"].round(2)
+out.to_csv("/tmp/movies_demo/top_movies.csv", index=False)
+print(f"wrote /tmp/movies_demo/top_movies.csv ({len(out)} rows)")
+print(out.head().to_string(index=False))
 PY
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
@@ -63,15 +76,16 @@ $CLI add dataframe_to_table    --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-# 1. Ingest — synthetic top-movies CSV (was an IMDB GitHub mirror; that 404'd, so we
-# generate a stable equivalent inline. The pipeline shape — read CSV, coerce types,
-# compute derived column, write to SQL — is what the demo is showcasing.)
+# 1. Ingest — Top 250 movies computed from real MovieLens ratings data.
+# (The IMDB-curated Top 250 isn't published as a CSV by IMDB themselves; their
+# `title.ratings.tsv.gz` lacks titles, and third-party Top-250 GitHub mirrors decay.
+# MovieLens is officially hosted by GroupLens at files.grouplens.org and stable.)
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: movies_raw
   file_path: /tmp/movies_demo/top_movies.csv
-  description: 50 synthetic top-rated movies (rank, title, year, rating, genre)
+  description: Top 250 movies by Bayesian-smoothed rating, derived from real MovieLens (latest-small) ratings
   group_name: ingest
 EOF
 
