@@ -66,6 +66,22 @@ The three asset components describe *what* runs; `asset_job` carves out the
 exact slice the external scheduler is allowed to invoke. The Dagster project
 itself doesn't know or care about the scheduler — that's the design.
 
+### Is `asset_job` required?
+
+**No** — the scheduler has three options for what to target. `asset_job`
+is the recommended one once you have more than one or two assets, but the
+others work:
+
+| Approach | scheduler-side payload | When it's OK |
+|---|---|---|
+| **Named `asset_job` (this demo)** | `jobName=daily_revenue_refresh` | Recommended. Stable contract; safe as the project grows. |
+| **`__ASSET_JOB` + asset selection** | `jobName=__ASSET_JOB` + `assetSelection: ["daily_revenue_report"]` in run config | Works. But `__ASSET_JOB` is an implementation detail, and the asset list now lives on both sides — your scheduler config and the Dagster project. Two sources of truth = drift. |
+| **Single asset, no job wrapper** | `dg launch --assets daily_revenue_report --partition $ODATE` (CLI) | Fine when there's exactly one asset to materialize. Once it grows, you're back to one of the above. |
+
+The named `asset_job` is the version you'd ship to customers. It's a stable
+GraphQL contract that doesn't change as you add unrelated assets — the
+scheduler stays out of the asset graph entirely.
+
 ## Run
 
 ```bash
