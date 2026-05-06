@@ -45,18 +45,72 @@ common ask. All of the following are configurable from `defs.yaml`:
 
 ## Asset graph: ADF in both directions
 
-The component supports the standard Dagster pattern of upstream/downstream:
+The component supports the standard Dagster pattern of upstream/downstream
+in **two granularities**:
 
-- **Other Dagster assets → ADF pipeline:** `upstream_asset_keys` (all
-  pipelines) or `assets_by_pipeline_name.<name>.deps` (per-pipeline). The
-  ADF pipeline materialization waits for those assets.
-- **ADF pipeline → other Dagster assets:** declare the ADF asset as a `deps`
-  on a downstream Dagster asset. Because `azure_data_factory` produces a
-  named asset per pipeline (e.g. `adf_pipeline_demo_wait_pipeline`),
-  downstream assets reference it like any other.
+### A) All-pipelines upstream (broad — applies to every imported pipeline)
+
+Use `upstream_asset_keys` when *every* imported ADF pipeline should wait
+for the same set of assets:
+
+```yaml
+attributes:
+  factory_name: my-data-factory
+  import_pipelines: true
+  upstream_asset_keys:
+    - dbt_marts/orders_clean      # every ADF pipeline waits for this
+    - dbt_marts/customers_clean
+```
+
+### B) Per-pipeline upstream (precise — different deps per ADF pipeline)
+
+Use `assets_by_pipeline_name.<pipeline_name>.deps` to wire each ADF
+pipeline to its own specific upstream Dagster assets. This is the more
+common case in production — different pipelines have different inputs:
+
+```yaml
+attributes:
+  factory_name: my-data-factory
+  import_pipelines: true
+
+  assets_by_pipeline_name:
+    daily_revenue_pipeline:
+      key: marts/daily_revenue
+      description: "Daily revenue computed by ADF"
+      group_name: revenue
+      deps:
+        - dbt_staging/orders        # this pipeline waits for orders
+        - dbt_staging/refunds       # AND for refunds
+
+    customer_360_pipeline:
+      key: marts/customer_360
+      group_name: customer
+      deps:
+        - dbt_staging/customers     # different upstream than the other pipeline
+        - external/crm_export
+```
+
+When Dagster materializes an ADF pipeline asset, it waits only for *that*
+pipeline's listed deps — not the union of all pipelines'.
+
+You can combine both: `upstream_asset_keys` sets a global baseline, and
+`assets_by_pipeline_name.<name>.deps` adds pipeline-specific deps on top.
+
+### C) ADF pipeline → other Dagster assets
+
+To declare a downstream Dagster asset that depends on an ADF pipeline,
+reference the imported asset by its key. Each pipeline becomes
+`adf_pipeline_<pipeline_name>` (or whatever you set via
+`assets_by_pipeline_name.<name>.key`). For example:
+
+```python
+@asset(deps=[AssetKey("adf_pipeline_daily_revenue_pipeline")])
+def revenue_dashboard_data(): ...
+```
 
 Same upstream-keying convention as the other registry integrations:
-`upstream_asset_keys` is the standard.
+`upstream_asset_keys` (broad) and `assets_by_pipeline_name.<name>.deps`
+(precise) are the two standards.
 
 ## Per-activity logs and metadata captured
 

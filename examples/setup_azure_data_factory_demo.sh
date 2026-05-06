@@ -118,12 +118,31 @@ attributes:
   max_wait_seconds: 600                  # this Wait pipeline finishes in ~5s; cap to keep tests fast
   run_poll_interval_seconds: 5
 
-  # If you wanted to wire ADF pipelines to Dagster upstreams:
-  # upstream_asset_keys: ["dbt_marts/orders_clean"]            # all ADF pipelines wait for this
-  # assets_by_pipeline_name:                                    # per-pipeline overrides
+  # ── Wiring ADF pipelines to upstream Dagster assets ──────────────────────
+  #
+  # OPTION A: Broad — every imported ADF pipeline waits for these:
+  # upstream_asset_keys:
+  #   - dbt_marts/orders_clean
+  #
+  # OPTION B: Per-pipeline (recommended for production) — different deps per
+  # pipeline. Each block under assets_by_pipeline_name supports:
+  #   key, description, group_name, metadata, tags, kinds, deps
+  #
+  # assets_by_pipeline_name:
   #   demo_wait_pipeline:
-  #     deps: ["raw/orders"]
-  #     description: "Pipeline gated on the raw orders landing"
+  #     key: marts/wait_marker
+  #     description: "Wait pipeline gated on raw orders landing"
+  #     deps:
+  #       - raw/orders          # only this pipeline waits for raw/orders
+  #       - raw/customers
+  #   customer_360_pipeline:
+  #     key: marts/customer_360
+  #     deps:
+  #       - dbt_staging/customers   # different upstream entirely
+  #       - external/crm_export
+  #
+  # Both options can be combined: upstream_asset_keys sets a global baseline,
+  # assets_by_pipeline_name.X.deps adds pipeline-specific deps on top.
 
   # If you wanted partitioned ADF pipeline runs (one ADF run per partition_key):
   # partition_type: daily
