@@ -54,9 +54,17 @@ The setup script writes:
 | 1 | `csv_file_ingestion` | ingestion | Read partitioned source CSV |
 | 2 | `summarize` | transformation | Per-partition group-by aggregate |
 | 3 | `dataframe_to_csv` | sink | Write `daily_revenue_{partition_key}.csv` |
+| 4 | `asset_job` | infrastructure | Bundle the 3 assets into a named job (`daily_revenue_refresh`) the scheduler targets stably |
 
 The Dagster project is a normal partitioned pipeline. Nothing in it knows
 or cares about the external scheduler — that's the design.
+
+The `asset_job` component matters here: the scheduler's contract is **"run
+job=daily_revenue_refresh, partition=$ODATE"**. That contract is stable
+even if you add unrelated assets to the same Dagster project — without
+`asset_job` you'd be targeting `__ASSET_JOB`, which materializes
+*everything* and would silently start running newly-added assets the
+scheduler never authorized.
 
 ## Run
 

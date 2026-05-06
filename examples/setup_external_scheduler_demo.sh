@@ -88,6 +88,23 @@ attributes:
   partition_start: "2026-04-30"
 EOF
 
+# Add an explicit asset_job so the external scheduler can target a named job
+# rather than relying on the auto-generated __ASSET_JOB. Cleaner: schedulers
+# get a stable contract ("run job=daily_revenue_refresh") that doesn't churn
+# when you add unrelated assets.
+$CLI add asset_job --auto-install >/dev/null
+
+cat > "src/$PKG/defs/asset_job/defs.yaml" <<EOF
+type: $PKG.components.asset_job.component.AssetJobComponent
+attributes:
+  job_name: daily_revenue_refresh
+  asset_keys:
+    - orders_raw
+    - daily_revenue
+    - daily_revenue_report
+  description: One-tick rollup invoked by the external scheduler (Control-M, cron, etc.)
+EOF
+
 echo ">>> Writing the companion external-scheduler scripts"
 mkdir -p bin
 
@@ -108,7 +125,7 @@ cat > bin/kick_off_run.sh <<'GRAPHQL'
 #                         banner; usually the project's package name)
 #
 # Optional env:
-#   JOB_NAME              Default: __ASSET_JOB (the auto-generated asset job)
+#   JOB_NAME              Default: daily_revenue_refresh (the named asset_job from this demo)
 #   DAGSTER_PLUS_USER_TOKEN  Required for Dagster+; skipped for OSS (no auth)
 #
 # Usage:
@@ -125,7 +142,7 @@ set -euo pipefail
 PARTITION="${1:-$(date -u +%Y-%m-%d)}"
 URL="${DAGSTER_GRAPHQL_URL:?set DAGSTER_GRAPHQL_URL to your Dagster /graphql endpoint}"
 LOCATION="${REPO_LOCATION:?set REPO_LOCATION (the code-location name shown in dg dev)}"
-JOB="${JOB_NAME:-__ASSET_JOB}"
+JOB="${JOB_NAME:-daily_revenue_refresh}"
 
 AUTH_HEADER=""
 if [ -n "${DAGSTER_PLUS_USER_TOKEN:-}" ]; then
@@ -190,8 +207,9 @@ cat > bin/kick_off_run_via_cli.sh <<'CLI'
 
 set -euo pipefail
 PARTITION="${1:-$(date -u +%Y-%m-%d)}"
+JOB="${JOB_NAME:-daily_revenue_refresh}"
 cd "$(dirname "$0")/.."
-exec uv run dg launch --assets '*' --partition "$PARTITION"
+exec uv run dg launch --job "$JOB" --partition "$PARTITION"
 CLI
 chmod +x bin/kick_off_run_via_cli.sh
 
@@ -212,7 +230,7 @@ set -euo pipefail
 PARTITION="${1:-$(date -u +%Y-%m-%d)}"
 URL="${DAGSTER_GRAPHQL_URL:?set DAGSTER_GRAPHQL_URL to your Dagster /graphql endpoint}"
 LOCATION="${REPO_LOCATION:?set REPO_LOCATION (the code-location name shown in dg dev)}"
-JOB="${JOB_NAME:-__ASSET_JOB}"
+JOB="${JOB_NAME:-daily_revenue_refresh}"
 
 AUTH_HEADER=""
 if [ -n "${DAGSTER_PLUS_USER_TOKEN:-}" ]; then
