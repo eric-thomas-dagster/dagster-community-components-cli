@@ -1,94 +1,158 @@
 # Examples
 
-End-to-end Dagster pipelines built entirely from community components — no
-custom Python beyond `model_validate({...})` calls. Each demo:
+End-to-end Dagster pipelines built entirely from community components.
+Each demo:
 
-- Hits a **public dataset or API** (no auth, no API key).
-- Installs every component via `dagster-component add`.
-- Materializes a small but real pipeline you can run locally in under a minute.
+- Runs end-to-end with a single `curl | bash` then `dg launch`
+- Lists exactly what it needs (auth, infra, env vars, cost)
+- Has been **validated against real systems**, not just type-checked
+
+The demos are grouped by what they need to run.
+
+---
+
+## No auth required (synthetic or public data)
+
+The biggest section — these run offline against synthetic data or public APIs.
+Useful for onboarding, CI smoke tests, and proving a component works.
+
+### Core ETL patterns
+
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [Kitchen Sink](kitchen_sink.md) | 21 components | The breadth showcase — ingest × 3 → quality × 4 → join → transform × 3 → analytics × 4 → sink × 5 → schedule |
+| [Pivot ↔ Unpivot](pivot_unpivot.md) | csv → pivot → unpivot → CSVs | Long↔wide round-trip on monthly sales |
+| [Router](router.md) | csv → router → 3× CSV | Multi-output conditional split (high/medium/low value orders) |
+| [Detect Changes](detect_changes.md) | csv × 2 → detect_changes → CSV | CDC: classify rows insert/update/delete/unchanged |
+| [SCD Type 2](scd_type_2.md) | csv × 2 → scd_type_2 → CSV | History-tracking dimension load |
+| [Window Calculation](window_calculation.md) | csv → window_calculation → CSV | Every supported window function on stock prices |
+| [Regional Orders Union](regional_orders.md) | csv × 3 → dataframe_union → CSV | Merge multi-region order extracts with mismatched columns |
+
+### Time series + forecasting
+
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [Airline Passengers Forecast](passengers_forecast.md) | csv → datetime → ets_forecast → CSV | ETS / Holt-Winters time-series forecasting |
+| [Forecast Comparison](forecast_comparison.md) | time_series → ARIMA + ETS → ts_compare | Head-to-head ARIMA vs ETS on the same series |
+| [Stocks — Anomaly Detection](stocks_anomaly.md) | csv → anomaly_detection → CSV | Per-ticker z-score outlier flagging |
+| [Sensor Gap-Fill](sensor_gapfill.md) | synthetic → ts_filler → running_total → CSV | Fill missing hourly readings + cumulative metrics |
+| [Synthetic Metrics + Anomalies](synthetic_metrics.md) | time_series_generator → anomaly_detection → CSV | No-upstream synthetic generator |
+
+### ML pipelines
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
 | [Palmer Penguins](penguins.md) | csv → impute → onehot → scale → parquet | Canonical ML preprocessing |
-| [USGS Earthquakes](earthquakes.md) | rest → flatten → select → sort → json | REST + nested JSON |
-| [Earthquakes (partitioned)](partitioned_earthquakes.md) | same, daily-partitioned | Backfillable date range |
-| [SpaceX Launches](spacex.md) | rest → select → datetime → rank → excel | Datetime parsing + ranking |
-| [REST Countries](countries.md) | rest → formula → summarize → json | Computed columns + rollup |
-| [NYC Weather](weather.md) | rest → datetime → running_total → transpose → csv | Columnar API + cumulative + pivot |
-| [Dagster GitHub Releases](releases.md) | rest → select → datetime → filter → sort → parquet | Filter + sort + parquet |
-| [Vintage Cars → SQL](cars_sql.md) | rest → datetime → formula → dataframe_to_table | Land a DataFrame in SQLite (or any SQLAlchemy DB) |
-| [Airline Passengers — Forecast](passengers_forecast.md) | csv → datetime → ets_forecast → csv | Time-series forecasting (ETS / Holt-Winters) |
-| [Iris — Unsupervised (PCA + K-Means)](iris_unsupervised.md) | csv → scale → pca → k_means → csv | Dimensionality reduction + clustering on the classic dataset |
-| [SpaceX — Multi-Source Join](spacex_join.md) | rest × 2 → dataframe_join → select → csv | Fan-in two REST sources, join on a FK |
-| [Stocks — Anomaly Detection](stocks_anomaly.md) | csv → anomaly_detection → csv | Per-ticker z-score outlier flagging |
-| [Books — Partitioned Web Scraper](books_scraper.md) | rest (text) → html_parser → json | Multi-page HTML scrape, one partition per page |
-| [UCI Retail — LTV (CDP)](retail_ltv.md) | csv → cleanse → formula → ltv → csv | Customer lifetime value on 542k real transactions |
-| [Airports — Spatial Clustering](airports_cluster.md) | csv → spatial_cluster → csv | DBSCAN on lat/lng (haversine, real km) |
-| [Hacker News — RSS Parsing](hn_rss.md) | rest (text) → regex (split) → regex (extract) → filter → csv | XML feed → structured rows |
-| [arXiv — PDF Extraction](arxiv_pdf.md) | csv → pdf_text_extractor → formula → csv | Document → text → word counts |
-| [SaaS Metrics (synthetic Stripe)](saas_metrics.md) | csv → subscription_metrics → csv | MRR / ARR / churn / LTV / ARPU |
-| [Revenue Attribution](revenue_attribution.md) | csv × 2 → revenue_attribution → csv | Linear attribution across marketing channels |
-| [Synthetic Time-Series + Anomalies](synthetic_metrics.md) | time_series_generator → anomaly_detection → csv | No-upstream synthetic data via the registry's generator |
-| [Hacker News (xml_parser)](hn_xml.md) | rest (text) → xml_parser (findall) → array_exploder → csv | Same as the regex variant, but xpath all the way down |
-| [GitHub Search — JSONPath](github_jsonpath.md) | rest → nested_field_extractor → json_path_extractor → csv | Two ways to flatten nested JSON |
-| [US Cities — Pairwise Distances](cities_distance.md) | csv × 2 → cross-join → distance_calculator → filter → sort → csv | Haversine distance matrix from a 6-component pipeline |
-| [Churn Prediction (synthetic)](churn.md) | csv → churn_prediction → csv | Rule-based scoring with interpretable risk factors |
-| [Cities — Nearest Neighbors](cities_nn.md) | csv → nearest_neighbors → csv | Top-3 closest cities per row (sklearn KD-tree) |
-| [Movies — SQL Source](movies_sql.md) | dataframe_from_sql → transforms → csv | Read from SQLite, fan into multiple sinks |
-| [Wikipedia — Multi-page Scraper](wiki_scraper.md) | rest × N → html_parser → csv | Scrape a list of wiki pages in parallel |
-| [Subscription Survival](subscription_survival.md) | synthetic_data_generator → survival_analysis → csv | Kaplan-Meier survival on synthetic SaaS subscriptions |
-| [Regional Orders Union](regional_orders.md) | csv × 3 → dataframe_union → csv | Merge multi-region order extracts with mismatched columns |
-| [Sensor Gap-Fill](sensor_gapfill.md) | synthetic_data_generator → ts_filler → running_total → csv | Fill missing hourly readings + cumulative metrics |
-| [A/B Full Pipeline](ab_full_pipeline.md) | 10 components | Assignment + analysis + trend + sample-size for next experiment |
-| [Forecast Comparison](forecast_comparison.md) | time_series → arima + ets → ts_compare | Head-to-head ARIMA vs ETS on the same series |
-| [Market Basket](market_basket.md) | csv → market_basket_rules → filter → csv | Apriori association rules with lift > 1.5 filter |
-| [Retail Analytics](retail_analytics.md) | 7 components, 3 parallel branches | RFM segmentation + cohort analysis + running spend |
-| [Titanic Complete](titanic_complete.md) | 12 components | Full DS workflow: ingest → quality → ETL → model → 3 outputs |
+| [Iris Unsupervised](iris_unsupervised.md) | csv → scale → pca → k_means → CSV | PCA + K-Means on the classic dataset |
 | [Wine ML Pipeline](wine_ml_pipeline.md) | 8 components | Feature scaling → train/test split → decision tree + cross-validation |
-| [Store Coverage (geospatial)](store_coverage.md) | 9 components | Buffer + spatial_join + summarize: customer-to-store coverage |
-| [West Coast Cities Filter](west_coast_cities.md) | csv → bounding_box_filter → csv | Geographic filter to a lat/lng bounding box |
-| [RSS Sensor](rss_sensor.md) | rss_feed_sensor → rest → xml_parser → csv | Sensor-driven HN frontpage ingestion (no auth) |
-| [NBA Scoreboard](nba_scoreboard.md) | http_poll_sensor → rest → json_path → csv | `http_poll_sensor` with targeted hashing — fires on real score changes, not server-timestamp churn. Hits an undocumented public JSON endpoint. |
-| [Kitchen Sink](kitchen_sink.md) | 21 components | The breadth showcase — ingest × 3 → quality × 4 → join → transform × 3 → analytics × 4 → sink × 5 → schedule. Synthetic data only. |
-| [Dagster+ Audit → Security Lake](dagster_plus_security_lake.md) **(Dagster+)** | dagster_plus_audit_log_ingestion → ocsf_normalizer → ocsf_validator → Parquet | Pull Dagster+ audit log via GraphQL, normalize to OCSF v1.1, validate conformance, land OCSF Parquet (local or in AWS Security Lake's Hive layout). Validated end-to-end with 176 real audit-log entries. **Requires a Dagster+ user token.** |
-| [SCD Type 2](scd_type_2.md) | csv × 2 → scd_type_2 → CSV | History-tracking dimension load on a 4-customer snapshot. Validates expire/insert/preserve logic. |
-| [Window Calculation](window_calculation.md) | csv → window_calculation → CSV | Every supported window function (row_number / rank / lag / lead / cumsum / moving_avg) on synthetic stock prices. |
-| [Pivot ↔ Unpivot](pivot_unpivot.md) | csv → pivot → unpivot → CSVs | Round-trip on monthly sales data. |
-| [Router](router.md) | csv → router → 3× CSV | Multi-output conditional split — orders into high/medium/low buckets. |
-| [Detect Changes](detect_changes.md) | csv × 2 → detect_changes → CSV | Diff today vs yesterday, classify each row insert/update/delete/unchanged. |
-| [OCSF + Security Lake](ocsf_security_lake.md) | csv → ocsf_normalizer → ocsf_validator → Parquet | Synthetic Dagster+ events through the full OCSF asset pipeline (no AWS required). |
-| [DuckDB Warehouse](duckdb_warehouse.md) | csv → duckdb_io_manager (resource) → summary asset → cron | Real Dagster project: IO manager round-trip + downstream asset + daily schedule. |
-| [Shell Command Job](shell_command_job.md) | shell_command_job | Scheduled shell command, no asset materialized. |
-| [Dynamic Fanout Job](dynamic_fanout_job.md) | dynamic_fanout_job | Generic DynamicOut: discover N items at runtime, parallel process, optional collect. |
-| [Per-File Processor](per_file_processor.md) | per_file_processor_job | Inbox-style fan-out: list local CSVs, parse each in parallel, archive on success. |
-| [External Scheduler](external_scheduler.md) | csv → summarize → csv (daily-partitioned) + bin/kick_off_run.sh | Pattern for keeping Control-M / Autosys / cron / etc. as the master scheduler with Dagster as the executor. Companion shell script (CLI + GraphQL flavors); no Dagster component required — that's the point. |
+| [Titanic Complete](titanic_complete.md) | 12 components | Full DS workflow: ingest → quality → ETL → model → 3 outputs |
+| [Churn Prediction](churn.md) | synthetic → churn_prediction → CSV | Rule-based scoring with interpretable risk factors |
+| [Market Basket](market_basket.md) | csv → market_basket_rules → filter → CSV | Apriori association rules with lift filter |
 
-## Component coverage
+### Customer + subscription analytics
 
-Across the **53 demos**, these exercise **90+ distinct components** spanning 6 categories:
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [SaaS Metrics (synthetic Stripe)](saas_metrics.md) | csv → subscription_metrics → CSV | MRR / ARR / churn / LTV / ARPU |
+| [Revenue Attribution](revenue_attribution.md) | csv × 2 → revenue_attribution → CSV | Linear attribution across marketing channels |
+| [Retail LTV (CDP)](retail_ltv.md) | csv → cleanse → formula → ltv → CSV | LTV on 542k real transactions |
+| [Subscription Survival](subscription_survival.md) | synthetic → survival_analysis → CSV | Kaplan-Meier survival on SaaS subscriptions |
+| [Retail Analytics](retail_analytics.md) | 7 components, 3 parallel branches | RFM segmentation + cohort analysis + running spend |
+| [A/B Full Pipeline](ab_full_pipeline.md) | 10 components | Assignment + analysis + trend + sample-size |
 
-- **ingestion** (2) — `csv_file_ingestion`, `rest_api_fetcher`
-- **transformation** (31) — `arima_forecast`, `array_exploder`, `create_samples`, `data_cleansing`, `dataframe_join`, `dataframe_union`, `datetime_parser`, `ets_forecast`, `feature_scaler`, `filter`, `formula`, `html_parser`, `imputation`, `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `one_hot_encoding`, `outlier_clipper`, `pdf_text_extractor`, `rank`, `regex_parser`, `running_total`, `select_columns`, `sort`, `summarize`, `tile_binning`, `transpose`, `ts_filler`, `type_coercer`, `unique_dedup`, `xml_parser`
-- **analytics** (29) — `ab_controls`, `ab_test_analysis`, `ab_treatments`, `ab_trend`, `anomaly_detection`, `bounding_box_filter`, `buffer`, `churn_prediction`, `cohort_analysis`, `create_points`, `cross_validation`, `decision_tree_model`, `distance_calculator`, `k_means_clustering`, `logistic_regression_model`, `ltv_prediction`, `make_grid`, `market_basket_rules`, `nearest_neighbors`, `pca`, `revenue_attribution`, `rfm_segmentation`, `smooth`, `spatial_cluster`, `spatial_join`, `subscription_metrics`, `survival_analysis`, `time_series_generator`, `ts_compare`
-- **ai** (1) — `synthetic_data_generator`
-- **sensor** (2) — `http_poll_sensor`, `rss_feed_sensor`
-- **sink** (5) — `dataframe_to_csv`, `dataframe_to_excel`, `dataframe_to_json`, `dataframe_to_parquet`, `dataframe_to_table`
+### Geospatial
 
-## How they're built
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [Airports Cluster](airports_cluster.md) | csv → spatial_cluster → CSV | DBSCAN on lat/lng (haversine, real km) |
+| [US Cities Pairwise Distances](cities_distance.md) | csv × 2 → cross-join → distance_calculator → CSV | Haversine distance matrix |
+| [Cities Nearest Neighbors](cities_nn.md) | csv → nearest_neighbors → CSV | Top-3 closest cities (sklearn KD-tree) |
+| [West Coast Cities Filter](west_coast_cities.md) | csv → bounding_box_filter → CSV | Geographic bounding-box filter |
+| [Store Coverage](store_coverage.md) | 9 components | Buffer + spatial_join + summarize coverage |
+
+### Public APIs (no auth)
+
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [USGS Earthquakes](earthquakes.md) | rest → flatten → select → sort → JSON | REST + nested JSON |
+| [Earthquakes Partitioned](partitioned_earthquakes.md) | same, daily-partitioned | Backfillable date range |
+| [SpaceX Launches](spacex.md) | rest → select → datetime → rank → Excel | Datetime parsing + ranking |
+| [SpaceX Multi-Source Join](spacex_join.md) | rest × 2 → dataframe_join → CSV | Fan-in two REST sources |
+| [REST Countries](countries.md) | rest → formula → summarize → JSON | Computed columns + rollup |
+| [NYC Weather](weather.md) | rest → datetime → running_total → transpose → CSV | Cumulative + pivot |
+| [Dagster GitHub Releases](releases.md) | rest → select → datetime → filter → sort → parquet | Filter + sort + parquet |
+| [GitHub Search JSONPath](github_jsonpath.md) | rest → nested_field_extractor → json_path_extractor → CSV | Two ways to flatten nested JSON |
+| [HN RSS](hn_rss.md) | rest → regex × 2 → filter → CSV | XML feed → structured rows |
+| [HN XML Parser](hn_xml.md) | rest → xml_parser → array_exploder → CSV | xpath all the way down |
+| [Wikipedia Multi-page Scraper](wiki_scraper.md) | rest × N → html_parser → CSV | Scrape multiple wiki pages |
+| [Books Scraper (partitioned)](books_scraper.md) | rest → html_parser → JSON | Multi-page HTML scrape, one partition per page |
+| [arXiv PDF Extraction](arxiv_pdf.md) | csv → pdf_text_extractor → formula → CSV | Document → text → word counts |
+| [Cars → SQL](cars_sql.md) | rest → datetime → formula → dataframe_to_table | Land DataFrame in SQLite |
+| [Movies → SQL](movies_sql.md) | csv → type_coercer → formula → SQL | Real MovieLens Top 250 → SQLite |
+| [NBA Scoreboard](nba_scoreboard.md) | http_poll_sensor → rest → json_path → CSV | `http_poll_sensor` with targeted hashing |
+| [RSS Sensor](rss_sensor.md) | rss_feed_sensor → rest → xml_parser → CSV | Sensor-driven HN frontpage ingestion |
+
+### OCSF / Security
+
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [OCSF + Security Lake](ocsf_security_lake.md) | csv → ocsf_normalizer → validator → Parquet | Synthetic Dagster+ events through full OCSF pipeline (no AWS required) |
+
+### Op jobs (no asset materialized)
+
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [Shell Command Job](shell_command_job.md) | shell_command_job | Scheduled shell command, no asset |
+| [Dynamic Fanout Job](dynamic_fanout_job.md) | dynamic_fanout_job | DynamicOut: discover N items, parallel process, optional collect |
+| [Per-File Processor](per_file_processor.md) | per_file_processor_job | Inbox-style fan-out: list local CSVs, parse each, archive on success |
+
+### Patterns
+
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [DuckDB Warehouse](duckdb_warehouse.md) | csv → duckdb_io_manager → summary → cron | IO manager round-trip + downstream asset + daily schedule |
+| [External Scheduler](external_scheduler.md) | csv → summarize → csv (daily-partitioned) + bin/kick_off_run.sh | Pattern for keeping Control-M / Autosys / cron as master with Dagster as executor (GraphQL launchRun) |
+
+---
+
+## Azure (subscription required)
+
+Each Azure demo lists exact provisioning commands and teardown. Costs are noted
+per-demo; all of these stay well under the free monthly allotments for personal
+subscriptions.
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [ADLS Round-Trip](adls_round_trip.md) | `dataframe_to_adls`, `external_adls_asset` | 1 storage account + container | <$0.05/mo |
+| [Bicep Self-Provision](bicep_self_provision.md) | `bicep_asset` provisions storage; downstream uses it | none upfront — Bicep creates it | <$0.05/mo |
+| [Dagster+ → Sentinel](dagster_plus_to_sentinel.md) **(Dagster+ + Azure)** | `dagster_plus_audit_log_ingestion` → `ocsf_normalizer` → `audit_logs_to_sentinel` | Log Analytics workspace | $0 (5GB/mo free tier) |
+
+**Validated end-to-end** against a real Azure subscription with a real
+Dagster+ deployment. The Sentinel demo pulled 176 production audit-log
+entries → OCSF v1.1 normalize → all 176 landed in Sentinel's
+`DagsterPlusAudit_CL` table.
+
+---
+
+## Dagster+ required (no Azure)
+
+| Demo | Pipeline | Highlights |
+|---|---|---|
+| [Dagster+ Audit → Security Lake](dagster_plus_security_lake.md) | dagster_plus_audit_log_ingestion → ocsf_normalizer → ocsf_validator → Parquet | Asset pipeline with full lineage; local Parquet by default. Validated with 176 real entries. |
+
+---
+
+## How a demo is built
 
 Each demo is a single Bash script (`setup_*.sh`) that:
 
 1. `uvx create-dagster project <name>` — scaffolds a canonical Dagster project
-2. `uv add`s any format-specific libs (pyarrow, openpyxl, etc.)
-3. `dagster-component add <id> --auto-install`s each component. The
-   class files (`component.py`, `schema.json`, `README.md`) land in
-   `src/<pkg>/components/<id>/`; the configured instance lands in
-   `src/<pkg>/defs/<id>/defs.yaml` — the canonical `create-dagster` split.
-4. Writes a `defs.yaml` per component with demo-specific attributes —
-   `dg`'s autoloader picks them up; no `definitions.py` glue
-5. Prints the run command (`dg launch --assets '*'`) + an inspect snippet
-
-Run any demo:
+2. `uv add` runtime libs (pyarrow, requests, etc.)
+3. `dagster-component add <id> --auto-install` for each component. Class
+   files land in `src/<pkg>/components/<id>/`; the configured instance lands
+   in `src/<pkg>/defs/<id>/defs.yaml` — the canonical `create-dagster` split
+4. Writes a `defs.yaml` per component with demo-specific attributes
+5. Prints the run command + an inspect snippet
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_<name>_demo.sh | bash
@@ -96,10 +160,22 @@ cd <name>-demo
 uv run dg launch --assets '*'
 ```
 
-## Why these exist
+## Auth-required demos: comprehensive prereqs
 
-Each demo doubles as an **integration test** that exercises a different
-combination of source / transform / sink. Several real component bugs
-(silent NaN on tz-aware datetimes in Excel, columnar dict misinterpretation
-in the REST fetcher, silent expression failures in `multi_field_formula`)
-were surfaced and fixed by the act of building these.
+For demos that need credentials, every walkthrough now documents:
+
+- **What to install** (Azure CLI, AWS CLI, etc.)
+- **What providers/features to enable** (Microsoft.Storage, Microsoft.OperationalInsights, etc.)
+- **What env vars to set** (with the `az` / `aws` commands to fetch them)
+- **What it costs** (with realistic numbers for the demo's data volume)
+- **How to tear down** (single-command deletion)
+
+If a section is missing from any auth-required walkthrough, file an issue or PR.
+
+## Component coverage
+
+Across the **55 demos**, these exercise **100+ distinct components** spanning
+every category in the registry. The validator harness at
+[`tools/validate_demos.py`](../tools/validate_demos.py) runs every no-auth demo
+end-to-end on each release; the auth-required ones get manual validation
+notes recorded in their walkthroughs.
