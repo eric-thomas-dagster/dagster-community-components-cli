@@ -137,12 +137,19 @@ subscriptions.
 | [Azure SQL Database](azure_sql.md) | `synthetic_data_generator` → `dataframe_to_table` (mssql+pymssql) | SQL Server + serverless DB | <$0.05/mo idle |
 | [Azure PostgreSQL Flexible](azure_postgres.md) | `synthetic_data_generator` → `dataframe_to_table` (postgresql+psycopg2) | Flexible Server B1ms | ~$13/mo |
 | [Azure MySQL Flexible](azure_mysql.md) | `synthetic_data_generator` → `dataframe_to_table` (mysql+pymysql) | Flexible Server B1ms | ~$13/mo |
+| [Azure Cache for Redis](azure_redis.md) | `redis_writer` (TLS) → `redis_reader` (TLS) → `dataframe_to_csv` | Cache Basic C0 | ~$16/mo |
 
 ### Orchestration + workflow
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
 | [Azure Data Factory](azure_data_factory.md) | `azure_data_factory` (import + trigger ADF pipelines, capture per-activity metadata) | ADF instance + service principal | $0 idle, $0.001/activity |
+
+### Streaming + queues
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [Azure Event Hubs Round-Trip](azure_eventhubs.md) | `dataframe_to_eventhub` (NEW) → `eventhubs_to_database_asset` → Postgres | EH Basic namespace + hub | ~$11/mo + $0.028/M events |
 
 ### Observability
 
@@ -156,6 +163,9 @@ Dagster+ deployment. Examples include:
 - ADF: `demo_wait_pipeline` triggered, polled Queued→InProgress→Succeeded in 15s, per-activity metadata captured
 - Cosmos: 50 orders upserted, 9 high-value rows queried back, CSV report written
 - Azure SQL: 100 rows landed in `dbo.orders`, top-5 verified via `SELECT TOP`
+- Postgres / MySQL Flexible: 100 rows landed in each in <4s
+- Cache for Redis: 30 rows HSET via TLS:6380, read back, CSV report
+- Event Hubs: 100 events published in 1.37s, consumer drained 200 events into Postgres in 6.12s
 
 ### Auth: managed identity in Azure compute
 
