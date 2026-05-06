@@ -1,9 +1,12 @@
 # Dagster+ Audit → AWS Security Lake demo
 
 **This is a Dagster+ demo** — pulls real audit-log entries from your Dagster+
-deployment via GraphQL, normalizes to OCSF, optionally lands in AWS Security
-Lake. The asset-style version (lineage tracked) of the
-[Dagster+ → SIEM op-job](dagster_plus_audit.md).
+deployment via GraphQL, normalizes to OCSF v1.1, optionally lands in AWS
+Security Lake. Lineage tracked end-to-end.
+
+If you don't have Dagster+ creds and just want to see the OCSF normalizer
++ validator working, see [OCSF + Security Lake](ocsf_security_lake.md) — same
+asset pipeline driven by synthetic data.
 
 ```
 dagster_plus_audit_log_ingestion → ocsf_normalizer

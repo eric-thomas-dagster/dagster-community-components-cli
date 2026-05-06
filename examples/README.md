@@ -50,8 +50,7 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 | [RSS Sensor](rss_sensor.md) | rss_feed_sensor → rest → xml_parser → csv | Sensor-driven HN frontpage ingestion (no auth) |
 | [NBA Scoreboard](nba_scoreboard.md) | http_poll_sensor → rest → json_path → csv | `http_poll_sensor` with targeted hashing — fires on real score changes, not server-timestamp churn. Hits an undocumented public JSON endpoint. |
 | [Kitchen Sink](kitchen_sink.md) | 21 components | The breadth showcase — ingest × 3 → quality × 4 → join → transform × 3 → analytics × 4 → sink × 5 → schedule. Synthetic data only. |
-| [Dagster+ Audit → SIEM](dagster_plus_audit.md) **(Dagster+)** | dagster_plus_audit_log_ingestion → siem_event_normalizer → CSV | Pull Dagster+ audit log via GraphQL, normalize to OCSF, write to CSV. Swap CSV for any SIEM sink (Splunk/Sentinel/Datadog/etc.) or use the all-in-one compound op job. **Requires a Dagster+ user token.** |
-| [Dagster+ Audit → Security Lake](dagster_plus_security_lake.md) **(Dagster+)** | dagster_plus_audit_log_ingestion → ocsf_normalizer → ocsf_validator → Parquet | Asset-style version of the op-job demo — full lineage tracked. Local Parquet by default; pass `security_lake` for the real AWS Security Lake sink. **Validated end-to-end with 176 real audit-log entries.** |
+| [Dagster+ Audit → Security Lake](dagster_plus_security_lake.md) **(Dagster+)** | dagster_plus_audit_log_ingestion → ocsf_normalizer → ocsf_validator → Parquet | Pull Dagster+ audit log via GraphQL, normalize to OCSF v1.1, validate conformance, land OCSF Parquet (local or in AWS Security Lake's Hive layout). Validated end-to-end with 176 real audit-log entries. **Requires a Dagster+ user token.** |
 | [SCD Type 2](scd_type_2.md) | csv × 2 → scd_type_2 → CSV | History-tracking dimension load on a 4-customer snapshot. Validates expire/insert/preserve logic. |
 | [Window Calculation](window_calculation.md) | csv → window_calculation → CSV | Every supported window function (row_number / rank / lag / lead / cumsum / moving_avg) on synthetic stock prices. |
 | [Pivot ↔ Unpivot](pivot_unpivot.md) | csv → pivot → unpivot → CSVs | Round-trip on monthly sales data. |
@@ -62,6 +61,7 @@ custom Python beyond `model_validate({...})` calls. Each demo:
 | [Shell Command Job](shell_command_job.md) | shell_command_job | Scheduled shell command, no asset materialized. |
 | [Dynamic Fanout Job](dynamic_fanout_job.md) | dynamic_fanout_job | Generic DynamicOut: discover N items at runtime, parallel process, optional collect. |
 | [Per-File Processor](per_file_processor.md) | per_file_processor_job | Inbox-style fan-out: list local CSVs, parse each in parallel, archive on success. |
+| [External Scheduler](external_scheduler.md) | csv → summarize → csv (daily-partitioned) + bin/kick_off_run.sh | Pattern for keeping Control-M / Autosys / cron / etc. as the master scheduler with Dagster as the executor. Companion shell script (CLI + GraphQL flavors); no Dagster component required — that's the point. |
 
 ## Component coverage
 
