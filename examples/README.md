@@ -153,6 +153,12 @@ subscriptions.
 |---|---|---|---|
 | [Azure Event Hubs Round-Trip](azure_eventhubs.md) | `dataframe_to_eventhub` (NEW) → `eventhubs_to_database_asset` → Postgres | EH Basic namespace + hub | ~$11/mo + $0.028/M events |
 
+### Microsoft Fabric (next-gen Synapse)
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [Fabric Full-Stack](fabric_full_stack.md) | All 6 Fabric components: `fabric_workspace`, `fabric_workspace_resource`, `fabric_lakehouse_resource`, `fabric_lakehouse_io_manager`, `dataframe_to_fabric_lakehouse`, `fabric_pipeline_trigger_job` (+ existing `dataframe_from_sql` for the Warehouse SQL endpoint) | F2 capacity + workspace + Lakehouse + Warehouse | ~$0.21/hr ($154/mo always-on) |
+
 ### Observability
 
 | Demo | Components exercised | Infra needed | ~Cost |
