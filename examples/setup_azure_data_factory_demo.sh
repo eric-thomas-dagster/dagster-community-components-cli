@@ -105,13 +105,35 @@ attributes:
   resource_group_name: dagster-demo-rg
   factory_name: $ADF_FACTORY_NAME
 
-  # Service principal auth (the component reads these env vars)
+  # Service principal auth — the component reads these env vars at load time
   tenant_id_env_var: AZURE_TENANT_ID
   client_id_env_var: AZURE_CLIENT_ID
   client_secret_env_var: AZURE_CLIENT_SECRET
 
   import_pipelines: true
   group_name: adf
+
+  # Comprehensive features (all optional)
+  capture_activity_metadata: true       # surface per-activity status / duration / error / output keys
+  max_wait_seconds: 600                  # this Wait pipeline finishes in ~5s; cap to keep tests fast
+  run_poll_interval_seconds: 5
+
+  # If you wanted to wire ADF pipelines to Dagster upstreams:
+  # upstream_asset_keys: ["dbt_marts/orders_clean"]            # all ADF pipelines wait for this
+  # assets_by_pipeline_name:                                    # per-pipeline overrides
+  #   demo_wait_pipeline:
+  #     deps: ["raw/orders"]
+  #     description: "Pipeline gated on the raw orders landing"
+
+  # If you wanted partitioned ADF pipeline runs (one ADF run per partition_key):
+  # partition_type: daily
+  # partition_start: "2026-04-01"
+  # partition_parameter_name: ODATE                            # name ADF expects in pipeline.parameters
+
+  # If you wanted to pass ADF pipeline parameters statically:
+  # pipeline_parameters:
+  #   environment: production
+  #   sla_minutes: 60
 EOF
 
 cat <<MSG
