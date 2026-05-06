@@ -145,6 +145,7 @@ subscriptions.
 |---|---|---|---|
 | [Azure Data Factory](azure_data_factory.md) | `azure_data_factory` (import + trigger ADF pipelines, capture per-activity metadata) | ADF instance + service principal | $0 idle, $0.001/activity |
 | [Azure Synapse Analytics](azure_synapse.md) | `azure_synapse` (import + trigger Synapse pipelines; Spark/notebook discovery) | Synapse workspace + ADLS Gen2 storage + service principal | $0 idle, free serverless SQL <1TB/mo |
+| [Synapse Serverless SQL (OPENROWSET)](azure_synapse_serverless.md) | `dataframe_to_adls` → `dataframe_from_sql` (no Synapse-specific component needed!) | Same Synapse workspace + a demo db with master key + db-scoped credential + external data source | $0 — first 1TB/mo scanned is free |
 
 ### Streaming + queues
 
@@ -168,6 +169,7 @@ Dagster+ deployment. Examples include:
 - Cache for Redis: 30 rows HSET via TLS:6380, read back, CSV report
 - Event Hubs: 100 events published in 1.37s, consumer drained 200 events into Postgres in 6.12s
 - Synapse: workspace pipeline triggered, polled Queued→Succeeded in 35s, run metadata captured
+- Synapse Serverless: parquet on ADLS → OPENROWSET → 7-row aggregation in 3.27s ($0 — free tier)
 
 ### Auth: managed identity in Azure compute
 
