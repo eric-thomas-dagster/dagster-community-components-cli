@@ -101,10 +101,15 @@ Each catalog-specific sink transforms this canonical payload to the
 catalog's expected format — Atlas entities for Purview, ingestProposals
 for DataHub, dataflow_objects for Alation, etc.
 
-## Swap to Microsoft Purview
+## Per-catalog examples
+
+Each example shows the YAML, the auth flow, the catalog API endpoint
+called, and what shows up in the catalog UI after a successful push.
+
+### Microsoft Purview
 
 ```yaml
-# Replace lineage_to_file/defs.yaml:
+# defs/lineage_to_purview/defs.yaml
 type: dagster_component_templates.LineageToPurviewComponent
 attributes:
   asset_name: lineage_in_purview
@@ -114,26 +119,162 @@ attributes:
   only_push_on_change: true
 ```
 
-Get a Purview access token:
+**Auth** (Microsoft Entra ID OAuth):
 
 ```bash
+# Local development
 export PURVIEW_ACCESS_TOKEN=$(az account get-access-token --resource https://purview.azure.net --query accessToken -o tsv)
+
+# Production: bake into a sidecar that refreshes the token before each run,
+# or use a Dagster resource to get the token via DefaultAzureCredential
 ```
 
-The component POSTs to `/datamap/api/atlas/v2/entity/bulk` — assets land
-as DataSet entities, lineage edges as Process entities (Purview renders
-lineage from Process inputs/outputs).
+**API:** `POST /datamap/api/atlas/v2/entity/bulk`
 
-## Swap to DataHub
+**What lands:** Each Dagster asset → `DataSet` Atlas entity. Each lineage
+edge → `Process` entity with input + output. Purview renders the lineage
+graph by following Process entities. Assets show up under the
+`dagster://<deployment>/<key>` qualifiedName prefix.
+
+### DataHub
 
 ```yaml
+# defs/lineage_to_datahub/defs.yaml
 type: dagster_component_templates.LineageToDataHubComponent
 attributes:
   asset_name: lineage_in_datahub
   upstream_asset_key: lineage_graph
-  catalog_url: https://datahub.example.com/api/gms
+  catalog_url: https://datahub.example.com/api/gms   # GMS = the metadata service
   api_token_env: DATAHUB_API_TOKEN
+  only_push_on_change: true
 ```
+
+**Auth:** Personal Access Token from DataHub Settings → Access Tokens.
+Set `DATAHUB_API_TOKEN=<token>`.
+
+**API:** `POST /aspects?action=ingestProposal` (Rest.li v2 protocol).
+Each asset emits two proposals: `datasetProperties` aspect (description,
+custom properties) + `upstreamLineage` aspect (parent dataset URNs).
+
+**What lands:** Datasets under
+`urn:li:dataset:(urn:li:dataPlatform:dagster,<key>,PROD)`. Lineage shows
+in DataHub's Lineage tab.
+
+### Alation
+
+```yaml
+# defs/lineage_to_alation/defs.yaml
+type: dagster_component_templates.LineageToAlationComponent
+attributes:
+  asset_name: lineage_in_alation
+  upstream_asset_key: lineage_graph
+  catalog_url: https://alation.example.com
+  api_token_env: ALATION_API_TOKEN
+```
+
+**Auth:** Alation API token. Header is `TOKEN: <value>` (NOT `Bearer`).
+Generate one in Alation: User Settings → Authentication.
+
+**API:** `POST /integration/v2/lineage/`. Each asset becomes a
+`dataflow` external object; each lineage edge becomes a path connecting
+upstream/downstream segments. Alation processes asynchronously and
+returns a job ID.
+
+**What lands:** External objects browseable under your Dagster
+deployment's external_id prefix. Lineage shows in the Lineage tab on
+each object.
+
+### Collibra
+
+```yaml
+# defs/lineage_to_collibra/defs.yaml
+type: dagster_component_templates.LineageToCollibraComponent
+attributes:
+  asset_name: lineage_in_collibra
+  upstream_asset_key: lineage_graph
+  catalog_url: https://example.collibra.com
+  api_token_env: COLLIBRA_API_TOKEN
+```
+
+**Auth:** Collibra Bearer token via Authorization header.
+
+**API:** `POST /rest/2.0/import/json-job`. Each asset → `Asset` object
+in a community/domain hierarchy (organization → "<org> Data Platform"
+community → asset's group as the domain). Lineage edges → `Data Flow`
+relations.
+
+**What lands:** Assets in the configured community. Lineage relations
+viewable via Collibra's Lineage Explorer.
+
+### OpenLineage (Marquez, Atlan, Astronomer Observe, etc.)
+
+```yaml
+# defs/lineage_to_openlineage/defs.yaml
+type: dagster_component_templates.LineageToOpenLineageComponent
+attributes:
+  asset_name: lineage_in_marquez
+  upstream_asset_key: lineage_graph
+  catalog_url: https://marquez.example.com
+  api_token_env: OPENLINEAGE_API_TOKEN     # optional — leave empty if your backend allows anonymous
+```
+
+**Auth:** Optional `Bearer <token>` if your OL backend requires it.
+Marquez open-source default has no auth; Astronomer Observe + Atlan
+require Bearer tokens.
+
+**API:** `POST /api/v1/lineage` with one `RunEvent` per push. Each
+asset becomes an `inputDataset` with a `dagster_metadata` facet (group,
+kinds, freshness policy) and a `schema` facet derived from asset
+metadata. The run also carries a `dagster_lineage` facet listing all
+edges + counts.
+
+**What lands:** A single completed RunEvent for the
+`dagster_lineage_sync` job. Datasets appear under
+`namespace=dagster://<org>/<deployment>`. Click-through to the run
+shows all edges in the facet.
+
+### Generic HTTP webhook
+
+```yaml
+# defs/lineage_to_webhook/defs.yaml
+type: dagster_component_templates.LineageToWebhookComponent
+attributes:
+  asset_name: lineage_in_n8n
+  upstream_asset_key: lineage_graph
+  catalog_url: https://n8n.example.com/webhook/lineage-update
+  api_token_env: LINEAGE_WEBHOOK_TOKEN     # optional — Bearer if set
+```
+
+**Auth:** Optional `Bearer <token>` if `api_token_env` is set.
+
+**API:** `POST <catalog_url>` with the raw canonical payload (no
+catalog-specific transform). Use this for n8n / Zapier / Slack /
+internal webhook endpoints that want the full lineage graph as JSON.
+
+**What lands:** Whatever your webhook endpoint does with the payload.
+Common pattern: post lineage diff to a Slack channel.
+
+### Local JSON file (for demos / audit / debug)
+
+```yaml
+# defs/lineage_to_file/defs.yaml
+type: dagster_component_templates.LineageToFileComponent
+attributes:
+  asset_name: lineage_audit_trail
+  upstream_asset_key: lineage_graph
+  catalog_url: data/lineage-history/lineage.json
+  api_token_env: ""
+```
+
+**Auth:** None.
+
+**Output:** Writes the canonical payload to the local path on every push
+(skipped if `only_push_on_change: true` and the hash matches). Good for:
+- Demo / debugging (run the demo with this sink, inspect the JSON before
+  pointing at a real catalog)
+- Compliance / audit logs (point at a mounted volume that's archived
+  daily)
+- Pre-production validation (payload diff in CI before catalog rollout)
 
 ## Fan-out to multiple catalogs
 
