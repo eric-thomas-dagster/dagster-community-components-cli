@@ -94,6 +94,7 @@ attributes:
   database: demo
   container: orders
   if_exists: upsert
+  id_field: order_id          # Cosmos requires 'id'; copy from order_id
   group_name: cosmos_sink
 EOF
 
