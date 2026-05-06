@@ -18,7 +18,6 @@ from .registry import fetch_file
 COMPONENT_FILES = (
     "component.py",
     "io_manager.py",        # split-architecture IO managers
-    "lineage_core.py",      # shared helper for lineage_to_<catalog> components
     "__init__.py",          # split-architecture re-exports
     "README.md",
     "schema.json",
