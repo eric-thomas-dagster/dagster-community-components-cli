@@ -144,6 +144,7 @@ subscriptions.
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
 | [Azure Data Factory](azure_data_factory.md) | `azure_data_factory` (import + trigger ADF pipelines, capture per-activity metadata) | ADF instance + service principal | $0 idle, $0.001/activity |
+| [Azure Synapse Analytics](azure_synapse.md) | `azure_synapse` (import + trigger Synapse pipelines; Spark/notebook discovery) | Synapse workspace + ADLS Gen2 storage + service principal | $0 idle, free serverless SQL <1TB/mo |
 
 ### Streaming + queues
 
@@ -166,6 +167,7 @@ Dagster+ deployment. Examples include:
 - Postgres / MySQL Flexible: 100 rows landed in each in <4s
 - Cache for Redis: 30 rows HSET via TLS:6380, read back, CSV report
 - Event Hubs: 100 events published in 1.37s, consumer drained 200 events into Postgres in 6.12s
+- Synapse: workspace pipeline triggered, polled Queued→Succeeded in 35s, run metadata captured
 
 ### Auth: managed identity in Azure compute
 
