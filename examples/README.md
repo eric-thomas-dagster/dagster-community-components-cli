@@ -189,6 +189,14 @@ uses env vars; production in Azure compute uses the attached identity.
 
 ---
 
+## Catalog Lineage Sync — multi-target (no auth required for the file demo)
+
+| Demo | Components used | Highlights |
+|---|---|---|
+| [Catalog Lineage Sync](lineage_catalogs.md) | `lineage_graph_extractor` (source) → `lineage_to_file` (sink) — swap in `lineage_to_purview`, `lineage_to_datahub`, `lineage_to_alation`, `lineage_to_collibra`, `lineage_to_openlineage`, `lineage_to_webhook` for real catalogs | Lock-step fan-out across N catalogs; per-sink change-detection skip via payload hashing. Validated locally end-to-end with file sink. |
+
+---
+
 ## How a demo is built
 
 Each demo is a single Bash script (`setup_*.sh`) that:
