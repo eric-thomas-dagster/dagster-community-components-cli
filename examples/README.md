@@ -121,17 +121,49 @@ Each Azure demo lists exact provisioning commands and teardown. Costs are noted
 per-demo; all of these stay well under the free monthly allotments for personal
 subscriptions.
 
+### Storage + lakehouse
+
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
 | [ADLS Round-Trip](adls_round_trip.md) | `dataframe_to_adls`, `external_adls_asset` | 1 storage account + container | <$0.05/mo |
 | [ADLS Inbox](adls_inbox.md) | `adls_monitor` (sensor) → `asset_job` → `adls_to_database_asset` | same storage account, files in `demo/inbox/` | <$0.05/mo |
 | [Bicep Self-Provision](bicep_self_provision.md) | `bicep_asset` provisions storage; downstream uses it | none upfront — Bicep creates it | <$0.05/mo |
+
+### Databases
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [Cosmos DB Round-Trip](cosmosdb_round_trip.md) | `cosmosdb_writer` → `cosmosdb_reader` → `dataframe_to_csv` | Cosmos DB account (free tier) | $0 |
+| [Azure SQL Database](azure_sql.md) | `synthetic_data_generator` → `dataframe_to_table` (mssql+pymssql) | SQL Server + serverless DB | <$0.05/mo idle |
+| [Azure PostgreSQL Flexible](azure_postgres.md) | `synthetic_data_generator` → `dataframe_to_table` (postgresql+psycopg2) | Flexible Server B1ms | ~$13/mo |
+| [Azure MySQL Flexible](azure_mysql.md) | `synthetic_data_generator` → `dataframe_to_table` (mysql+pymysql) | Flexible Server B1ms | ~$13/mo |
+
+### Orchestration + workflow
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [Azure Data Factory](azure_data_factory.md) | `azure_data_factory` (import + trigger ADF pipelines, capture per-activity metadata) | ADF instance + service principal | $0 idle, $0.001/activity |
+
+### Observability
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
 | [Dagster+ → Sentinel](dagster_plus_to_sentinel.md) **(Dagster+ + Azure)** | `dagster_plus_audit_log_ingestion` → `ocsf_normalizer` → `audit_logs_to_sentinel` | Log Analytics workspace | $0 (5GB/mo free tier) |
 
 **Validated end-to-end** against a real Azure subscription with a real
-Dagster+ deployment. The Sentinel demo pulled 176 production audit-log
-entries → OCSF v1.1 normalize → all 176 landed in Sentinel's
-`DagsterPlusAudit_CL` table.
+Dagster+ deployment. Examples include:
+- Sentinel: 176 production audit-log entries → OCSF v1.1 normalize → all 176 landed in `DagsterPlusAudit_CL`
+- ADF: `demo_wait_pipeline` triggered, polled Queued→InProgress→Succeeded in 15s, per-activity metadata captured
+- Cosmos: 50 orders upserted, 9 high-value rows queried back, CSV report written
+- Azure SQL: 100 rows landed in `dbo.orders`, top-5 verified via `SELECT TOP`
+
+### Auth: managed identity in Azure compute
+
+When running these in **Azure Container Apps** or **AKS** with a managed
+identity attached, you can omit the env-var auth entirely. The Azure
+components use `DefaultAzureCredential`, which falls back through
+env vars → managed identity → `az login` automatically. Local development
+uses env vars; production in Azure compute uses the attached identity.
 
 ---
 
