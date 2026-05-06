@@ -13,13 +13,15 @@ The bridge between them is a shell script that calls Dagster's GraphQL API.
    (Control-M, Autosys,      │ shells out
    cron, Jenkins, ...)       ▼
                           bin/kick_off_run.sh
-                              │ POST /graphql  (curl)
+                              │ POST /graphql launchRun
+                              │   jobName=daily_revenue_refresh
+                              │   tags={dagster/partition: <ODATE>}
                               ▼
-                          ┌──────────────────────────────┐
-                          │  daily-partitioned Dagster   │
-                          │  job:                         │
-                          │    csv → summarize → csv      │
-                          └──────────────────────────────┘
+                          ┌──────────────────────────────────────────┐
+                          │  asset_job   (daily_revenue_refresh)     │  ← the named, scheduler-stable target
+                          │    │                                      │
+                          │    └─→ csv → summarize → csv (per partition)
+                          └──────────────────────────────────────────┘
 ```
 
 ## Why GraphQL, not the Dagster CLI?
@@ -49,22 +51,20 @@ The setup script writes:
 
 ## Components used
 
+The four community components below compose into the full pattern. The
+star is **`asset_job`** — without it, the scheduler has no stable name to
+target.
+
 | # | Component | Category | Role |
 |---|---|---|---|
 | 1 | `csv_file_ingestion` | ingestion | Read partitioned source CSV |
 | 2 | `summarize` | transformation | Per-partition group-by aggregate |
 | 3 | `dataframe_to_csv` | sink | Write `daily_revenue_{partition_key}.csv` |
-| 4 | `asset_job` | infrastructure | Bundle the 3 assets into a named job (`daily_revenue_refresh`) the scheduler targets stably |
+| 4 | **`asset_job`** | infrastructure | **Bundles the 3 assets above into the named job `daily_revenue_refresh` that the scheduler launches.** Without this, you'd target `__ASSET_JOB` (auto-generated, materializes *everything*), so the scheduler would silently start running newly-added assets it never authorized. The `asset_job` keeps the scheduler-side contract stable: *"run job=daily_revenue_refresh, partition=$ODATE"*. |
 
-The Dagster project is a normal partitioned pipeline. Nothing in it knows
-or cares about the external scheduler — that's the design.
-
-The `asset_job` component matters here: the scheduler's contract is **"run
-job=daily_revenue_refresh, partition=$ODATE"**. That contract is stable
-even if you add unrelated assets to the same Dagster project — without
-`asset_job` you'd be targeting `__ASSET_JOB`, which materializes
-*everything* and would silently start running newly-added assets the
-scheduler never authorized.
+The three asset components describe *what* runs; `asset_job` carves out the
+exact slice the external scheduler is allowed to invoke. The Dagster project
+itself doesn't know or care about the scheduler — that's the design.
 
 ## Run
 
