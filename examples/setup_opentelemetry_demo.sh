@@ -98,7 +98,7 @@ attributes:
   endpoint: $OTLP_ENDPOINT
   metric_name: orders.total
   metric_kind: sum                # counter — only goes up
-  metric_unit: "1"
+  metric_unit: "_count"
   value_column: total              # numeric column on each order
   attribute_columns: [category, status]
   service_name: dagster_demo
