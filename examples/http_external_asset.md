@@ -1,20 +1,19 @@
 # HTTP External Asset — wraps any HTTP-driven external job runner
 
 **Validated end-to-end against the public GitHub Actions REST API** —
-RUN_SUCCESS materializing in 841ms. No auth required.
+RUN_SUCCESS materializing through the full chain in ~4s. Three asset
+shapes covered: un-partitioned trigger/poll, downstream pandas
+consumer, and daily-partitioned with `partition_key` flowing into the
+HTTP request. No auth required.
 
 ```
-github_workflow_run  ← http_external_asset
-   │
-   ├── trigger: GET /repos/{owner}/{repo}/actions/runs?per_page=1
-   │   → returns the ID of the most recent workflow run
-   │
-   ├── status:  GET /repos/{owner}/{repo}/actions/runs/{run_id}
-   │   → polls until status="completed", asserts conclusion="success"
-   │
-   └── metadata extracted: workflow_name · run_number · conclusion ·
-       run_started_at · updated_at · run_url · head_branch · head_sha ·
-       event · actor_login
+github_workflow_run     ← http_external_asset (trigger → poll → metadata)
+        │
+        └─→ github_run_summary  ← pandas (consumes upstream metadata,
+                                  writes /tmp/github_run_summary.csv)
+
+github_runs_by_day      ← http_external_asset (DAILY-partitioned;
+                          partition_key flows into ?created=YYYY-MM-DD)
 ```
 
 ## Components covered (1)
@@ -25,15 +24,33 @@ github_workflow_run  ← http_external_asset
 
 ## Cost
 
-**$0.** Anonymous GitHub REST API allows 60 req/hour/IP, plenty for one
-demo run (1 trigger + 1 poll = 2 requests).
+**$0.** Anonymous GitHub REST API allows 60 req/hour/IP. The full demo
+issues ~4 requests (un-partitioned trigger + poll, plus partition
+trigger + poll), well under the budget.
+
+## What this demo proves end-to-end
+
+| Capability | Where shown | Validation |
+|---|---|---|
+| Trigger → poll → finalize loop | `github_workflow_run` | RUN_SUCCESS in 1.02s, external_run_id 25584195096 |
+| JSONPath extractor + `equals` operator | `is_terminal: $.status equals completed` | terminal correctly detected on first poll |
+| `any_of` boolean composition | `is_success` on partitioned asset accepts `success` OR `skipped` | matched against real conclusions |
+| Multiple `metadata` extractors | `workflow_name`, `run_number`, `conclusion`, `run_started_at`, `run_url`, `head_branch`, `head_sha`, `event`, `actor_login` | all surfaced as Dagster MaterializeResult metadata |
+| Downstream Dagster lineage | `github_run_summary` reads upstream materialization metadata via `context.instance` | RUN_SUCCESS, real CSV written with the upstream's metadata |
+| Daily partitions | `github_runs_by_day` with `partition_type: daily` + `partition_start: 2026-04-01` | partition `2026-05-01` materialized, external run `25238007065` from that day |
+| `{{ partition_key }}` Jinja templating into HTTP request | `query_params.created: "{% raw %}{{ partition_key }}{% endraw %}"` | server received `?created=2026-05-01` |
 
 ## Run it
 
 ```bash
 ./setup_http_external_asset_demo.sh
 cd http-external-asset-demo
-uv run dg launch --assets github_workflow_run
+
+# Un-partitioned chain (http asset → downstream pandas summary):
+uv run dg launch --assets github_workflow_run+
+
+# A single daily partition:
+uv run dg launch --assets github_runs_by_day --partition 2026-05-01
 ```
 
 To target a different public repo:
@@ -42,7 +59,7 @@ To target a different public repo:
 TARGET_REPO=apache/airflow ./setup_http_external_asset_demo.sh airflow-demo
 ```
 
-Or open the asset graph:
+Open the asset graph:
 
 ```bash
 uv run dg dev   # http://localhost:3000
@@ -52,8 +69,7 @@ uv run dg dev   # http://localhost:3000
 
 The component is meant for any HTTP-driven job runner — Fivetran, Airbyte,
 dbt Cloud, Jenkins, internal job APIs. We picked the GitHub Actions REST
-API for the validation walkthrough because it has all the right
-properties:
+API for the validation walkthrough because:
 
 - **Public + no-auth.** Reproducible without secrets.
 - **Real lifecycle.** Workflow runs go `queued → in_progress → completed`
@@ -61,23 +77,22 @@ properties:
   timed_out / action_required` — exactly the trigger/poll shape the
   component is designed for.
 - **Real JSON contract.** Tests the JSONPath extractors, condition
-  language (`equals`, `in`), and metadata extraction against a
-  production API contract, not a mock.
-- **Already-terminal runs are fine.** Most-recent runs on a busy public
-  repo are already terminal by the time the demo polls, so the asset
-  materializes on the first poll without waiting.
+  language, and metadata extraction against a production API contract,
+  not a mock.
+- **Filterable by date** via the `?created=YYYY-MM-DD` query param —
+  ideal for proving the daily-partition pattern.
 
-## What got fixed validating this demo
+## Bugs surfaced and fixed validating this demo
 
-The end-to-end run surfaced one real bug in the component:
-
-- **`trigger.run_id` source default.** The `_ConditionExtractor` field
-  `source` defaults to `status_response`, but at trigger time only
-  `trigger_response` is available — so the extractor read None instead
-  of the response body. Fixed by forcing `source=trigger_response` for
-  the run-id extractor at evaluation time. Documented as a behavior
-  override (the user's `source` setting is ignored on `trigger.run_id`
-  — only one source makes sense at trigger time).
+1. **`trigger.run_id` source default.** The `_ConditionExtractor` field
+   `source` defaults to `status_response`, but at trigger time only
+   `trigger_response` is available — so the extractor read None. Fixed
+   by forcing `source=trigger_response` for the run-id extractor at
+   evaluation time.
+2. **`from __future__ import annotations` was at the top of
+   `component.py`.** Dagster's `_validate_context_type_hint` reads
+   parameter annotations at runtime, and the future import turns them
+   into strings — breaking the `is`-checks. Removed.
 
 ## Convert into a real (write-side) trigger
 
@@ -97,9 +112,8 @@ attributes:
           ref: main
           inputs:
             environment: production
-        # /dispatches returns 204 with no body, so we need a follow-up
-        # filter on /actions/runs to find the run we just kicked. Use
-        # the from_python: escape hatch for that:
+        # /dispatches returns 204 with no body, so use from_python: to
+        # follow up with /actions/runs and find the run we just kicked.
         run_id:
           from_python: "myproject.helpers:resolve_dispatched_run_id"
       status:
