@@ -6,7 +6,7 @@
 ```
 support_tickets (synthetic 20 rows from synthetic_data_generator)
        │
-       └── ticket_summaries  ← anthropic_llm (claude-3-5-haiku-20241022)
+       └── ticket_summaries  ← anthropic_llm (claude-haiku-4-5-20251001)
 ```
 
 ## Components covered (1)
@@ -22,9 +22,9 @@ fastest current model). Bigger models are pricier:
 
 | Model | Input \$ / 1M tok | Output \$ / 1M tok |
 |---|---|---|
-| `claude-3-5-haiku-20241022` | $0.80 | $4 |
-| `claude-3-5-sonnet-20241022` | $3 | $15 |
-| `claude-3-opus-20240229` | $15 | $75 |
+| `claude-haiku-4-5-20251001` | $0.80 | $4 |
+| `claude-sonnet-4-6` | $3 | $15 |
+| `claude-opus-4-7` | $15 | $75 |
 
 ## Required env var
 
@@ -45,9 +45,9 @@ uv run dg launch --assets '*'
 Edit `src/<pkg>/defs/anthropic_llm/defs.yaml` and change `model:`:
 
 ```yaml
-model: claude-3-5-sonnet-20241022   # better at long-context analysis
+model: claude-sonnet-4-6   # better at long-context analysis
 # or
-model: claude-3-opus-20240229       # most capable, slowest
+model: claude-opus-4-7       # most capable, slowest
 ```
 
 ## Why both `openai_llm` and `anthropic_llm`?

@@ -10,15 +10,15 @@
 # Asset graph:
 #   support_tickets (synthetic 20 rows: support requests + complaints)
 #         │
-#         └── ticket_summaries  ← anthropic_llm (claude-3-5-haiku-20241022)
+#         └── ticket_summaries  ← anthropic_llm (claude-haiku-4-5-20251001)
 #
 # REQUIRED ENV VAR
 #   ANTHROPIC_API_KEY     Claude API key (sk-ant-...)
 #
 # COST while running
-#   ~\$0.01–\$0.05 against claude-3-5-haiku-20241022 for 20 rows.
+#   ~\$0.01–\$0.05 against claude-haiku-4-5-20251001 for 20 rows.
 #   For more advanced (and pricier) Claude models, edit `model:` in the
-#   defs.yaml — claude-3-5-sonnet-20241022, claude-3-opus-20240229, etc.
+#   defs.yaml — claude-sonnet-4-6, claude-opus-4-7, etc.
 
 set -euo pipefail
 PROJECT_DIR="${1:-anthropic-demo}"
@@ -58,7 +58,7 @@ attributes:
   asset_name: ticket_summaries
   upstream_asset_key: support_tickets
   api_key: \${ANTHROPIC_API_KEY}
-  model: claude-3-5-haiku-20241022
+  model: claude-haiku-4-5-20251001
   system_prompt: "You are a customer-support analyst. Output a one-sentence summary of each ticket — under 20 words, no preamble."
   user_prompt_template: "Ticket: {ticket_text}"
   input_column: ticket_text
@@ -85,7 +85,7 @@ Inspect:
 To use a different Claude model, edit
     src/$PKG/defs/anthropic_llm/defs.yaml
 and change \`model:\` to one of:
-  - claude-3-5-haiku-20241022   (fastest, cheapest)
-  - claude-3-5-sonnet-20241022  (default — balanced)
-  - claude-3-opus-20240229      (most capable, priciest)
+  - claude-haiku-4-5-20251001   (fastest, cheapest)
+  - claude-sonnet-4-6  (default — balanced)
+  - claude-opus-4-7      (most capable, priciest)
 MSG
