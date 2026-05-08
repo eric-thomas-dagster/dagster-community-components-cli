@@ -57,7 +57,7 @@ type: $PKG.components.keyword_extractor.component.KeywordExtractorComponent
 attributes:
   asset_name: ticket_keywords
   upstream_asset_key: support_tickets
-  text_column: ticket_text
+  input_column: ticket_text
   group_name: ai
 EOF
 
@@ -66,7 +66,7 @@ type: $PKG.components.language_detector.component.LanguageDetectorComponent
 attributes:
   asset_name: ticket_languages
   upstream_asset_key: support_tickets
-  text_column: ticket_text
+  input_column: ticket_text
   group_name: ai
 EOF
 
@@ -75,7 +75,7 @@ type: $PKG.components.pii_detector.component.PiiDetectorComponent
 attributes:
   asset_name: ticket_pii_counts
   upstream_asset_key: support_tickets
-  text_column: ticket_text
+  input_column: ticket_text
   group_name: ai
 EOF
 
@@ -84,7 +84,7 @@ type: $PKG.components.pii_redactor.component.PiiRedactorComponent
 attributes:
   asset_name: ticket_redacted
   upstream_asset_key: support_tickets
-  text_column: ticket_text
+  input_column: ticket_text
   group_name: ai
 EOF
 

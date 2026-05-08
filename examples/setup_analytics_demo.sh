@@ -162,6 +162,24 @@ def ecommerce_dataset() -> pd.DataFrame:
 
 
 @dg.asset(group_name="ingest")
+def stripe_dataset() -> pd.DataFrame:
+    """Stripe-shaped subscriptions data for subscription_metrics."""
+    rng = np.random.default_rng(13)
+    n = 50
+    base_ts = int(pd.Timestamp("2025-01-01").timestamp())
+    return pd.DataFrame({
+        "id": [f"sub_{i:04d}" for i in range(n)],
+        "customer": [f"cus_{i:04d}" for i in range(n)],
+        "status": rng.choice(["active", "trialing", "canceled", "past_due"], n, p=[0.6, 0.15, 0.2, 0.05]),
+        "plan_amount": rng.choice([900, 2900, 9900, 19900], n),  # cents
+        "currency": ["usd"] * n,
+        "current_period_start": [base_ts + i * 86400 for i in range(n)],
+        "current_period_end": [base_ts + (i + 30) * 86400 for i in range(n)],
+        "created": [base_ts - rng.integers(30, 365) * 86400 for _ in range(n)],
+    })
+
+
+@dg.asset(group_name="ingest")
 def support_dataset() -> pd.DataFrame:
     """Zendesk-shaped ticket data for support_ticket_standardizer."""
     return pd.DataFrame({
@@ -217,14 +235,25 @@ write_yaml() {
 for c in linear_regression_model gradient_boosting_model naive_bayes_model \
          spline_model svm count_regression gamma_regression; do
   CLASS=$(python3 -c "n='$c'; print(''.join(p.capitalize() for p in n.split('_')) + 'Component')" | sed 's/Svm/SVM/')
-  TARGET="y_reg"; if [ "$c" = "naive_bayes_model" ] || [ "$c" = "svm" ]; then TARGET="y_class"; fi
+  TARGET="y_reg"
+  if [ "$c" = "naive_bayes_model" ] || [ "$c" = "svm" ]; then TARGET="y_class"; fi
   if [ "$c" = "count_regression" ]; then TARGET="y_count"; fi
+  # task_type is only meaningful on algorithm-flexible models. Fixed-task
+  # models (linear/gamma/count/spline regression, naive_bayes) reject it.
+  TASK_LINE=""
+  case "$c" in
+    gradient_boosting_model|svm)
+      TASK="regression"; [ "$c" = "svm" ] && TASK="classification"
+      TASK_LINE="
+  task_type: $TASK"
+      ;;
+  esac
   write_yaml "$c" "type: $PKG.components.$c.component.$CLASS
 attributes:
   asset_name: ${c}_output
   upstream_asset_key: ml_dataset
   target_column: $TARGET
-  feature_columns: [x1, x2, x3]
+  feature_columns: [x1, x2, x3]${TASK_LINE}
   group_name: ml"
 done
 
@@ -235,6 +264,7 @@ attributes:
   upstream_asset_key: ml_dataset
   target_column: y_reg
   feature_columns: [x1, x2, x3]
+  task_type: regression
   hidden_layer_sizes: [16, 8]
   group_name: ml"
 
@@ -275,7 +305,8 @@ attributes:
   upstream_asset_key: ml_dataset
   target_column: y_reg
   feature_columns: [x1, x2, x3]
-  models: [linear, gradient_boosting]
+  task_type: regression
+  models: [gradient_boosting, decision_tree, random_forest]
   group_name: ml"
 
 write_yaml "model_score" "type: $PKG.components.model_score.component.ModelScoreComponent
@@ -303,6 +334,8 @@ attributes:
   upstream_asset_key: ml_dataset
   target_column: y_reg
   feature_columns: [x1, x2, x3]
+  task_type: regression
+  n_features_to_select: 2
   group_name: stats"
 
 write_yaml "multidimensional_scaling" "type: $PKG.components.multidimensional_scaling.component.MultidimensionalScalingComponent
@@ -358,6 +391,7 @@ write_yaml "point_in_polygon" "type: $PKG.components.point_in_polygon.component.
 attributes:
   asset_name: pip_output
   upstream_asset_key: geo_dataset
+  geojson_url: 'https://raw.githubusercontent.com/codeforgermany/click_that_hood/main/public/data/united-states.geojson'
   group_name: geo"
 
 write_yaml "geocoder" "type: $PKG.components.geocoder.component.GeocoderComponent
@@ -421,7 +455,7 @@ attributes:
 write_yaml "subscription_metrics" "type: $PKG.components.subscription_metrics.component.SubscriptionMetricsComponent
 attributes:
   asset_name: subscription_metrics_output
-  stripe_data_asset_key: ecommerce_dataset
+  stripe_data_asset_key: stripe_dataset
   group_name: business"
 
 # === Marketing/event (2) ===

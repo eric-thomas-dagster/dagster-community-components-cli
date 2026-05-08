@@ -302,7 +302,7 @@ write_yaml "multi_field_formula" "type: $PKG.components.multi_field_formula.comp
 attributes:
   asset_name: orders_formula
   upstream_asset_key: orders
-  expression: 'col * 1.1'
+  expression: '{col} * 1.1'
   columns: [unit_price]
   output_suffix: '_with_tax'
   group_name: transforms"
@@ -313,10 +313,14 @@ attributes:
   asset_name: orders_row_formula
   upstream_asset_key: orders
   operations:
-    - output: total_value
-      expression: 'quantity * unit_price'
-    - output: discount_amount
-      expression: 'quantity * unit_price * discount'
+    - output_column: quantity_lag1
+      column: quantity
+      operation: lag
+      periods: 1
+    - output_column: rolling_qty_3
+      column: quantity
+      operation: rolling_mean
+      window: 3
   group_name: transforms"
 
 # 20. record_id
@@ -362,7 +366,7 @@ attributes:
 write_yaml "sql_transform" "type: $PKG.components.sql_transform.component.SqlTransformComponent
 attributes:
   asset_name: orders_sql
-  connection_url_env_var: DUCKDB_PATH_VAR
+  connection_url_env_var: SQL_DB_URL
   destination_table: orders_sql
   sql: 'SELECT category, SUM(quantity) AS total_qty FROM orders GROUP BY category'
   group_name: transforms"
