@@ -67,9 +67,13 @@ uv run dg dev   # http://localhost:3000
 
 ## Why GitHub Actions for the demo?
 
-The component is meant for any HTTP-driven job runner — Fivetran, Airbyte,
-dbt Cloud, Jenkins, internal job APIs. We picked the GitHub Actions REST
-API for the validation walkthrough because:
+The component is meant for HTTP-driven job runners that **don't already
+have a dedicated registry component** — internal job APIs,
+less-common SaaS tools, GitHub Actions / Jenkins / CircleCI / Argo /
+Kestra, or prototyping. (For Fivetran, Airbyte, dbt Cloud, Matillion,
+Rivery, Precisely, Coalesce, Databricks, Dataiku — use the dedicated
+component, not this.) We picked the GitHub Actions REST API for the
+validation walkthrough because:
 
 - **Public + no-auth.** Reproducible without secrets.
 - **Real lifecycle.** Workflow runs go `queued → in_progress → completed`
