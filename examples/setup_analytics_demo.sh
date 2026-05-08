@@ -175,7 +175,12 @@ def stripe_dataset() -> pd.DataFrame:
         "currency": ["usd"] * n,
         "current_period_start": [base_ts + i * 86400 for i in range(n)],
         "current_period_end": [base_ts + (i + 30) * 86400 for i in range(n)],
-        "created": [base_ts - rng.integers(30, 365) * 86400 for _ in range(n)],
+        "created": [base_ts - int(rng.integers(30, 365)) * 86400 for _ in range(n)],
+        # canceled_at is non-null only for status=='canceled' rows
+        "canceled_at": [
+            base_ts + int(rng.integers(0, 30)) * 86400 if st == "canceled" else None
+            for st in rng.choice(["active", "trialing", "canceled", "past_due"], n, p=[0.6, 0.15, 0.2, 0.05])
+        ],
     })
 
 
@@ -220,7 +225,8 @@ def trained_model() -> str:
 
 defs = dg.Definitions(assets=[ml_dataset, geo_dataset, customer_dataset,
                               event_dataset, campaign_dataset, crm_dataset,
-                              ecommerce_dataset, support_dataset, ad_spend_dataset,
+                              ecommerce_dataset, stripe_dataset,
+                              support_dataset, ad_spend_dataset,
                               trained_model])
 PYEOF
 
