@@ -1,5 +1,9 @@
 # Google Sheets ingestion — service-account auth end-to-end
 
+**Validated end-to-end.** RUN_SUCCESS pulling 2 rows from a real
+Google Sheet via service-account auth, plus the downstream pandas
+summary asset.
+
 Pull rows from a Google Sheets spreadsheet using a service-account
 JSON, materialize as a Dagster asset, then summarize with a downstream
 pandas asset.
@@ -81,6 +85,12 @@ contains the exact remediation URL.
    string in an env var). Added `credentials_path` and a fallback
    to `GOOGLE_APPLICATION_CREDENTIALS` — the standard google-auth
    convention every Google SDK consumer expects.
+3. **Google Sheets API has to be enabled per-project.** Service
+   accounts often live in a different GCP project than the user's
+   "main" one; if the SA's project hasn't enabled the Sheets API,
+   you get a `403 SERVICE_DISABLED` with an exact remediation URL
+   in the error message. Click the link, hit Enable, ~30s to
+   propagate. Caught + documented during this demo's first run.
 
 ## Service account setup
 
