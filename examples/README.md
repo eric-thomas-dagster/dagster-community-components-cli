@@ -187,7 +187,72 @@ uses env vars; production in Azure compute uses the attached identity.
 
 ---
 
-## Dagster+ required (no Azure)
+## Google Cloud (GCP, subscription required)
+
+Each GCP demo is validated end-to-end against a real GCP project. Auth via
+service-account JSON pointed at by `GOOGLE_APPLICATION_CREDENTIALS`.
+Most APIs need to be enabled per-project on first use; the components
+surface the exact activation URL on the first call. Costs are noted
+per-demo; everything below stays well under the free tier for typical
+demos.
+
+### Workspace (Drive, Docs, Sheets, Calendar)
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [Google Sheets](google_sheets.md) | `google_sheets_ingestion` → pandas → CSV | SA shared on a sheet, Sheets API enabled | $0 |
+| [Google Calendar](google_calendar.md) | `google_calendar_ingestion` → pandas → CSV + `dataframe_to_bigquery` | SA shared on a calendar, Calendar API enabled | $0 |
+| [Drive + Docs + Gemini](google_drive_docs.md) | `google_drive_ingestion` → `google_docs_extractor` → `gemini_llm` → CSV | SA shared on a Drive folder, Drive + Docs + Generative Language APIs enabled | $0 |
+
+### Warehouse (BigQuery)
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [BigQuery Query](bigquery_query.md) | `bigquery_query_asset` against `bigquery-public-data.samples.shakespeare` → pandas | BigQuery API enabled, `roles/bigquery.jobUser` | $0.0001 |
+| [BigQuery ML Pipeline](bigquery_ml_pipeline.md) | `bigquery_create_table_from_query_asset` (CTAS) → `bigquery_ml_train_asset` (LOGISTIC_REG) → `bigquery_ml_predict_asset` → CSV | BQ dataset, `roles/bigquery.dataEditor` + `jobUser` | <$0.001 |
+| [BigQuery ↔ GCS Bulk Bridge](bigquery_bulk_bridge.md) | `bigquery_export_to_gcs_asset` (EXTRACT) → `bigquery_load_from_gcs_asset` (LOAD JOB) — round-trip | BQ dataset + GCS bucket | $0 (extract + load free) |
+
+### AI / LLM
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [Gemini LLM](gemini_llm.md) | `synthetic_data_generator` → `gemini_llm` (gemini-2.5-flash) | Gemini API key | $0 (free tier 5 RPM) |
+| [Nano Banana](nano_banana.md) | `gemini_image_generation` (gemini-2.5-flash-image) → pandas dimension report | Gemini API key, billing enabled (image gen requires it) | ~$0.01–$0.10 |
+
+### Real-pipeline patterns (multi-component chains)
+
+| Demo | Components exercised | Highlights |
+|---|---|---|
+| [HRIS Normalizer](hris_normalizer.md) | `hris_normalizer` (vendor-agnostic) → pandas headcount-by-dept → CSV | 20-row synthetic vendor export → canonical schema mapped (status `T`→`terminated` etc.) → headcount + tenure aggregations |
+
+### Auth: workload identity in GCP compute
+
+When running these in **GKE / Cloud Run / Compute Engine / Cloud Functions**
+with a service account attached, you can omit the env-var auth entirely.
+The Google client libraries fall back through `GOOGLE_APPLICATION_CREDENTIALS`
+→ workload identity → `gcloud auth application-default` automatically.
+Local development uses the env var; production in GCP compute uses the
+attached SA.
+
+**Validated end-to-end** against a real GCP project. Examples include:
+- BigQuery ML: 150-row iris → CTAS → LOGISTIC_REG model trained in BQ in 1m36s → 10 predictions returned, setosa @ 99.92% top class
+- BigQuery bridge: 150-row table → EXTRACT to GCS parquet (2.6 KB compressed) → LOAD back to a new BQ table → identical row count + schema, ~8s round-trip
+- Calendar: 60 events from `ethomasii@gmail.com` next 30 days → CSV + BQ table
+- Drive + Docs + Gemini: 1 Doc, 661 words extracted → real Gemini summary → CSV in <6s
+- Sheets: 2 rows pulled live from a shared spreadsheet
+
+### Bug-finds during validation
+
+Live runs surfaced several real bugs the components now handle cleanly:
+- `gemini_llm` thinking_budget vs max_output_tokens (truncated output)
+- `google_sheets_ingestion` wrong import (`dlt.sources.google_sheets` isn't pip-installable)
+- `bigquery_export_to_gcs_asset` ExtractJob has no `total_bytes_processed`
+- `hris_normalizer` case-insensitive map didn't lowercase user-supplied keys
+- Service account project's Sheets / Docs / Calendar APIs needing per-project enable
+
+---
+
+## Dagster+ required
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
