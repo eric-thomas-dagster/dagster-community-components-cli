@@ -218,6 +218,9 @@ demos.
 |---|---|---|---|
 | [Gemini LLM](gemini_llm.md) | `synthetic_data_generator` → `gemini_llm` (gemini-2.5-flash) | Gemini API key | $0 (free tier 5 RPM) |
 | [Nano Banana](nano_banana.md) | `gemini_image_generation` (gemini-2.5-flash-image) → pandas dimension report | Gemini API key, billing enabled (image gen requires it) | ~$0.01–$0.10 |
+| [Vertex AI Embeddings](vertex_ai_embeddings.md) | `vertex_ai_text_embeddings_asset` (text-embedding-004) → pandas → CSV | Vertex AI API enabled, `roles/aiplatform.user` | $0 (under free tier) |
+| [Vision + Translation](vision_translate.md) | `vision_api_asset` (LABEL + OBJECT) → pandas → `translation_api_asset` (es/fr/de/ja) → CSV | Vision + Translation APIs enabled | ~$0.005 |
+| [Speech + Translation](speech_translate.md) | `speech_to_text_asset` (Cloud Speech v2) → `translation_api_asset` (es/fr/de/ja) → CSV | Speech + Translation APIs enabled | ~$0.001 |
 
 ### Real-pipeline patterns (multi-component chains)
 
@@ -240,6 +243,9 @@ attached SA.
 - Calendar: 60 events from `ethomasii@gmail.com` next 30 days → CSV + BQ table
 - Drive + Docs + Gemini: 1 Doc, 661 words extracted → real Gemini summary → CSV in <6s
 - Sheets: 2 rows pulled live from a shared spreadsheet
+- Vertex embeddings: 5 product descriptions → 5 × 768-dim vectors via `text-embedding-004`, all distinct
+- Vision + Translation: 3 synthetic PNGs → labels (`Red`, `Blue`, `Clip art`) → translated to es/fr/de/ja (赤 / 青 / クリップアート)
+- Speech + Translation: `brooklyn_bridge.mp3` → "How old is the Brooklyn Bridge?" → translated to es/fr/de/ja (`ブルックリン橋は何年前にできたのですか？`)
 
 ### Bug-finds during validation
 
