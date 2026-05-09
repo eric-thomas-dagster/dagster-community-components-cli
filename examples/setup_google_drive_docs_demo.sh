@@ -106,6 +106,20 @@ attributes:
   group_name: ai
 EOF
 
+# ─── CSV sink — writes the summarized rows to /tmp ──────────────────────
+$CLI add dataframe_to_csv --auto-install
+mkdir -p "src/$PKG/defs/dataframe_to_csv"
+cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
+type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
+attributes:
+  asset_name: doc_summaries_csv
+  upstream_asset_key: doc_summaries
+  file_path: /tmp/doc_summaries.csv
+  include_index: false
+  description: CSV export of Doc id + title + summary.
+  group_name: sink
+EOF
+
 cat <<MSG
 
 >>> Setup complete.
@@ -116,10 +130,15 @@ Asset graph:
           └── doc_texts      ← google_docs_extractor (Docs API)
                   │
                   └── doc_summaries  ← gemini_llm (one-sentence summary)
+                            │
+                            └── doc_summaries_csv  ← dataframe_to_csv (/tmp/doc_summaries.csv)
 
-Materialize all three:
+Materialize all four:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
+
+After running, inspect the CSV:
+    cat /tmp/doc_summaries.csv
 
 Inspect:
     uv run dg dev   # http://localhost:3000
