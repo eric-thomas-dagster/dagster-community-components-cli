@@ -60,6 +60,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [SCD Type 2](scd_type_2.md) | csv × 2 → scd_type_2 → CSV | History-tracking dimension load |
 | [Window Calculation](window_calculation.md) | csv → window_calculation → CSV | Every supported window function on stock prices |
 | [Regional Orders Union](regional_orders.md) | csv × 3 → dataframe_union → CSV | Merge multi-region order extracts with mismatched columns |
+| [Data Hygiene](data_hygiene.md) | synthetic → 9-stage chain → counts | Toolbox demo: audit / validate / rename / canonicalize / mask / hash / surrogate-key / number / aggregate |
 
 <a id="time-series--forecasting"></a>
 ### Time series + forecasting [¶](#time-series--forecasting)
