@@ -56,9 +56,9 @@ All 34 components materialize successfully on first run. Total wall-clock
 
 | Component | Why skipped |
 |---|---|
-| [`file_transformer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/file_transformer) | Reads raw files (CSV/JSON/Parquet) — not a DataFrame-in component |
-| [`sql_transform`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sql_transform) | Needs a SQLAlchemy connection URL env var (postgres://, etc.) |
-| [`dataframe_transformer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_transformer) | Component has a `retry_policy_max_retries` attribute bug at runtime |
+| `file_transformer` | Reads raw files (CSV/JSON/Parquet) — not a DataFrame-in component |
+| `sql_transform` | Needs a SQLAlchemy connection URL env var (postgres://, etc.) |
+| `dataframe_transformer` | Component has a `retry_policy_max_retries` attribute bug at runtime |
 
 ## Bugs found + fixed during validation
 
@@ -66,7 +66,7 @@ All 34 components materialize successfully on first run. Total wall-clock
   boolean `True`, not the string key the components expect. Fixed in
   the demo by quoting the key: `"on": product`.
 
-- **[`dataframe_transformer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_transformer)**: tries to read `self.retry_policy_max_retries`
+- **`dataframe_transformer`**: tries to read `self.retry_policy_max_retries`
   but the field doesn't exist on the model — runtime AttributeError.
   Excluded from this demo. Should be fixed in the component itself.
 
@@ -77,18 +77,18 @@ convention. Key gotchas surfaced during validation:
 
 | Component | Fields differ from what you'd guess |
 |---|---|
-| [`arrange`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/arrange) | `move_to_front`, `move_to_back`, `column_order`, `rename` (not `sort_keys`) |
-| [`make_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/make_columns) | `n_columns`, `value_column`, `key_column` (no `pivot_column`) |
-| [`multi_field_binning`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/multi_field_binning) | `n_bins`, not `num_bins` |
-| [`multi_field_formula`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/multi_field_formula) | `expression: "{col} * 1.1"` — `{col}` is the placeholder |
-| [`multi_row_formula`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/multi_row_formula) | `operations: [{output_column, column, operation: lag\|rolling_mean\|...}]` |
-| [`text_to_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/text_to_columns) | `delimiter`, not `separator` |
-| [`train_test_splitter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/train_test_splitter) | `seed`, not `random_state`; outputs `<asset>_train` + `<asset>_test` |
-| [`sample`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sample) | `n` or `frac`, not `sample_size` |
-| [`select_records`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/select_records) | `mode: head\|tail\|range\|indices`, not `filter_expression` |
-| [`generate_rows`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/generate_rows) | `mode: duplicate`, plus `n` |
-| [`siem_event_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/siem_event_normalizer) | `schema: ocsf\|ecs`, no `event_column` |
-| [`cross_join`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/cross_join) | `upstream_asset_key` + `upstream_right_key` |
+| `arrange` | `move_to_front`, `move_to_back`, `column_order`, `rename` (not `sort_keys`) |
+| `make_columns` | `n_columns`, `value_column`, `key_column` (no `pivot_column`) |
+| `multi_field_binning` | `n_bins`, not `num_bins` |
+| `multi_field_formula` | `expression: "{col} * 1.1"` — `{col}` is the placeholder |
+| `multi_row_formula` | `operations: [{output_column, column, operation: lag\|rolling_mean\|...}]` |
+| `text_to_columns` | `delimiter`, not `separator` |
+| `train_test_splitter` | `seed`, not `random_state`; outputs `<asset>_train` + `<asset>_test` |
+| `sample` | `n` or `frac`, not `sample_size` |
+| `select_records` | `mode: head\|tail\|range\|indices`, not `filter_expression` |
+| `generate_rows` | `mode: duplicate`, plus `n` |
+| `siem_event_normalizer` | `schema: ocsf\|ecs`, no `event_column` |
+| `cross_join` | `upstream_asset_key` + `upstream_right_key` |
 
 ## Run
 

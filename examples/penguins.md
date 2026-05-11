@@ -12,11 +12,11 @@ csv_file_ingestion → imputation → one_hot_encoding → feature_scaler → da
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Pull penguins CSV |
-| 2 | [`imputation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/imputation) | transformation | Fill missing numeric values (mean), categorical (mode) |
-| 3 | [`one_hot_encoding`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/one_hot_encoding) | transformation | Expand `island`, `sex`, `species` into binary columns |
-| 4 | [`feature_scaler`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/feature_scaler) | transformation | StandardScaler on the four numeric measurements |
-| 5 | [`dataframe_to_parquet`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_parquet) | sink | Write `/tmp/penguins_features.parquet` |
+| 1 | `csv_file_ingestion` | ingestion | Pull penguins CSV |
+| 2 | `imputation` | transformation | Fill missing numeric values (mean), categorical (mode) |
+| 3 | `one_hot_encoding` | transformation | Expand `island`, `sex`, `species` into binary columns |
+| 4 | `feature_scaler` | transformation | StandardScaler on the four numeric measurements |
+| 5 | `dataframe_to_parquet` | sink | Write `/tmp/penguins_features.parquet` |
 
 ## Run
 

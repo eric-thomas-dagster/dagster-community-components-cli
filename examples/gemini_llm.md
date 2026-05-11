@@ -16,8 +16,8 @@ support_tickets   ← synthetic_data_generator (20 rows)
 
 | Component | What it does |
 |---|---|
-| [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) | Native (no-LiteLLM) Google Gemini text LLM. Drop-in peer of [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) — same field shape, swap providers by changing `type:` and the api_key env var. |
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | Generates synthetic DataFrames; `schema_type: support_tickets` produces 20 plausible support-ticket rows. |
+| `gemini_llm` | Native (no-LiteLLM) Google Gemini text LLM. Drop-in peer of `openai_llm` / `anthropic_llm` — same field shape, swap providers by changing `type:` and the api_key env var. |
+| `synthetic_data_generator` | Generates synthetic DataFrames; `schema_type: support_tickets` produces 20 plausible support-ticket rows. |
 
 ## Cost
 
@@ -66,15 +66,15 @@ Run `client.models.list()` against your key for the live set.
 
 ## Why a native (non-LiteLLM) component?
 
-The registry already has [`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset) which routes to
-OpenAI, Anthropic, and Gemini through one config. We ship [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm)
+The registry already has `litellm_inference_asset` which routes to
+OpenAI, Anthropic, and Gemini through one config. We ship `gemini_llm`
 alongside it because:
 
 - **Single-vendor shops** standardize on Google and don't want the
   LiteLLM router as an extra dep.
 - **Drop-in field shape** — same `upstream_asset_key`, `input_column`,
-  `output_column`, `system_prompt`, etc. as [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) /
-  [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm), so you can A/B providers by changing the `type:`
+  `output_column`, `system_prompt`, etc. as `openai_llm` /
+  `anthropic_llm`, so you can A/B providers by changing the `type:`
   line.
 - **Native error messages** — on 404 (bad model id) the component
   surfaces "Set `text_model:` to a current id" with concrete
@@ -86,12 +86,12 @@ Drop-in equivalence + production multi-vendor patterns:
 
 | Component | Provider | Common use |
 |---|---|---|
-| [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) | OpenAI | gpt-4o, gpt-4o-mini |
-| [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) | Anthropic | Claude 4.x — long-context, prompt caching |
-| [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) | Google | gemini-2.5-flash / pro — generous free tier |
-| [`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset) | Any | Provider-agnostic routing via LiteLLM |
-| [`ollama_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/ollama_inference_asset) | Local | $0, on-device |
+| `openai_llm` | OpenAI | gpt-4o, gpt-4o-mini |
+| `anthropic_llm` | Anthropic | Claude 4.x — long-context, prompt caching |
+| `gemini_llm` | Google | gemini-2.5-flash / pro — generous free tier |
+| `litellm_inference_asset` | Any | Provider-agnostic routing via LiteLLM |
+| `ollama_inference_asset` | Local | $0, on-device |
 
-Pick [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) specifically when you want a **free** dev/test
+Pick `gemini_llm` specifically when you want a **free** dev/test
 experience or Google's long-context strength without bringing
 LiteLLM along.

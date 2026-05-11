@@ -16,9 +16,9 @@ sensor_readings        ← synthetic_data_generator (sensors schema)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | Synthetic upstream. `schema_type: sensors` produces `(sensor_id, timestamp, sensor_type, location, value, unit, status)` — fits Bigtable's wide-column model naturally. |
-| [`bigtable_writer_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigtable_writer_asset) | One DataFrame row → one Bigtable row. `row_key_column` + per-column family/qualifier `column_map` + `json_columns` for dict/list values. |
-| [`bigtable_reader_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigtable_reader_asset) | Prefix or range scan → DataFrame with `_row_key` + one column per `<family>:<qualifier>` (latest cell). |
+| `synthetic_data_generator` | Synthetic upstream. `schema_type: sensors` produces `(sensor_id, timestamp, sensor_type, location, value, unit, status)` — fits Bigtable's wide-column model naturally. |
+| `bigtable_writer_asset` | One DataFrame row → one Bigtable row. `row_key_column` + per-column family/qualifier `column_map` + `json_columns` for dict/list values. |
+| `bigtable_reader_asset` | Prefix or range scan → DataFrame with `_row_key` + one column per `<family>:<qualifier>` (latest cell). |
 
 ## Live run output
 
@@ -37,7 +37,7 @@ sensor_readings        ← synthetic_data_generator (sensors schema)
 
 ## Bugs surfaced fixing this demo
 
-1. **[`bigtable_reader_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigtable_reader_asset) passed bytes to `add_row_range_with_prefix`** — that method's implementation does `chr(ord(prefix[-1]) + 1)` to compute the end key, which fails on bytes (`TypeError: ord() expected string of length 1, but int found`). Fixed by passing the prefix as `str`.
+1. **`bigtable_reader_asset` passed bytes to `add_row_range_with_prefix`** — that method's implementation does `chr(ord(prefix[-1]) + 1)` to compute the end key, which fails on bytes (`TypeError: ord() expected string of length 1, but int found`). Fixed by passing the prefix as `str`.
 2. **Bigtable `cbt` CLI isn't shipped with gcloud by default** — used Python admin client to create the table + families instead. Worth noting in setup docs.
 
 ## Performance

@@ -12,9 +12,9 @@ Pipeline (3 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read source CSV |
-| 2 | [`bounding_box_filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/bounding_box_filter) | analytics | Filter to lat/lng bbox |
-| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
+| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 2 | `bounding_box_filter` | analytics | Filter to lat/lng bbox |
+| 3 | `dataframe_to_csv` | sink | Write CSV |
 
 ## Run
 

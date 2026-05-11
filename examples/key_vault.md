@@ -3,7 +3,7 @@
 **Validated end-to-end** against live infrastructure.
 
 The right enterprise pattern for credentials: load DB password from
-Key Vault at runtime via [`key_vault_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/key_vault_resource). SP just needs the
+Key Vault at runtime via `key_vault_resource`. SP just needs the
 "Key Vault Secrets User" role (RBAC) — no env-var sprawl for sensitive
 values.
 
@@ -26,7 +26,7 @@ Secrets User". `list_names()` returned the vault contents.
 
 Most components in the registry take `*_env_var` fields. That's fine for
 dev / single-secret cases but doesn't scale to 50+ secrets across an
-enterprise. With [`key_vault_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/key_vault_resource):
+enterprise. With `key_vault_resource`:
 
 - All secrets live in one audited place
 - RBAC controls who can read each secret

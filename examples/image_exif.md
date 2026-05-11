@@ -12,8 +12,8 @@ sample_images       ← synthetic_image_generator (3 JPEGs, inject_exif: true)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_image_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_image_generator) | Generates sample images. With `inject_exif: true` it writes JPEGs (not PNGs) and embeds realistic EXIF: Make/Model/DateTimeOriginal/ISO/FNumber/ExposureTime/FocalLength/GPS. GPS lat/lon nudges per image so each is distinct. |
-| [`image_exif_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/image_exif_extractor) | Pillow-based EXIF extraction. Adds `exif_make`, `exif_model`, `exif_datetime_original`, `exif_iso`, `exif_focal_length_mm`, `exif_exposure_time`, `exif_f_number`, `exif_orientation`, `exif_gps_lat`, `exif_gps_lon`, `exif_gps_altitude_m`, `exif_raw` (full dict), `exif_width`/`height`. |
+| `synthetic_image_generator` | Generates sample images. With `inject_exif: true` it writes JPEGs (not PNGs) and embeds realistic EXIF: Make/Model/DateTimeOriginal/ISO/FNumber/ExposureTime/FocalLength/GPS. GPS lat/lon nudges per image so each is distinct. |
+| `image_exif_extractor` | Pillow-based EXIF extraction. Adds `exif_make`, `exif_model`, `exif_datetime_original`, `exif_iso`, `exif_focal_length_mm`, `exif_exposure_time`, `exif_f_number`, `exif_orientation`, `exif_gps_lat`, `exif_gps_lon`, `exif_gps_altitude_m`, `exif_raw` (full dict), `exif_width`/`height`. |
 
 ## Live output
 

@@ -23,8 +23,8 @@ sample_images           (3 synthetic PNGs in /tmp/vision_translate_imgs/)
 
 | Component | What it does |
 |---|---|
-| [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) | Cloud Vision per-row image analysis. 11 supported feature types (labels, objects, faces, landmarks, logos, OCR, NSFW safe-search, image properties, web detection, crop hints, document text). |
-| [`translation_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/translation_api_asset) | Cloud Translation v3. Translate a column to N target languages — one new column per target. Per-row source-language auto-detect. |
+| `vision_api_asset` | Cloud Vision per-row image analysis. 11 supported feature types (labels, objects, faces, landmarks, logos, OCR, NSFW safe-search, image properties, web detection, crop hints, document text). |
+| `translation_api_asset` | Cloud Translation v3. Translate a column to N target languages — one new column per target. Per-row source-language auto-detect. |
 
 ## Validation status — both live
 
@@ -79,4 +79,4 @@ attributes:
   image_source: gcs              # or `auto`
 ```
 
-For document parsing (forms / tables / structured), use [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor) instead of Vision — Document AI parses field structure, Vision OCR returns flat text.
+For document parsing (forms / tables / structured), use `document_ai_extractor` instead of Vision — Document AI parses field structure, Vision OCR returns flat text.

@@ -13,10 +13,10 @@ Pipeline (4 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | Hit a REST endpoint |
-| 2 | [`html_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/html_parser) | transformation | Parse HTML tables |
-| 3 | [`array_exploder`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/array_exploder) | transformation |  |
-| 4 | [`dataframe_to_json`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_json) | sink |  |
+| 1 | `rest_api_fetcher` | ingestion | Hit a REST endpoint |
+| 2 | `html_parser` | transformation | Parse HTML tables |
+| 3 | `array_exploder` | transformation |  |
+| 4 | `dataframe_to_json` | sink |  |
 
 ## Run
 

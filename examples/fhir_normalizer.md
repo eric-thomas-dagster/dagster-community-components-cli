@@ -17,8 +17,8 @@ One component, four different `resource_types` filters → four purpose-built ta
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `schema_type: fhir_patients` emits `(row_id, resource)` where `resource` is a parsed FHIR JSON dict. Mix of Patient + Observation resources. |
-| [`fhir_resource_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/fhir_resource_normalizer) | Flattens FHIR R4/R5 JSON resources to a flat DataFrame. Per-resource extractors for `Patient` / `Observation` / `Encounter` / `Condition` / `MedicationRequest`, plus generic fallback. Inherits the [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) `value_maps` shape for column-value normalization. |
+| `synthetic_data_generator` | `schema_type: fhir_patients` emits `(row_id, resource)` where `resource` is a parsed FHIR JSON dict. Mix of Patient + Observation resources. |
+| `fhir_resource_normalizer` | Flattens FHIR R4/R5 JSON resources to a flat DataFrame. Per-resource extractors for `Patient` / `Observation` / `Encounter` / `Condition` / `MedicationRequest`, plus generic fallback. Inherits the `hris_normalizer` `value_maps` shape for column-value normalization. |
 
 ## Live output
 
@@ -58,7 +58,7 @@ Note: `gender` came through as `M`/`F` from the source FHIR; `value_maps` normal
 | `Bundle` | id, bundle_type, timestamp, total, entry_count, entries_by_type (dict) |
 | Other | Generic fallback: resource_type, id, status, patient_id |
 
-## value_maps (inherited from [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) pattern)
+## value_maps (inherited from `hris_normalizer` pattern)
 
 ```yaml
 value_maps:

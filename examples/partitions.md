@@ -1,7 +1,7 @@
 # Partitions — the four canonical shapes end-to-end
 
 **Validated end-to-end** — exercises the canonical partition shape (Phase 1
-of the partition rework) across four use cases on the same [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv)
+of the partition rework) across four use cases on the same `dataframe_to_csv`
 sink, plus a `PerPartitionBackfillJob` driving multi-tenant rebuilds with
 per-tenant concurrency keys. RUN_SUCCESS on every shape, $0 cost.
 
@@ -45,8 +45,8 @@ This demo demonstrates that all three are now first-class:
 
 | Component | Role |
 |---|---|
-| [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Sink — exercised four times with different `partition_type` values |
-| [`per_partition_backfill_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/per_partition_backfill_job) | Job — drives the dynamic-partition sink with per-tenant concurrency |
+| `dataframe_to_csv` | Sink — exercised four times with different `partition_type` values |
+| `per_partition_backfill_job` | Job — drives the dynamic-partition sink with per-tenant concurrency |
 
 ## Required env vars
 

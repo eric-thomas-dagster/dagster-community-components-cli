@@ -18,12 +18,12 @@ synthetic_data_generator (schema_type: support_tickets)
 
 | # | Component | Output |
 |---|---|---|
-| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) (`schema_type: support_tickets`) | 30 tickets in en/es/fr/de with embedded PII + ground-truth labels |
-| 2 | [`keyword_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/keyword_extractor) | TF-IDF top-k keywords per ticket |
-| 3 | [`language_detector`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/language_detector) | ISO 639-1 language code per ticket |
-| 4 | [`pii_detector`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/pii_detector) | counts of emails / phones / names found |
-| 5 | [`pii_redactor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/pii_redactor) | ticket text with PII masked via Presidio |
-| 6 | [`embeddings_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/embeddings_generator) (`provider: sentence_transformers`) | local 384-dim MiniLM-L6 vectors |
+| 1 | `synthetic_data_generator` (`schema_type: support_tickets`) | 30 tickets in en/es/fr/de with embedded PII + ground-truth labels |
+| 2 | `keyword_extractor` | TF-IDF top-k keywords per ticket |
+| 3 | `language_detector` | ISO 639-1 language code per ticket |
+| 4 | `pii_detector` | counts of emails / phones / names found |
+| 5 | `pii_redactor` | ticket text with PII masked via Presidio |
+| 6 | `embeddings_generator` (`provider: sentence_transformers`) | local 384-dim MiniLM-L6 vectors |
 
 ## Validated end-to-end
 

@@ -13,9 +13,9 @@ Pipeline (5 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read source CSV |
-| 2 | [`dataframe_union`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_union) | transformation |  |
-| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
+| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 2 | `dataframe_union` | transformation |  |
+| 3 | `dataframe_to_csv` | sink | Write CSV |
 
 ## Run
 

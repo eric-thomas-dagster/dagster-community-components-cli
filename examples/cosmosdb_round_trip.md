@@ -53,10 +53,10 @@ export COSMOS_KEY=$(az cosmosdb keys list -g "$RG" -n "$NAME" --query primaryMas
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate 50 synthetic orders |
-| 2 | [`cosmosdb_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/cosmosdb_writer) | sink | Upsert each row as a Cosmos document; `id_field=order_id` to satisfy Cosmos's required `id` |
-| 3 | [`cosmosdb_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/cosmosdb_reader) | source | Run a SQL query (`SELECT * FROM c WHERE c.total > 500 ORDER BY c.total DESC`) and return rows as a DataFrame |
-| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write the high-value-orders report locally |
+| 1 | `synthetic_data_generator` | ai | Generate 50 synthetic orders |
+| 2 | `cosmosdb_writer` | sink | Upsert each row as a Cosmos document; `id_field=order_id` to satisfy Cosmos's required `id` |
+| 3 | `cosmosdb_reader` | source | Run a SQL query (`SELECT * FROM c WHERE c.total > 500 ORDER BY c.total DESC`) and return rows as a DataFrame |
+| 4 | `dataframe_to_csv` | sink | Write the high-value-orders report locally |
 
 ## Run
 
@@ -70,14 +70,14 @@ uv run dg launch --assets '*'
 
 | Step | Result |
 |---|---|
-| [`cosmosdb_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/cosmosdb_writer) | 50 items upserted into `demo.orders` |
-| [`cosmosdb_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/cosmosdb_reader) | 9 rows returned (those with `total > 500`) |
-| [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | `/tmp/cosmos_high_value_orders.csv` written; rows include Cosmos system fields (`_rid`, `_etag`, `_ts`) |
+| `cosmosdb_writer` | 50 items upserted into `demo.orders` |
+| `cosmosdb_reader` | 9 rows returned (those with `total > 500`) |
+| `dataframe_to_csv` | `/tmp/cosmos_high_value_orders.csv` written; rows include Cosmos system fields (`_rid`, `_etag`, `_ts`) |
 
 ## Cosmos requires `id`
 
 Cosmos's NoSQL/SQL API requires every document to have an `id` string field.
-The [`cosmosdb_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/cosmosdb_writer) component's `id_field` parameter copies a column at
+The `cosmosdb_writer` component's `id_field` parameter copies a column at
 write time:
 
 ```yaml
@@ -108,5 +108,5 @@ az group delete --name dagster-demo-rg --yes
 - Swap to `if_exists: insert` to fail on duplicate IDs (vs upsert).
 - Tune the read query in `cosmosdb_reader/defs.yaml` — Cosmos SQL supports
   WHERE / GROUP BY / aggregates / spatial / array_contains.
-- Add a [`cosmosdb_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/cosmosdb_resource) (existing component) so multiple assets share
+- Add a `cosmosdb_resource` (existing component) so multiple assets share
   one client, useful when the read and write live in the same process.

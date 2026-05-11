@@ -12,8 +12,8 @@ hl7_messages         ← synthetic_data_generator (hl7_messages, 12 messages)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `schema_type: hl7_messages` alternates between ADT^A01 admit and ORU^R01 lab result. Realistic pipe-delimited segments. |
-| [`hl7_v2_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hl7_v2_parser) | Stdlib-only pipe-delimited parser. Emits one row per kept segment with the parent MSH context (`msg_control_id`, `message_type`, `sending_app`, `version_id`) inherited on every row. |
+| `synthetic_data_generator` | `schema_type: hl7_messages` alternates between ADT^A01 admit and ORU^R01 lab result. Realistic pipe-delimited segments. |
+| `hl7_v2_parser` | Stdlib-only pipe-delimited parser. Emits one row per kept segment with the parent MSH context (`msg_control_id`, `message_type`, `sending_app`, `version_id`) inherited on every row. |
 
 ## Live output
 

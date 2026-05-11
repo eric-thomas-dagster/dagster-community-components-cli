@@ -11,11 +11,11 @@ rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_j
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | GET the USGS daily feed (no auth) |
-| 2 | [`json_flatten`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/json_flatten) | transformation | Flatten the `properties` dict from each feature |
-| 3 | [`select_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/select_columns) | transformation | Keep `mag`, `place`, `time`, `url`, `tsunami` |
-| 4 | [`sort`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sort) | transformation | Order by magnitude (descending) |
-| 5 | [`dataframe_to_json`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_json) | sink | Write `/tmp/earthquakes.jsonl` (one record per line) |
+| 1 | `rest_api_fetcher` | ingestion | GET the USGS daily feed (no auth) |
+| 2 | `json_flatten` | transformation | Flatten the `properties` dict from each feature |
+| 3 | `select_columns` | transformation | Keep `mag`, `place`, `time`, `url`, `tsunami` |
+| 4 | `sort` | transformation | Order by magnitude (descending) |
+| 5 | `dataframe_to_json` | sink | Write `/tmp/earthquakes.jsonl` (one record per line) |
 
 ## Run
 
@@ -36,5 +36,5 @@ uv run dg launch --assets '*'
 
 - REST ingestion with `json_path` extraction (the USGS response wraps the
   earthquake list under `features`).
-- [`json_flatten`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/json_flatten) turns nested dict columns into flat scalar columns.
+- `json_flatten` turns nested dict columns into flat scalar columns.
 - JSONL output preserves record-per-line structure for downstream tools.

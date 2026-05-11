@@ -14,10 +14,10 @@ sample_videos       ← synthetic_video_generator (2 MP4s w/ video+audio tracks)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_video_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_video_generator) | ffmpeg `testsrc` color-bar video + `sine` audio → real MP4s for hermetic demos |
-| [`video_metadata_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/video_metadata_extractor) | ffprobe → container + per-stream codec/resolution/fps/bitrate/sample rate |
-| [`video_frame_extract_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/video_frame_extract_asset) | ffmpeg frame sampling: every N seconds, every N frames, or fixed-count even-spread |
-| [`video_audio_extract_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/video_audio_extract_asset) | ffmpeg audio-track extract w/ resample + channel-fold (Whisper-ready in one step) |
+| `synthetic_video_generator` | ffmpeg `testsrc` color-bar video + `sine` audio → real MP4s for hermetic demos |
+| `video_metadata_extractor` | ffprobe → container + per-stream codec/resolution/fps/bitrate/sample rate |
+| `video_frame_extract_asset` | ffmpeg frame sampling: every N seconds, every N frames, or fixed-count even-spread |
+| `video_audio_extract_asset` | ffmpeg audio-track extract w/ resample + channel-fold (Whisper-ready in one step) |
 
 ## Live output
 

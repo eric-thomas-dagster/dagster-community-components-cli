@@ -2,7 +2,7 @@
 
 A 3-component pipeline that generates a Stripe-shaped CSV (50 synthetic
 subscriptions across active / trialing / canceled states), runs
-[`subscription_metrics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/subscription_metrics), writes a SaaS-dashboard CSV with MRR, ARR,
+`subscription_metrics`, writes a SaaS-dashboard CSV with MRR, ARR,
 churn rate, LTV, and ARPU.
 
 ## Pipeline
@@ -13,9 +13,9 @@ csv_file_ingestion → subscription_metrics → dataframe_to_csv
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Load the synthetic subscriptions CSV |
-| 2 | [`subscription_metrics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/subscription_metrics) | analytics | Compute MRR / ARR / churn / LTV / ARPU from Stripe-shaped data |
-| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | One-row metrics snapshot |
+| 1 | `csv_file_ingestion` | ingestion | Load the synthetic subscriptions CSV |
+| 2 | `subscription_metrics` | analytics | Compute MRR / ARR / churn / LTV / ARPU from Stripe-shaped data |
+| 3 | `dataframe_to_csv` | sink | One-row metrics snapshot |
 
 ## Run
 
@@ -50,7 +50,7 @@ $43.50, historical LTV $783.
 - **First synthetic-data demo.** The setup script emits a Stripe-shaped
   CSV with a Python heredoc — useful for any pipeline where the dataset
   is hard to get clean publicly (Stripe data, internal metrics, etc.).
-- **[`subscription_metrics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/subscription_metrics) consumes Stripe directly.** The component
+- **`subscription_metrics` consumes Stripe directly.** The component
   expects columns `status`, `created`, `canceled_at`,
   `current_period_end`, `plan_amount`, etc. — a real Stripe export from
   `stripe sigma` will work without rename. Synthetic data here matches

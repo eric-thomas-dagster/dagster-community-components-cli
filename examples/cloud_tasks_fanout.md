@@ -2,7 +2,7 @@
 
 **Validated end-to-end against real APIs** (servicepulse-490502 →
 us-central1/demo-queue → httpbin.org). A Dagster asset emits 10
-synthetic events; the [`cloud_tasks_enqueue_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/cloud_tasks_enqueue_asset) component
+synthetic events; the `cloud_tasks_enqueue_asset` component
 pushes each row as an HTTP task onto Cloud Tasks; the queue dispatches
 them asynchronously to a target URL.
 
@@ -18,8 +18,8 @@ events                   ← synthetic_data_generator (events schema, 10 rows)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | Synthetic upstream. `schema_type: events` produces event-log rows — each one becomes a Cloud Tasks job body. |
-| [`cloud_tasks_enqueue_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/cloud_tasks_enqueue_asset) | Per-row HTTP task push to a Cloud Tasks queue. Supports body_columns, URL templating (`{col}` placeholders), `schedule_time_column` for deferred work, OIDC auth for invoking private Cloud Run / Cloud Functions, and `dispatch_deadline_seconds`. |
+| `synthetic_data_generator` | Synthetic upstream. `schema_type: events` produces event-log rows — each one becomes a Cloud Tasks job body. |
+| `cloud_tasks_enqueue_asset` | Per-row HTTP task push to a Cloud Tasks queue. Supports body_columns, URL templating (`{col}` placeholders), `schedule_time_column` for deferred work, OIDC auth for invoking private Cloud Run / Cloud Functions, and `dispatch_deadline_seconds`. |
 
 ## Live run output
 

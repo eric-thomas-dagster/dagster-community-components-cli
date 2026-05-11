@@ -15,8 +15,8 @@ sample_documents         ← synthetic_pdf_generator (built-in invoice + letter)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_pdf_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_pdf_generator) | Generate sample PDFs (built-in invoice + letter, or your own custom set). Emits a DataFrame of `(doc_id, kind, file_path, pages)` — feeds straight into [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor) / [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset). |
-| [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor) | Per-row Cloud Document AI extraction. Supports any processor type — OCR, FORM_PARSER, INVOICE_PROCESSOR, LAYOUT_PARSER, US_DRIVER_LICENSE, custom (CDE), etc. Toggle output columns via `extract_text` / `extract_form_fields` / `extract_entities` / `extract_tables`. |
+| `synthetic_pdf_generator` | Generate sample PDFs (built-in invoice + letter, or your own custom set). Emits a DataFrame of `(doc_id, kind, file_path, pages)` — feeds straight into `document_ai_extractor` / `vision_api_asset`. |
+| `document_ai_extractor` | Per-row Cloud Document AI extraction. Supports any processor type — OCR, FORM_PARSER, INVOICE_PROCESSOR, LAYOUT_PARSER, US_DRIVER_LICENSE, custom (CDE), etc. Toggle output columns via `extract_text` / `extract_form_fields` / `extract_entities` / `extract_tables`. |
 
 ## Live run output
 

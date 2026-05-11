@@ -13,11 +13,11 @@ rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_j
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | Daily-partitioned GET to the USGS historical query API; uses `{partition_date}` / `{partition_date_next}` URL templating |
-| 2 | [`json_flatten`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/json_flatten) | transformation | Flatten partition-by-partition |
-| 3 | [`select_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/select_columns) | transformation | Same as the unpartitioned demo |
-| 4 | [`sort`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sort) | transformation | By magnitude per partition |
-| 5 | [`dataframe_to_json`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_json) | sink | Per-partition file: `/tmp/earthquakes/{partition_date}.jsonl` |
+| 1 | `rest_api_fetcher` | ingestion | Daily-partitioned GET to the USGS historical query API; uses `{partition_date}` / `{partition_date_next}` URL templating |
+| 2 | `json_flatten` | transformation | Flatten partition-by-partition |
+| 3 | `select_columns` | transformation | Same as the unpartitioned demo |
+| 4 | `sort` | transformation | By magnitude per partition |
+| 5 | `dataframe_to_json` | sink | Per-partition file: `/tmp/earthquakes/{partition_date}.jsonl` |
 
 ## Run
 

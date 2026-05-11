@@ -14,11 +14,11 @@ top_shakespeare_words   ← bigquery_query_asset (public BQ dataset)
 
 | Component | What it does |
 |---|---|
-| [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) | Run a SQL query against BigQuery, return a DataFrame. Drop-in peer of [`duckdb_query_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/duckdb_query_reader) (DuckDB) and [`database_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/database_query) (any SQLAlchemy DB). For multi-asset BQ entity import, use [`google_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/google_bigquery). |
+| `bigquery_query_asset` | Run a SQL query against BigQuery, return a DataFrame. Drop-in peer of `duckdb_query_reader` (DuckDB) and `database_query` (any SQLAlchemy DB). For multi-asset BQ entity import, use `google_bigquery`. |
 
 ## Validation status
 
-[`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) validation: **live**. RUN_SUCCESS materializing
+`bigquery_query_asset` validation: **live**. RUN_SUCCESS materializing
 the top-20 most-frequent Shakespeare words via the public BQ sample
 dataset, plus a downstream pandas summary by word length:
 

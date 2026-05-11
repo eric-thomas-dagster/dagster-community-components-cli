@@ -12,8 +12,8 @@ tones               ← synthetic_audio_generator (3 sine tones, 44.1kHz/16-bit)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_audio_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_audio_generator) | stdlib-only sine-tone WAV generator. Emits `(clip_id, kind, frequency_hz, duration_seconds, sample_rate, file_path, file_size_bytes)` DataFrame. |
-| [`audio_transform_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/audio_transform_asset) | ffmpeg-based resample / format-convert / channel-fold / trim / loudness-normalize. Reads a column of file paths, writes new files. |
+| `synthetic_audio_generator` | stdlib-only sine-tone WAV generator. Emits `(clip_id, kind, frequency_hz, duration_seconds, sample_rate, file_path, file_size_bytes)` DataFrame. |
+| `audio_transform_asset` | ffmpeg-based resample / format-convert / channel-fold / trim / loudness-normalize. Reads a column of file paths, writes new files. |
 
 ## Live output
 

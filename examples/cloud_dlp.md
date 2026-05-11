@@ -18,9 +18,9 @@ support_tickets       ← synthetic_data_generator (support_tickets schema, embe
 
 | Component | Category | Object type | Purpose |
 |---|---|---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `ai` | `@dg.asset` | Synthetic upstream. `schema_type: support_tickets` produces multilingual ticket text with embedded names, emails, phones, and credit-card fragments — exactly the shape DLP is built for. |
-| [`cloud_dlp_inspect_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/cloud_dlp_inspect_asset) | `ai` | `@dg.asset` | Augments DataFrame with PII finding columns. Use for redaction routing, compliance reporting, training-data labeling. |
-| [`cloud_dlp_pii_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/cloud_dlp_pii_check) | `asset_checks` | `@dg.asset_check` | Pass/fail gate. Use to BLOCK downstream materialization when forbidden PII appears. |
+| `synthetic_data_generator` | `ai` | `@dg.asset` | Synthetic upstream. `schema_type: support_tickets` produces multilingual ticket text with embedded names, emails, phones, and credit-card fragments — exactly the shape DLP is built for. |
+| `cloud_dlp_inspect_asset` | `ai` | `@dg.asset` | Augments DataFrame with PII finding columns. Use for redaction routing, compliance reporting, training-data labeling. |
+| `cloud_dlp_pii_check` | `asset_checks` | `@dg.asset_check` | Pass/fail gate. Use to BLOCK downstream materialization when forbidden PII appears. |
 
 ## Why two components, not one?
 

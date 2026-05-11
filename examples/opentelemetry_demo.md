@@ -19,10 +19,10 @@ synthetic_data_generator → orders_raw  ──┬─→ dataframe_to_otlp_metri
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | 30 synthetic orders |
-| 2 | [`dataframe_to_otlp_metrics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_otlp_metrics) | sink | Push counter `orders.total` with category/status attributes |
-| 3 | [`dataframe_to_otlp_logs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_otlp_logs) | sink | One log per order with order_id body, customer_id/category/total attributes |
-| 4 | [`dataframe_to_otlp_traces`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_otlp_traces) | sink | One span per order, trace_id derived from customer_id (groups orders into customer journeys) |
+| 1 | `synthetic_data_generator` | ai | 30 synthetic orders |
+| 2 | `dataframe_to_otlp_metrics` | sink | Push counter `orders.total` with category/status attributes |
+| 3 | `dataframe_to_otlp_logs` | sink | One log per order with order_id body, customer_id/category/total attributes |
+| 4 | `dataframe_to_otlp_traces` | sink | One span per order, trace_id derived from customer_id (groups orders into customer journeys) |
 
 ## Why one demo, three signals
 
@@ -108,7 +108,7 @@ docker rm -f dg-otel-demo
   metrics, no logs/traces)
 - **Multi-vendor fan-out**: add multiple sink components, each pointing
   at a different backend — test data sovereignty / multi-region setups
-- **Production tracing**: replace [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) with real
+- **Production tracing**: replace `synthetic_data_generator` with real
   ETL outputs and use `trace_id_column` to group related work into
   meaningful traces
 - **Custom attributes**: add any DataFrame columns to `attribute_columns`

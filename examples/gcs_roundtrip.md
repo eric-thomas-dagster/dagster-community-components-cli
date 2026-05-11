@@ -18,10 +18,10 @@ transactions           ← synthetic_data_generator (transactions schema, 20 row
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | Synthetic upstream. `schema_type: transactions` produces `(transaction_id, account_id, timestamp, type, amount, merchant, category, status)` — common shape for warehouse ingest demos. |
-| [`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs) | Write a DataFrame to GCS as parquet / csv / json. Bucket from env var. |
-| [`bigquery_load_from_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/bigquery_load_from_gcs_asset) | BQ LOAD job from one or more GCS URIs. Format autodetect, partitioning, schema overrides. |
-| [`bigquery_export_to_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigquery_export_to_gcs_asset) | BQ EXPORT job from a table or query to GCS (parquet / csv / json / avro). Data never round-trips through the executor. |
+| `synthetic_data_generator` | Synthetic upstream. `schema_type: transactions` produces `(transaction_id, account_id, timestamp, type, amount, merchant, category, status)` — common shape for warehouse ingest demos. |
+| `dataframe_to_gcs` | Write a DataFrame to GCS as parquet / csv / json. Bucket from env var. |
+| `bigquery_load_from_gcs_asset` | BQ LOAD job from one or more GCS URIs. Format autodetect, partitioning, schema overrides. |
+| `bigquery_export_to_gcs_asset` | BQ EXPORT job from a table or query to GCS (parquet / csv / json / avro). Data never round-trips through the executor. |
 
 ## Live run output
 
@@ -40,7 +40,7 @@ us-west,10000,5
 
 ## Bugs surfaced fixing this demo
 
-1. **[`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs) needs `gcsfs` at runtime** but `pip install dataframe_to_gcs` doesn't pull it transitively (lives behind pyarrow's fsspec layer for parquet writes to gs://). The setup script now `uv add`s it explicitly. Worth a note in the component's README too.
+1. **`dataframe_to_gcs` needs `gcsfs` at runtime** but `pip install dataframe_to_gcs` doesn't pull it transitively (lives behind pyarrow's fsspec layer for parquet writes to gs://). The setup script now `uv add`s it explicitly. Worth a note in the component's README too.
 
 ## Why this pattern matters
 

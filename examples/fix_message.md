@@ -12,8 +12,8 @@ fix_messages         ← synthetic_data_generator (fix_messages, 30 msgs)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `schema_type: fix_messages` emits proper FIX 4.4 wire format with `8=FIX.4.4`, `9=<body_length>`, `10=<checksum>` envelopes. Mix of NewOrderSingle (D) + ExecutionReport (8). Pipe-rendered to make the column legible in pandas; canonical SOH (`\x01`) is also auto-detected. |
-| [`fix_message_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/fix_message_parser) | Resolves common FIX tag IDs to friendly columns (symbol, side, ord_type, time_in_force, ord_status, exec_type, etc.) with proper enum decoding. Preserves the full raw tag dict in `tags_raw` for ad-hoc analysis. |
+| `synthetic_data_generator` | `schema_type: fix_messages` emits proper FIX 4.4 wire format with `8=FIX.4.4`, `9=<body_length>`, `10=<checksum>` envelopes. Mix of NewOrderSingle (D) + ExecutionReport (8). Pipe-rendered to make the column legible in pandas; canonical SOH (`\x01`) is also auto-detected. |
+| `fix_message_parser` | Resolves common FIX tag IDs to friendly columns (symbol, side, ord_type, time_in_force, ord_status, exec_type, etc.) with proper enum decoding. Preserves the full raw tag dict in `tags_raw` for ad-hoc analysis. |
 
 ## Live output
 

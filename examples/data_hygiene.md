@@ -19,16 +19,16 @@ raw_customers
 
 | Component | What it adds |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | 50 synthetic customer rows (`customers` schema) |
-| [`audit_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/audit_columns) | `dagster_run_id`, `dagster_asset_key`, `materialization_time` + arbitrary `static_columns` |
-| [`schema_validator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/schema_validator) | JSON-schema validation — flags or fails rows that don't conform |
-| [`field_mapper`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/field_mapper) | Column renaming (`customer_id` → `cust_id`, `email` → `email_address`, ...) |
-| [`map_values`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/map_values) | Value lookup (`CA` → `California`, ...). Falls through to `default_value` if no match |
-| [`data_masking`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/data_masking) | PII masking — `method: hash` / `redact` / `partial` / `pseudonymize` per-column |
-| [`hash`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/hash) | Row fingerprint across N columns (SHA-256). Use for CDC / change-detection |
-| [`surrogate_key`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/surrogate_key) | Stable surrogate key from business-key columns. Truncatable. |
-| [`record_id`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/record_id) | Monotonic ID with prefix (`CUST-1000`, `CUST-1001`, ...). Sortable input order. |
-| [`count_records`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/count_records) | Aggregation — `group_by` + count column |
+| `synthetic_data_generator` | 50 synthetic customer rows (`customers` schema) |
+| `audit_columns` | `dagster_run_id`, `dagster_asset_key`, `materialization_time` + arbitrary `static_columns` |
+| `schema_validator` | JSON-schema validation — flags or fails rows that don't conform |
+| `field_mapper` | Column renaming (`customer_id` → `cust_id`, `email` → `email_address`, ...) |
+| `map_values` | Value lookup (`CA` → `California`, ...). Falls through to `default_value` if no match |
+| `data_masking` | PII masking — `method: hash` / `redact` / `partial` / `pseudonymize` per-column |
+| `hash` | Row fingerprint across N columns (SHA-256). Use for CDC / change-detection |
+| `surrogate_key` | Stable surrogate key from business-key columns. Truncatable. |
+| `record_id` | Monotonic ID with prefix (`CUST-1000`, `CUST-1001`, ...). Sortable input order. |
+| `count_records` | Aggregation — `group_by` + count column |
 
 ## Live output
 
@@ -94,5 +94,5 @@ Pure Python — no external dependencies. The whole chain runs in under 20 secon
 The graph is a strict linear DAG, so you can swap any transform for an alternative without changing the others:
 
 - Replace `field_mapper` with a dict literal in a downstream transform
-- Replace `data_masking` with [`pii_redactor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/pii_redactor) for regex-based detection
-- Replace `count_records` with [`aggregate`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/aggregate) for sum / mean / median per group
+- Replace `data_masking` with `pii_redactor` for regex-based detection
+- Replace `count_records` with `aggregate` for sum / mean / median per group

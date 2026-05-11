@@ -2,7 +2,7 @@
 
 A 4-component pipeline that hits GitHub's repo search API, then flattens
 nested fields (`owner.*`, `license.*`) into top-level columns using
-both [`nested_field_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/nested_field_extractor) (dot paths) and [`json_path_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/json_path_extractor)
+both `nested_field_extractor` (dot paths) and `json_path_extractor`
 (JSONPath). Demonstrates the two ways to descend into nested JSON.
 
 ## Pipeline
@@ -13,10 +13,10 @@ rest_api_fetcher → nested_field_extractor → json_path_extractor → datafram
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | GET `/search/repositories?q=orchestrator&per_page=10`; `json_path: items` extracts the array |
-| 2 | [`nested_field_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/nested_field_extractor) | transformation | Dot paths into `owner` dict — `login`, `html_url` |
-| 3 | [`json_path_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/json_path_extractor) | transformation | JSONPath into `license` dict (which may be null) — `$.key`, `$.name` |
-| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Pick the human-meaningful columns |
+| 1 | `rest_api_fetcher` | ingestion | GET `/search/repositories?q=orchestrator&per_page=10`; `json_path: items` extracts the array |
+| 2 | `nested_field_extractor` | transformation | Dot paths into `owner` dict — `login`, `html_url` |
+| 3 | `json_path_extractor` | transformation | JSONPath into `license` dict (which may be null) — `$.key`, `$.name` |
+| 4 | `dataframe_to_csv` | sink | Pick the human-meaningful columns |
 
 ## Run
 
@@ -39,9 +39,9 @@ crewAI,crewAIInc/crewAI,crewAIInc,https://github.com/crewAIInc,mit,MIT License,5
 
 ## What this demo shows
 
-- **Two ways to flatten nested JSON.** [`nested_field_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/nested_field_extractor) uses
+- **Two ways to flatten nested JSON.** `nested_field_extractor` uses
   dot paths (`address.city`) — quick and readable for predictable
-  shapes. [`json_path_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/json_path_extractor) uses full JSONPath (`$.user.id`,
+  shapes. `json_path_extractor` uses full JSONPath (`$.user.id`,
   `$.tags[*]`) — more powerful for arrays and conditional matches.
   Use either, or both, in the same pipeline.
 - **`drop_source: true`** — both extractors can drop the original

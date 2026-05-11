@@ -14,11 +14,11 @@ csv_file_ingestion → data_cleansing → formula → ltv_prediction → datafra
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Pull the UCI dataset (Databricks-mirrored CSV, ~45MB, 542k rows) |
-| 2 | [`data_cleansing`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/data_cleansing) | transformation | Drop rows where `CustomerID` is null (~25% of raw — anonymous walk-ins) |
-| 3 | [`formula`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/formula) | transformation | Compute `amount = Quantity * UnitPrice` per line |
-| 4 | [`ltv_prediction`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ltv_prediction) | analytics | Predict 12-month LTV per customer; bucket into value segments |
-| 5 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write the per-customer report |
+| 1 | `csv_file_ingestion` | ingestion | Pull the UCI dataset (Databricks-mirrored CSV, ~45MB, 542k rows) |
+| 2 | `data_cleansing` | transformation | Drop rows where `CustomerID` is null (~25% of raw — anonymous walk-ins) |
+| 3 | `formula` | transformation | Compute `amount = Quantity * UnitPrice` per line |
+| 4 | `ltv_prediction` | analytics | Predict 12-month LTV per customer; bucket into value segments |
+| 5 | `dataframe_to_csv` | sink | Write the per-customer report |
 
 ## Run
 
@@ -59,24 +59,24 @@ customer_id  total_transactions  historical_ltv  predicted_total_ltv  value_segm
 
 - **A real CDP pipeline composed entirely from registry components.**
   Ingest, clean, derive, model, sink — five YAML files, no Python glue.
-- **[`ltv_prediction`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ltv_prediction) auto-detects column names**, but you can override
+- **`ltv_prediction` auto-detects column names**, but you can override
   them via `customer_id_field`, `transaction_date_field`, `amount_field`.
   Useful when the canonical names don't match (e.g. UCI's `CustomerID`
   vs. the auto-detect's `customer_id`).
 - **Customer segmentation comes for free** — the asset's output
   includes a `value_segment` column (Bronze/Silver/Gold/Platinum) and an
-  `ltv_percentile` column. Drop a [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) downstream to materialize a
+  `ltv_percentile` column. Drop a `filter` downstream to materialize a
   "Platinum-only" segment for targeted campaigns.
 
 ## Extending to a fuller CDP
 
 Once you have a customer-keyed dataframe, more registry components plug in:
 
-- [`rfm_segmentation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/rfm_segmentation) — Recency / Frequency / Monetary scoring (uses
+- `rfm_segmentation` — Recency / Frequency / Monetary scoring (uses
   `source_asset` lineage, not `upstream_asset_key`)
-- [`churn_prediction`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/churn_prediction) — predict which customers stop buying
-- [`customer_journey_mapping`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/customer_journey_mapping) — sequence analysis from event data
-- [`multi_touch_attribution`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/multi_touch_attribution) — distribute conversion credit across channels
+- `churn_prediction` — predict which customers stop buying
+- `customer_journey_mapping` — sequence analysis from event data
+- `multi_touch_attribution` — distribute conversion credit across channels
 
 All accept transaction-shaped dataframes; many auto-detect the same column
 patterns (`customer_id`, `date`, `amount`).

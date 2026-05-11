@@ -12,8 +12,8 @@ sample_images       ← synthetic_image_generator (3 default PNGs, 640x640)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_image_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_image_generator) | Generates sample PNGs (built-in apple / blue car / green plant + optional custom set). Emits `(sku, name, kind, file_path)` DataFrame. |
-| [`image_transform_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/image_transform_asset) | Pillow-based resize / crop / format-convert / grayscale. Reads a column of file paths, writes new files, adds `transformed_path` + `size_before` + `size_after` columns. |
+| `synthetic_image_generator` | Generates sample PNGs (built-in apple / blue car / green plant + optional custom set). Emits `(sku, name, kind, file_path)` DataFrame. |
+| `image_transform_asset` | Pillow-based resize / crop / format-convert / grayscale. Reads a column of file paths, writes new files, adds `transformed_path` + `size_before` + `size_after` columns. |
 
 ## Live output
 

@@ -16,12 +16,12 @@ csv_file_ingestion ─┘   → distance_calculator → filter
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1a / 1b | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) × 2 | ingestion | Same CSV, two distinct assets so the cross join has two inputs |
-| 2 | [`dataframe_join`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_join) | transformation | `how: cross` — Cartesian product (10 × 10 = 100 pairs); `suffixes: [_origin, _dest]` |
-| 3 | [`distance_calculator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/distance_calculator) | analytics | Haversine distance from `lat_origin/lng_origin` → `lat_dest/lng_dest` in km |
-| 4 | [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) | transformation | Drop rows where origin == dest |
-| 5 | [`sort`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sort) | transformation | Ascending by `distance_km` |
-| 6 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write `city_origin, city_dest, distance_km` |
+| 1a / 1b | `csv_file_ingestion` × 2 | ingestion | Same CSV, two distinct assets so the cross join has two inputs |
+| 2 | `dataframe_join` | transformation | `how: cross` — Cartesian product (10 × 10 = 100 pairs); `suffixes: [_origin, _dest]` |
+| 3 | `distance_calculator` | analytics | Haversine distance from `lat_origin/lng_origin` → `lat_dest/lng_dest` in km |
+| 4 | `filter` | transformation | Drop rows where origin == dest |
+| 5 | `sort` | transformation | Ascending by `distance_km` |
+| 6 | `dataframe_to_csv` | sink | Write `city_origin, city_dest, distance_km` |
 
 ## Run
 
@@ -50,11 +50,11 @@ NY-Philly the closest at ~130km, NY-SF the farthest at ~4,129km.
 
 ## What this demo shows
 
-- **[`dataframe_join`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_join) with `how: cross`** — Cartesian product, no join
+- **`dataframe_join` with `how: cross`** — Cartesian product, no join
   key needed. Useful for distance matrices, all-pairs comparisons,
   scenario sweeps. The same component handles inner / left / right /
   outer joins via the `how` field.
-- **[`distance_calculator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/distance_calculator) haversine math.** Real spherical distance
+- **`distance_calculator` haversine math.** Real spherical distance
   using lat/lng — accurate at any scale. Other formulas: `manhattan`,
   `euclidean` (for projected coordinates), and unit conversion to
   miles or meters via the `unit` field.

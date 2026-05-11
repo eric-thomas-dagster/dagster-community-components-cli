@@ -14,11 +14,11 @@ class_data_sheet     ← google_sheets_ingestion (Sheets API → DataFrame)
 
 | Component | What it does |
 |---|---|
-| [`google_sheets_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_sheets_ingestion) | Service-account-authenticated Google Sheets reader. Pulls one or more named ranges / sheet tabs from a spreadsheet, returns a pandas DataFrame, optionally persists to a dlt destination (Snowflake, BigQuery, Postgres, etc.). |
+| `google_sheets_ingestion` | Service-account-authenticated Google Sheets reader. Pulls one or more named ranges / sheet tabs from a spreadsheet, returns a pandas DataFrame, optionally persists to a dlt destination (Snowflake, BigQuery, Postgres, etc.). |
 
 ## Validation status
 
-- **[`google_sheets_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_sheets_ingestion): live** — `dg check defs` passes; service
+- **`google_sheets_ingestion`: live** — `dg check defs` passes; service
   account auth flows; Sheets API call lands; and the actionable
   permission-denied path was verified end-to-end (the component
   surfaces a 403 with a clickable share-link rather than crashing).

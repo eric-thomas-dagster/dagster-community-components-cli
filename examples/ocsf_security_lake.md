@@ -5,12 +5,12 @@ normalize → conformance check → Parquet (mocking AWS Security Lake's layout,
 AWS required).
 
 Validates:
-- [`ocsf_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/ocsf_normalizer) correctly maps Dagster+ event types to OCSF class_uid /
+- `ocsf_normalizer` correctly maps Dagster+ event types to OCSF class_uid /
   category_uid / activity_id (Authentication=3002, Account Change=3005, User
   Access=3006, App Lifecycle=6002).
-- [`ocsf_validator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/ocsf_validator) (asset_check) catches conformance issues — required fields,
+- `ocsf_validator` (asset_check) catches conformance issues — required fields,
   severity range, known class_uid set.
-- [`dataframe_to_parquet`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_parquet) writes the OCSF rows.
+- `dataframe_to_parquet` writes the OCSF rows.
 
 ```
 csv (synthetic) → ocsf_normalizer → ocsf_validator (asset_check)
@@ -21,10 +21,10 @@ csv (synthetic) → ocsf_normalizer → ocsf_validator (asset_check)
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | 25 synthetic Dagster+ audit events |
-| 2 | [`ocsf_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/ocsf_normalizer) | transformation | Map source events → OCSF v1.1 |
-| 3 | [`ocsf_validator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/ocsf_validator) | check | Asset check: OCSF v1.x conformance |
-| 4 | [`dataframe_to_parquet`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_parquet) | sink | Write OCSF rows (snappy Parquet) |
+| 1 | `csv_file_ingestion` | ingestion | 25 synthetic Dagster+ audit events |
+| 2 | `ocsf_normalizer` | transformation | Map source events → OCSF v1.1 |
+| 3 | `ocsf_validator` | check | Asset check: OCSF v1.x conformance |
+| 4 | `dataframe_to_parquet` | sink | Write OCSF rows (snappy Parquet) |
 
 ## Run
 
@@ -59,5 +59,5 @@ print(df.groupby('raw_event_type')['class_uid'].first())
 
 The demo writes Parquet to `/tmp` instead of an actual Security Lake bucket so it
 runs offline. To target the real AWS Security Lake layout, swap
-[`dataframe_to_parquet`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_parquet) for [`dataframe_to_security_lake`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sinks/dataframe_to_security_lake) — see
+`dataframe_to_parquet` for `dataframe_to_security_lake` — see
 `dagster_plus_security_lake_demo` for that flow.

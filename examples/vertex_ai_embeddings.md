@@ -19,7 +19,7 @@ sample_texts                  (5 product descriptions)
 
 | Component | What it does |
 |---|---|
-| [`vertex_ai_text_embeddings_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vertex_ai_text_embeddings_asset) | Native Vertex AI text-embedding wrapper (text-embedding-004, gemini-embedding-001, multilingual-002, etc.). Drop-in shape parallel to [`embeddings_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/embeddings_generator) and the openai/anthropic embedding peers. Useful for RAG, semantic search, vector store loaders. |
+| `vertex_ai_text_embeddings_asset` | Native Vertex AI text-embedding wrapper (text-embedding-004, gemini-embedding-001, multilingual-002, etc.). Drop-in shape parallel to `embeddings_generator` and the openai/anthropic embedding peers. Useful for RAG, semantic search, vector store loaders. |
 
 ## Validation status — live
 
@@ -62,8 +62,8 @@ cat /tmp/vertex_embeddings.csv
 
 | Component | Provider | Best for |
 |---|---|---|
-| [`vertex_ai_text_embeddings_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vertex_ai_text_embeddings_asset) | Google Vertex AI | GCP-native shops, multilingual via gemini-embedding-001 |
-| `openai_embeddings` / [`embeddings_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/embeddings_generator) (LiteLLM) | OpenAI | text-embedding-3-small/large, broad ecosystem |
+| `vertex_ai_text_embeddings_asset` | Google Vertex AI | GCP-native shops, multilingual via gemini-embedding-001 |
+| `openai_embeddings` / `embeddings_generator` (LiteLLM) | OpenAI | text-embedding-3-small/large, broad ecosystem |
 | `anthropic_*` | (Anthropic doesn't have native embedding models — use Voyage AI or OpenAI for that) | — |
 
 ## Task-type tuning

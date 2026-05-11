@@ -22,10 +22,10 @@ iris_clean              ← bigquery_create_table_from_query_asset
 
 | Component | What it does |
 |---|---|
-| [`bigquery_create_table_from_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/bigquery_create_table_from_query_asset) | CTAS — `CREATE OR REPLACE TABLE/VIEW/MATERIALIZED VIEW` from a SELECT. Transform layer of any BQ-native ELT (same shape as a dbt model, run directly without dbt). |
-| [`bigquery_ml_train_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_train_asset) | Train a BQML model (LINEAR_REG, LOGISTIC_REG, KMEANS, ARIMA_PLUS, DNN_*, BOOSTED_TREE_*, AUTOML_*, etc.) in pure SQL. |
-| [`bigquery_ml_predict_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_predict_asset) | Run ML.PREDICT / ML.FORECAST / ML.EXPLAIN_PREDICT / ML.DETECT_ANOMALIES against a trained model. |
-| [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Local CSV export. (For Dagster+ Cloud, swap for [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) / [`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs).) |
+| `bigquery_create_table_from_query_asset` | CTAS — `CREATE OR REPLACE TABLE/VIEW/MATERIALIZED VIEW` from a SELECT. Transform layer of any BQ-native ELT (same shape as a dbt model, run directly without dbt). |
+| `bigquery_ml_train_asset` | Train a BQML model (LINEAR_REG, LOGISTIC_REG, KMEANS, ARIMA_PLUS, DNN_*, BOOSTED_TREE_*, AUTOML_*, etc.) in pure SQL. |
+| `bigquery_ml_predict_asset` | Run ML.PREDICT / ML.FORECAST / ML.EXPLAIN_PREDICT / ML.DETECT_ANOMALIES against a trained model. |
+| `dataframe_to_csv` | Local CSV export. (For Dagster+ Cloud, swap for `dataframe_to_bigquery` / `dataframe_to_gcs`.) |
 
 ## Validation status — all live
 

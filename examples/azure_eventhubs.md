@@ -1,7 +1,7 @@
 # Azure Event Hubs Round-Trip demo
 
 100 synthetic e-commerce orders → DataFrame → published to Azure Event
-Hubs → consumed by [`eventhubs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/eventhubs_to_database_asset) → landed in Azure
+Hubs → consumed by `eventhubs_to_database_asset` → landed in Azure
 PostgreSQL. Round-trips through a real message queue with lineage flowing
 across the broker.
 
@@ -17,18 +17,18 @@ synthetic_data_generator → dataframe_to_eventhub → Event Hub
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | 100 synthetic e-commerce orders |
-| 2 | [`dataframe_to_eventhub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_eventhub) (NEW) | sink | Publish each row as a JSON event; pinned by `customer_id` partition key |
-| 3 | [`eventhubs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/eventhubs_to_database_asset) | ingestion | Consume events from EH and bulk-insert into Postgres |
+| 1 | `synthetic_data_generator` | ai | 100 synthetic e-commerce orders |
+| 2 | `dataframe_to_eventhub` (NEW) | sink | Publish each row as a JSON event; pinned by `customer_id` partition key |
+| 3 | `eventhubs_to_database_asset` | ingestion | Consume events from EH and bulk-insert into Postgres |
 
 ### Why a new producer component?
 
 The user asked: should the producer be a component or a CLI? We added
-[`dataframe_to_eventhub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_eventhub) so the demo composes from registry components
+`dataframe_to_eventhub` so the demo composes from registry components
 without a custom asset. Since each message-queue SDK has distinct auth +
 partition-key semantics (Event Hubs vs Kafka vs PubSub vs Kinesis vs
 Redis Streams), each gets its own focused component rather than one fat
-multi-queue component. [`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) and [`dataframe_to_eventhub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_eventhub) are
+multi-queue component. `redis_writer` and `dataframe_to_eventhub` are
 already in the registry; `dataframe_to_kafka`, `dataframe_to_pubsub`, and
 `dataframe_to_kinesis` are planned in the same shape.
 
@@ -81,8 +81,8 @@ uv run dg launch --assets '*'
 
 | Step | Result |
 |---|---|
-| [`dataframe_to_eventhub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_eventhub) | Sent 100/100 events to `demo-events` in 1.37s |
-| [`eventhubs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/eventhubs_to_database_asset) | Consumed 200 events → 10 cols, drained in 6.12s |
+| `dataframe_to_eventhub` | Sent 100/100 events to `demo-events` in 1.37s |
+| `eventhubs_to_database_asset` | Consumed 200 events → 10 cols, drained in 6.12s |
 | Verification | `SELECT COUNT(*) FROM orders_received` returns 200 rows |
 
 (Consumer drained 200 because a previous failed run left 100 events in
@@ -93,8 +93,8 @@ the hub before the consumer fix landed; with a fresh hub it'd be exactly
 
 While building this demo we shipped:
 
-1. **[`dataframe_to_eventhub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_eventhub)** — the producer component
-2. **[`eventhubs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/eventhubs_to_database_asset) consumer hang fix** — `receive_batch()`
+1. **`dataframe_to_eventhub`** — the producer component
+2. **`eventhubs_to_database_asset` consumer hang fix** — `receive_batch()`
    loops forever; previous logic returned early from the callback but
    never closed the client. Now closes from inside the callback once
    max_events is reached, with the exception caught and treated as clean
@@ -135,8 +135,8 @@ az group delete --name dagster-demo-rg --yes
 
 ## Variations
 
-- **Stream-driven downstream:** use the [`eventhubs_monitor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/eventhubs_monitor) sensor to
-  trigger [`eventhubs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/eventhubs_to_database_asset) reactively whenever a new
+- **Stream-driven downstream:** use the `eventhubs_monitor` sensor to
+  trigger `eventhubs_to_database_asset` reactively whenever a new
   partition advances (instead of asset materialization).
 - **Different sink:** the consumer's `database_url_env_var` works against
   any SQLAlchemy URL — flip to mssql+pymssql / mysql+pymysql for Azure SQL

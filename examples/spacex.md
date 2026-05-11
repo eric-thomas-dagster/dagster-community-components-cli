@@ -11,11 +11,11 @@ rest_api_fetcher → select_columns → datetime_parser → rank → dataframe_t
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | GET `api.spacexdata.com/v4/launches` (no auth) |
-| 2 | [`select_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/select_columns) | transformation | Keep `name`, `date_utc`, `success`, `rocket`, `flight_number`, `details` |
-| 3 | [`datetime_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/datetime_parser) | transformation | Parse `date_utc` → tz-aware datetime in `launch_date` |
-| 4 | [`rank`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/rank) | transformation | Rank by `launch_date` descending → `rank_by_date` |
-| 5 | [`dataframe_to_excel`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_excel) | sink | Write `/tmp/spacex_launches.xlsx` |
+| 1 | `rest_api_fetcher` | ingestion | GET `api.spacexdata.com/v4/launches` (no auth) |
+| 2 | `select_columns` | transformation | Keep `name`, `date_utc`, `success`, `rocket`, `flight_number`, `details` |
+| 3 | `datetime_parser` | transformation | Parse `date_utc` → tz-aware datetime in `launch_date` |
+| 4 | `rank` | transformation | Rank by `launch_date` descending → `rank_by_date` |
+| 5 | `dataframe_to_excel` | sink | Write `/tmp/spacex_launches.xlsx` |
 
 ## Run
 
@@ -39,10 +39,10 @@ Transporter-6         2022-12-01            2
 
 ## What this demo shows
 
-- [`datetime_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/datetime_parser) auto-detects ISO 8601 with millisecond `.000Z` precision
+- `datetime_parser` auto-detects ISO 8601 with millisecond `.000Z` precision
   — no `input_format` required.
-- [`rank`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/rank) supports `dense` / `min` / `max` / `first` methods, ascending or
+- `rank` supports `dense` / `min` / `max` / `first` methods, ascending or
   descending, with a configurable output column.
-- [`dataframe_to_excel`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_excel) automatically strips tz from tz-aware datetimes
+- `dataframe_to_excel` automatically strips tz from tz-aware datetimes
   before writing (Excel doesn't support tz-aware) and logs which columns
   were touched.

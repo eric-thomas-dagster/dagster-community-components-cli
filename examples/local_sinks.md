@@ -23,11 +23,11 @@ orders (synthetic source: 30 rows × 5 cols)
 
 | Component | Output |
 |---|---|
-| [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | CSV file |
-| [`dataframe_to_parquet`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_parquet) | Parquet (snappy compression by default) |
-| [`dataframe_to_json`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_json) | JSON (one record per row by default) |
-| [`dataframe_to_excel`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_excel) | XLSX |
-| [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) | SQL table via SQLAlchemy (SQLite here, but works against PostgreSQL / MySQL / DuckDB / etc.) |
+| `dataframe_to_csv` | CSV file |
+| `dataframe_to_parquet` | Parquet (snappy compression by default) |
+| `dataframe_to_json` | JSON (one record per row by default) |
+| `dataframe_to_excel` | XLSX |
+| `dataframe_to_table` | SQL table via SQLAlchemy (SQLite here, but works against PostgreSQL / MySQL / DuckDB / etc.) |
 
 ## Run it
 
@@ -54,15 +54,15 @@ uv run dg dev   # http://localhost:3000
 The full sink family has 23 components. The 18 not exercised here need
 cloud credentials or specialized backends:
 
-- **Object stores:** [`dataframe_to_s3`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_s3), [`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs), [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls)
-- **Warehouses:** [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery), [`dataframe_to_snowflake`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_snowflake),
-  [`dataframe_to_redshift`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_redshift), [`dataframe_to_databricks`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_databricks), [`dataframe_to_fabric_lakehouse`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_fabric_lakehouse),
-  [`dataframe_to_kusto`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_kusto), [`dataframe_to_azure_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_azure_table)
-- **Streaming:** [`dataframe_to_eventhub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_eventhub), [`dataframe_to_servicebus`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_servicebus)
-- **Observability:** [`dataframe_to_dynatrace_events`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_dynatrace_events), [`dataframe_to_newrelic_logs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_newrelic_logs),
-  [`dataframe_to_otlp_logs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_otlp_logs), [`dataframe_to_otlp_metrics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_otlp_metrics), [`dataframe_to_otlp_traces`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_otlp_traces),
-  [`dataframe_to_prometheus`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_prometheus)
-- **Generic:** [`dlt_dataframe_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dlt_dataframe_writer)
+- **Object stores:** `dataframe_to_s3`, `dataframe_to_gcs`, `dataframe_to_adls`
+- **Warehouses:** `dataframe_to_bigquery`, `dataframe_to_snowflake`,
+  `dataframe_to_redshift`, `dataframe_to_databricks`, `dataframe_to_fabric_lakehouse`,
+  `dataframe_to_kusto`, `dataframe_to_azure_table`
+- **Streaming:** `dataframe_to_eventhub`, `dataframe_to_servicebus`
+- **Observability:** `dataframe_to_dynatrace_events`, `dataframe_to_newrelic_logs`,
+  `dataframe_to_otlp_logs`, `dataframe_to_otlp_metrics`, `dataframe_to_otlp_traces`,
+  `dataframe_to_prometheus`
+- **Generic:** `dlt_dataframe_writer`
 
 Each is a candidate for its own integration-specific demo (most need
 either a localstack/wiremock + cloud-credentials path or a real

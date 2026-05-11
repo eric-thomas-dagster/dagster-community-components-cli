@@ -12,8 +12,8 @@ x12_messages         ← synthetic_data_generator (x12_messages, 15 msgs)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `schema_type: x12_messages` rotates 5 transaction sets: 270 (eligibility inquiry), 271 (eligibility response), 835 (remittance), 837 (healthcare claim), 850 (purchase order). Each wrapped in full ISA/GS envelopes. |
-| [`x12_edi_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/x12_edi_parser) | Auto-detects ISA delimiters per spec, walks segments, emits one row per ST/SE transaction with ISA/GS context columns + transaction-specific fields (payment_amount, claim_total_charge, po_number, payer_name, …). |
+| `synthetic_data_generator` | `schema_type: x12_messages` rotates 5 transaction sets: 270 (eligibility inquiry), 271 (eligibility response), 835 (remittance), 837 (healthcare claim), 850 (purchase order). Each wrapped in full ISA/GS envelopes. |
+| `x12_edi_parser` | Auto-detects ISA delimiters per spec, walks segments, emits one row per ST/SE transaction with ISA/GS context columns + transaction-specific fields (payment_amount, claim_total_charge, po_number, payer_name, …). |
 
 ## Live output
 

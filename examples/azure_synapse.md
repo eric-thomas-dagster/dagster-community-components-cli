@@ -17,7 +17,7 @@ azure_synapse imports the workspace →
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`azure_synapse`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_synapse) | integration | Discover Synapse pipelines / Spark jobs / notebooks, expose each as a Dagster asset, trigger + poll runs |
+| 1 | `azure_synapse` | integration | Discover Synapse pipelines / Spark jobs / notebooks, expose each as a Dagster asset, trigger + poll runs |
 
 ## Synapse vs ADF
 
@@ -30,9 +30,9 @@ azure_synapse imports the workspace →
 | Notebooks | — | ✓ |
 | Pricing | per-activity | workspace free; pools metered separately |
 
-If your team only uses ADF pipelines, prefer the [`azure_data_factory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_data_factory)
+If your team only uses ADF pipelines, prefer the `azure_data_factory`
 component (lighter dependency footprint). If you use any of Spark / SQL
-pools / notebooks alongside pipelines, use [`azure_synapse`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_synapse).
+pools / notebooks alongside pipelines, use `azure_synapse`.
 
 ## Prerequisites
 
@@ -196,7 +196,7 @@ az group delete --name dagster-demo-rg --yes
   in the catalog. Notebook execution requires a Spark pool and is
   typically driven via pipeline notebook activities.
 - **Per-pipeline upstream deps:** the component supports the same
-  `assets_by_pipeline_name.<name>.deps` pattern as [`azure_data_factory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_data_factory)
+  `assets_by_pipeline_name.<name>.deps` pattern as `azure_data_factory`
   — wire one Synapse pipeline to specific upstream Dagster assets.
 - **Filtering:** use `filter_by_name_pattern` / `exclude_name_pattern` to
   scope which pipelines are imported (regex).

@@ -12,8 +12,8 @@ support_tickets               ← synthetic_data_generator (multilingual tickets
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `schema_type: support_tickets` — multilingual ticket text with German, Spanish, French content + embedded PII. |
-| [`text_codec_convert_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/text_codec_convert_asset) | Convert text between codecs. Two modes: `string` (in-DataFrame text columns) and `file` (read file bytes, recode, write new files — the EBCDIC mainframe ingest pattern). |
+| `synthetic_data_generator` | `schema_type: support_tickets` — multilingual ticket text with German, Spanish, French content + embedded PII. |
+| `text_codec_convert_asset` | Convert text between codecs. Two modes: `string` (in-DataFrame text columns) and `file` (read file bytes, recode, write new files — the EBCDIC mainframe ingest pattern). |
 
 ## Live output
 

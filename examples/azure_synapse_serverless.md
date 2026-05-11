@@ -20,7 +20,7 @@ synthetic_data_generator → dataframe_to_adls (parquet)
 ## Why no Synapse-specific component?
 
 We considered building a `dataframe_from_synapse_serverless` component but
-it would just be a duplicate of [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql). The OPENROWSET
+it would just be a duplicate of `dataframe_from_sql`. The OPENROWSET
 construct is plain T-SQL the user passes via the `query` field, and the
 connection string is just `mssql+pymssql://workspace-ondemand.sql.azuresynapse.net:1433/<db>`.
 
@@ -33,9 +33,9 @@ MySQL, Snowflake, BigQuery, DuckDB, and any other SQLAlchemy backend.
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | 100 synthetic orders |
-| 2 | [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls) | sink | Write parquet to ADLS Gen2 |
-| 3 | [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) | source | OPENROWSET aggregation via Synapse Serverless |
+| 1 | `synthetic_data_generator` | ai | 100 synthetic orders |
+| 2 | `dataframe_to_adls` | sink | Write parquet to ADLS Gen2 |
+| 3 | `dataframe_from_sql` | source | OPENROWSET aggregation via Synapse Serverless |
 
 ## Synapse Serverless setup gotchas
 
@@ -68,8 +68,8 @@ The setup script automates all of this. Common errors and fixes:
 
 | Step | Result |
 |---|---|
-| [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls) | 100 rows → `synapsefs/dagster-test/orders.parquet` in 4.3s |
-| [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) (Serverless) | OPENROWSET aggregation → 7 rows × 3 columns in 3.27s |
+| `dataframe_to_adls` | 100 rows → `synapsefs/dagster-test/orders.parquet` in 4.3s |
+| `dataframe_from_sql` (Serverless) | OPENROWSET aggregation → 7 rows × 3 columns in 3.27s |
 | Query plan | Synapse scanned ~15KB (well under the 1TB/mo free tier) |
 
 Sample output (`orders_revenue_summary`):
@@ -103,7 +103,7 @@ uv run dg launch --assets '*'
   `BULK 'dagster-test/year=*/month=*/*.parquet'`
 - **CSV instead of parquet**: change `FORMAT = 'PARQUET'` →
   `FORMAT = 'CSV', PARSER_VERSION = '2.0'`
-- **Materialized aggregation**: pipe the result through [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table)
+- **Materialized aggregation**: pipe the result through `dataframe_to_table`
   to land aggregated results in Postgres / SQL Server for BI
 - **Federate across multiple accounts**: create one EXTERNAL DATA SOURCE
   per storage account, reference each in different OPENROWSET calls in

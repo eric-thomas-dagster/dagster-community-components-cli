@@ -1,6 +1,6 @@
 # Window Calculation demo
 
-Synthetic 3-symbol × 10-day stock-price ticks → one [`window_calculation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/window_calculation)
+Synthetic 3-symbol × 10-day stock-price ticks → one `window_calculation`
 component computes **every supported window function** in one pass.
 
 ```
@@ -11,9 +11,9 @@ csv → window_calculation → CSV
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | 30 rows of synthetic close prices |
-| 2 | [`window_calculation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/window_calculation) | transformation | row_number, rank, dense_rank, lag, lead, cumsum, moving_avg(3), moving_sum(5) |
-| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write the augmented DataFrame |
+| 1 | `csv_file_ingestion` | ingestion | 30 rows of synthetic close prices |
+| 2 | `window_calculation` | transformation | row_number, rank, dense_rank, lag, lead, cumsum, moving_avg(3), moving_sum(5) |
+| 3 | `dataframe_to_csv` | sink | Write the augmented DataFrame |
 
 ## Window functions covered
 

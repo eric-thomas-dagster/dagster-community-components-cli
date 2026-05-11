@@ -18,8 +18,8 @@ rule-based and ML signals on identical input.
 | Component | Asset | What it does |
 |---|---|---|
 | `synthetic` source | `user_comments` | 30 synthetic comments — clean, spam, hateful, multilingual, PII-bearing |
-| [`moderation_scorer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/moderation_scorer) | `moderation_scores` | Rule-based: keyword risk + sentiment + length signals → `risk_score`, `sentiment_score`, `moderation_decision` (approved / needs_review / flagged) |
-| [`text_moderator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/text_moderator) | `moderated_comments` | OpenAI moderation endpoint policy categories: hate, harassment, sexual, violence, self_harm |
+| `moderation_scorer` | `moderation_scores` | Rule-based: keyword risk + sentiment + length signals → `risk_score`, `sentiment_score`, `moderation_decision` (approved / needs_review / flagged) |
+| `text_moderator` | `moderated_comments` | OpenAI moderation endpoint policy categories: hate, harassment, sexual, violence, self_harm |
 
 ## Cost
 

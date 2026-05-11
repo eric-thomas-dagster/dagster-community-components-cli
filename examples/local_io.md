@@ -52,10 +52,10 @@ uv run dg dev   # http://localhost:3000
 Validating this demo surfaced two real component bugs in the registry,
 both fixed:
 
-- **[`iceberg_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/iceberg_io_manager)**: import path was wrong
+- **`iceberg_io_manager`**: import path was wrong
   (`dagster_iceberg.io_manager.pyarrow.IcebergPyarrowIOManager` → the
   actual `dagster_iceberg.io_manager.arrow.PyArrowIcebergIOManager`).
-- **[`deltalake_polars_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/deltalake_polars_io_manager)**: `storage_options` was being passed
+- **`deltalake_polars_io_manager`**: `storage_options` was being passed
   as `None` or `{}`, both of which the underlying `deltalake-storage`
   rejects via discriminated-union validation. Now picks
   `LocalConfig` / `S3Config` / `AzureConfig` / `GcsConfig` based on

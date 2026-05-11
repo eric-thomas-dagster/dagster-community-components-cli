@@ -11,9 +11,9 @@ Pipeline (3 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate synthetic data |
-| 2 | [`survival_analysis`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/survival_analysis) | analytics | Kaplan-Meier survival |
-| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
+| 1 | `synthetic_data_generator` | ai | Generate synthetic data |
+| 2 | `survival_analysis` | analytics | Kaplan-Meier survival |
+| 3 | `dataframe_to_csv` | sink | Write CSV |
 
 ## Run
 

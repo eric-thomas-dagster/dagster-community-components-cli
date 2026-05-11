@@ -12,7 +12,7 @@ doc_search    ← bigquery_vector_search_asset
 
 | Component | What it does |
 |---|---|
-| [`bigquery_vector_search_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_vector_search_asset) | Wraps BigQuery's native `VECTOR_SEARCH` function for k-NN similarity over an `ARRAY<FLOAT64>` column. Two input modes: inline `query_vectors` (static) or `upstream_asset_key` + `query_vector_column` (per-row from upstream embedding asset). |
+| `bigquery_vector_search_asset` | Wraps BigQuery's native `VECTOR_SEARCH` function for k-NN similarity over an `ARRAY<FLOAT64>` column. Two input modes: inline `query_vectors` (static) or `upstream_asset_key` + `query_vector_column` (per-row from upstream embedding asset). |
 
 ## Live run output
 
@@ -72,7 +72,7 @@ upstream_asset_key: query_embeddings
 query_vector_column: vector
 query_id_column: query_id
 ```
-Upstream produced by e.g. [`vertex_ai_text_embeddings_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vertex_ai_text_embeddings_asset) (text-embedding-004, 768-dim).
+Upstream produced by e.g. `vertex_ai_text_embeddings_asset` (text-embedding-004, 768-dim).
 
 ## Required env vars
 

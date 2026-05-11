@@ -12,11 +12,11 @@ pipeline that runs both algorithms in sequence:
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read source CSV |
-| 2 | [`feature_scaler`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/feature_scaler) | transformation | Standardize features |
-| 3 | [`pca`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/pca) | analytics | PCA dimensionality reduction |
-| 4 | [`k_means_clustering`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/k_means_clustering) | analytics | K-Means clustering |
-| 5 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
+| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 2 | `feature_scaler` | transformation | Standardize features |
+| 3 | `pca` | analytics | PCA dimensionality reduction |
+| 4 | `k_means_clustering` | analytics | K-Means clustering |
+| 5 | `dataframe_to_csv` | sink | Write CSV |
 
 ## Run
 

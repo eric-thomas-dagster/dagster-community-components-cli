@@ -13,10 +13,10 @@ Pipeline (4 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | Hit a REST endpoint |
-| 2 | [`xml_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/xml_parser) | transformation | XPath extract → columns |
-| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
-| 4 | [`rss_feed_sensor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/rss_feed_sensor) | sensor | Trigger on new RSS entry |
+| 1 | `rest_api_fetcher` | ingestion | Hit a REST endpoint |
+| 2 | `xml_parser` | transformation | XPath extract → columns |
+| 3 | `dataframe_to_csv` | sink | Write CSV |
+| 4 | `rss_feed_sensor` | sensor | Trigger on new RSS entry |
 
 ## Run
 

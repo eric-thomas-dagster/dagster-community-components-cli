@@ -17,9 +17,9 @@ sensor_readings        ← synthetic_data_generator (sensors schema)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | Synthetic upstream. `schema_type: sensors` produces `(sensor_id, timestamp, sensor_type, location, value, unit, status)` — sensor_id maps cleanly to a Firestore doc id, status produces a queryable filter. |
-| [`firestore_writer_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/firestore_writer_asset) | One DataFrame row → one Firestore doc. `id_column` for doc id, `write_mode` (set/merge/create), batched via Firestore batch commits. |
-| [`firestore_reader_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/firestore_reader_asset) | Collection or collection-group query → DataFrame. Supports `where` filters, `order_by`, `limit`, sub-collection paths. |
+| `synthetic_data_generator` | Synthetic upstream. `schema_type: sensors` produces `(sensor_id, timestamp, sensor_type, location, value, unit, status)` — sensor_id maps cleanly to a Firestore doc id, status produces a queryable filter. |
+| `firestore_writer_asset` | One DataFrame row → one Firestore doc. `id_column` for doc id, `write_mode` (set/merge/create), batched via Firestore batch commits. |
+| `firestore_reader_asset` | Collection or collection-group query → DataFrame. Supports `where` filters, `order_by`, `limit`, sub-collection paths. |
 
 ## Live run output
 
@@ -64,9 +64,9 @@ gcloud projects add-iam-policy-binding $GCP_PROJECT_ID \
 | You need | Use |
 |---|---|
 | Document/JSON CRUD with strong consistency | Firestore Native |
-| Wide-column at petabyte scale | Bigtable ([`bigtable_reader_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigtable_reader_asset)) |
-| Transactional RDBMS at global scale | Spanner ([`spanner_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/spanner_query_asset)) |
-| Analytic scans | BigQuery ([`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset)) |
+| Wide-column at petabyte scale | Bigtable (`bigtable_reader_asset`) |
+| Transactional RDBMS at global scale | Spanner (`spanner_query_asset`) |
+| Analytic scans | BigQuery (`bigquery_query_asset`) |
 
 ## Run it
 

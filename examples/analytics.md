@@ -42,58 +42,58 @@ ml_dataset (200 rows × 6 cols)         geo_dataset (5 cities)
 
 ### ML models (8) — all sklearn, share `target_column` + `feature_columns`
 
-[`linear_regression_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/linear_regression_model), [`gradient_boosting_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/gradient_boosting_model), [`naive_bayes_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/naive_bayes_model),
-[`neural_network_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/neural_network_model), [`gamma_regression`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/gamma_regression), [`count_regression`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/count_regression),
-[`spline_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/spline_model), [`svm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/svm). Note: [`gradient_boosting_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/gradient_boosting_model) and
-[`neural_network_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/neural_network_model) default to `task_type: classification` so set
+`linear_regression_model`, `gradient_boosting_model`, `naive_bayes_model`,
+`neural_network_model`, `gamma_regression`, `count_regression`,
+`spline_model`, `svm`. Note: `gradient_boosting_model` and
+`neural_network_model` default to `task_type: classification` so set
 `target_column` to a discrete y.
 
 ### Diagnostics + utility (7)
 
-[`k_centroids_diagnostics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/k_centroids_diagnostics) (silhouette + elbow), [`append_cluster`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/append_cluster),
-[`model_coefficients`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/model_coefficients), [`vif`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/vif) (variance inflation), [`model_comparison`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/model_comparison),
-[`model_score`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/model_score) (load + score a saved sklearn pickle), [`lift_chart`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/lift_chart).
+`k_centroids_diagnostics` (silhouette + elbow), `append_cluster`,
+`model_coefficients`, `vif` (variance inflation), `model_comparison`,
+`model_score` (load + score a saved sklearn pickle), `lift_chart`.
 
 ### Stats + sampling (6)
 
-[`stepwise`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/stepwise) (forward feature selection), [`multidimensional_scaling`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/multidimensional_scaling),
-[`oversample_field`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/oversample_field) (SMOTE-style), [`simulation_sampling`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/simulation_sampling),
-[`test_of_means`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/test_of_means) (t-test), [`optimization`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/optimization).
+`stepwise` (forward feature selection), `multidimensional_scaling`,
+`oversample_field` (SMOTE-style), `simulation_sampling`,
+`test_of_means` (t-test), `optimization`.
 
 ### Geo (4)
 
-[`coordinate_transformer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/coordinate_transformer), [`point_in_polygon`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/point_in_polygon) (needs a GeoJSON file),
-[`geocoder`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/geocoder) (geopy/Nominatim), [`reverse_geocoder`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/reverse_geocoder).
+`coordinate_transformer`, `point_in_polygon` (needs a GeoJSON file),
+`geocoder` (geopy/Nominatim), `reverse_geocoder`.
 
 ### Business analytics (6)
 
-[`customer_360`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/customer_360), [`customer_health_score`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/customer_health_score), [`lead_scoring`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/lead_scoring),
-[`product_recommendations`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/product_recommendations), [`product_usage_analytics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/product_usage_analytics),
-[`propensity_scoring`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/propensity_scoring). Each uses **specific** asset_key fields like
+`customer_360`, `customer_health_score`, `lead_scoring`,
+`product_recommendations`, `product_usage_analytics`,
+`propensity_scoring`. Each uses **specific** asset_key fields like
 `crm_data_asset_key`, `event_data_asset_key`, etc. — not a generic
 `upstream_asset_key`.
 
 ### Marketing/event (3)
 
-[`funnel_analysis`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/funnel_analysis), [`campaign_performance`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/campaign_performance), [`event_data_standardizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/event_data_standardizer).
+`funnel_analysis`, `campaign_performance`, `event_data_standardizer`.
 
 ### SaaS data standardizers (6)
 
-[`ad_spend_standardizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ad_spend_standardizer), [`crm_data_standardizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/crm_data_standardizer),
-[`ecommerce_standardizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ecommerce_standardizer), [`marketing_data_standardizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/marketing_data_standardizer),
-[`product_analytics_standardizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/product_analytics_standardizer), [`support_ticket_standardizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/support_ticket_standardizer). All
+`ad_spend_standardizer`, `crm_data_standardizer`,
+`ecommerce_standardizer`, `marketing_data_standardizer`,
+`product_analytics_standardizer`, `support_ticket_standardizer`. All
 take a `platform: <enum>` field that pins the source schema.
 
 ## Skipped (2 / 42)
 
 | Component | Why |
 |---|---|
-| [`priority_scorer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/priority_scorer) | Declares `**kwargs` ins= without binding any AssetIn → raises `Priority Scorer requires an upstream DataFrame` regardless of YAML |
-| [`subscription_metrics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/subscription_metrics) | Silent subprocess crash on synthetic data — likely needs Stripe-shaped subscription history |
+| `priority_scorer` | Declares `**kwargs` ins= without binding any AssetIn → raises `Priority Scorer requires an upstream DataFrame` regardless of YAML |
+| `subscription_metrics` | Silent subprocess crash on synthetic data — likely needs Stripe-shaped subscription history |
 
 ## Bugs found + fixed during validation
 
-1. **[`campaign_performance`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/campaign_performance)** — emitted `numpy.float64` values directly
+1. **`campaign_performance`** — emitted `numpy.float64` values directly
    into Dagster metadata, causing `SerializationError: Unhandled value
    type <class 'numpy.float64'>`. Fixed by coercing to native `float()`
    and `int()` in the metadata dict.
@@ -105,14 +105,14 @@ The analytics category has very inconsistent input-asset patterns. Key gotchas:
 | Component | Input asset field |
 |---|---|
 | Most ML models | `upstream_asset_key` |
-| [`customer_health_score`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/customer_health_score) | `customer_data_asset_key` (+ optional `subscription_*`, `product_*`, `support_*`) |
-| [`customer_360`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/customer_360) | `crm_data_asset_key` (+ optional `stripe_*`, `ga4_*`, `marketing_*`) |
-| [`lead_scoring`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/lead_scoring) | `lead_data_asset_key` (+ optional `behavioral_*`, `company_*`) |
-| [`product_usage_analytics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/product_usage_analytics) | `event_data_asset_key` |
-| [`subscription_metrics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/subscription_metrics) | `stripe_data_asset_key` |
-| [`funnel_analysis`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/funnel_analysis) | `event_data_asset_key` |
-| [`ad_spend_standardizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ad_spend_standardizer) | `google_ads_asset` / `facebook_ads_asset` / `other_ad_platform_asset` |
-| [`priority_scorer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/priority_scorer), [`optimization`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/optimization), [`test_of_means`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/test_of_means) | various — see component README |
+| `customer_health_score` | `customer_data_asset_key` (+ optional `subscription_*`, `product_*`, `support_*`) |
+| `customer_360` | `crm_data_asset_key` (+ optional `stripe_*`, `ga4_*`, `marketing_*`) |
+| `lead_scoring` | `lead_data_asset_key` (+ optional `behavioral_*`, `company_*`) |
+| `product_usage_analytics` | `event_data_asset_key` |
+| `subscription_metrics` | `stripe_data_asset_key` |
+| `funnel_analysis` | `event_data_asset_key` |
+| `ad_spend_standardizer` | `google_ads_asset` / `facebook_ads_asset` / `other_ad_platform_asset` |
+| `priority_scorer`, `optimization`, `test_of_means` | various — see component README |
 
 ## Run
 

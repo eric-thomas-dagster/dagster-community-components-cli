@@ -22,17 +22,17 @@ doc_summaries      ← gemini_llm
 
 | Component | What it does |
 |---|---|
-| [`google_drive_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_drive_ingestion) | List files in Drive matching a query / folder, optionally download contents. Service-account auth. |
-| [`google_docs_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_docs_extractor)  | Extract plain text + headings from Google Docs by ID. Pairs with Drive listings via `upstream_asset_key`. |
-| [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm)             | Per-row text generation with Gemini text models. Drop-in peer of [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm). |
+| `google_drive_ingestion` | List files in Drive matching a query / folder, optionally download contents. Service-account auth. |
+| `google_docs_extractor`  | Extract plain text + headings from Google Docs by ID. Pairs with Drive listings via `upstream_asset_key`. |
+| `gemini_llm`             | Per-row text generation with Gemini text models. Drop-in peer of `openai_llm` / `anthropic_llm`. |
 
 ## Validation status — all three live
 
 | Component | Run | Outcome |
 |---|---|---|
-| [`google_drive_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_drive_ingestion) | 935ms | Listed 1 Doc owned by `ethomasii@gmail.com`, 3,377 bytes |
-| [`google_docs_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_docs_extractor) | 1.46s | Extracted 661 words from Docs API |
-| [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) | 1.85s | Real summary: "The user proposes five changes to improve clarity and conciseness…" |
+| `google_drive_ingestion` | 935ms | Listed 1 Doc owned by `ethomasii@gmail.com`, 3,377 bytes |
+| `google_docs_extractor` | 1.46s | Extracted 661 words from Docs API |
+| `gemini_llm` | 1.85s | Real summary: "The user proposes five changes to improve clarity and conciseness…" |
 
 ## Cost
 
@@ -67,8 +67,8 @@ uv run dg launch --assets '*'
 ## Bugs surfaced and fixed validating this demo
 
 1. **Docs API not enabled per-project.** Same gotcha as Sheets — service accounts often live in a project that hasn't enabled the API yet. Component surfaces the activation URL.
-2. **Gemini 2.5 thinking-token consumption.** Caught the silent-truncation issue: with `max_output_tokens=80`, Gemini 2.5 Flash burned 73 tokens on internal "thinking" and emitted only 3 visible tokens, producing a 3-word "summary." Added `thinking_budget` config field to [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm); setting `thinking_budget: 0` for short structured outputs frees all the budget for visible response.
-3. **Failed Doc rows dropped columns.** Original [`google_docs_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_docs_extractor) only wrote `id/title/word_count` for failed rows, breaking downstream components that expected a `text` column. Now writes `text=None` / `headings=None` consistently.
+2. **Gemini 2.5 thinking-token consumption.** Caught the silent-truncation issue: with `max_output_tokens=80`, Gemini 2.5 Flash burned 73 tokens on internal "thinking" and emitted only 3 visible tokens, producing a 3-word "summary." Added `thinking_budget` config field to `gemini_llm`; setting `thinking_budget: 0` for short structured outputs frees all the budget for visible response.
+3. **Failed Doc rows dropped columns.** Original `google_docs_extractor` only wrote `id/title/word_count` for failed rows, breaking downstream components that expected a `text` column. Now writes `text=None` / `headings=None` consistently.
 
 ## Asset graph in the UI
 

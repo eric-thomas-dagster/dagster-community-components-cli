@@ -19,12 +19,12 @@ raw_customers (100 rows: 5 numeric + 3 categorical, with NaNs and outliers)
 
 | Component | Strategy options |
 |---|---|
-| [`imputation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/imputation) | `mean`, `median`, `mode`, `forward_fill`, `backward_fill`, `constant` |
-| [`outlier_clipper`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/outlier_clipper) | `iqr`, `zscore`, `percentile`; `clip` or `drop` action |
-| [`label_encoder`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/label_encoder) | Ordering: `frequency`, `alphabetical`, `as_seen` |
-| [`one_hot_encoding`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/one_hot_encoding) | `drop_first`, `dummy_na`, `max_categories` |
-| [`feature_scaler`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/feature_scaler) | `standard` (z-score), `minmax`, `robust`, `maxabs` |
-| [`tile_binning`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/tile_binning) | `equal_freq`, `equal_width`, `kmeans`; configurable `labels` |
+| `imputation` | `mean`, `median`, `mode`, `forward_fill`, `backward_fill`, `constant` |
+| `outlier_clipper` | `iqr`, `zscore`, `percentile`; `clip` or `drop` action |
+| `label_encoder` | Ordering: `frequency`, `alphabetical`, `as_seen` |
+| `one_hot_encoding` | `drop_first`, `dummy_na`, `max_categories` |
+| `feature_scaler` | `standard` (z-score), `minmax`, `robust`, `maxabs` |
+| `tile_binning` | `equal_freq`, `equal_width`, `kmeans`; configurable `labels` |
 
 ## Cost
 
@@ -51,6 +51,6 @@ each step:
   visible alongside the rest of your pipeline in the catalog.
 - Auto-infers column lineage (each output column maps to its input
   column) for downstream model components.
-- Composes naturally — [`imputation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/imputation) → [`outlier_clipper`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/outlier_clipper) →
-  [`feature_scaler`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/feature_scaler) → [`train_test_splitter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/train_test_splitter) → [`gradient_boosting_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/gradient_boosting_model)
+- Composes naturally — `imputation` → `outlier_clipper` →
+  `feature_scaler` → `train_test_splitter` → `gradient_boosting_model`
   is a complete end-to-end ML pipeline using only registry components.

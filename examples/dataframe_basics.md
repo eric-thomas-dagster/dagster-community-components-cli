@@ -25,15 +25,15 @@ monthly_metrics (long-format)
 
 | Component | Pandas equivalent |
 |---|---|
-| [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) | `df.query("...")` |
-| [`sort`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sort) | `df.sort_values(...)` |
-| [`unique_dedup`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/unique_dedup) | `df.drop_duplicates(...)` |
-| [`select_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/select_columns) | `df[[cols]]` / `df.drop(cols)` |
-| [`data_cleansing`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/data_cleansing) | trim + case-normalize + fillna pipeline |
-| [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) | `df.groupby(...).agg(...)` |
-| [`rank`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/rank) | `df.groupby(...).rank(...)` |
-| [`running_total`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/running_total) | `df.groupby(...).cumsum()` |
-| [`transpose`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/transpose) | `df.set_index(...).T.reset_index()` |
+| `filter` | `df.query("...")` |
+| `sort` | `df.sort_values(...)` |
+| `unique_dedup` | `df.drop_duplicates(...)` |
+| `select_columns` | `df[[cols]]` / `df.drop(cols)` |
+| `data_cleansing` | trim + case-normalize + fillna pipeline |
+| `summarize` | `df.groupby(...).agg(...)` |
+| `rank` | `df.groupby(...).rank(...)` |
+| `running_total` | `df.groupby(...).cumsum()` |
+| `transpose` | `df.set_index(...).T.reset_index()` |
 
 ## Cost
 

@@ -13,10 +13,10 @@ csv (today)     ─┘
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Yesterday: C001-C004 |
-| 2 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Today: C001-C003, C005 (no C004); C003's plan_tier upgraded |
-| 3 | [`detect_changes`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/detect_changes) | transformation | Outer-merge + classify |
-| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write changeset |
+| 1 | `csv_file_ingestion` | ingestion | Yesterday: C001-C004 |
+| 2 | `csv_file_ingestion` | ingestion | Today: C001-C003, C005 (no C004); C003's plan_tier upgraded |
+| 3 | `detect_changes` | transformation | Outer-merge + classify |
+| 4 | `dataframe_to_csv` | sink | Write changeset |
 
 ## Configuration
 
@@ -48,6 +48,6 @@ cd detect-changes-demo && uv run dg launch --assets '*'
 
 ## Why it's useful
 
-CDC-friendly. Pipe the output into [`alter_row`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/alter_row) to mark rows for a downstream
-sink, into [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) for daily-changes dashboards, or into a Slack/email
+CDC-friendly. Pipe the output into `alter_row` to mark rows for a downstream
+sink, into `summarize` for daily-changes dashboards, or into a Slack/email
 digest of "what changed today".

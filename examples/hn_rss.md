@@ -15,11 +15,11 @@ rest_api_fetcher (text)  → regex_parser (split)
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | GET `hnrss.org/frontpage`; `output_format: text` returns raw XML |
-| 2 | [`regex_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/regex_parser) (split) | transformation | Split on `</item>`; one row per feed item |
-| 3 | [`regex_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/regex_parser) (extract) | transformation | Extract title + link via two capture groups in one regex |
-| 4 | [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) | transformation | Drop rows where `title` is null (the preamble before the first item) |
-| 5 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write title, link |
+| 1 | `rest_api_fetcher` | ingestion | GET `hnrss.org/frontpage`; `output_format: text` returns raw XML |
+| 2 | `regex_parser` (split) | transformation | Split on `</item>`; one row per feed item |
+| 3 | `regex_parser` (extract) | transformation | Extract title + link via two capture groups in one regex |
+| 4 | `filter` | transformation | Drop rows where `title` is null (the preamble before the first item) |
+| 5 | `dataframe_to_csv` | sink | Write title, link |
 
 ## Run
 
@@ -42,10 +42,10 @@ An open letter asking NHS England to keep its code open,https://keepthingsopen.c
 
 ## What this demo shows
 
-- **First parsing demo.** [`regex_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/regex_parser) is used twice — once in
+- **First parsing demo.** `regex_parser` is used twice — once in
   `mode: split` (explode rows by a separator regex) and once in
   `mode: extract` (capture-group → new columns).
-- **Same component installed twice in one project.** [`regex_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/regex_parser) lives
+- **Same component installed twice in one project.** `regex_parser` lives
   at `defs/regex_parser/` for the split step and `defs/regex_extract/` for
   the extraction step (via `dagster-component add ... --target-dir`).
   Each gets its own `defs.yaml`, both pointing at the same Python class.
@@ -55,5 +55,5 @@ An open letter asking NHS England to keep its code open,https://keepthingsopen.c
 
 ## Extending
 
-Add a [`datetime_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/datetime_parser) to parse `<pubDate>...</pubDate>`, then a [`sort`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sort)
-by date. Or chain a [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) for HN posts above a points threshold.
+Add a `datetime_parser` to parse `<pubDate>...</pubDate>`, then a `sort`
+by date. Or chain a `filter` for HN posts above a points threshold.

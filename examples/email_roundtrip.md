@@ -16,9 +16,9 @@ inbound_replies      ← imap_inbox_source (fetches replies)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | 5 synthetic support-ticket rows (`support_tickets` schema) |
-| [`smtp_send_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/smtp_send_asset) | Send one email per upstream row via SMTP. Templates `{column}` placeholders into to/cc/subject/body. Multipart/alternative for text + HTML. |
-| [`imap_inbox_source`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/imap_inbox_source) | Fetch from any IMAP-compliant mailbox. Auto-decodes RFC-2047 headers, multipart bodies, quoted-printable. |
+| `synthetic_data_generator` | 5 synthetic support-ticket rows (`support_tickets` schema) |
+| `smtp_send_asset` | Send one email per upstream row via SMTP. Templates `{column}` placeholders into to/cc/subject/body. Multipart/alternative for text + HTML. |
+| `imap_inbox_source` | Fetch from any IMAP-compliant mailbox. Auto-decodes RFC-2047 headers, multipart bodies, quoted-printable. |
 
 ## Live output
 

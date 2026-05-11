@@ -21,9 +21,9 @@ churn_dataset (100 customers, 30% churn)
 
 | Component | What it produces |
 |---|---|
-| [`arima_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/arima_forecast) | One row per forecast period: `{date, forecast, lower_ci, upper_ci}`. Configurable `(p, d, q)` order + optional seasonal `(P, D, Q, m)`. |
-| [`ets_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/ets_forecast) | Same shape; uses Holt-Winters exponential smoothing. `trend` and `seasonal` are additive or multiplicative. |
-| [`create_samples`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/create_samples) | The original DataFrame plus a `split` column tagging each row `train` \| `val` \| `test`. Optional `stratify_column` preserves class balance. Alternative to [`train_test_splitter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/train_test_splitter) when you want a single tagged frame. |
+| `arima_forecast` | One row per forecast period: `{date, forecast, lower_ci, upper_ci}`. Configurable `(p, d, q)` order + optional seasonal `(P, D, Q, m)`. |
+| `ets_forecast` | Same shape; uses Holt-Winters exponential smoothing. `trend` and `seasonal` are additive or multiplicative. |
+| `create_samples` | The original DataFrame plus a `split` column tagging each row `train` \| `val` \| `test`. Optional `stratify_column` preserves class balance. Alternative to `train_test_splitter` when you want a single tagged frame. |
 
 ## Cost
 
@@ -40,9 +40,9 @@ uv run dg dev   # http://localhost:3000
 
 ## When to pick which forecast
 
-- **[`arima_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/arima_forecast)** for stationary or seasonally-differentiable
+- **`arima_forecast`** for stationary or seasonally-differentiable
   series. Strong on macroeconomic-style data.
-- **[`ets_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/ets_forecast)** for clearly trended + seasonal data with no need
+- **`ets_forecast`** for clearly trended + seasonal data with no need
   for `(p, d, q)` tuning. More robust default choice.
 - For both: `forecast_periods` is the horizon. `confidence_level` (0–1)
   controls the prediction interval width (default 0.95).

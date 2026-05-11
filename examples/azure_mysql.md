@@ -1,6 +1,6 @@
 # Azure Database for MySQL Flexible Server demo
 
-DataFrame → Azure MySQL Flexible Server via [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) (SQLAlchemy
+DataFrame → Azure MySQL Flexible Server via `dataframe_to_table` (SQLAlchemy
 + pymysql). Same pipeline shape as `azure_sql` and `azure_postgres` — flip
 the URL prefix, the same components write to a different SQL backend.
 
@@ -12,8 +12,8 @@ synthetic_data_generator → dataframe_to_table → Azure MySQL ('orders' table)
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | 100 synthetic e-commerce orders |
-| 2 | [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) | sink | Write via SQLAlchemy + pymysql |
+| 1 | `synthetic_data_generator` | ai | 100 synthetic e-commerce orders |
+| 2 | `dataframe_to_table` | sink | Write via SQLAlchemy + pymysql |
 
 ## Prerequisites
 
@@ -85,7 +85,7 @@ uv run dg launch --assets '*'
 | Step | Result |
 |---|---|
 | Provisioning | server + db created in westus3 |
-| [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) | 100 rows written to `orders` in 1.99s |
+| `dataframe_to_table` | 100 rows written to `orders` in 1.99s |
 | Verification | `SELECT * FROM orders ORDER BY total DESC LIMIT 5` returned high-value rows |
 
 ## Cost
@@ -106,5 +106,5 @@ az group delete --name dagster-demo-rg --yes
 ## Variations
 
 - Swap `if_exists: replace` → `append` for incremental loads
-- Use [`mysql_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/mysql_io_manager) instead for auto-table-per-asset semantics
-- Use [`mysql_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/mysql_resource) for ad-hoc queries from other ops
+- Use `mysql_io_manager` instead for auto-table-per-asset semantics
+- Use `mysql_resource` for ad-hoc queries from other ops

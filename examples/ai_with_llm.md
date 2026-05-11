@@ -22,12 +22,12 @@ same code through Azure OpenAI — no code changes.
 
 | # | Component | Asset | LLM purpose |
 |---|---|---|---|
-| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `support_tickets` | source — 30 multilingual tickets |
-| 2 | [`text_classifier`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/text_classifier) | `ticket_priorities` | classify into `[low, medium, high, urgent]` |
-| 3 | [`entity_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/entity_extractor) | `ticket_entities` | extract people/orgs/products/IDs/emails |
-| 4 | [`sentiment_analyzer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/sentiment_analyzer) | `ticket_sentiment` | sentiment + confidence + reasoning |
-| 5 | [`document_summarizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_summarizer) | `ticket_summaries` | one-sentence summary |
-| 6 | [`data_enricher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/data_enricher) | `ticket_urgency` | derive `urgent_action_required` (yes/no) + `primary_intent` |
+| 1 | `synthetic_data_generator` | `support_tickets` | source — 30 multilingual tickets |
+| 2 | `text_classifier` | `ticket_priorities` | classify into `[low, medium, high, urgent]` |
+| 3 | `entity_extractor` | `ticket_entities` | extract people/orgs/products/IDs/emails |
+| 4 | `sentiment_analyzer` | `ticket_sentiment` | sentiment + confidence + reasoning |
+| 5 | `document_summarizer` | `ticket_summaries` | one-sentence summary |
+| 6 | `data_enricher` | `ticket_urgency` | derive `urgent_action_required` (yes/no) + `primary_intent` |
 
 ## Validated end-to-end
 
@@ -61,16 +61,16 @@ were fixed:
    `AssetExecutionContext`; any other name is interpreted as an *input
    asset*. Result: every materialization failed with `Input asset
    "['ctx']" is not produced by any...`. Fixed across
-   [`text_classifier`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/text_classifier), [`document_summarizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_summarizer), [`rag_pipeline`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/rag_pipeline),
-   [`llm_chain_executor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_chain_executor), [`llm_output_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_output_parser), [`conversation_memory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/conversation_memory).
+   `text_classifier`, `document_summarizer`, `rag_pipeline`,
+   `llm_chain_executor`, `llm_output_parser`, `conversation_memory`.
 
-3. **[`sentiment_analyzer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/sentiment_analyzer) / [`entity_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/entity_extractor) / [`text_moderator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/text_moderator)** used
+3. **`sentiment_analyzer` / `entity_extractor` / `text_moderator`** used
    `prompt_template.format(text=text)` to interpolate the user text into
    a template that contained literal JSON braces (`{"sentiment":
    "..."}`), causing `KeyError` since `str.format()` interprets `{` as a
    field marker. Switched to `prompt_template.replace("{text}", text)`.
 
-4. **[`text_classifier`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/text_classifier) had only-`json.loads`** as its way of parsing
+4. **`text_classifier` had only-`json.loads`** as its way of parsing
    `categories`, which broke once the field became a list. Now passes
    the list through directly.
 

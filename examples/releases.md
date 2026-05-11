@@ -12,12 +12,12 @@ rest_api_fetcher → select_columns → datetime_parser → filter → sort → 
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | GET `api.github.com/repos/dagster-io/dagster/releases?per_page=50` (no auth, ~60 req/hr/IP) |
-| 2 | [`select_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/select_columns) | transformation | Keep `tag_name`, `name`, `published_at`, `prerelease`, `draft`, `html_url` |
-| 3 | [`datetime_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/datetime_parser) | transformation | Parse `published_at` ISO 8601 → tz-aware datetime in `published_dt` |
-| 4 | [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) | transformation | `prerelease == False and draft == False` |
-| 5 | [`sort`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sort) | transformation | By `published_dt` descending |
-| 6 | [`dataframe_to_parquet`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_parquet) | sink | Write `/tmp/dagster_releases.parquet` |
+| 1 | `rest_api_fetcher` | ingestion | GET `api.github.com/repos/dagster-io/dagster/releases?per_page=50` (no auth, ~60 req/hr/IP) |
+| 2 | `select_columns` | transformation | Keep `tag_name`, `name`, `published_at`, `prerelease`, `draft`, `html_url` |
+| 3 | `datetime_parser` | transformation | Parse `published_at` ISO 8601 → tz-aware datetime in `published_dt` |
+| 4 | `filter` | transformation | `prerelease == False and draft == False` |
+| 5 | `sort` | transformation | By `published_dt` descending |
+| 6 | `dataframe_to_parquet` | sink | Write `/tmp/dagster_releases.parquet` |
 
 ## Run
 
@@ -38,9 +38,9 @@ tag_name             published_dt              html_url
 
 ## What this demo shows
 
-- [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) accepts arbitrary `df.query`-style boolean expressions — chain
+- `filter` accepts arbitrary `df.query`-style boolean expressions — chain
   conditions with `and` / `or` / `not`.
-- [`sort`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sort) accepts a list of columns plus per-column ascending flags.
+- `sort` accepts a list of columns plus per-column ascending flags.
 - Parquet preserves tz-aware datetimes natively (unlike Excel) — round-trips
   cleanly into pandas with the original timezone.
 - Six components composed via `Definitions.merge` with no glue code.

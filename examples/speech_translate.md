@@ -17,8 +17,8 @@ audio_files                       (2 public Google sample gs:// audio URIs)
 
 | Component | What it does |
 |---|---|
-| [`speech_to_text_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/speech_to_text_asset) | Cloud Speech-to-Text v2 per-row transcription. Local paths or `gs://` URIs. Multilingual / specialized recognizer models (latest_long, chirp, phone_call, medical_conversation, etc.). |
-| [`translation_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/translation_api_asset) | Cloud Translation v3. Translate a column to N target languages — one new column per target. Per-row source-language auto-detect when source unset. |
+| `speech_to_text_asset` | Cloud Speech-to-Text v2 per-row transcription. Local paths or `gs://` URIs. Multilingual / specialized recognizer models (latest_long, chirp, phone_call, medical_conversation, etc.). |
+| `translation_api_asset` | Cloud Translation v3. Translate a column to N target languages — one new column per target. Per-row source-language auto-detect when source unset. |
 
 ## Validation status — both live
 

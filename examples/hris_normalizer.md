@@ -19,7 +19,7 @@ employees_raw           (synthetic 20-row vendor HRIS export with
 
 | Component | What it does |
 |---|---|
-| [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) | Vendor-agnostic schema mapping. Takes any DataFrame of employee data (Workday, BambooHR, ADP, Gusto, Rippling, Hibob, internal export) and maps it to a canonical schema (`employee_id`, `email`, `first_name`, `last_name`, `manager_employee_id`, `department`, `job_title`, `location`, `country`, `employment_status`, `employment_type`, `hire_date`, `termination_date`, plus derived `tenure_days`, `is_active`, `full_name`). |
+| `hris_normalizer` | Vendor-agnostic schema mapping. Takes any DataFrame of employee data (Workday, BambooHR, ADP, Gusto, Rippling, Hibob, internal export) and maps it to a canonical schema (`employee_id`, `email`, `first_name`, `last_name`, `manager_employee_id`, `department`, `job_title`, `location`, `country`, `employment_status`, `employment_type`, `hire_date`, `termination_date`, plus derived `tenure_days`, `is_active`, `full_name`). |
 
 ## Validation status — live
 
@@ -114,4 +114,4 @@ and `active` all match the same way.
 
 ## Why a generic component (not `workday_normalizer` / `bamboohr_normalizer`)?
 
-Same pattern as [`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset) vs [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm): we have a vendor-agnostic generic + per-vendor natives in parallel. Most teams running HR analytics either (a) standardize on one vendor and want a clean canonical schema, or (b) have already normalized at ingest and just need the HR analytics layer. [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) covers (a); upstream `merge_dev_hris_ingestion` + this normalizer covers (b).
+Same pattern as `litellm_inference_asset` vs `openai_llm`: we have a vendor-agnostic generic + per-vendor natives in parallel. Most teams running HR analytics either (a) standardize on one vendor and want a clean canonical schema, or (b) have already normalized at ingest and just need the HR analytics layer. `hris_normalizer` covers (a); upstream `merge_dev_hris_ingestion` + this normalizer covers (b).

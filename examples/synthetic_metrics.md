@@ -1,7 +1,7 @@
 # Synthetic time-series — registry-native generator
 
 A 3-component pipeline that generates 30 days of synthetic hourly metrics
-via [`time_series_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/time_series_generator) (no external data, no upstream — pure
+via `time_series_generator` (no external data, no upstream — pure
 in-component generation), runs anomaly detection on the result, writes a
 CSV. Demonstrates that you don't need an inline Python heredoc for
 synthetic data: the registry has a real component for it.
@@ -14,9 +14,9 @@ time_series_generator → anomaly_detection → dataframe_to_csv
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`time_series_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/time_series_generator) | analytics | Generate `cpu_pct` from scratch (`pattern_type: complex`, hourly, 30 days, base 100, noise 0.15, seeded) |
-| 2 | [`anomaly_detection`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/anomaly_detection) | analytics | z-score, threshold 2.5σ |
-| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write timestamp + metric + anomaly flag |
+| 1 | `time_series_generator` | analytics | Generate `cpu_pct` from scratch (`pattern_type: complex`, hourly, 30 days, base 100, noise 0.15, seeded) |
+| 2 | `anomaly_detection` | analytics | z-score, threshold 2.5σ |
+| 3 | `dataframe_to_csv` | sink | Write timestamp + metric + anomaly flag |
 
 ## Run
 
@@ -35,7 +35,7 @@ threshold 2.5σ.
 
 ## What this demo shows
 
-- **First demo with no upstream ingestion** — [`time_series_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/time_series_generator)
+- **First demo with no upstream ingestion** — `time_series_generator`
   is the source. Useful for testing downstream pipelines, generating
   load-test fixtures, or seeding a Dagster job graph for
   asset-materialization timing experiments.
@@ -44,5 +44,5 @@ threshold 2.5σ.
   combine `noise_level` and `random_seed` for realism.
 - **The right way to do synthetic data.** The SaaS-metrics + revenue-
   attribution demos use inline Python heredocs because they need
-  Stripe-shaped CSVs that [`time_series_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/time_series_generator) doesn't produce. For
+  Stripe-shaped CSVs that `time_series_generator` doesn't produce. For
   pure time-series, this is the registry-native pattern.

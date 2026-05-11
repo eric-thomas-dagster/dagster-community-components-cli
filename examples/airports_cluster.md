@@ -13,9 +13,9 @@ csv_file_ingestion → spatial_cluster → dataframe_to_csv
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Pull vega's airports.csv (~3.4k US airports + lat/lng) |
-| 2 | [`spatial_cluster`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/spatial_cluster) | analytics | DBSCAN with `eps_km=50` and `min_samples=5`; uses haversine distance |
-| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write `iata`, `city`, `state`, `cluster_id` |
+| 1 | `csv_file_ingestion` | ingestion | Pull vega's airports.csv (~3.4k US airports + lat/lng) |
+| 2 | `spatial_cluster` | analytics | DBSCAN with `eps_km=50` and `min_samples=5`; uses haversine distance |
+| 3 | `dataframe_to_csv` | sink | Write `iata`, `city`, `state`, `cluster_id` |
 
 ## Run
 
@@ -42,7 +42,7 @@ Top metro clusters:
 
 ## What this demo shows
 
-- **First geo-spatial demo.** [`spatial_cluster`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/spatial_cluster) uses sklearn's DBSCAN
+- **First geo-spatial demo.** `spatial_cluster` uses sklearn's DBSCAN
   with haversine distance — `eps_km` is in real kilometers, not feature
   space.
 - **DBSCAN finds density, not k.** Unlike k-means, you don't say "give me

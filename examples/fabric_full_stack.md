@@ -26,12 +26,12 @@ Plus:
 
 | Component | Category | Purpose |
 |---|---|---|
-| [`fabric_workspace`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/fabric_workspace) | integration | Discover Fabric workspace items (lakehouses, warehouses, notebooks, pipelines) as Dagster assets |
-| [`fabric_workspace_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/fabric_workspace_resource) | resource | Reusable Fabric REST API client for ad-hoc calls from custom ops |
-| [`fabric_lakehouse_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/fabric_lakehouse_resource) | resource | OneLake URL helper + storage options for Delta access |
-| [`fabric_lakehouse_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/fabric_lakehouse_io_manager) | io_manager | Auto-serialize asset DataFrames as Delta tables in a Lakehouse |
-| [`dataframe_to_fabric_lakehouse`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_fabric_lakehouse) | sink | Explicit per-table sink (one DataFrame → one Delta table) |
-| [`fabric_pipeline_trigger_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/fabric_pipeline_trigger_job) | infrastructure | Op-job to trigger ONE Fabric pipeline / notebook / dataflow on a schedule |
+| `fabric_workspace` | integration | Discover Fabric workspace items (lakehouses, warehouses, notebooks, pipelines) as Dagster assets |
+| `fabric_workspace_resource` | resource | Reusable Fabric REST API client for ad-hoc calls from custom ops |
+| `fabric_lakehouse_resource` | resource | OneLake URL helper + storage options for Delta access |
+| `fabric_lakehouse_io_manager` | io_manager | Auto-serialize asset DataFrames as Delta tables in a Lakehouse |
+| `dataframe_to_fabric_lakehouse` | sink | Explicit per-table sink (one DataFrame → one Delta table) |
+| `fabric_pipeline_trigger_job` | infrastructure | Op-job to trigger ONE Fabric pipeline / notebook / dataflow on a schedule |
 
 ## Reuse-vs-new
 
@@ -40,9 +40,9 @@ tooling — so existing components handle it without Fabric-specific code:
 
 | Need | Existing component | Fabric URL pattern |
 |---|---|---|
-| Read from Fabric Warehouse | [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) | `mssql+pyodbc://<id>.datawarehouse.fabric.microsoft.com:1433/<db>?driver=ODBC+Driver+18+for+SQL+Server&Authentication=ActiveDirectoryServicePrincipal&UID=<sp>&PWD=<secret>` |
-| Write to Fabric Warehouse | [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) | same URL |
-| Cross-warehouse query | [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) with arbitrary CTEs / joins | same |
+| Read from Fabric Warehouse | `dataframe_from_sql` | `mssql+pyodbc://<id>.datawarehouse.fabric.microsoft.com:1433/<db>?driver=ODBC+Driver+18+for+SQL+Server&Authentication=ActiveDirectoryServicePrincipal&UID=<sp>&PWD=<secret>` |
+| Write to Fabric Warehouse | `dataframe_to_table` | same URL |
+| Cross-warehouse query | `dataframe_from_sql` with arbitrary CTEs / joins | same |
 
 ## Prerequisites
 
@@ -135,7 +135,7 @@ attributes:
 ### 3. Gold layer — query via Fabric Warehouse SQL endpoint
 
 The Lakehouse table auto-registers in the Fabric SQL endpoint. We can
-query it via [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) using the warehouse URL pattern:
+query it via `dataframe_from_sql` using the warehouse URL pattern:
 
 ```yaml
 # defs/orders_revenue/defs.yaml
@@ -214,7 +214,7 @@ admin enables Fabric, the same components ship will work end-to-end.
 | Trial capacity | $0 for 60 days (activate via Power BI) |
 
 Pause the capacity overnight + on weekends to halve cost — same pattern
-as [`synapse_sql_pool_admin_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/synapse_sql_pool_admin_job).
+as `synapse_sql_pool_admin_job`.
 
 ## Teardown
 
@@ -229,6 +229,6 @@ az fabric capacity delete -g dagster-demo-rg -n <capacity-name> --yes
   the fly, list workspace permissions)
 - **Use the lakehouse resource** in a custom transformation op if you
   need direct Delta read/write without going through the IO manager
-- **Pair with [`lineage_to_purview`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_purview)** to publish the full Dagster lineage
+- **Pair with `lineage_to_purview`** to publish the full Dagster lineage
   graph (including Fabric assets) into Purview for organization-wide
   data governance

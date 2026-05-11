@@ -13,8 +13,8 @@ warehouse_table  (existing BQ table, declare-only external asset)
 
 | Component | Mode | Cost |
 |---|---|---|
-| [`bigquery_dry_run_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/bigquery_dry_run_check) | Pre-flight cost guardrail. Three caps (pick any combination): `max_bytes`, `max_cost_usd`, `max_slot_ms`. Server-side dry-run, free, < 1s. | Free |
-| [`bigquery_table_freshness_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/bigquery_table_freshness_check) | SLO check via table's `last_modified_time`. Optionally checks freshest partition for ingest-partitioned tables. | Free |
+| `bigquery_dry_run_check` | Pre-flight cost guardrail. Three caps (pick any combination): `max_bytes`, `max_cost_usd`, `max_slot_ms`. Server-side dry-run, free, < 1s. | Free |
+| `bigquery_table_freshness_check` | SLO check via table's `last_modified_time`. Optionally checks freshest partition for ingest-partitioned tables. | Free |
 
 ## Cost vs. bytes vs. slot-ms — pick one based on billing
 

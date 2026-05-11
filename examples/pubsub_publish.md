@@ -15,8 +15,8 @@ events                 ← synthetic_data_generator (events schema)
 
 | Component | What it does |
 |---|---|
-| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | Synthetic upstream. `schema_type: events` produces `(event_id, user_id, session_id, timestamp, event_type, page, duration_seconds, device, browser)` — `event_type` + `device` make natural filter attributes for subscription routing. |
-| [`pubsub_publish_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/pubsub_publish_asset) | Per-row publish to a Pub/Sub topic. Pick a `message_column` for the body (else the whole row gets JSON-serialized). `attribute_columns` become Pub/Sub message attributes — usable for subscription filter routing. Optional `ordering_key_column` for ordered delivery. |
+| `synthetic_data_generator` | Synthetic upstream. `schema_type: events` produces `(event_id, user_id, session_id, timestamp, event_type, page, duration_seconds, device, browser)` — `event_type` + `device` make natural filter attributes for subscription routing. |
+| `pubsub_publish_asset` | Per-row publish to a Pub/Sub topic. Pick a `message_column` for the body (else the whole row gets JSON-serialized). `attribute_columns` become Pub/Sub message attributes — usable for subscription filter routing. Optional `ordering_key_column` for ordered delivery. |
 
 ## Live run output
 
