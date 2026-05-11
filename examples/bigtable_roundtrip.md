@@ -88,9 +88,3 @@ gcloud bigtable instances add-iam-policy-binding demo-instance \
 cd bigtable-roundtrip-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`firestore_reader_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/firestore_reader_asset) / [`firestore_writer_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/firestore_writer_asset) — document NoSQL alternative
-- [`spanner_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/spanner_query_asset) — globally-distributed transactional RDBMS
-- [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) — analytical sink instead of operational

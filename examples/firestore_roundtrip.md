@@ -75,9 +75,3 @@ gcloud projects add-iam-policy-binding $GCP_PROJECT_ID \
 cd firestore-roundtrip-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`bigtable_reader_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigtable_reader_asset) / [`bigtable_writer_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigtable_writer_asset) — wide-column NoSQL
-- [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) — analytical sink alternative
-- [`external_pubsub_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_pubsub_asset) — declare-only Pub/Sub topic asset

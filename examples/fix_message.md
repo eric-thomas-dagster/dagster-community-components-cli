@@ -93,10 +93,3 @@ FIX is the global protocol for electronic trading — equities, fixed income, FX
 cd fix-message-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`x12_edi_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/x12_edi_parser) — US-domestic B2B EDI (claims, orders)
-- [`iso20022_payment_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/iso20022_payment_parser) — cross-border payments XML
-- [`fhir_resource_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/fhir_resource_normalizer) — same flatten-pattern for healthcare
-- [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) — common downstream for trading-ops warehouse

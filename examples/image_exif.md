@@ -58,10 +58,3 @@ Real-world note: actual camera EXIF varies widely (Canon vs iPhone vs DSLR all u
 cd image-exif-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`image_transform_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/image_transform_asset) — resize / crop / convert (often paired with this)
-- [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) — Cloud Vision label / OCR
-- [`video_metadata_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/video_metadata_extractor) — same pattern for video files (ffprobe)
-- [`cloud_dlp_inspect_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/cloud_dlp_inspect_asset) — pair with this for both EXIF-PII (GPS) and content-PII detection

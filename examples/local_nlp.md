@@ -107,11 +107,3 @@ takes a few minutes the first time).
 
 ~$0.05 — the 8 local components are free; the 4 LLM components share
 gpt-4o-mini calls (~30 rows × 4 calls = ~120 cheap completions).
-
-## See also
-
-- [`llm_execution.md`](./llm_execution.md) — 12 LLM-orchestration components
-- [`document_extractors.md`](./document_extractors.md) — 13 typed document extractors
-- [`vector_rag.md`](./vector_rag.md) — 5 vector-store / RAG components
-- [`ai_with_llm.md`](./ai_with_llm.md) — task-specific LLM components
-- [`ai_no_llm.md`](./ai_no_llm.md) — local AI components (no API key)

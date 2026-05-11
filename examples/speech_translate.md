@@ -72,10 +72,3 @@ Add more target languages — Translation supports 130+ language codes:
 ```yaml
 target_languages: [es, fr, de, ja, zh-CN, hi, pt, ar, ru, it]
 ```
-
-## Sister components
-
-- [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) — image OCR / labels / objects (similar shape).
-- [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor) — structured document parsing.
-- [`vertex_ai_text_embeddings_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vertex_ai_text_embeddings_asset) — embed the transcripts for semantic search.
-- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) — analyze transcripts after transcription (sentiment, summarization, etc.).

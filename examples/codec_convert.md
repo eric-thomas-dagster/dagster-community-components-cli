@@ -86,9 +86,3 @@ This is what banking, insurance, and federal-agency systems use every day to ing
 cd codec-convert-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`dataframe_flatten_nested_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_flatten_nested_columns) — common pre-warehouse normalization (pairs with this)
-- [`bigquery_load_from_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/bigquery_load_from_gcs_asset) — common downstream after EBCDIC → UTF-8
-- [`hl7_v2_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hl7_v2_parser), [`iso20022_payment_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/iso20022_payment_parser) — common downstreams after mainframe codec conversion

@@ -72,9 +72,3 @@ uv run dg launch --assets '*'
 
 In `cost_guard/defs.yaml`, lower `max_bytes` to `100` → cost guard fails.
 In `freshness_slo/defs.yaml`, lower `max_age_minutes` to `1` → freshness fails.
-
-## Sister components
-
-- [`pandas_dataframe_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/pandas_dataframe_check) — structural checks (column existence, dtypes) post-materialize
-- [`great_expectations_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/great_expectations_check) — full GE expectation-suite checks
-- [`cloud_dlp_pii_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/cloud_dlp_pii_check) — content checks for PII

@@ -52,9 +52,3 @@ uv run dg launch --assets '*'
 
 ls -la /tmp/audio_transform_demo_out/
 ```
-
-## Sister components
-
-- [`image_transform_asset`](https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/assets/transforms/image_transform_asset) — image sibling (Pillow)
-- [`speech_to_text_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/speech_to_text_asset) — common downstream after resampling
-- [`cloud_text_to_speech_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/cloud_text_to_speech_asset) — generates audio; this component post-processes it

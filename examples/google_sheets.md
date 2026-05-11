@@ -112,10 +112,3 @@ If you don't already have a service-account JSON:
 
 6. `export GOOGLE_APPLICATION_CREDENTIALS=/path/to/the/json`. Most
    Google SDKs read this env var by default.
-
-## Sister components
-
-- [`google_sheets_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/google_sheets_resource) — connection-handle resource, for use by
-  custom assets that need direct Sheets access.
-- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) / [`gemini_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_image_generation) — Gemini text and image
-  generation, native (no LiteLLM) Google components.

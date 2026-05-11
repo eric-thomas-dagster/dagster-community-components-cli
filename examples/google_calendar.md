@@ -83,12 +83,3 @@ download it. For cloud-deployed pipelines, use one of:
 This demo wires up both [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) AND [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery)
 in parallel so you can see both shapes; drop the local one before
 deploying to cloud.
-
-## Sister components
-
-- [`google_drive_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_drive_ingestion) — list/download Drive files.
-- [`google_docs_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_docs_extractor) — extract plain text from Google Docs.
-- [`google_sheets_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_sheets_ingestion) — pull Google Sheets values.
-- [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) — run SQL against BigQuery.
-- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) / [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) — chain a summarizer
-  off `upcoming_events.description` to get auto-summarized meetings.

@@ -97,10 +97,3 @@ Switch model:
 model_name: gemini-embedding-001                # latest Gemini-family
 model_name: text-multilingual-embedding-002     # multilingual
 ```
-
-## Sister components
-
-- [`embeddings_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/embeddings_generator) — generic LiteLLM-routed embeddings.
-- [`pgvector_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/pgvector_asset) / [`pinecone_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/pinecone_asset) / [`chromadb_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/chromadb_asset) — load embeddings into a vector store downstream.
-- [`vector_store_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vector_store_query) — query a vector store with the embeddings.
-- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) / [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) — generate text on the same SA / pattern.

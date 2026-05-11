@@ -126,9 +126,3 @@ uv run dg launch --assets '*'
 
 $0 — entirely local sklearn / scipy / statsmodels / shapely.
 The geocoder uses Nominatim (free public service) with a low rate limit.
-
-## See also
-
-- [`transformations.md`](./transformations.md) — 37 pure-pandas transformations
-- [`local_nlp.md`](./local_nlp.md) — 13 NLP / lightweight-AI components
-- [`data_quality_checks.md`](./data_quality_checks.md) — data quality

@@ -88,9 +88,3 @@ gcloud documentai processors delete <PROCESSOR_ID> \
 ```
 
 Or leave it — OCR processors have no idle cost.
-
-## Sister components
-
-- [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) — image-level OCR + label detection (better for photos than scanned docs)
-- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) — for "extract structured JSON from this doc" using multimodal Gemini (a different design pattern: LLM extraction vs. dedicated OCR processor)
-- [`speech_to_text_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/speech_to_text_asset) — audio analogue

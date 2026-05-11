@@ -141,10 +141,3 @@ options:
   horizon: 30
   confidence_level: 0.95
 ```
-
-## Sister components
-
-- [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) — ad-hoc SELECT (no CTAS).
-- [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) — load a Dagster-side DataFrame into a BQ table.
-- [`external_bigquery_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_bigquery_table) — declare-only external asset for an existing BQ table.
-- [`google_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/google_bigquery) — multi-asset import of BQ entities (scheduled queries, materialized views, transfer jobs).

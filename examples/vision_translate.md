@@ -80,11 +80,3 @@ attributes:
 ```
 
 For document parsing (forms / tables / structured), use [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor) instead of Vision — Document AI parses field structure, Vision OCR returns flat text.
-
-## Sister components
-
-- [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor) (planned next) — structured document parsing.
-- [`gemini_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_image_generation) — generate images.
-- [`vision_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_model) — multi-vendor image-LLM wrapper.
-- [`vertex_ai_text_embeddings_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vertex_ai_text_embeddings_asset) — embeddings for the OCR'd text.
-- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) / [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) — LLM-based translation when Translation API isn't nuanced enough.

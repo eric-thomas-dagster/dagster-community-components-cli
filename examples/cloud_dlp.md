@@ -76,9 +76,3 @@ None — clean live validation. Both components worked first try once DLP API wa
 cd cloud-dlp-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`pandas_dataframe_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/pandas_dataframe_check) — column existence + dtype checks (structural, no PII service)
-- [`great_expectations_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/great_expectations_check) — full GE expectation-suite integration
-- [`cloud_logging_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/cloud_logging_query_asset) — pulls audit logs (useful when paired with DLP for "who saw the PII" reports)

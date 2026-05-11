@@ -85,9 +85,3 @@ uv run dg launch --assets '*'
 
 gcloud pubsub subscriptions pull demo-events-sub --limit=10 --auto-ack
 ```
-
-## Sister components
-
-- [`cloud_tasks_enqueue_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/cloud_tasks_enqueue_asset) — also fan-out, but with built-in HTTP delivery + retries (lower throughput, more guarantees)
-- [`pubsub_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/pubsub_to_database_asset) — opposite direction (read from Pub/Sub into a DB)
-- [`external_pubsub_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_pubsub_asset) — declare-only Pub/Sub topic as a Dagster external asset

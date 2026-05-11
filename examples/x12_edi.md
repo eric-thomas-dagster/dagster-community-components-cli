@@ -75,11 +75,3 @@ ASC X12 is the dominant US-domestic EDI standard. Every major payer, retailer, l
 cd x12-edi-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`iso20022_payment_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/iso20022_payment_parser) — same pattern for cross-border payments (XML)
-- [`fhir_resource_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/fhir_resource_normalizer) — modern healthcare JSON
-- [`hl7_v2_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hl7_v2_parser) — legacy clinical messaging
-- [`fix_message_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/fix_message_parser) — trading messages
-- [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) — common downstream for claims warehouse

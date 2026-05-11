@@ -125,10 +125,3 @@ attributes:
   partition_type: DAY
   cluster_fields: [customer_id, status]
 ```
-
-## Sister components
-
-- [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) — ad-hoc SELECT (no CTAS, no export).
-- [`bigquery_create_table_from_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/bigquery_create_table_from_query_asset) — CTAS, materialize a model.
-- [`bigquery_ml_train_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_train_asset) / [`bigquery_ml_predict_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_predict_asset) — BQML.
-- [`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs) / [`gcs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/gcs_to_database_asset) — DataFrame-mediated peers.

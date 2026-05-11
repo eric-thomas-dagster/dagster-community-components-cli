@@ -45,9 +45,3 @@ uv run dg dev   # → http://localhost:3000 → Assets graph
 
 $0 — fully local. All models are open-weight (sentence-transformers,
 spaCy, scikit-learn, langdetect, Presidio).
-
-## See also
-
-- [`ai_with_llm.md`](./ai_with_llm.md) — companion demo using the same
-  upstream synthetic data, but routing through OpenAI/Azure OpenAI for
-  classification, extraction, summarization, sentiment, and enrichment.

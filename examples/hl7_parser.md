@@ -67,9 +67,3 @@ Wave 4 backlog: `IN1` (insurance), `GT1` (guarantor), `NK1` (next of kin), `MRG`
 cd hl7-parser-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`fhir_resource_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/fhir_resource_normalizer) — modern healthcare standard (JSON, R4/R5)
-- [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) — same vendor-data-to-canonical pattern for HR
-- [`iso20022_payment_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/iso20022_payment_parser) — same pattern for fintech payments

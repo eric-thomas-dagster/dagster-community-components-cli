@@ -82,10 +82,3 @@ uv run dg launch --assets '*'
 ls -la /tmp/video_demo_frames/    # 10 JPEGs
 ls -la /tmp/video_demo_audio/     # 2 WAVs
 ```
-
-## Sister components
-
-- [`synthetic_audio_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_audio_generator), [`synthetic_image_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_image_generator), [`synthetic_pdf_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_pdf_generator) — siblings for hermetic media demos
-- [`audio_transform_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/audio_transform_asset) — post-process extracted audio
-- [`image_transform_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/image_transform_asset) — post-process extracted frames
-- [`speech_to_text_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/speech_to_text_asset), [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) — typical downstreams

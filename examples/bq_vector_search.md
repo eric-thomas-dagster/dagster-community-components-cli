@@ -95,9 +95,3 @@ export BQ_DATASET=your_dataset
 cd bq-vector-search-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`vertex_ai_text_embeddings_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vertex_ai_text_embeddings_asset) — produce embeddings (Vertex AI text-embedding-004, 768-dim)
-- [`litellm_embedding_batch`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_embedding_batch) — multi-provider embedding upstream
-- [`chroma_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/chroma_resource) / [`qdrant_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/qdrant_resource) / [`weaviate_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/weaviate_resource) — non-BQ vector stores

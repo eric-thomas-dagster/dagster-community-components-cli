@@ -101,9 +101,3 @@ uv run dg launch --assets '*'
 ## Cost
 
 $0 — entirely local pandas / numpy / rapidfuzz / jsonschema.
-
-## See also
-
-- [`local_nlp.md`](./local_nlp.md) — 13 NLP / lightweight-AI components
-- [`data_quality_checks.md`](./data_quality_checks.md) — 4 data quality
-  components (companion to [`schema_validator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/schema_validator) and [`audit_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/audit_columns) here)

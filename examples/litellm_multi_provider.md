@@ -79,13 +79,3 @@ cat /tmp/litellm_multi_provider.csv
 
 You can mix: use native components for production paths, LiteLLM for
 the cost/quality comparison harness behind the scenes.
-
-## Sister components
-
-- [`litellm_embedding_batch`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_embedding_batch) — same multi-provider pattern for embeddings.
-- [`litellm_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_image_generation) — same for image generation.
-- [`litellm_audio_transcription`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_audio_transcription) — same for audio.
-- [`litellm_structured_output`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_structured_output) — same for tool-use / JSON-mode.
-- [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) / [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) — native single-vendor peers.
-- `groq_llm_asset` (planned) — Groq native (very fast, free tier).
-- `openrouter_llm_asset` (planned) — one key for 100+ models.

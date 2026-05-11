@@ -75,10 +75,3 @@ value_maps:
 cd fhir-normalizer-demo
 uv run dg launch --assets '*'
 ```
-
-## Sister components
-
-- [`hl7_v2_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hl7_v2_parser) — legacy healthcare standard (pipe-delimited)
-- [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) — same pattern for HR data
-- [`iso20022_payment_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/iso20022_payment_parser) — same pattern for fintech payments
-- [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) — common downstream sink

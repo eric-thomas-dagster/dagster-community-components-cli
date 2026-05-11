@@ -45,9 +45,3 @@ uv run dg launch --assets '*'
 
 ls -la /tmp/image_transform_demo_out/
 ```
-
-## Sister components
-
-- [`audio_transform_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/audio_transform_asset) — audio sibling (ffmpeg)
-- [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) — common downstream (label / OCR the transformed images)
-- [`gemini_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_image_generation) — generates images; this component post-processes them

@@ -80,10 +80,3 @@ RAG generation uses ~3 short `gpt-4o-mini` completions.
   templates), compose `vector_store_query → reranker → llm_prompt_executor`
   manually — that's exactly what the parallel branch in this demo
   exercises.
-
-## See also
-
-- [`llm_execution.md`](./llm_execution.md) — 12 LLM-orchestration components
-- [`document_extractors.md`](./document_extractors.md) — 13 typed document extractors
-- [`ai_with_llm.md`](./ai_with_llm.md) — task-specific LLM components
-- [`ai_no_llm.md`](./ai_no_llm.md) — local AI components (no API key)

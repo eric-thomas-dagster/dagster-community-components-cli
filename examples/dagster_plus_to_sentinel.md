@@ -119,10 +119,3 @@ az group delete --name dagster-demo-rg --yes
 - **Not a real-time stream.** This is a polling pull on `dg launch`. For
   every-15-min cadence, install [`cron_schedule`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/cron_schedule) and point it at this asset
   graph, or use the [`dagster_plus_to_siem_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/dagster_plus_to_siem_job) op-job (single-YAML version).
-
-## Related
-
-- [OCSF + Security Lake](ocsf_security_lake.md) — same OCSF asset pipeline,
-  no auth required (synthetic data, writes Parquet to disk instead of Sentinel)
-- [Dagster+ Audit → Security Lake](dagster_plus_security_lake.md) — same pull,
-  Parquet sink instead of Sentinel sink

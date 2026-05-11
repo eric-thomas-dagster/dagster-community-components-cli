@@ -80,11 +80,3 @@ When materializing partition `2026-05-01`, the query becomes
 Set `dry_run: true` to validate the query without scanning data —
 the asset materialization metadata then shows `bytes_processed` and
 an estimated USD cost. Useful in CI / linting.
-
-## Sister components
-
-- [`bigquery_create_table_from_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/bigquery_create_table_from_query_asset) — CTAS, materialize a query as a real BQ table (the transform layer).
-- [`bigquery_ml_train_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_train_asset) / [`bigquery_ml_predict_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_predict_asset) — BQML: ML in pure SQL.
-- [`bigquery_export_to_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigquery_export_to_gcs_asset) / [`bigquery_load_from_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/bigquery_load_from_gcs_asset) — BQ ↔ GCS bulk bridge.
-- [`duckdb_query_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/duckdb_query_reader) — same shape, against DuckDB.
-- [`database_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/database_query) — generic SQL via SQLAlchemy.

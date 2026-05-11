@@ -105,10 +105,3 @@ YAML, no code changes.
 
 ~$0.10–$0.50 per full pipeline run on `gpt-4o-mini` (30 tickets × 5
 components ≈ 150 calls).
-
-## See also
-
-- [`ai_no_llm.md`](./ai_no_llm.md) — companion demo using the same
-  upstream synthetic data with 5 *local* AI components (TF-IDF
-  keywords, langdetect, Presidio PII, sentence-transformers
-  embeddings) — no API key needed.

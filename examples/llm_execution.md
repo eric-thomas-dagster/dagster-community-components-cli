@@ -122,11 +122,3 @@ uv run dg dev   # → http://localhost:3000 → Assets graph
 ## Cost
 
 ~$0.30–$1.00 per full run on `gpt-4o-mini` (20 tickets × 12 components ≈ 240 calls).
-
-## See also
-
-- [`ai_with_llm.md`](./ai_with_llm.md) — task-specific LLM components
-  (text_classifier, entity_extractor, sentiment_analyzer,
-  document_summarizer, data_enricher).
-- [`ai_no_llm.md`](./ai_no_llm.md) — local AI components (no API key
-  needed) using the same upstream synthetic data.

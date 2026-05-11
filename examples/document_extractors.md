@@ -97,12 +97,3 @@ uv run dg dev   # → http://localhost:3000 → Assets graph
 ## Cost
 
 ~$0.20–$0.50 per full run on `gpt-4o-mini`.
-
-## See also
-
-- [`llm_execution.md`](./llm_execution.md) — generic LLM-orchestration
-  components (12 components: openai_llm, langchain, dspy, instructor,
-  litellm, llm_judge, llm_output_parser, etc.)
-- [`ai_with_llm.md`](./ai_with_llm.md) — task-specific LLM components
-  (text_classifier, entity_extractor, sentiment_analyzer, etc.)
-- [`ai_no_llm.md`](./ai_no_llm.md) — local AI components (no API key)

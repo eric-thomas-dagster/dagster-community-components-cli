@@ -94,10 +94,3 @@ uv run dg launch --assets '*'
 
 gcloud storage cat gs://$GCS_BUCKET/sales/sales_summary_000000000000.csv
 ```
-
-## Sister components
-
-- [`gcs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/gcs_to_database_asset) — read GCS → write to any SQLAlchemy DB
-- [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) — direct DataFrame → BQ load (no GCS hop)
-- [`bigquery_create_table_from_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/bigquery_create_table_from_query_asset) — CTAS in-warehouse, no GCS hop
-- [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) — read BQ → DataFrame

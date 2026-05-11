@@ -103,9 +103,3 @@ None — clean validation. (The component was code-only before this demo, so liv
 gcloud tasks queues delete demo-queue --location=us-central1 \
   --project=$GCP_PROJECT_ID --quiet
 ```
-
-## Sister components
-
-- [`pubsub_publish_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/pubsub_publish_asset) — fan-out via Pub/Sub instead (lower latency, no built-in retries)
-- [`cloud_run_job_trigger_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/cloud_run_job_trigger_asset) — kick off a Cloud Run **Job** (not Service) once
-- [`cloud_functions_invoke_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/cloud_functions_invoke_asset) — synchronous Cloud Function call (waits for response, no retries)
