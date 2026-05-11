@@ -42,12 +42,14 @@ The demos are grouped by what they need to run.
 
 ---
 
-## No auth required (synthetic or public data)
+<a id="no-auth-required-synthetic-or-public-data"></a>
+## No auth required (synthetic or public data) [¶](#no-auth-required-synthetic-or-public-data)
 
 The biggest section — these run offline against synthetic data or public APIs.
 Useful for onboarding, CI smoke tests, and proving a component works.
 
-### Core ETL patterns
+<a id="core-etl-patterns"></a>
+### Core ETL patterns [¶](#core-etl-patterns)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -59,7 +61,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Window Calculation](window_calculation.md) | csv → window_calculation → CSV | Every supported window function on stock prices |
 | [Regional Orders Union](regional_orders.md) | csv × 3 → dataframe_union → CSV | Merge multi-region order extracts with mismatched columns |
 
-### Time series + forecasting
+<a id="time-series--forecasting"></a>
+### Time series + forecasting [¶](#time-series--forecasting)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -69,7 +72,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Sensor Gap-Fill](sensor_gapfill.md) | synthetic → ts_filler → running_total → CSV | Fill missing hourly readings + cumulative metrics |
 | [Synthetic Metrics + Anomalies](synthetic_metrics.md) | time_series_generator → anomaly_detection → CSV | No-upstream synthetic generator |
 
-### ML pipelines
+<a id="ml-pipelines"></a>
+### ML pipelines [¶](#ml-pipelines)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -80,7 +84,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Churn Prediction](churn.md) | synthetic → churn_prediction → CSV | Rule-based scoring with interpretable risk factors |
 | [Market Basket](market_basket.md) | csv → market_basket_rules → filter → CSV | Apriori association rules with lift filter |
 
-### Customer + subscription analytics
+<a id="customer--subscription-analytics"></a>
+### Customer + subscription analytics [¶](#customer--subscription-analytics)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -91,7 +96,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Retail Analytics](retail_analytics.md) | 7 components, 3 parallel branches | RFM segmentation + cohort analysis + running spend |
 | [A/B Full Pipeline](ab_full_pipeline.md) | 10 components | Assignment + analysis + trend + sample-size |
 
-### Geospatial
+<a id="geospatial"></a>
+### Geospatial [¶](#geospatial)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -101,7 +107,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [West Coast Cities Filter](west_coast_cities.md) | csv → bounding_box_filter → CSV | Geographic bounding-box filter |
 | [Store Coverage](store_coverage.md) | 9 components | Buffer + spatial_join + summarize coverage |
 
-### Public APIs (no auth)
+<a id="public-apis-no-auth"></a>
+### Public APIs (no auth) [¶](#public-apis-no-auth)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -123,13 +130,15 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [NBA Scoreboard](nba_scoreboard.md) | http_poll_sensor → rest → json_path → CSV | [`http_poll_sensor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/http_poll_sensor) with targeted hashing |
 | [RSS Sensor](rss_sensor.md) | rss_feed_sensor → rest → xml_parser → CSV | Sensor-driven HN frontpage ingestion |
 
-### OCSF / Security
+<a id="ocsf--security"></a>
+### OCSF / Security [¶](#ocsf--security)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
 | [OCSF + Security Lake](ocsf_security_lake.md) | csv → ocsf_normalizer → validator → Parquet | Synthetic Dagster+ events through full OCSF pipeline (no AWS required) |
 
-### Op jobs (no asset materialized)
+<a id="op-jobs-no-asset-materialized"></a>
+### Op jobs (no asset materialized) [¶](#op-jobs-no-asset-materialized)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -137,7 +146,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Dynamic Fanout Job](dynamic_fanout_job.md) | dynamic_fanout_job | DynamicOut: discover N items, parallel process, optional collect |
 | [Per-File Processor](per_file_processor.md) | per_file_processor_job | Inbox-style fan-out: list local CSVs, parse each, archive on success |
 
-### Patterns
+<a id="patterns"></a>
+### Patterns [¶](#patterns)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -146,13 +156,15 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 
 ---
 
-## Azure (subscription required)
+<a id="azure-subscription-required"></a>
+## Azure (subscription required) [¶](#azure-subscription-required)
 
 Each Azure demo lists exact provisioning commands and teardown. Costs are noted
 per-demo; all of these stay well under the free monthly allotments for personal
 subscriptions.
 
-### Storage + lakehouse
+<a id="storage--lakehouse"></a>
+### Storage + lakehouse [¶](#storage--lakehouse)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
@@ -160,7 +172,8 @@ subscriptions.
 | [ADLS Inbox](adls_inbox.md) | [`adls_monitor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/adls_monitor) (sensor) → [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job) → [`adls_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/adls_to_database_asset) | same storage account, files in `demo/inbox/` | <$0.05/mo |
 | [Bicep Self-Provision](bicep_self_provision.md) | [`bicep_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/bicep_asset) provisions storage; downstream uses it | none upfront — Bicep creates it | <$0.05/mo |
 
-### Databases
+<a id="databases"></a>
+### Databases [¶](#databases)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
@@ -170,7 +183,8 @@ subscriptions.
 | [Azure MySQL Flexible](azure_mysql.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) → [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) (mysql+pymysql) | Flexible Server B1ms | ~$13/mo |
 | [Azure Cache for Redis](azure_redis.md) | [`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) (TLS) → [`redis_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/redis_reader) (TLS) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Cache Basic C0 | ~$16/mo |
 
-### Orchestration + workflow
+<a id="orchestration--workflow"></a>
+### Orchestration + workflow [¶](#orchestration--workflow)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
@@ -178,19 +192,22 @@ subscriptions.
 | [Azure Synapse Analytics](azure_synapse.md) | [`azure_synapse`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_synapse) (import + trigger Synapse pipelines; Spark/notebook discovery) | Synapse workspace + ADLS Gen2 storage + service principal | $0 idle, free serverless SQL <1TB/mo |
 | [Synapse Serverless SQL (OPENROWSET)](azure_synapse_serverless.md) | [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls) → [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) (no Synapse-specific component needed!) | Same Synapse workspace + a demo db with master key + db-scoped credential + external data source | $0 — first 1TB/mo scanned is free |
 
-### Streaming + queues
+<a id="streaming--queues"></a>
+### Streaming + queues [¶](#streaming--queues)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
 | [Azure Event Hubs Round-Trip](azure_eventhubs.md) | [`dataframe_to_eventhub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_eventhub) (NEW) → [`eventhubs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/eventhubs_to_database_asset) → Postgres | EH Basic namespace + hub | ~$11/mo + $0.028/M events |
 
-### Microsoft Fabric (next-gen Synapse)
+<a id="microsoft-fabric-next-gen-synapse"></a>
+### Microsoft Fabric (next-gen Synapse) [¶](#microsoft-fabric-next-gen-synapse)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
 | [Fabric Full-Stack](fabric_full_stack.md) | All 6 Fabric components: [`fabric_workspace`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/fabric_workspace), [`fabric_workspace_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/fabric_workspace_resource), [`fabric_lakehouse_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/fabric_lakehouse_resource), [`fabric_lakehouse_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/fabric_lakehouse_io_manager), [`dataframe_to_fabric_lakehouse`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_fabric_lakehouse), [`fabric_pipeline_trigger_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/fabric_pipeline_trigger_job) (+ existing [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) for the Warehouse SQL endpoint) | F2 capacity + workspace + Lakehouse + Warehouse | ~$0.21/hr ($154/mo always-on) |
 
-### Observability
+<a id="observability"></a>
+### Observability [¶](#observability)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
@@ -208,7 +225,8 @@ Dagster+ deployment. Examples include:
 - Synapse: workspace pipeline triggered, polled Queued→Succeeded in 35s, run metadata captured
 - Synapse Serverless: parquet on ADLS → OPENROWSET → 7-row aggregation in 3.27s ($0 — free tier)
 
-### Auth: managed identity in Azure compute
+<a id="auth-managed-identity-in-azure-compute"></a>
+### Auth: managed identity in Azure compute [¶](#auth-managed-identity-in-azure-compute)
 
 When running these in **Azure Container Apps** or **AKS** with a managed
 identity attached, you can omit the env-var auth entirely. The Azure
@@ -218,7 +236,8 @@ uses env vars; production in Azure compute uses the attached identity.
 
 ---
 
-## Google Cloud (GCP, subscription required)
+<a id="google-cloud-gcp-subscription-required"></a>
+## Google Cloud (GCP, subscription required) [¶](#google-cloud-gcp-subscription-required)
 
 Each GCP demo is validated end-to-end against a real GCP project. Auth via
 service-account JSON pointed at by `GOOGLE_APPLICATION_CREDENTIALS`.
@@ -227,7 +246,8 @@ surface the exact activation URL on the first call. Costs are noted
 per-demo; everything below stays well under the free tier for typical
 demos.
 
-### Workspace (Drive, Docs, Sheets, Calendar)
+<a id="workspace-drive-docs-sheets-calendar"></a>
+### Workspace (Drive, Docs, Sheets, Calendar) [¶](#workspace-drive-docs-sheets-calendar)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
@@ -235,7 +255,8 @@ demos.
 | [Google Calendar](google_calendar.md) | [`google_calendar_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_calendar_ingestion) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) + [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) | SA shared on a calendar, Calendar API enabled | $0 |
 | [Drive + Docs + Gemini](google_drive_docs.md) | [`google_drive_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_drive_ingestion) → [`google_docs_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_docs_extractor) → [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) → CSV | SA shared on a Drive folder, Drive + Docs + Generative Language APIs enabled | $0 |
 
-### Warehouse (BigQuery)
+<a id="warehouse-bigquery"></a>
+### Warehouse (BigQuery) [¶](#warehouse-bigquery)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
@@ -243,7 +264,8 @@ demos.
 | [BigQuery ML Pipeline](bigquery_ml_pipeline.md) | [`bigquery_create_table_from_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/bigquery_create_table_from_query_asset) (CTAS) → [`bigquery_ml_train_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_train_asset) (LOGISTIC_REG) → [`bigquery_ml_predict_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_predict_asset) → CSV | BQ dataset, `roles/bigquery.dataEditor` + `jobUser` | <$0.001 |
 | [BigQuery ↔ GCS Bulk Bridge](bigquery_bulk_bridge.md) | [`bigquery_export_to_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigquery_export_to_gcs_asset) (EXTRACT) → [`bigquery_load_from_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/bigquery_load_from_gcs_asset) (LOAD JOB) — round-trip | BQ dataset + GCS bucket | $0 (extract + load free) |
 
-### AI / LLM
+<a id="ai--llm"></a>
+### AI / LLM [¶](#ai--llm)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
@@ -253,13 +275,15 @@ demos.
 | [Vision + Translation](vision_translate.md) | [`synthetic_image_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_image_generator) → [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) (LABEL + OBJECT) → [`dataframe_extract_field`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_extract_field) (top label) → [`translation_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/translation_api_asset) (es/fr/de/ja) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Vision + Translation APIs enabled | ~$0.005 |
 | [Speech + Translation](speech_translate.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) (audio_samples) → [`speech_to_text_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/speech_to_text_asset) (Cloud Speech v2) → [`translation_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/translation_api_asset) (es/fr/de/ja) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Speech + Translation APIs enabled | ~$0.001 |
 
-### Real-pipeline patterns (multi-component chains)
+<a id="real-pipeline-patterns-multi-component-chains"></a>
+### Real-pipeline patterns (multi-component chains) [¶](#real-pipeline-patterns-multi-component-chains)
 
 | Demo | Components exercised | Highlights |
 |---|---|---|
 | [HRIS Normalizer](hris_normalizer.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) (employees) → [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) (vendor-agnostic) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Synthetic vendor export → canonical schema mapped via `value_maps` (case-insensitive: `Active`/`active`/`ACTIVE` → `active`; `Full-Time`/`FT`/`FULL_TIME` → `full_time`) |
 
-### Auth: workload identity in GCP compute
+<a id="auth-workload-identity-in-gcp-compute"></a>
+### Auth: workload identity in GCP compute [¶](#auth-workload-identity-in-gcp-compute)
 
 When running these in **GKE / Cloud Run / Compute Engine / Cloud Functions**
 with a service account attached, you can omit the env-var auth entirely.
@@ -289,7 +313,8 @@ Live runs surfaced several real bugs the components now handle cleanly:
 
 ---
 
-## Dagster+ required
+<a id="dagster-required"></a>
+## Dagster+ required [¶](#dagster-required)
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
@@ -297,7 +322,8 @@ Live runs surfaced several real bugs the components now handle cleanly:
 
 ---
 
-## Catalog Lineage Sync — multi-target (no auth required for the file demo)
+<a id="catalog-lineage-sync--multi-target-no-auth-required-for-the-file-demo"></a>
+## Catalog Lineage Sync — multi-target (no auth required for the file demo) [¶](#catalog-lineage-sync--multi-target-no-auth-required-for-the-file-demo)
 
 | Demo | Components used | Highlights |
 |---|---|---|
@@ -305,7 +331,8 @@ Live runs surfaced several real bugs the components now handle cleanly:
 
 ---
 
-## How a demo is built
+<a id="how-a-demo-is-built"></a>
+## How a demo is built [¶](#how-a-demo-is-built)
 
 Each demo is a single Bash script (`setup_*.sh`) that:
 
@@ -323,7 +350,8 @@ cd <name>-demo
 uv run dg launch --assets '*'
 ```
 
-## Auth-required demos: comprehensive prereqs
+<a id="auth-required-demos-comprehensive-prereqs"></a>
+## Auth-required demos: comprehensive prereqs [¶](#auth-required-demos-comprehensive-prereqs)
 
 For demos that need credentials, every walkthrough now documents:
 
