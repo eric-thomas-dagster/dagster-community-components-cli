@@ -24,27 +24,27 @@ freshness, lineage, and metadata — but the demo itself is offline.
 
 | Family | Component | Asset key |
 |---|---|---|
-| Warehouse | `external_snowflake_table` | `snowflake/raw/orders` (partitioned: dynamic by tenant) |
-| Warehouse | `external_bigquery_table` | `bigquery/analytics/page_views` |
-| Warehouse | `external_databricks_table` | `databricks/silver/sessions` |
-| Warehouse | `external_clickhouse_table` | `clickhouse/events/clicks` |
-| Warehouse | `external_sql_asset` | `sql/orders` |
-| Object store | `external_s3_asset` | `s3/raw/orders` |
-| Object store | `external_gcs_asset` | `gcs/raw/orders` |
-| Object store | `external_adls_asset` | `adls/raw/orders` |
-| Object store | `external_sftp_path` | `sftp/incoming/orders` |
-| Object store | `external_sharepoint_library` | `sharepoint/Documents` |
-| Streaming | `external_kafka_asset` | `kafka/orders` |
-| Streaming | `external_kinesis_asset` | `kinesis/orders-stream` |
-| Streaming | `external_eventhubs_asset` | `eventhubs/orders` |
-| Streaming | `external_pubsub_asset` | `pubsub/orders-topic` |
-| Streaming | `external_sqs_asset` | `sqs/orders-queue` |
-| Streaming | `external_servicebus_asset` | `servicebus/orders` |
-| Streaming | `external_pulsar_asset` | `pulsar/orders` |
-| Streaming | `external_nats_asset` | `nats/orders` |
-| Streaming | `external_rabbitmq_asset` | `rabbitmq/orders` |
-| Streaming | `external_mqtt_asset` | `mqtt/sensors/temp` |
-| Streaming | `external_redis_stream_asset` | `redis_stream/orders` |
+| Warehouse | [`external_snowflake_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_snowflake_table) | `snowflake/raw/orders` (partitioned: dynamic by tenant) |
+| Warehouse | [`external_bigquery_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_bigquery_table) | `bigquery/analytics/page_views` |
+| Warehouse | [`external_databricks_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_databricks_table) | `databricks/silver/sessions` |
+| Warehouse | [`external_clickhouse_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_clickhouse_table) | `clickhouse/events/clicks` |
+| Warehouse | [`external_sql_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_sql_asset) | `sql/orders` |
+| Object store | [`external_s3_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_s3_asset) | `s3/raw/orders` |
+| Object store | [`external_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_gcs_asset) | `gcs/raw/orders` |
+| Object store | [`external_adls_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_adls_asset) | `adls/raw/orders` |
+| Object store | [`external_sftp_path`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_sftp_path) | `sftp/incoming/orders` |
+| Object store | [`external_sharepoint_library`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_sharepoint_library) | `sharepoint/Documents` |
+| Streaming | [`external_kafka_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_kafka_asset) | `kafka/orders` |
+| Streaming | [`external_kinesis_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_kinesis_asset) | `kinesis/orders-stream` |
+| Streaming | [`external_eventhubs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_eventhubs_asset) | `eventhubs/orders` |
+| Streaming | [`external_pubsub_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_pubsub_asset) | `pubsub/orders-topic` |
+| Streaming | [`external_sqs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_sqs_asset) | `sqs/orders-queue` |
+| Streaming | [`external_servicebus_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_servicebus_asset) | `servicebus/orders` |
+| Streaming | [`external_pulsar_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_pulsar_asset) | `pulsar/orders` |
+| Streaming | [`external_nats_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_nats_asset) | `nats/orders` |
+| Streaming | [`external_rabbitmq_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_rabbitmq_asset) | `rabbitmq/orders` |
+| Streaming | [`external_mqtt_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_mqtt_asset) | `mqtt/sensors/temp` |
+| Streaming | [`external_redis_stream_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_redis_stream_asset) | `redis_stream/orders` |
 
 ## Run it
 

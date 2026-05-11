@@ -62,47 +62,14 @@ attributes:
   group_name: warehouse
 EOF
 
-# Downstream pandas analysis
-mkdir -p "src/$PKG/defs/word_summary"
-cat > "src/$PKG/defs/word_summary/definitions.py" <<'PYEOF'
-"""Bucket the top Shakespeare words by length and report counts."""
-import pandas as pd
-import dagster as dg
-from dagster import AssetExecutionContext, AssetIn
-
-
-@dg.asset(
-    key=dg.AssetKey(["word_summary"]),
-    description="Word-length-bucket counts and total occurrences for the top Shakespeare words.",
-    group_name="downstream",
-    kinds={"pandas"},
-    ins={"top_shakespeare_words": AssetIn(key=dg.AssetKey(["top_shakespeare_words"]))},
-)
-def word_summary(top_shakespeare_words: pd.DataFrame) -> pd.DataFrame:
-    df = top_shakespeare_words
-    if df.empty:
-        return pd.DataFrame()
-    summary = df.groupby("word_length").agg(
-        word_count=("word", "count"),
-        total_occurrences=("occurrences", "sum"),
-        sample_words=("word", lambda s: list(s.head(3))),
-    ).reset_index().sort_values("word_length")
-    return summary
-
-
-defs = dg.Definitions(assets=[word_summary])
-PYEOF
-
 cat <<MSG
 
->>> Setup complete.
+>>> Setup complete (100% components — no custom Python in defs/).
 
-Asset graph:
+Asset:
     top_shakespeare_words   ← bigquery_query_asset (public BQ dataset)
-          │
-          └── word_summary  ← pandas (bucket by word length)
 
-Materialize all:
+Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 

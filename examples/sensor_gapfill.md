@@ -15,10 +15,10 @@ Pipeline (4 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | Generate synthetic data |
-| 2 | `ts_filler` | transformation | Fill time-series gaps |
-| 3 | `running_total` | transformation | Cumulative aggregate |
-| 4 | `dataframe_to_csv` | sink | Write CSV |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate synthetic data |
+| 2 | [`ts_filler`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/ts_filler) | transformation | Fill time-series gaps |
+| 3 | [`running_total`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/running_total) | transformation | Cumulative aggregate |
+| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
 
 ## Run
 

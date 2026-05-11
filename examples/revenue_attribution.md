@@ -1,7 +1,7 @@
 # Revenue attribution — split conversions across marketing channels
 
 A 4-component pipeline that fans in two synthetic CSVs (5 marketing
-campaigns + 120 Stripe charge events), runs `revenue_attribution` with
+campaigns + 120 Stripe charge events), runs [`revenue_attribution`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/revenue_attribution) with
 linear attribution, writes per-campaign metrics (spend, impressions,
 clicks, conversions, ROI, ROAS, CAC).
 
@@ -15,10 +15,10 @@ csv_file_ingestion (revenue)   ┘
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1a | `csv_file_ingestion` (marketing) | ingestion | Load synthetic campaigns (Spring_Sale, Brand_Awareness, Retargeting, Black_Friday, Newsletter) |
-| 1b | `csv_file_ingestion` (revenue) | ingestion | Load synthetic Stripe-shaped charges |
-| 2 | `revenue_attribution` | analytics | Linear attribution model; aggregates spend + computes ROI / ROAS / CAC |
-| 3 | `dataframe_to_csv` | sink | Per-campaign report |
+| 1a | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) (marketing) | ingestion | Load synthetic campaigns (Spring_Sale, Brand_Awareness, Retargeting, Black_Friday, Newsletter) |
+| 1b | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) (revenue) | ingestion | Load synthetic Stripe-shaped charges |
+| 2 | [`revenue_attribution`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/revenue_attribution) | analytics | Linear attribution model; aggregates spend + computes ROI / ROAS / CAC |
+| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Per-campaign report |
 
 ## Run
 
@@ -51,12 +51,12 @@ each customer's touchpoints.
 ## What this demo shows
 
 - **First fan-in to a multi-source analytics component.**
-  `revenue_attribution` declares both `marketing_data_asset` and
+  [`revenue_attribution`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/revenue_attribution) declares both `marketing_data_asset` and
   `revenue_data_asset` — dg's autoloader wires both into the asset's
   inputs. Same pattern as the SpaceX join demo, but with two separate
   ingest assets each owning its own `defs.yaml`.
 - **Same component installed twice via `--target-dir`.**
-  `csv_file_ingestion` lives at `defs/csv_file_ingestion/` (marketing)
+  [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) lives at `defs/csv_file_ingestion/` (marketing)
   and `defs/csv_revenue/` (revenue) — each with its own attributes.
 - **Component-level computed metrics.** ROI / ROAS / CAC are computed
   internally from `spend` / `attributed_revenue` / `attributed_customers`;

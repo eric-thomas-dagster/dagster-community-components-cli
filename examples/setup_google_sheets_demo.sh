@@ -11,7 +11,6 @@
 # Asset graph:
 #   class_data_sheet  ← google_sheets_ingestion (Class Data sample, public)
 #         │
-#         └── class_data_summary  ← pandas (rows-by-major summary)
 #
 # REQUIRED ENV VAR
 #   GOOGLE_APPLICATION_CREDENTIALS  Path to service-account JSON.
@@ -59,44 +58,12 @@ attributes:
   group_name: google_sheets
 EOF
 
-# ─── Downstream pandas summary asset ───────────────────────────────────────
-mkdir -p "src/$PKG/defs/class_data_summary"
-cat > "src/$PKG/defs/class_data_summary/definitions.py" <<'PYEOF'
-"""Summary by major: count, mean GPA, etc."""
-import pandas as pd
-import dagster as dg
-from dagster import AssetExecutionContext, AssetIn
-
-
-@dg.asset(
-    key=dg.AssetKey(["class_data_summary"]),
-    description="Class data summary by major (count + first-name list).",
-    group_name="downstream",
-    kinds={"pandas"},
-    ins={"class_data_sheet": AssetIn(key=dg.AssetKey(["class_data_sheet"]))},
-)
-def class_data_summary(class_data_sheet: pd.DataFrame) -> pd.DataFrame:
-    df = class_data_sheet
-    if df.empty:
-        return pd.DataFrame()
-    # Best-effort: find a major-like column case-insensitively
-    cols = {c.lower(): c for c in df.columns}
-    major_col = cols.get("major") or cols.get("class") or list(df.columns)[0]
-    grouped = df.groupby(major_col).size().reset_index(name="row_count").sort_values("row_count", ascending=False)
-    return grouped
-
-
-defs = dg.Definitions(assets=[class_data_summary])
-PYEOF
-
 cat <<MSG
 
->>> Setup complete.
+>>> Setup complete (100% components, no custom Python in defs/).
 
-Asset graph:
+Asset:
     class_data_sheet         ← google_sheets_ingestion (public Class Data)
-          │
-          └── class_data_summary  ← pandas (rows-by-major)
 
 Materialize:
     cd $PROJECT_DIR

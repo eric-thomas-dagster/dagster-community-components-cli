@@ -10,10 +10,10 @@ pull data into pipelines.
 
 | Resource | Auth | Use case |
 |---|---|---|
-| `workday_resource` | OAuth refresh token | HR data — workers, departments, comp |
-| `marketo_resource` | OAuth client credentials | Marketing — leads, campaigns, programs |
-| `intercom_resource` | API token (Bearer) | Support — contacts, conversations |
-| `plaid_resource` | client_id + secret (no OAuth, just credentials) | Fintech — accounts, transactions, identity |
+| [`workday_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/workday_resource) | OAuth refresh token | HR data — workers, departments, comp |
+| [`marketo_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/marketo_resource) | OAuth client credentials | Marketing — leads, campaigns, programs |
+| [`intercom_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/intercom_resource) | API token (Bearer) | Support — contacts, conversations |
+| [`plaid_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/plaid_resource) | client_id + secret (no OAuth, just credentials) | Fintech — accounts, transactions, identity |
 
 ## Status
 

@@ -22,10 +22,10 @@ product_sales (5 products × 36 months)
 
 | Component | Use case |
 |---|---|
-| `ts_forecast` | Single-series forecast. `model: auto` picks ARIMA or ETS based on AIC. |
-| `ts_compare` | Train multiple models on a hold-out test set, report MAE/RMSE/MAPE per model. |
-| `ts_covariate_forecast` | SARIMAX with exogenous regressors — useful when you have leading indicators (marketing spend, weather, holidays). |
-| `ts_model_factory` | One forecast per group key. Per-product, per-region, per-tenant — without writing the loop yourself. |
+| [`ts_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_forecast) | Single-series forecast. `model: auto` picks ARIMA or ETS based on AIC. |
+| [`ts_compare`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_compare) | Train multiple models on a hold-out test set, report MAE/RMSE/MAPE per model. |
+| [`ts_covariate_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_covariate_forecast) | SARIMAX with exogenous regressors — useful when you have leading indicators (marketing spend, weather, holidays). |
+| [`ts_model_factory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_model_factory) | One forecast per group key. Per-product, per-region, per-tenant — without writing the loop yourself. |
 
 ## Cost
 
@@ -42,19 +42,19 @@ uv run dg dev   # http://localhost:3000
 
 ## When to pick which
 
-- **`ts_forecast`** — you have one series, you don't want to think about
+- **[`ts_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_forecast)** — you have one series, you don't want to think about
   models. Auto-selection is good enough for 80% of dashboards.
-- **`ts_compare`** — you care about which model wins. Useful for a
+- **[`ts_compare`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_compare)** — you care about which model wins. Useful for a
   one-time analysis or a quarterly model selection.
-- **`ts_covariate_forecast`** — you have leading indicators. Marketing
+- **[`ts_covariate_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_covariate_forecast)** — you have leading indicators. Marketing
   spend forecasts revenue better than naive ARIMA.
-- **`ts_model_factory`** — you have many series of the same shape
+- **[`ts_model_factory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_model_factory)** — you have many series of the same shape
   (per-tenant, per-product, per-region). Each gets its own model
   fitted to its own history.
 
 ## Combine with PerPartitionBackfillJob
 
-The `ts_model_factory` shape pairs naturally with the
-`per_partition_backfill_job` (see `partitions.md`): make the asset
+The [`ts_model_factory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ts_model_factory) shape pairs naturally with the
+[`per_partition_backfill_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/per_partition_backfill_job) (see `partitions.md`): make the asset
 partitioned by `group_column`, and use the backfill job to
 materialize one model-fit per partition with per-tenant concurrency.

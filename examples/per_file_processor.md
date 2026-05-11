@@ -17,7 +17,7 @@ four backends.
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `per_file_processor_job` | infrastructure | DynamicOut + per-file callable + archive |
+| 1 | [`per_file_processor_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/per_file_processor_job) | infrastructure | DynamicOut + per-file callable + archive |
 
 ## Demo flow
 

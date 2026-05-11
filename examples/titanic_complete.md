@@ -21,18 +21,18 @@ Pipeline (12 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
-| 2 | `unique_dedup` | transformation | Drop duplicates |
-| 3 | `data_cleansing` | transformation | Clean text fields |
-| 4 | `outlier_clipper` | transformation | Clip IQR outliers |
-| 5 | `imputation` | transformation | Fill missing values |
-| 6 | `type_coercer` | transformation | Coerce column types |
-| 7 | `tile_binning` | transformation | Bin a numeric column |
-| 8 | `one_hot_encoding` | transformation | Expand categorical → dummies |
-| 9 | `logistic_regression_model` | analytics | Fit logistic regression |
-| 10 | `summarize` | transformation | Group-by aggregate |
-| 11 | `filter` | transformation | Row filter by predicate |
-| 12 | `dataframe_to_csv` | sink | Write CSV |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read source CSV |
+| 2 | [`unique_dedup`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/unique_dedup) | transformation | Drop duplicates |
+| 3 | [`data_cleansing`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/data_cleansing) | transformation | Clean text fields |
+| 4 | [`outlier_clipper`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/outlier_clipper) | transformation | Clip IQR outliers |
+| 5 | [`imputation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/imputation) | transformation | Fill missing values |
+| 6 | [`type_coercer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/type_coercer) | transformation | Coerce column types |
+| 7 | [`tile_binning`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/tile_binning) | transformation | Bin a numeric column |
+| 8 | [`one_hot_encoding`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/one_hot_encoding) | transformation | Expand categorical → dummies |
+| 9 | [`logistic_regression_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/logistic_regression_model) | analytics | Fit logistic regression |
+| 10 | [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) | transformation | Group-by aggregate |
+| 11 | [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) | transformation | Row filter by predicate |
+| 12 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
 
 ## Run
 

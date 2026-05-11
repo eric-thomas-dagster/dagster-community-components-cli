@@ -13,10 +13,10 @@ csv (today)     ─┘
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Yesterday's snapshot (with effective_from) |
-| 2 | `csv_file_ingestion` | ingestion | Today's incoming snapshot |
-| 3 | `scd_type_2` | transformation | Merge: expire+insert when changed, keep when missing |
-| 4 | `dataframe_to_csv` | sink | Write the resulting SCD2 history |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Yesterday's snapshot (with effective_from) |
+| 2 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Today's incoming snapshot |
+| 3 | [`scd_type_2`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/scd_type_2) | transformation | Merge: expire+insert when changed, keep when missing |
+| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write the resulting SCD2 history |
 
 ## Run
 

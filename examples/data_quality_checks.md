@@ -16,12 +16,12 @@ synthetic_data_generator → orders_raw → dataframe_to_csv
 
 | # | Component | Sub-checks created |
 |---|---|---|
-| 1 | `synthetic_data_generator` | — (source) |
-| 2 | `dataframe_to_csv` | — (sink) |
-| 3 | `enhanced_data_quality_checks` | `orders_row_count`, `orders_critical_not_null`, `orders_total_in_range`, `orders_dtype` |
-| 4 | `pandas_dataframe_check` | `_pandas_check` |
-| 5 | `pandera_asset_check` | `_pandera_check` |
-| 6 | `freshness_check` | `freshness_check` (declarative SLA: 1h warn, 24h fail) |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | — (source) |
+| 2 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | — (sink) |
+| 3 | [`enhanced_data_quality_checks`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/enhanced_data_quality_checks) | `orders_row_count`, `orders_critical_not_null`, `orders_total_in_range`, `orders_dtype` |
+| 4 | [`pandas_dataframe_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/pandas_dataframe_check) | `_pandas_check` |
+| 5 | [`pandera_asset_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/pandera_asset_check) | `_pandera_check` |
+| 6 | [`freshness_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/freshness_check) | [`freshness_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/freshness_check) (declarative SLA: 1h warn, 24h fail) |
 
 ## Validated end-to-end
 
@@ -30,7 +30,7 @@ synthetic_data_generator → orders_raw → dataframe_to_csv
 | `column_schema_change` | passed (first materialization) |
 | `_pandas_check` | passed |
 | `_pandera_check` | did not pass (Pandera enforces stricter constraints — demo's intent: show check FAILURE wired up correctly without blocking pipeline) |
-| `freshness_check` | passed ("3 seconds ago, within the allowed time range of 1 day") |
+| [`freshness_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/freshness_check) | passed ("3 seconds ago, within the allowed time range of 1 day") |
 | `orders_row_count` | passed (100 within 50–1000 range) |
 | `orders_critical_not_null` | passed (no nulls in order_id, customer_id, total) |
 | `orders_total_in_range` | passed (all totals in 0–100000) |
@@ -40,14 +40,14 @@ synthetic_data_generator → orders_raw → dataframe_to_csv
 
 While building this demo, three real bugs surfaced in the registry:
 
-1. **`freshness_check`** was emitting a new AssetSpec for the same key as
+1. **[`freshness_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/freshness_check)** was emitting a new AssetSpec for the same key as
    the existing asset, causing `Duplicate asset key` errors when paired
    with any component-defined asset. Fixed: switched to Dagster's
    `build_last_update_freshness_checks` factory — same declarative
    freshness contract, materialized as asset_checks under the hood
    (Dagster's recommended pattern in 1.10+). User config unchanged.
 
-2. **`enhanced_data_quality_checks`** was using `sanitized_name` in 4
+2. **[`enhanced_data_quality_checks`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/enhanced_data_quality_checks)** was using `sanitized_name` in 4
    `_create_*_check` methods without first defining it, raising
    `NameError`. Fixed by adding the missing assignment.
 
@@ -69,11 +69,11 @@ uv run dg dev   # → http://localhost:3000 → Assets → orders_raw → Checks
 
 | Need | Component |
 |---|---|
-| Rich rule library (row count, null, range, type, anomaly, correlation, custom) with selection-by-tag/group | `enhanced_data_quality_checks` |
-| Lightweight pandas dtype + required-cols enforcement | `pandas_dataframe_check` |
-| Schema-as-code with Pandera DataFrameSchema (typed columns + validators) | `pandera_asset_check` |
-| Declarative freshness SLA (rolling window OR cron deadline) | `freshness_check` |
-| Great Expectations expectation suite | `great_expectations_check` |
+| Rich rule library (row count, null, range, type, anomaly, correlation, custom) with selection-by-tag/group | [`enhanced_data_quality_checks`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/enhanced_data_quality_checks) |
+| Lightweight pandas dtype + required-cols enforcement | [`pandas_dataframe_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/pandas_dataframe_check) |
+| Schema-as-code with Pandera DataFrameSchema (typed columns + validators) | [`pandera_asset_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/pandera_asset_check) |
+| Declarative freshness SLA (rolling window OR cron deadline) | [`freshness_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/freshness_check) |
+| Great Expectations expectation suite | [`great_expectations_check`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/great_expectations_check) |
 | Vendor-specific (Acceldata / Monte Carlo / Sifflet / Soda) | per-vendor check component |
 
 ## Cost

@@ -38,36 +38,30 @@ uv add -q pandas google-auth google-cloud-speech google-cloud-translate
 uv add --dev -q dagster-dg-cli
 
 echo ">>> Installing speech_to_text_asset + translation_api_asset + dataframe_to_csv"
-uvx --from dagster-community-components-cli dagster-component add speech_to_text_asset --auto-install 2>&1 | tail -2
-uvx --from dagster-community-components-cli dagster-component add translation_api_asset --auto-install 2>&1 | tail -2
-uvx --from dagster-community-components-cli dagster-component add dataframe_to_csv --auto-install 2>&1 | tail -2
+uvx --from dagster-community-components-cli dagster-component add synthetic_data_generator --auto-install 2>&1 | tail -2
+uvx --from dagster-community-components-cli dagster-component add speech_to_text_asset      --auto-install 2>&1 | tail -2
+uvx --from dagster-community-components-cli dagster-component add translation_api_asset     --auto-install 2>&1 | tail -2
+uvx --from dagster-community-components-cli dagster-component add dataframe_to_csv          --auto-install 2>&1 | tail -2
+
+echo 'from .component import SyntheticDataGeneratorComponent
+__all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_data_generator/__init__.py"
 
 echo 'from .component import SpeechToTextAssetComponent
 __all__ = ["SpeechToTextAssetComponent"]' > "src/$PKG/components/speech_to_text_asset/__init__.py"
 echo 'from .component import TranslationApiAssetComponent
 __all__ = ["TranslationApiAssetComponent"]' > "src/$PKG/components/translation_api_asset/__init__.py"
 
-# 1) Audio source — public Google sample
+# 1) Audio source via synthetic_data_generator (audio_samples schema)
 mkdir -p "src/$PKG/defs/audio_files"
-cat > "src/$PKG/defs/audio_files/definitions.py" <<'PYEOF'
-"""Public sample audio files from Google's cloud-samples-data bucket."""
-import pandas as pd
-import dagster as dg
-
-@dg.asset(
-    key=dg.AssetKey(["audio_files"]),
-    description="2 public Google Speech sample audio clips.",
-    group_name="ingest",
-    kinds={"pandas"},
-)
-def audio_files() -> pd.DataFrame:
-    return pd.DataFrame([
-        {"id": "brooklyn", "audio_uri": "gs://cloud-samples-data/speech/brooklyn_bridge.mp3", "expected": "how old is the Brooklyn Bridge"},
-        {"id": "hello",    "audio_uri": "gs://cloud-samples-data/speech/hello.wav",           "expected": "hello"},
-    ])
-
-defs = dg.Definitions(assets=[audio_files])
-PYEOF
+cat > "src/$PKG/defs/audio_files/defs.yaml" <<EOF
+type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
+attributes:
+  asset_name: audio_files
+  schema_type: audio_samples
+  row_count: 2
+  random_state: 42
+  group_name: ingest
+EOF
 
 # 2) Speech-to-Text — transcribe each audio
 mkdir -p "src/$PKG/defs/speech_to_text_asset"
@@ -78,7 +72,7 @@ attributes:
   upstream_asset_key: audio_files
   credentials_path: "$GOOGLE_APPLICATION_CREDENTIALS"
 
-  audio_column: audio_uri
+  audio_column: gcs_uri
   output_column: transcript
 
   language_codes: [en-US]

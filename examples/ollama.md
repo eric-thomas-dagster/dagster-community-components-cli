@@ -14,8 +14,8 @@ support_tickets (synthetic_data_generator)
 
 | Component | Asset | What it does |
 |---|---|---|
-| `synthetic_data_generator` | `support_tickets` | 30 synthetic multilingual tickets with PII |
-| `ollama_inference_asset` | `ticket_categories` | Classifies each ticket priority via local llama3.2:3b |
+| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `support_tickets` | 30 synthetic multilingual tickets with PII |
+| [`ollama_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/ollama_inference_asset) | `ticket_categories` | Classifies each ticket priority via local llama3.2:3b |
 
 ## Cost
 

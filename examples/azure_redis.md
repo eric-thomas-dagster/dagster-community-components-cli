@@ -1,7 +1,7 @@
 # Azure Cache for Redis Round-Trip demo
 
 DataFrame → Redis hashes (TLS on port 6380) → SQL query back as DataFrame
-→ CSV report. Validates `redis_writer` and `redis_reader` against a real
+→ CSV report. Validates [`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) and [`redis_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/redis_reader) against a real
 Azure managed Redis with TLS, with the read depending on the write so
 lineage flows through the cache.
 
@@ -16,12 +16,12 @@ synthetic_data_generator → redis_writer → redis_reader → dataframe_to_csv
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | Generate 30 synthetic orders |
-| 2 | `redis_writer` | sink | HSET each row keyed by `order_id`, expire after 1h |
-| 3 | `redis_reader` | source | Read all `ORD*` hashes back as a DataFrame |
-| 4 | `dataframe_to_csv` | sink | Write the report locally |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate 30 synthetic orders |
+| 2 | [`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) | sink | HSET each row keyed by `order_id`, expire after 1h |
+| 3 | [`redis_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/redis_reader) | source | Read all `ORD*` hashes back as a DataFrame |
+| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write the report locally |
 
-`redis_writer` and `redis_reader` both gained an `ssl: bool` field; setting
+[`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) and [`redis_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/redis_reader) both gained an `ssl: bool` field; setting
 `ssl: true` is required for Azure Cache for Redis (which only accepts
 TLS connections on port 6380).
 
@@ -65,9 +65,9 @@ uv run dg launch --assets '*'
 
 | Step | Result |
 |---|---|
-| `redis_writer` | 30 rows HSET to `ORD*` keys (TLS:6380) in ~1s |
-| `redis_reader` | 30 hashes read back as a DataFrame (1.6s) |
-| `dataframe_to_csv` | `/tmp/redis_orders_report.csv` written, 30 rows |
+| [`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) | 30 rows HSET to `ORD*` keys (TLS:6380) in ~1s |
+| [`redis_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/redis_reader) | 30 hashes read back as a DataFrame (1.6s) |
+| [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | `/tmp/redis_orders_report.csv` written, 30 rows |
 
 Sample output (CSV):
 
@@ -112,11 +112,11 @@ az group delete --name dagster-demo-rg --yes
 
 ## Variations
 
-- **Streams instead of hashes:** swap `redis_writer` for the
-  `redis_streams_to_database_asset` ingestion path (Redis Streams are a
+- **Streams instead of hashes:** swap [`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) for the
+  [`redis_streams_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/redis_streams_to_database_asset) ingestion path (Redis Streams are a
   log-structured queue with consumer groups).
-- **Cache aside:** use `redis_reader` as a source upstream of dbt /
-  ML inference; write to Redis with `redis_writer` after long-running
+- **Cache aside:** use [`redis_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/redis_reader) as a source upstream of dbt /
+  ML inference; write to Redis with [`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) after long-running
   computation.
 - **Multi-region:** use Premium-tier geo-replication; this demo's Basic
   tier is single-region.

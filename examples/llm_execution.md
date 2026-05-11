@@ -25,19 +25,19 @@ synthetic_data_generator → support_tickets
 
 | Component | Asset | LLM purpose |
 |---|---|---|
-| `synthetic_data_generator` | `support_tickets` | source — 20 multilingual tickets |
-| `openai_llm` | `openai_response` | OpenAI SDK direct chat completion |
-| `llm_prompt_executor` | `prompt_response` | provider-agnostic prompt executor (OpenAI/Anthropic) |
-| `litellm_inference_asset` | `litellm_inference` | single LiteLLM completion per row |
-| `litellm_batch_completion` | `litellm_batch` | LiteLLM with parallel ThreadPoolExecutor |
-| `litellm_function_calling` | `litellm_tools` | OpenAI tool/function calling via LiteLLM |
-| `litellm_structured_output` | `litellm_structured` | JSON-schema extraction (response_format) |
-| `instructor_extractor` | `instructor_extracted` | Instructor library — Pydantic-typed extraction |
-| `langchain_chain_asset` | `langchain_output` | LangChain prompt-template chain |
-| `dspy_program` | `dspy_output` | DSPy `ChainOfThought` with signature `ticket -> priority, reasoning` |
-| `llm_chain_executor` | `chain_executed` | custom 2-step chain (summary → next_action) |
-| `llm_judge` | `judged_response` | LLM-as-judge over `openai_response` (criteria: accuracy, clarity, relevance) |
-| `llm_output_parser` | `parsed_response` | parses raw JSON LLM output into structured columns |
+| [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | `support_tickets` | source — 20 multilingual tickets |
+| [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) | `openai_response` | OpenAI SDK direct chat completion |
+| [`llm_prompt_executor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_prompt_executor) | `prompt_response` | provider-agnostic prompt executor (OpenAI/Anthropic) |
+| [`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset) | `litellm_inference` | single LiteLLM completion per row |
+| [`litellm_batch_completion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_batch_completion) | `litellm_batch` | LiteLLM with parallel ThreadPoolExecutor |
+| [`litellm_function_calling`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_function_calling) | `litellm_tools` | OpenAI tool/function calling via LiteLLM |
+| [`litellm_structured_output`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_structured_output) | `litellm_structured` | JSON-schema extraction (response_format) |
+| [`instructor_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/instructor_extractor) | `instructor_extracted` | Instructor library — Pydantic-typed extraction |
+| [`langchain_chain_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/langchain_chain_asset) | `langchain_output` | LangChain prompt-template chain |
+| [`dspy_program`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/dspy_program) | `dspy_output` | DSPy `ChainOfThought` with signature `ticket -> priority, reasoning` |
+| [`llm_chain_executor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_chain_executor) | `chain_executed` | custom 2-step chain (summary → next_action) |
+| [`llm_judge`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_judge) | `judged_response` | LLM-as-judge over `openai_response` (criteria: accuracy, clarity, relevance) |
+| [`llm_output_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_output_parser) | `parsed_response` | parses raw JSON LLM output into structured columns |
 
 ## Validated end-to-end (timings)
 
@@ -64,8 +64,8 @@ multiprocess executor). Cost on `gpt-4o-mini`: ~$0.30–$1.00.
 Validating 12 components against a real key surfaced **9 distinct
 bugs** in the registry — all now fixed:
 
-1. **`langchain_chain_asset`, `litellm_inference_asset`,
-   `moderation_scorer`, `ollama_inference_asset`** — declared `List[str]`
+1. **[`langchain_chain_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/langchain_chain_asset), [`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset),
+   [`moderation_scorer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/moderation_scorer), [`ollama_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/ollama_inference_asset)** — declared `List[str]`
    fields but only imported `Optional` from `typing`. Module-load
    `NameError`. Fixed: imports updated.
 
@@ -73,37 +73,37 @@ bugs** in the registry — all now fixed:
    resolver auto-parses bracket syntax to lists regardless of quoting.
    Changed to `List[Dict[str, Any]]`.
 
-3. **`llm_output_parser`** — asset-fn parameter named `ctx` instead of
+3. **[`llm_output_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_output_parser)** — asset-fn parameter named `ctx` instead of
    `context`, so Dagster treated it as an input asset. Same `ctx →
    context` fix applied earlier to 6 other AI components.
 
-4. **`openai_llm` `user_prompt_template`** — Dagster runs string fields
+4. **[`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) `user_prompt_template`** — Dagster runs string fields
    through Jinja2 templating. The template had `{{"intent": ...}}`
    which Jinja2 tried to evaluate. Switched the demo prompt to
    single-brace `{column}` references.
 
-5. **`llm_chain_executor`** — `prompt_template.format(**context_data)`
+5. **[`llm_chain_executor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_chain_executor)** — `prompt_template.format(**context_data)`
    raised `KeyError: 'input'` when users referenced `{input}` in their
    prompts. The component validated `input_column` existed but never
    aliased it to `'input'`. Fixed: now `context_data["input"] =
    row[input_column]`.
 
-6. **`llm_prompt_executor`** — same bug as #5; same fix.
+6. **[`llm_prompt_executor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_prompt_executor)** — same bug as #5; same fix.
 
-7. **`litellm_batch_completion`** — same pattern with `text_column` →
+7. **[`litellm_batch_completion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_batch_completion)** — same pattern with `text_column` →
    `{text}`. Now aliases `text` key in row dict.
 
-8. **`llm_chain_executor`** — `json.dumps(context_data)` failed with
+8. **[`llm_chain_executor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_chain_executor)** — `json.dumps(context_data)` failed with
    `TypeError: Object of type Timestamp is not JSON serializable` when
    upstream rows contained datetime columns. Fixed with
    `json.dumps(..., default=str)`.
 
-9. **`llm_judge`** — used `api_key=api_key` in `litellm.completion()`
+9. **[`llm_judge`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_judge)** — used `api_key=api_key` in `litellm.completion()`
    call but `api_key` was never defined as a local variable (the actual
    key is in `kwargs`). Caused `NameError` for every row. Removed the
    redundant kwarg.
 
-10. **`instructor_extractor`** — uses `os.environ.get(...)` in
+10. **[`instructor_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/instructor_extractor)** — uses `os.environ.get(...)` in
     `_make_openai_client` but never imported `os`. Module-load NameError
     at runtime.
 

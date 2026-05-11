@@ -27,9 +27,9 @@ collide with the ADLS round-trip demo's RG.
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `bicep_asset` | infrastructure | Deploy `bicep/main.bicep` via `az deployment group create` |
-| 2 | `synthetic_data_generator` | ai | Generate 100 synthetic orders |
-| 3 | `dataframe_to_adls` | sink | Write Parquet to the just-provisioned storage |
+| 1 | [`bicep_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/bicep_asset) | infrastructure | Deploy `bicep/main.bicep` via `az deployment group create` |
+| 2 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate 100 synthetic orders |
+| 3 | [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls) | sink | Write Parquet to the just-provisioned storage |
 
 ## What the Bicep template provisions
 
@@ -84,12 +84,12 @@ Ran live against an Azure subscription:
 
 | Step | Result |
 |---|---|
-| `bicep_asset` provisioning | succeeded in ~67s; `dagdemowuzc7ysvzvpeo` storage account created |
+| [`bicep_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/bicep_asset) provisioning | succeeded in ~67s; `dagdemowuzc7ysvzvpeo` storage account created |
 | Downstream materialize | 100 rows → `bicep_provisioned/orders.parquet` (10.6KB snappy) |
 
 ## Why `az` CLI instead of the Python SDK?
 
-`bicep_asset` shells out to `az deployment group create` rather than using
+[`bicep_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/bicep_asset) shells out to `az deployment group create` rather than using
 `azure-mgmt-resource`'s Python SDK. Two reasons:
 
 1. **Bicep already requires the `az` CLI** for the `az bicep build` compile
@@ -117,12 +117,12 @@ az group delete --name dagster-demo-bicep-rg --yes
 - Set `what_if: true` to preview changes without applying — useful for
   CI/CD dry-runs before rolling forward.
 - Stack a `data_factory` Bicep resource on top of the storage account, then
-  add an `azure_data_factory` component asset that triggers a pipeline in it.
+  add an [`azure_data_factory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_data_factory) component asset that triggers a pipeline in it.
 
 ## What this isn't
 
-- **Not a multi-cloud IaC story.** For AWS use `cloudformation_asset` or
-  `terraform_asset`; for GCP use `gcp_deployment_manager_asset`. Same shape.
+- **Not a multi-cloud IaC story.** For AWS use [`cloudformation_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/cloudformation_asset) or
+  [`terraform_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/terraform_asset); for GCP use [`gcp_deployment_manager_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/gcp_deployment_manager_asset). Same shape.
 - **Not a Bicep CI demo.** This runs on `dg launch`; for CI, wrap the same
-  deployment in a `cron_schedule` or trigger via the
+  deployment in a [`cron_schedule`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/cron_schedule) or trigger via the
   [external scheduler pattern](external_scheduler.md).

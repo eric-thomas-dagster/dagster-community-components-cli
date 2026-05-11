@@ -14,11 +14,11 @@ top_shakespeare_words   ← bigquery_query_asset (public BQ dataset)
 
 | Component | What it does |
 |---|---|
-| `bigquery_query_asset` | Run a SQL query against BigQuery, return a DataFrame. Drop-in peer of `duckdb_query_reader` (DuckDB) and `database_query` (any SQLAlchemy DB). For multi-asset BQ entity import, use `google_bigquery`. |
+| [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) | Run a SQL query against BigQuery, return a DataFrame. Drop-in peer of [`duckdb_query_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/duckdb_query_reader) (DuckDB) and [`database_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/database_query) (any SQLAlchemy DB). For multi-asset BQ entity import, use [`google_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/google_bigquery). |
 
 ## Validation status
 
-`bigquery_query_asset` validation: **live**. RUN_SUCCESS materializing
+[`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) validation: **live**. RUN_SUCCESS materializing
 the top-20 most-frequent Shakespeare words via the public BQ sample
 dataset, plus a downstream pandas summary by word length:
 
@@ -83,8 +83,8 @@ an estimated USD cost. Useful in CI / linting.
 
 ## Sister components
 
-- `bigquery_create_table_from_query_asset` — CTAS, materialize a query as a real BQ table (the transform layer).
-- `bigquery_ml_train_asset` / `bigquery_ml_predict_asset` — BQML: ML in pure SQL.
-- `bigquery_export_to_gcs_asset` / `bigquery_load_from_gcs_asset` — BQ ↔ GCS bulk bridge.
-- `duckdb_query_reader` — same shape, against DuckDB.
-- `database_query` — generic SQL via SQLAlchemy.
+- [`bigquery_create_table_from_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/bigquery_create_table_from_query_asset) — CTAS, materialize a query as a real BQ table (the transform layer).
+- [`bigquery_ml_train_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_train_asset) / [`bigquery_ml_predict_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_predict_asset) — BQML: ML in pure SQL.
+- [`bigquery_export_to_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigquery_export_to_gcs_asset) / [`bigquery_load_from_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/bigquery_load_from_gcs_asset) — BQ ↔ GCS bulk bridge.
+- [`duckdb_query_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/duckdb_query_reader) — same shape, against DuckDB.
+- [`database_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/database_query) — generic SQL via SQLAlchemy.

@@ -9,7 +9,6 @@
 # Asset graph:
 #   upcoming_events     ← google_calendar_ingestion
 #         │
-#         ├── events_by_day   ← pandas (count events per calendar day)
 #         └── upcoming_events_csv  ← dataframe_to_csv (/tmp/calendar_events.csv)
 #
 # REQUIRED ENV VARS
@@ -64,40 +63,6 @@ attributes:
   group_name: calendar
 EOF
 
-# ─── Downstream pandas summary ──────────────────────────────────────────
-mkdir -p "src/$PKG/defs/events_by_day"
-cat > "src/$PKG/defs/events_by_day/definitions.py" <<'PYEOF'
-"""Count events per calendar day, sample event titles."""
-import pandas as pd
-import dagster as dg
-from dagster import AssetExecutionContext, AssetIn
-
-
-@dg.asset(
-    key=dg.AssetKey(["events_by_day"]),
-    description="Per-day event count + sample titles, derived from upcoming_events.",
-    group_name="downstream",
-    kinds={"pandas"},
-    ins={"upcoming_events": AssetIn(key=dg.AssetKey(["upcoming_events"]))},
-)
-def events_by_day(upcoming_events: pd.DataFrame) -> pd.DataFrame:
-    df = upcoming_events
-    if df.empty:
-        return pd.DataFrame()
-    # Normalize the start col to date string. start may be ISO datetime ("2026-05-09T07:00:00-04:00")
-    # or all-day date ("2026-05-09").
-    df = df.copy()
-    df["date"] = df["start"].astype(str).str.slice(0, 10)
-    summary = df.groupby("date").agg(
-        event_count=("id", "count"),
-        sample_titles=("summary", lambda s: list(s.dropna().head(3))),
-    ).reset_index().sort_values("date")
-    return summary
-
-
-defs = dg.Definitions(assets=[events_by_day])
-PYEOF
-
 # ─── CSV sink ───────────────────────────────────────────────────────────
 mkdir -p "src/$PKG/defs/dataframe_to_csv"
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF
@@ -133,11 +98,10 @@ cat <<MSG
 Asset graph:
     upcoming_events     ← google_calendar_ingestion ($GOOGLE_CALENDAR_ID)
           │
-          ├── events_by_day        ← pandas (count + sample titles per day)
           ├── upcoming_events_csv  ← dataframe_to_csv  (/tmp/calendar_events.csv — local dev)
           └── upcoming_events_bq   ← dataframe_to_bigquery  (cloud-friendly: lands a BQ table)
 
-Materialize all four:
+Materialize all three:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 

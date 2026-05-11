@@ -12,7 +12,7 @@ cleanup, status pings, ad-hoc maintenance.
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `shell_command_job` | infrastructure | Single op job; subprocess wrapper |
+| 1 | [`shell_command_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/shell_command_job) | infrastructure | Single op job; subprocess wrapper |
 
 ## Demo command
 
@@ -38,5 +38,5 @@ uv run dg launch --job count_old_tmp_files
 ## Why "op job, not asset"
 
 This work doesn't model a tracked artifact. There's no DataFrame to materialize,
-no key worth lineage. Pretending it's an asset (e.g. via `shell_command_asset`)
+no key worth lineage. Pretending it's an asset (e.g. via [`shell_command_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/shell_command_asset))
 adds a fake catalog entry that drifts from reality every run.

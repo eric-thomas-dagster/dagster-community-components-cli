@@ -16,18 +16,18 @@ synthetic_data_generator → dataframe_to_azure_table → azure_table_reader →
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | 100 synthetic orders |
-| 2 | `dataframe_to_azure_table` | sink | Upsert each row keyed by (customer_id PK, order_id RK) |
-| 3 | `azure_table_reader` | source | Read with OData filter `total gt 500.0` |
-| 4 | `dataframe_to_csv` | sink | High-value-orders report |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | 100 synthetic orders |
+| 2 | [`dataframe_to_azure_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_azure_table) | sink | Upsert each row keyed by (customer_id PK, order_id RK) |
+| 3 | [`azure_table_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/azure_table_reader) | source | Read with OData filter `total gt 500.0` |
+| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | High-value-orders report |
 
 ## Validated end-to-end
 
 | Step | Result |
 |---|---|
-| `dataframe_to_azure_table` | 100 entities upserted (~1s) |
-| `azure_table_reader` | Filtered to ~9 high-value orders |
-| `dataframe_to_csv` | `/tmp/azure_tables_high_value_orders.csv` written |
+| [`dataframe_to_azure_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_azure_table) | 100 entities upserted (~1s) |
+| [`azure_table_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/azure_table_reader) | Filtered to ~9 high-value orders |
+| [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | `/tmp/azure_tables_high_value_orders.csv` written |
 
 ## Run
 

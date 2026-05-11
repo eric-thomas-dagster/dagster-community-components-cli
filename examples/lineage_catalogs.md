@@ -22,14 +22,14 @@ dataframe_to_csv          → orders_csv ─┘   (the asset graph being tracked
 
 | Component | Category | Role |
 |---|---|---|
-| `lineage_graph_extractor` | source | Builds canonical lineage payload (nodes + edges + source-system identity), hashes it for change detection |
-| `lineage_to_file` | sink | Writes JSON locally — for demos / debugging / audit trails |
-| `lineage_to_alation` | sink | Alation Data Catalog REST API |
-| `lineage_to_collibra` | sink | Collibra Import API |
-| `lineage_to_datahub` | sink | DataHub Rest.li ingestProposal |
-| `lineage_to_openlineage` | sink | Marquez, Atlan, Astronomer Observe (OL spec) |
-| `lineage_to_purview` | sink | Microsoft Purview Data Map (Apache Atlas v2 entity bulk) |
-| `lineage_to_webhook` | sink | Generic POST to any HTTP endpoint |
+| [`lineage_graph_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/lineage_graph_extractor) | source | Builds canonical lineage payload (nodes + edges + source-system identity), hashes it for change detection |
+| [`lineage_to_file`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_file) | sink | Writes JSON locally — for demos / debugging / audit trails |
+| [`lineage_to_alation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_alation) | sink | Alation Data Catalog REST API |
+| [`lineage_to_collibra`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_collibra) | sink | Collibra Import API |
+| [`lineage_to_datahub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_datahub) | sink | DataHub Rest.li ingestProposal |
+| [`lineage_to_openlineage`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_openlineage) | sink | Marquez, Atlan, Astronomer Observe (OL spec) |
+| [`lineage_to_purview`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_purview) | sink | Microsoft Purview Data Map (Apache Atlas v2 entity bulk) |
+| [`lineage_to_webhook`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_webhook) | sink | Generic POST to any HTTP endpoint |
 
 ## Why this shape?
 
@@ -38,7 +38,7 @@ graph and maintaining its own change-detection cursor. Per the
 [`OCSF`](ocsf_security_lake.md) modular pattern, this is now a fan-out
 asset pipeline:
 
-- **One source of truth** — `lineage_graph_extractor` builds the graph
+- **One source of truth** — [`lineage_graph_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/lineage_graph_extractor) builds the graph
   once per tick and stamps the payload with a `payload_hash` of the
   structural content (nodes + edges)
 - **Lock-step fan-out** — multiple catalog sinks see the same snapshot
@@ -65,8 +65,8 @@ uv run dg launch --assets '*'
 
 | Step | Result |
 |---|---|
-| Run 1: `lineage_graph_extractor` materializes | 4 nodes, 2 edges, hash=`ccd8b7c9db883f5e` |
-| Run 1: `lineage_to_file` materializes | Wrote `/tmp/dagster_lineage.json` (2,476 bytes) |
+| Run 1: [`lineage_graph_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/lineage_graph_extractor) materializes | 4 nodes, 2 edges, hash=`ccd8b7c9db883f5e` |
+| Run 1: [`lineage_to_file`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_file) materializes | Wrote `/tmp/dagster_lineage.json` (2,476 bytes) |
 | Run 2 (graph unchanged) | `Lineage unchanged (hash=ccd8b7c9), skipping push to file. Graph: 4 nodes, 2 edges.` |
 
 ## JSON payload shape (file sink)
@@ -327,7 +327,7 @@ Three common patterns:
 ## Variations
 
 - **Deployment-wide scope**: set `scope: deployment` on
-  `lineage_graph_extractor` to query Dagster+ GraphQL for the full
+  [`lineage_graph_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/lineage_graph_extractor) to query Dagster+ GraphQL for the full
   cross-code-location graph (requires `DAGSTER_PLUS_TOKEN`)
 - **Asset-specific filtering**: write a custom downstream asset that
   takes the `lineage_graph` dict and filters to a subset before sinking

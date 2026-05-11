@@ -17,9 +17,9 @@ upcoming_events     ← google_calendar_ingestion (Calendar API)
 
 | Component | What it does |
 |---|---|
-| `google_calendar_ingestion` | Native service-account-authed Calendar reader. One row per event with summary, time, location, organizer, attendees, html_link. |
-| `dataframe_to_csv` | Local CSV sink. Good for dev; not durable on Dagster+ Cloud (per-run executor filesystem). |
-| `dataframe_to_bigquery` | Cloud-friendly sink — lands rows in a BQ table with WRITE_TRUNCATE / WRITE_APPEND options. |
+| [`google_calendar_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_calendar_ingestion) | Native service-account-authed Calendar reader. One row per event with summary, time, location, organizer, attendees, html_link. |
+| [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Local CSV sink. Good for dev; not durable on Dagster+ Cloud (per-run executor filesystem). |
+| [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) | Cloud-friendly sink — lands rows in a BQ table with WRITE_TRUNCATE / WRITE_APPEND options. |
 
 ## Validation status — all live
 
@@ -68,27 +68,27 @@ bq query --nouse_legacy_sql 'SELECT COUNT(*) FROM dagster_demo.calendar_events'
 
 ## Local vs. Dagster+ Cloud sinks
 
-`dataframe_to_csv` writes to the local filesystem of whoever's running
+[`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) writes to the local filesystem of whoever's running
 the materialization. On Dagster+ Cloud that's an ephemeral executor
 container — the file is gone the moment the run ends, and you can't
 download it. For cloud-deployed pipelines, use one of:
 
-- **`dataframe_to_bigquery`** — lands a BQ table. Cleanest if you want
+- **[`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery)** — lands a BQ table. Cleanest if you want
   SQL access to the result.
-- **`dataframe_to_gcs`** — writes a `gs://bucket/path` object. Cleanest
+- **[`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs)** — writes a `gs://bucket/path` object. Cleanest
   if you want a file-shaped output.
-- **`dataframe_to_s3`** / **`dataframe_to_adls`** — same shape, AWS / Azure.
+- **[`dataframe_to_s3`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_s3)** / **[`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls)** — same shape, AWS / Azure.
 - **`dataframe_to_database`** — generic SQLAlchemy sink (Postgres, MySQL, Snowflake).
 
-This demo wires up both `dataframe_to_csv` AND `dataframe_to_bigquery`
+This demo wires up both [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) AND [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery)
 in parallel so you can see both shapes; drop the local one before
 deploying to cloud.
 
 ## Sister components
 
-- `google_drive_ingestion` — list/download Drive files.
-- `google_docs_extractor` — extract plain text from Google Docs.
-- `google_sheets_ingestion` — pull Google Sheets values.
-- `bigquery_query_asset` — run SQL against BigQuery.
-- `gemini_llm` / `anthropic_llm` / `openai_llm` — chain a summarizer
+- [`google_drive_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_drive_ingestion) — list/download Drive files.
+- [`google_docs_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_docs_extractor) — extract plain text from Google Docs.
+- [`google_sheets_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_sheets_ingestion) — pull Google Sheets values.
+- [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) — run SQL against BigQuery.
+- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) / [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) — chain a summarizer
   off `upcoming_events.description` to get auto-summarized meetings.

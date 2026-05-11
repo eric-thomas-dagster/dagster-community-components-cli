@@ -18,8 +18,8 @@ iris_export_to_gcs   ← bigquery_export_to_gcs_asset
 
 | Component | What it does |
 |---|---|
-| `bigquery_export_to_gcs_asset` | BQ table or query result → GCS (parquet / CSV / JSONL / AVRO). Uses BQ `EXTRACT` job for tables (free, native sharding for >1 GB) or `EXPORT DATA OPTIONS(...) AS <select>` for queries. |
-| `bigquery_load_from_gcs_asset` | GCS objects → BQ table via the native LOAD JOB API. Supports parquet, CSV, JSONL, AVRO, ORC; write_disposition / autodetect / explicit schema / partition + cluster on destination. |
+| [`bigquery_export_to_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigquery_export_to_gcs_asset) | BQ table or query result → GCS (parquet / CSV / JSONL / AVRO). Uses BQ `EXTRACT` job for tables (free, native sharding for >1 GB) or `EXPORT DATA OPTIONS(...) AS <select>` for queries. |
+| [`bigquery_load_from_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/bigquery_load_from_gcs_asset) | GCS objects → BQ table via the native LOAD JOB API. Supports parquet, CSV, JSONL, AVRO, ORC; write_disposition / autodetect / explicit schema / partition + cluster on destination. |
 
 ## Validation status — both live
 
@@ -87,8 +87,8 @@ move:
 
 | Pattern | Components |
 |---|---|
-| **Vendor-native** (data never touches the executor — fast at TB scale) | `bigquery_export_to_gcs_asset`, `bigquery_load_from_gcs_asset` |
-| **DataFrame-mediated** (works across any warehouse + any cloud) | `dataframe_to_gcs` / `s3` / `adls` + `gcs_to_database_asset` / `s3_*` / `adls_*` |
+| **Vendor-native** (data never touches the executor — fast at TB scale) | [`bigquery_export_to_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigquery_export_to_gcs_asset), [`bigquery_load_from_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/bigquery_load_from_gcs_asset) |
+| **DataFrame-mediated** (works across any warehouse + any cloud) | [`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs) / `s3` / `adls` + [`gcs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/gcs_to_database_asset) / `s3_*` / `adls_*` |
 
 Pick vendor-native when:
 - Data volume > a few hundred MB
@@ -128,7 +128,7 @@ attributes:
 
 ## Sister components
 
-- `bigquery_query_asset` — ad-hoc SELECT (no CTAS, no export).
-- `bigquery_create_table_from_query_asset` — CTAS, materialize a model.
-- `bigquery_ml_train_asset` / `bigquery_ml_predict_asset` — BQML.
-- `dataframe_to_gcs` / `gcs_to_database_asset` — DataFrame-mediated peers.
+- [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) — ad-hoc SELECT (no CTAS, no export).
+- [`bigquery_create_table_from_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/bigquery_create_table_from_query_asset) — CTAS, materialize a model.
+- [`bigquery_ml_train_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_train_asset) / [`bigquery_ml_predict_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_predict_asset) — BQML.
+- [`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs) / [`gcs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/gcs_to_database_asset) — DataFrame-mediated peers.

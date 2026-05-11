@@ -18,10 +18,10 @@ dagster_plus_audit_log_ingestion → ocsf_normalizer
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `dagster_plus_audit_log_ingestion` | ingestion | GraphQL pull from `auditLog.auditLogEntries` |
-| 2 | `ocsf_normalizer` | transformation | Map Dagster+ event types → OCSF v1.1 |
-| 3 | `ocsf_validator` | check | OCSF conformance (required fields, severity, class_uid) |
-| 4 | `dataframe_to_parquet` (local) **or** `dataframe_to_security_lake` (AWS) | sink | Write OCSF Parquet |
+| 1 | [`dagster_plus_audit_log_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/ingestion/dagster_plus_audit_log_ingestion) | ingestion | GraphQL pull from `auditLog.auditLogEntries` |
+| 2 | [`ocsf_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/ocsf_normalizer) | transformation | Map Dagster+ event types → OCSF v1.1 |
+| 3 | [`ocsf_validator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/asset_checks/ocsf_validator) | check | OCSF conformance (required fields, severity, class_uid) |
+| 4 | [`dataframe_to_parquet`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_parquet) (local) **or** [`dataframe_to_security_lake`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sinks/dataframe_to_security_lake) (AWS) | sink | Write OCSF Parquet |
 
 ## Prerequisites
 

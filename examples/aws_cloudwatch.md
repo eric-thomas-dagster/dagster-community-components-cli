@@ -10,8 +10,8 @@ analytics, anomaly detection, capacity planning.
 
 | Component | Category | Role |
 |---|---|---|
-| `aws_cloudwatch_metrics_query` | source | GetMetricData → DataFrame |
-| `aws_cloudwatch_logs_insights_query` | source | Logs Insights query → DataFrame |
+| [`aws_cloudwatch_metrics_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/aws_cloudwatch_metrics_query) | source | GetMetricData → DataFrame |
+| [`aws_cloudwatch_logs_insights_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/aws_cloudwatch_logs_insights_query) | source | Logs Insights query → DataFrame |
 
 ## Status
 

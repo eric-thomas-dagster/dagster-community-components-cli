@@ -4,14 +4,14 @@
 
 Run a KQL query against an Azure Log Analytics workspace and
 materialize the result as a DataFrame asset. Counterpart to
-`audit_logs_to_sentinel` (write side) — write logs first, then query
+[`audit_logs_to_sentinel`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sinks/audit_logs_to_sentinel) (write side) — write logs first, then query
 them back.
 
 ## Components used
 
 | Component | Category | Role |
 |---|---|---|
-| `azure_log_analytics_query` | source | KQL query → DataFrame |
+| [`azure_log_analytics_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/azure_log_analytics_query) | source | KQL query → DataFrame |
 
 ## Status
 

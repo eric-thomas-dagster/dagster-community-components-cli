@@ -19,16 +19,16 @@ synthetic_data_generator → unpivot → dataframe_to_prometheus
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | 30 synthetic orders (wide format) |
-| 2 | `unpivot` | transformation | Wide → long: 4 metric columns → 30×N long rows |
-| 3 | `dataframe_to_prometheus` | sink | Push as gauges with (category, metric) labels |
-| 4 | `dataframe_from_prometheus` | source | PromQL `sum by (category) (orders_metric{metric="total"})` |
-| 5 | `dataframe_to_csv` | sink | Aggregated revenue-by-category report |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | 30 synthetic orders (wide format) |
+| 2 | [`unpivot`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/unpivot) | transformation | Wide → long: 4 metric columns → 30×N long rows |
+| 3 | [`dataframe_to_prometheus`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_prometheus) | sink | Push as gauges with (category, metric) labels |
+| 4 | [`dataframe_from_prometheus`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_prometheus) | source | PromQL `sum by (category) (orders_metric{metric="total"})` |
+| 5 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Aggregated revenue-by-category report |
 
 ## Pattern: wide → long → metrics
 
 The wide-to-long reshape is what enables the multi-metric pattern. With
-the existing `unpivot` transform + `dataframe_to_prometheus` sink, you
+the existing [`unpivot`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/unpivot) transform + [`dataframe_to_prometheus`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_prometheus) sink, you
 don't need a Prometheus-specific transform layer.
 
 ## Validated end-to-end

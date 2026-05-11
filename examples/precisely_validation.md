@@ -34,8 +34,8 @@ RESTful shapes:
 
 | Endpoint | Best-guess default | Override via |
 |---|---|---|
-| Submit a job | `POST {host}/projects/{job_id}/run` with JSON `{"parameters": {...}}` | `submit_path_template` field on `PreciselyResource` and `precisely_run_asset` |
-| List recent runs of a job (sensor only) | `GET {host}/api/v1/jobs/{job_id}/runs?limit=1&sort=-startTime` | `list_runs_path_template` field on `precisely_job_sensor` |
+| Submit a job | `POST {host}/projects/{job_id}/run` with JSON `{"parameters": {...}}` | `submit_path_template` field on `PreciselyResource` and [`precisely_run_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/precisely_run_asset) |
+| List recent runs of a job (sensor only) | `GET {host}/api/v1/jobs/{job_id}/runs?limit=1&sort=-startTime` | `list_runs_path_template` field on [`precisely_job_sensor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/precisely_job_sensor) |
 
 If these defaults don't match your install's API, override the field
 in your `defs.yaml` — the component logic will still poll the correct
@@ -79,7 +79,7 @@ attributes:
 ```
 
 Mode A is the safe default for customers who can pre-determine the
-run-id (e.g., from `precisely_run_asset`'s materialization metadata).
+run-id (e.g., from [`precisely_run_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/precisely_run_asset)'s materialization metadata).
 Mode B requires validation against the customer's install.
 
 ## What we still don't have

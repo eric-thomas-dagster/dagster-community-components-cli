@@ -1,29 +1,24 @@
 # Google Sheets ingestion — service-account auth end-to-end
 
 **Validated end-to-end.** RUN_SUCCESS pulling 2 rows from a real
-Google Sheet via service-account auth, plus the downstream pandas
-summary asset.
+Google Sheet via service-account auth.
 
 Pull rows from a Google Sheets spreadsheet using a service-account
-JSON, materialize as a Dagster asset, then summarize with a downstream
-pandas asset.
+JSON, materialize as a Dagster asset.
 
 ```
-class_data_sheet     ← google_sheets_ingestion
-                       (Sheets API → DataFrame)
-        │
-        └── class_data_summary  ← pandas (rows-by-major)
+class_data_sheet     ← google_sheets_ingestion (Sheets API → DataFrame)
 ```
 
 ## Components covered (1)
 
 | Component | What it does |
 |---|---|
-| `google_sheets_ingestion` | Service-account-authenticated Google Sheets reader. Pulls one or more named ranges / sheet tabs from a spreadsheet, returns a pandas DataFrame, optionally persists to a dlt destination (Snowflake, BigQuery, Postgres, etc.). |
+| [`google_sheets_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_sheets_ingestion) | Service-account-authenticated Google Sheets reader. Pulls one or more named ranges / sheet tabs from a spreadsheet, returns a pandas DataFrame, optionally persists to a dlt destination (Snowflake, BigQuery, Postgres, etc.). |
 
 ## Validation status
 
-- **`google_sheets_ingestion`: live** — `dg check defs` passes; service
+- **[`google_sheets_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_sheets_ingestion): live** — `dg check defs` passes; service
   account auth flows; Sheets API call lands; and the actionable
   permission-denied path was verified end-to-end (the component
   surfaces a 403 with a clickable share-link rather than crashing).
@@ -120,7 +115,7 @@ If you don't already have a service-account JSON:
 
 ## Sister components
 
-- `google_sheets_resource` — connection-handle resource, for use by
+- [`google_sheets_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/google_sheets_resource) — connection-handle resource, for use by
   custom assets that need direct Sheets access.
-- `gemini_llm` / `gemini_image_generation` — Gemini text and image
+- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) / [`gemini_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_image_generation) — Gemini text and image
   generation, native (no LiteLLM) Google components.

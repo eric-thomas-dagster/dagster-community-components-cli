@@ -17,13 +17,13 @@ raw_sensors          → filled_sensors          ← ts_filler (forward-fill dat
 
 | Component | What it does |
 |---|---|
-| `dataframe_join` | `pd.merge` — left/right/inner/outer/cross; on= or left_on/right_on |
-| `dataframe_union` | `pd.concat` of N upstreams; outer/inner join on columns |
-| `formula` | Add computed columns from pandas expressions: `revenue: price * qty` |
-| `type_coercer` | Per-column dtype coercion: `int`, `float`, `bool`, `datetime`, `json`. errors: 'raise' \| 'coerce' \| 'ignore' |
-| `datetime_parser` | Parse a string column → datetime. Optionally extract `_year`, `_month`, `_day`, `_hour`, `_dow` columns. |
-| `array_exploder` | `df.explode(col)` — one row per array element |
-| `ts_filler` | Reindex by date frequency + fill missing rows. ffill/bfill/interpolate, optionally per-group |
+| [`dataframe_join`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_join) | `pd.merge` — left/right/inner/outer/cross; on= or left_on/right_on |
+| [`dataframe_union`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_union) | `pd.concat` of N upstreams; outer/inner join on columns |
+| [`formula`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/formula) | Add computed columns from pandas expressions: `revenue: price * qty` |
+| [`type_coercer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/type_coercer) | Per-column dtype coercion: `int`, `float`, `bool`, `datetime`, `json`. errors: 'raise' \| 'coerce' \| 'ignore' |
+| [`datetime_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/datetime_parser) | Parse a string column → datetime. Optionally extract `_year`, `_month`, `_day`, `_hour`, `_dow` columns. |
+| [`array_exploder`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/array_exploder) | `df.explode(col)` — one row per array element |
+| [`ts_filler`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/ts_filler) | Reindex by date frequency + fill missing rows. ffill/bfill/interpolate, optionally per-group |
 
 ## Cost
 
@@ -40,7 +40,7 @@ uv run dg dev   # http://localhost:3000
 
 ## YAML pitfalls — `on:` is a reserved keyword in YAML 1.1
 
-`dataframe_join` uses an `on: [col]` field. YAML 1.1 (still the default
+[`dataframe_join`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_join) uses an `on: [col]` field. YAML 1.1 (still the default
 spec for many parsers) treats bareword `on` as a boolean (= `True`),
 which causes a "True was unexpected" pydantic error. Always quote it:
 

@@ -15,14 +15,14 @@ Pipeline (9 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
-| 2 | `create_points` | analytics | lat/lng → shapely Points |
-| 3 | `buffer` | analytics | Polygon buffer (radius) |
-| 4 | `smooth` | analytics | Simplify geometry |
-| 5 | `make_grid` | analytics | Tile bbox into grid cells |
-| 6 | `spatial_join` | analytics | Spatial within / contains |
-| 7 | `summarize` | transformation | Group-by aggregate |
-| 8 | `dataframe_to_csv` | sink | Write CSV |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read source CSV |
+| 2 | [`create_points`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/create_points) | analytics | lat/lng → shapely Points |
+| 3 | [`buffer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/buffer) | analytics | Polygon buffer (radius) |
+| 4 | [`smooth`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/smooth) | analytics | Simplify geometry |
+| 5 | [`make_grid`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/make_grid) | analytics | Tile bbox into grid cells |
+| 6 | [`spatial_join`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/spatial_join) | analytics | Spatial within / contains |
+| 7 | [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) | transformation | Group-by aggregate |
+| 8 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
 
 ## Run
 

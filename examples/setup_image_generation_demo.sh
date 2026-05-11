@@ -44,33 +44,23 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing litellm_image_generation"
+$CLI add synthetic_data_generator --auto-install
 $CLI add litellm_image_generation --auto-install
 
-# ─── Upstream prompts (custom asset) ─────────────────────────────────────
+echo 'from .component import SyntheticDataGeneratorComponent
+__all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_data_generator/__init__.py"
+
+# ─── Upstream prompts: synthetic_data_generator (image_prompts schema) ──
 mkdir -p "src/$PKG/defs/image_prompts"
-cat > "src/$PKG/defs/image_prompts/definitions.py" <<'PYEOF'
-"""Three synthetic product hero-image prompts for the demo."""
-import pandas as pd
-import dagster as dg
-from dagster import AssetExecutionContext
-
-
-@dg.asset(
-    key=dg.AssetKey(["image_prompts_df"]),
-    description="3 product descriptions for hero-image generation.",
-    group_name="ingest",
-    kinds={"pandas"},
-)
-def image_prompts_df() -> pd.DataFrame:
-    return pd.DataFrame([
-        {"sku": "SKU-001", "description": "A minimalist white ceramic coffee mug on a marble countertop, soft morning light, professional product photography"},
-        {"sku": "SKU-002", "description": "A vintage leather messenger bag against a brick wall, warm afternoon sun, editorial style"},
-        {"sku": "SKU-003", "description": "A pair of running shoes mid-stride above a wet asphalt surface with subtle splash effects, dramatic lighting"},
-    ])
-
-
-defs = dg.Definitions(assets=[image_prompts_df])
-PYEOF
+cat > "src/$PKG/defs/image_prompts/defs.yaml" <<EOF
+type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
+attributes:
+  asset_name: image_prompts_df
+  schema_type: image_prompts
+  row_count: 3
+  random_state: 42
+  group_name: ingest
+EOF
 
 # ─── litellm_image_generation configuration ──────────────────────────────
 cat > "src/$PKG/defs/litellm_image_generation/defs.yaml" <<EOF
@@ -79,7 +69,7 @@ attributes:
   asset_name: product_hero_images
   upstream_asset_key: image_prompts_df
 
-  prompt_column: description
+  prompt_column: prompt
   output_column: image_url
   response_format: url
 

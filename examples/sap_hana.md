@@ -10,9 +10,9 @@ partner offering).
 
 | Component | Category | Role |
 |---|---|---|
-| `sap_hana_resource` | resource | SQLAlchemy URL builder + engine factory |
-| `dataframe_to_table` (existing) | sink | Write via `hana://` URL |
-| `dataframe_from_sql` (existing) | source | Query via `hana://` URL |
+| [`sap_hana_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/sap_hana_resource) | resource | SQLAlchemy URL builder + engine factory |
+| [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) (existing) | sink | Write via `hana://` URL |
+| [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) (existing) | source | Query via `hana://` URL |
 
 ## Status
 

@@ -12,10 +12,10 @@ csv_file_ingestion → datetime_parser → ets_forecast → dataframe_to_csv
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Pull the canonical Box-Jenkins airline-passengers CSV (144 rows, monthly) |
-| 2 | `datetime_parser` | transformation | Parse `1949-01` strings into first-of-month datetimes |
-| 3 | `ets_forecast` | transformation | Fit ETS with additive trend + multiplicative seasonality, forecast 24 periods |
-| 4 | `dataframe_to_csv` | sink | Write 144 historical + 24 forecasted rows |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Pull the canonical Box-Jenkins airline-passengers CSV (144 rows, monthly) |
+| 2 | [`datetime_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/datetime_parser) | transformation | Parse `1949-01` strings into first-of-month datetimes |
+| 3 | [`ets_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/ets_forecast) | transformation | Fit ETS with additive trend + multiplicative seasonality, forecast 24 periods |
+| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write 144 historical + 24 forecasted rows |
 
 ## Run
 
@@ -47,11 +47,11 @@ seasonal cycle (summer peaks, winter troughs).
 ## What this demo shows
 
 - **Time-series forecasting from one `defs.yaml`.** No statsmodels boilerplate
-  in user code — `ets_forecast` configures `trend`, `seasonal`,
+  in user code — [`ets_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/ets_forecast) configures `trend`, `seasonal`,
   `seasonal_periods`, `forecast_periods`, and `output_mode` from YAML.
 - **`output_mode: append`** — the result combines history and forecast into
   one continuous series, ready for plotting. Use `forecast` for just the
-  projected window, or swap to `arima_forecast` for ARIMA / SARIMA models
+  projected window, or swap to [`arima_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/arima_forecast) for ARIMA / SARIMA models
   (same field shape).
 - **Real model fit, no glue code.** The asset's metadata records column
   schema and lineage automatically; lineage chains back through the parser
@@ -59,6 +59,6 @@ seasonal cycle (summer peaks, winter troughs).
 
 ## Extending
 
-Swap `ets_forecast` for `arima_forecast` (set `order: [1, 1, 1]` and
+Swap [`ets_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/ets_forecast) for [`arima_forecast`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/arima_forecast) (set `order: [1, 1, 1]` and
 optionally `seasonal_order: [1, 1, 1, 12]`) — same input shape, same output
 modes, but ARIMA-style fit. Or change `forecast_periods` to project further.

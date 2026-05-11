@@ -1,7 +1,7 @@
 # DuckDB Warehouse demo
 
 A **real Dagster project** — assets persisted to a local DuckDB file via the
-`duckdb_io_manager` resource, a downstream summary asset that loads the upstream
+[`duckdb_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/duckdb_io_manager) resource, a downstream summary asset that loads the upstream
 DataFrame back through the IO manager, and a daily cron schedule.
 
 ```
@@ -14,10 +14,10 @@ csv_file_ingestion → duckdb_io_manager (resource, persists every asset)
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Pull the iris dataset |
-| 2 | `duckdb_io_manager` | io_manager | Persists each asset materialization to a DuckDB table |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Pull the iris dataset |
+| 2 | [`duckdb_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/duckdb_io_manager) | io_manager | Persists each asset materialization to a DuckDB table |
 | 3 | (Python asset) | n/a | Downstream summary that loads via the IO manager |
-| 4 | `cron_schedule` | infrastructure | Daily 02:00 re-materialization |
+| 4 | [`cron_schedule`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/cron_schedule) | infrastructure | Daily 02:00 re-materialization |
 
 ## Run
 
@@ -41,7 +41,7 @@ duckdb /tmp/iris_warehouse.duckdb 'SELECT * FROM iris_summary'
 It's the IO-manager round-trip test. Most asset demos read from a source and
 write to a sink, treating the in-flight DataFrame as ephemeral. This one
 proves:
-1. The `duckdb_io_manager` correctly persists outputs to DuckDB tables.
+1. The [`duckdb_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/duckdb_io_manager) correctly persists outputs to DuckDB tables.
 2. A downstream asset can load that table back as a DataFrame via the same
    IO manager (no glue Python on either end).
 3. The schedule re-runs the chain — DuckDB tables get overwritten cleanly

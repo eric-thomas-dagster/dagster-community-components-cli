@@ -35,27 +35,27 @@ synthetic_data_generator (products, 200)   ─┘
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | Generate 2000 synthetic orders |
-| 2 | `synthetic_data_generator` | ai | Generate 600 synthetic customers |
-| 3 | `synthetic_data_generator` | ai | Generate 200 synthetic products |
-| 4 | `unique_dedup` | transformation | Drop duplicate order_ids |
-| 5 | `type_coercer` | transformation | Parse order_date + numeric cols |
-| 6 | `outlier_clipper` | transformation | IQR-clip extreme totals |
-| 7 | `data_cleansing` | transformation | Trim + lowercase customer fields |
-| 8 | `dataframe_join` | transformation | Join orders to customers |
-| 9 | `filter` | transformation | Keep delivered orders only |
-| 10 | `select_columns` | transformation | Slim to reporting columns |
-| 11 | `sort` | transformation | Sort by date desc |
-| 12 | `summarize` | transformation | Revenue by category |
-| 13 | `summarize` | transformation | Revenue by city/state |
-| 14 | `rank` | transformation | Rank top categories by revenue |
-| 15 | `rfm_segmentation` | analytics | Customer RFM segments |
-| 16 | `dataframe_to_csv` | sink | Write category report |
-| 17 | `dataframe_to_csv` | sink | Write city report |
-| 18 | `dataframe_to_csv` | sink | Write top-categories report |
-| 19 | `dataframe_to_csv` | sink | Write RFM report |
-| 20 | `dataframe_to_csv` | sink | Write recent-orders report |
-| 21 | `cron_schedule` | infrastructure | Daily 7am refresh |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate 2000 synthetic orders |
+| 2 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate 600 synthetic customers |
+| 3 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate 200 synthetic products |
+| 4 | [`unique_dedup`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/unique_dedup) | transformation | Drop duplicate order_ids |
+| 5 | [`type_coercer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/type_coercer) | transformation | Parse order_date + numeric cols |
+| 6 | [`outlier_clipper`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/outlier_clipper) | transformation | IQR-clip extreme totals |
+| 7 | [`data_cleansing`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/data_cleansing) | transformation | Trim + lowercase customer fields |
+| 8 | [`dataframe_join`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_join) | transformation | Join orders to customers |
+| 9 | [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) | transformation | Keep delivered orders only |
+| 10 | [`select_columns`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/select_columns) | transformation | Slim to reporting columns |
+| 11 | [`sort`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/sort) | transformation | Sort by date desc |
+| 12 | [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) | transformation | Revenue by category |
+| 13 | [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) | transformation | Revenue by city/state |
+| 14 | [`rank`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/rank) | transformation | Rank top categories by revenue |
+| 15 | [`rfm_segmentation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/rfm_segmentation) | analytics | Customer RFM segments |
+| 16 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write category report |
+| 17 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write city report |
+| 18 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write top-categories report |
+| 19 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write RFM report |
+| 20 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write recent-orders report |
+| 21 | [`cron_schedule`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/cron_schedule) | infrastructure | Daily 7am refresh |
 
 ## Run
 

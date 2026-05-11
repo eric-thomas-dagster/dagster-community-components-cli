@@ -12,10 +12,10 @@ csv_file_ingestion → pdf_text_extractor → formula → dataframe_to_csv
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Load a 2-row manifest of `paper, path` |
-| 2 | `pdf_text_extractor` | transformation | Extract text from each PDF with pdfplumber |
-| 3 | `formula` | transformation | Compute `char_count` + `word_count`; drop the giant text column |
-| 4 | `dataframe_to_csv` | sink | Per-paper summary |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Load a 2-row manifest of `paper, path` |
+| 2 | [`pdf_text_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/pdf_text_extractor) | transformation | Extract text from each PDF with pdfplumber |
+| 3 | [`formula`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/formula) | transformation | Compute `char_count` + `word_count`; drop the giant text column |
+| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Per-paper summary |
 
 ## Run
 
@@ -41,17 +41,17 @@ Pre-train Prompt and Predict,        /tmp/arxiv_papers/...pdf, 264609, 12210
 
 ## What this demo shows
 
-- **First document-extraction demo.** `pdf_text_extractor` accepts file
+- **First document-extraction demo.** [`pdf_text_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/pdf_text_extractor) accepts file
   paths or raw bytes; pdfplumber handles layout and text decoding.
 - **Manifest pattern.** The CSV manifest decouples "which PDFs to
   process" from "how to extract them." Add a row, re-materialize, get
   another paper's stats.
-- **Drop the huge column before the sink.** `formula`'s
+- **Drop the huge column before the sink.** [`formula`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/formula)'s
   `drop_source_columns` field removes `text` after computing aggregates,
   so the output CSV stays small.
 
 ## Extending
 
-Add `regex_parser` (`mode: extract`) downstream to pull abstract
+Add [`regex_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/regex_parser) (`mode: extract`) downstream to pull abstract
 sections, citation patterns, or references. Combine with
-`text_preprocessing` (lowercase, strip stopwords) for downstream NLP.
+[`text_preprocessing`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/text_preprocessing) (lowercase, strip stopwords) for downstream NLP.

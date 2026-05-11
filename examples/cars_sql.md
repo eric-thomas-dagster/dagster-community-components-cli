@@ -13,10 +13,10 @@ rest_api_fetcher → datetime_parser → formula → dataframe_to_table
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET vega's cars.json (406-record JSON array, no auth) |
-| 2 | `datetime_parser` | transformation | Parse the `Year` string ("YYYY-01-01") into a real datetime |
-| 3 | `formula` | transformation | Compute `decade = (model_year.dt.year // 10) * 10` |
-| 4 | `dataframe_to_table` | sink | Write to whatever DB `DATABASE_URL` points at — SQLite for this demo |
+| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | GET vega's cars.json (406-record JSON array, no auth) |
+| 2 | [`datetime_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/datetime_parser) | transformation | Parse the `Year` string ("YYYY-01-01") into a real datetime |
+| 3 | [`formula`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/formula) | transformation | Compute `decade = (model_year.dt.year // 10) * 10` |
+| 4 | [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) | sink | Write to whatever DB `DATABASE_URL` points at — SQLite for this demo |
 
 ## Run
 
@@ -52,7 +52,7 @@ Japan stayed efficient throughout.
 ## What this demo shows
 
 - **First demo with a SQL sink.** All other demos write CSV / JSON / Parquet /
-  Excel files. `dataframe_to_table` writes to anything SQLAlchemy supports —
+  Excel files. [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) writes to anything SQLAlchemy supports —
   SQLite, Postgres, MySQL, Redshift, Snowflake, etc. Same `defs.yaml`, same
   pipeline; just change the `DATABASE_URL`.
 - **Env-var-driven connection strings.** Database credentials live outside the

@@ -16,7 +16,7 @@ op-job pattern in the registry.
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `dynamic_fanout_job` | infrastructure | DynamicOut + map + collect compound op job |
+| 1 | [`dynamic_fanout_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/dynamic_fanout_job) | infrastructure | DynamicOut + map + collect compound op job |
 
 ## Demo callables
 

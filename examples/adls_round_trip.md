@@ -10,8 +10,8 @@ synthetic_data_generator → dataframe_to_adls → external_adls_asset
 
 ## What it demonstrates
 
-- `dataframe_to_adls` writing snappy-compressed Parquet to an ADLS Gen2 container, authenticated by account key.
-- `external_adls_asset` declaring the landed Parquet as an observable external asset — gives downstream lineage on the cold side of the lake without re-reading the file.
+- [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls) writing snappy-compressed Parquet to an ADLS Gen2 container, authenticated by account key.
+- [`external_adls_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_adls_asset) declaring the landed Parquet as an observable external asset — gives downstream lineage on the cold side of the lake without re-reading the file.
 
 ## Prerequisites
 
@@ -44,9 +44,9 @@ export AZURE_STORAGE_ACCOUNT_KEY="$KEY"
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | Generate 200 synthetic e-commerce orders |
-| 2 | `dataframe_to_adls` | sink | Write Parquet to ADLS, snappy-compressed |
-| 3 | `external_adls_asset` | external | Declare the landed file as an observable external asset |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate 200 synthetic e-commerce orders |
+| 2 | [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls) | sink | Write Parquet to ADLS, snappy-compressed |
+| 3 | [`external_adls_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_adls_asset) | external | Declare the landed file as an observable external asset |
 
 ## Run
 
@@ -104,7 +104,7 @@ az group delete --name dagster-demo-rg --yes
 
 - **Not a "Synapse" demo.** Synapse Analytics workspace is its own
   $$ resource and isn't required just to land data in ADLS.
-- **Not an ADLS-as-source demo.** `adls_to_database_asset` reads from ADLS
+- **Not an ADLS-as-source demo.** [`adls_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/adls_to_database_asset) reads from ADLS
   back into SQL — that's a separate demo, since it requires per-run config
   for the container/blob path. Reach out if you want it.
 
@@ -112,7 +112,7 @@ az group delete --name dagster-demo-rg --yes
 
 - Change `format: parquet` to `csv` in `dataframe_to_adls/defs.yaml` to
   write CSV instead. Smaller, less efficient — but often what other systems consume.
-- Add a `dataframe_join` upstream of `dataframe_to_adls` to land a
+- Add a [`dataframe_join`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_join) upstream of [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls) to land a
   joined dataset (orders + customers).
 - Make it daily-partitioned by adding `partition_type: daily` to all three
   defs.yaml — then each `dg launch --partition <date>` writes a separate

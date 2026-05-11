@@ -1,6 +1,6 @@
 # Azure Database for PostgreSQL Flexible Server demo
 
-DataFrame → Azure PostgreSQL Flexible Server via `dataframe_to_table`
+DataFrame → Azure PostgreSQL Flexible Server via [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table)
 (SQLAlchemy + psycopg2). Same pipeline shape as the `azure_sql` /
 `azure_mysql` demos — flip the URL prefix, the same components write to a
 different SQL backend.
@@ -13,19 +13,19 @@ synthetic_data_generator → dataframe_to_table → Azure PostgreSQL ('orders' t
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | 100 synthetic e-commerce orders |
-| 2 | `dataframe_to_table` | sink | Write via SQLAlchemy + psycopg2 |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | 100 synthetic e-commerce orders |
+| 2 | [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) | sink | Write via SQLAlchemy + psycopg2 |
 
 ## Per-DB components in the registry
 
 | Backend | IO Manager | Resource |
 |---|---|---|
-| Azure PostgreSQL | `postgres_io_manager` | `postgres_resource` |
-| Azure MySQL | `mysql_io_manager` | `mysql_resource` |
-| Azure SQL | `mssql_io_manager` | `mssql_resource` |
+| Azure PostgreSQL | [`postgres_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/postgres_io_manager) | [`postgres_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/postgres_resource) |
+| Azure MySQL | [`mysql_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/mysql_io_manager) | [`mysql_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/mysql_resource) |
+| Azure SQL | [`mssql_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/mssql_io_manager) | [`mssql_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/mssql_resource) |
 
-For "land DataFrame in SQL" the lightest path is `dataframe_to_table`. For
-auto-table-per-asset semantics, use `postgres_io_manager` instead.
+For "land DataFrame in SQL" the lightest path is [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table). For
+auto-table-per-asset semantics, use [`postgres_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/postgres_io_manager) instead.
 
 ## Prerequisites
 
@@ -78,7 +78,7 @@ uv run dg launch --assets '*'
 | Step | Result |
 |---|---|
 | Provisioning | server + db created in westus3 |
-| `dataframe_to_table` | 100 rows written to `orders` in 3.6s |
+| [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) | 100 rows written to `orders` in 3.6s |
 | Verification | `SELECT * FROM orders ORDER BY total DESC LIMIT 5` returned high-value rows |
 
 ## Cost
@@ -99,8 +99,8 @@ az group delete --name dagster-demo-rg --yes
 ## Variations
 
 - Swap `if_exists: replace` → `append` for incremental loads
-- Add `dataframe_from_table` upstream to read from an existing Postgres
+- Add [`dataframe_from_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_table) upstream to read from an existing Postgres
   table — flip the same `DATABASE_URL`
-- Use `postgres_io_manager` instead for auto-table-per-asset semantics
-- Use `postgres_resource` to expose a connection to other ops for ad-hoc
+- Use [`postgres_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/postgres_io_manager) instead for auto-table-per-asset semantics
+- Use [`postgres_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/postgres_resource) to expose a connection to other ops for ad-hoc
   queries

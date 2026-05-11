@@ -18,10 +18,10 @@ Pipeline (4 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | Hit a REST endpoint |
-| 2 | `json_path_extractor` | transformation | JSONPath extract → columns |
-| 3 | `dataframe_to_csv` | sink | Write CSV |
-| 4 | `http_poll_sensor` | sensor | Trigger on URL change |
+| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | Hit a REST endpoint |
+| 2 | [`json_path_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/json_path_extractor) | transformation | JSONPath extract → columns |
+| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
+| 4 | [`http_poll_sensor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/http_poll_sensor) | sensor | Trigger on URL change |
 
 ## Run
 

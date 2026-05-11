@@ -17,12 +17,12 @@ Pipeline (7 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | Generate synthetic data |
-| 2 | `datetime_parser` | transformation | Parse date columns |
-| 3 | `rfm_segmentation` | analytics | RFM customer segments |
-| 4 | `cohort_analysis` | analytics | Cohort retention matrix |
-| 5 | `running_total` | transformation | Cumulative aggregate |
-| 6 | `dataframe_to_csv` | sink | Write CSV |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate synthetic data |
+| 2 | [`datetime_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/datetime_parser) | transformation | Parse date columns |
+| 3 | [`rfm_segmentation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/rfm_segmentation) | analytics | RFM customer segments |
+| 4 | [`cohort_analysis`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/cohort_analysis) | analytics | Cohort retention matrix |
+| 5 | [`running_total`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/running_total) | transformation | Cumulative aggregate |
+| 6 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
 
 ## Run
 

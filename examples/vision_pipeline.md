@@ -15,15 +15,15 @@ sample_images_df          (3 synthetic 320×240 PNGs in /tmp/vision_pipeline_ima
 
 | Component | What it does |
 |---|---|
-| `image_metadata_extractor` | Pure PIL. Extracts width, height, format, mode, EXIF, GPS, optional histogram from a column of file paths. |
-| `vision_model` | Vision-capable LLM (OpenAI gpt-4o or Anthropic Claude). Reads each image (URL / path / base64) and returns a free-text description for each row. |
+| [`image_metadata_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/image_metadata_extractor) | Pure PIL. Extracts width, height, format, mode, EXIF, GPS, optional histogram from a column of file paths. |
+| [`vision_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_model) | Vision-capable LLM (OpenAI gpt-4o or Anthropic Claude). Reads each image (URL / path / base64) and returns a free-text description for each row. |
 
 ## Validation status
 
-- **`image_metadata_extractor`: live** — RUN_SUCCESS in 4.16s on the
+- **[`image_metadata_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/image_metadata_extractor): live** — RUN_SUCCESS in 4.16s on the
   `sample_images_df → image_metadata` chain. 3 images materialized
   with all expected `img_*` columns + asset check passed.
-- **`vision_model`: code** — YAML loads under `dg check defs` and
+- **[`vision_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_model): code** — YAML loads under `dg check defs` and
   initializes against the Anthropic provider. End-to-end RUN_SUCCESS
   pending an `ANTHROPIC_API_KEY`. Update the validation level to
   `live` after running with a real key.
@@ -63,12 +63,12 @@ uv run dg dev   # http://localhost:3000
 The `sample_images_df` custom asset writes 3 solid-color PNGs with
 text labels straight to `/tmp/vision_pipeline_images/`. No CDN, no
 network for the image source — the demo is hermetic on the
-$0 path, and only `vision_model` reaches out to Anthropic when
+$0 path, and only [`vision_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_model) reaches out to Anthropic when
 materialized.
 
 ## Convention drift caught during validation
 
-`vision_model`'s shipped `example.yaml` used `source_asset:` while
+[`vision_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_model)'s shipped `example.yaml` used `source_asset:` while
 the Pydantic field is `upstream_asset_key:` (the canonical registry
 field name). Fixed the example to match. The component code didn't
 need to change — only the example.

@@ -170,85 +170,12 @@ attributes:
             jsonpath: \$.html_url
 EOF
 
-# ─── Downstream pandas asset that consumes the metadata ──────────────────
-# Demonstrates the end-to-end shape: HTTP-driven external job materialized
-# as a Dagster asset → downstream Dagster asset reads its metadata via
-# context.instance and emits a summary table. Real lineage in the asset
-# graph.
-mkdir -p "src/$PKG/defs/run_summary"
-cat > "src/$PKG/defs/run_summary/definitions.py" <<PYEOF
-"""Downstream consumer of github_workflow_run.
-
-Materializing this asset reads the latest \`github_workflow_run\`
-materialization metadata, builds a one-row pandas summary, and writes
-to /tmp. The lineage edge (deps=) makes Dagster show the dependency
-in the asset graph and lets us trigger downstream rebuilds when the
-upstream HTTP-driven asset re-materializes.
-"""
-import pandas as pd
-import dagster as dg
-from dagster import AssetExecutionContext
-
-
-@dg.asset(
-    key=dg.AssetKey(["github_run_summary"]),
-    deps=[dg.AssetKey(["github_workflow_run"])],
-    description="Pandas summary of the latest GitHub workflow run, sourced from upstream materialization metadata.",
-    group_name="downstream",
-    kinds={"pandas"},
-    tags={"owner": "data-platform"},
-)
-def github_run_summary(context: AssetExecutionContext) -> dg.MaterializeResult:
-    upstream = dg.AssetKey(["github_workflow_run"])
-    ev = context.instance.get_latest_materialization_event(upstream)
-    if ev is None or ev.asset_materialization is None:
-        raise RuntimeError(f"no materialization found for {upstream} — run that asset first")
-    md = ev.asset_materialization.metadata or {}
-
-    def _val(k):
-        v = md.get(k)
-        if v is None:
-            return None
-        return getattr(v, "value", None) or getattr(v, "text", None) or v
-
-    row = {
-        "external_run_id": _val("external_run_id"),
-        "workflow_name":   _val("workflow_name"),
-        "run_number":      _val("run_number"),
-        "conclusion":      _val("conclusion"),
-        "head_branch":     _val("head_branch"),
-        "actor_login":     _val("actor_login"),
-        "run_url":         _val("run_url"),
-        "duration_seconds": _val("duration_seconds"),
-        "poll_count":      _val("poll_count"),
-    }
-    df = pd.DataFrame([row])
-    out = "/tmp/github_run_summary.csv"
-    df.to_csv(out, index=False)
-
-    return dg.MaterializeResult(
-        metadata={
-            "row_count":   dg.MetadataValue.int(len(df)),
-            "csv_path":    dg.MetadataValue.path(out),
-            "preview":     dg.MetadataValue.md(df.to_markdown(index=False)),
-            "conclusion":  dg.MetadataValue.text(str(row["conclusion"])),
-            "workflow":    dg.MetadataValue.text(str(row["workflow_name"])),
-            "run_url":     dg.MetadataValue.url(str(row["run_url"])) if row["run_url"] else dg.MetadataValue.text(""),
-        }
-    )
-
-
-defs = dg.Definitions(assets=[github_run_summary])
-PYEOF
-
 cat <<MSG
 
 >>> Setup complete.
 
 Asset graph:
     github_workflow_run     ← http_external_asset (trigger → poll → metadata)
-            │
-            └─→ github_run_summary  ← pandas (consumes the metadata, writes /tmp CSV)
 
     github_runs_by_day      ← http_external_asset (DAILY-partitioned)
 

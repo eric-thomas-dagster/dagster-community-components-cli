@@ -48,32 +48,23 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing gemini_image_generation"
-$CLI add gemini_image_generation --auto-install
+$CLI add synthetic_data_generator --auto-install
+$CLI add gemini_image_generation  --auto-install
 
-# ─── Upstream prompts ────────────────────────────────────────────────────
+echo 'from .component import SyntheticDataGeneratorComponent
+__all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_data_generator/__init__.py"
+
+# ─── Upstream prompts: synthetic_data_generator (image_prompts schema) ──
 mkdir -p "src/$PKG/defs/image_prompts"
-cat > "src/$PKG/defs/image_prompts/definitions.py" <<'PYEOF'
-"""3 prompts for the demo's hero-shot image generation."""
-import pandas as pd
-import dagster as dg
-
-
-@dg.asset(
-    key=dg.AssetKey(["image_prompts_df"]),
-    description="3 product descriptions used as Nano Banana prompts.",
-    group_name="ingest",
-    kinds={"pandas"},
-)
-def image_prompts_df() -> pd.DataFrame:
-    return pd.DataFrame([
-        {"sku": "MUG-001", "description": "A minimalist white ceramic coffee mug on a polished marble countertop, soft morning sunlight, crisp shadows, professional product photography"},
-        {"sku": "BAG-002", "description": "A vintage tan leather messenger bag leaning against a red brick wall, golden afternoon sun, editorial fashion style, shallow depth of field"},
-        {"sku": "RUN-003", "description": "A pair of futuristic neon running shoes mid-stride above a wet asphalt surface with tiny splashes, dramatic high-key lighting, hyperreal"},
-    ])
-
-
-defs = dg.Definitions(assets=[image_prompts_df])
-PYEOF
+cat > "src/$PKG/defs/image_prompts/defs.yaml" <<EOF
+type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
+attributes:
+  asset_name: image_prompts_df
+  schema_type: image_prompts
+  row_count: 3
+  random_state: 42
+  group_name: ingest
+EOF
 
 # ─── gemini_image_generation configuration ──────────────────────────────
 cat > "src/$PKG/defs/gemini_image_generation/defs.yaml" <<EOF
@@ -83,12 +74,12 @@ attributes:
   upstream_asset_key: image_prompts_df
 
   api_key_env_var: GEMINI_API_KEY
-  image_model: gemini-2.5-flash-image-preview
+  image_model: gemini-2.5-flash-image
 
-  prompt_column: description
+  prompt_column: prompt
   output_dir: /tmp/nano_banana_demo
   output_path_column: generated_image_path
-  output_filename_template: "{sku}_{idx}.png"
+  output_filename_template: "{prompt_id}_{idx}.png"
 
   temperature: 1.0
   rate_limit_delay: 0.5
@@ -97,67 +88,17 @@ attributes:
   group_name: ai_media
 EOF
 
-# ─── Downstream pandas summary that reads each generated PNG ────────────
-mkdir -p "src/$PKG/defs/image_size_report"
-cat > "src/$PKG/defs/image_size_report/definitions.py" <<'PYEOF'
-"""Reads each generated PNG and reports dimensions. Proves full lineage."""
-import os
-import pandas as pd
-import dagster as dg
-from dagster import AssetExecutionContext, AssetKey
-from PIL import Image
-
-
-@dg.asset(
-    key=dg.AssetKey(["image_size_report"]),
-    deps=[dg.AssetKey(["product_hero_images"])],
-    description="One-row-per-image summary: SKU, prompt, generated path, width, height, file size.",
-    group_name="downstream",
-    kinds={"pandas"},
-)
-def image_size_report(context: AssetExecutionContext) -> pd.DataFrame:
-    upstream = AssetKey(["product_hero_images"])
-    ev = context.instance.get_latest_materialization_event(upstream)
-    if ev is None:
-        raise RuntimeError(f"no materialization for {upstream}")
-
-    rows = []
-    out_dir = "/tmp/nano_banana_demo"
-    if not os.path.isdir(out_dir):
-        return pd.DataFrame(rows)
-    for fname in sorted(os.listdir(out_dir)):
-        if not fname.endswith(".png"):
-            continue
-        path = os.path.join(out_dir, fname)
-        with Image.open(path) as img:
-            w, h = img.size
-        rows.append({
-            "filename": fname,
-            "path": path,
-            "width": w,
-            "height": h,
-            "size_kb": round(os.path.getsize(path) / 1024, 1),
-        })
-    df = pd.DataFrame(rows)
-    return df
-
-
-defs = dg.Definitions(assets=[image_size_report])
-PYEOF
-
 cat <<MSG
 
 >>> Setup complete.
 
 Asset graph:
-    image_prompts_df              (3 hero-image prompts)
+    image_prompts_df              ← synthetic_data_generator (image_prompts, 3 rows)
           │
           └── product_hero_images  ← gemini_image_generation (Nano Banana)
                                     saves PNGs to /tmp/nano_banana_demo
-                  │
-                  └── image_size_report  ← pandas (reads PNGs, reports dimensions)
 
-Materialize all three:
+Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 

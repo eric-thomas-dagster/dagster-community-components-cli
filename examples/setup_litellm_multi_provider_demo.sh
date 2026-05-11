@@ -126,49 +126,39 @@ else
   rm -rf "src/$PKG/defs/classified_anthropic"
 fi
 
-# 5) Side-by-side join — only joins providers that ran
-mkdir -p "src/$PKG/defs/multi_provider_compare"
-cat > "src/$PKG/defs/multi_provider_compare/definitions.py" <<'PYEOF'
-"""Joins the per-provider summary columns into one row per ticket."""
-import pandas as pd
-import dagster as dg
-from dagster import AssetIn, AssetKey
+# 5) Side-by-side join via dataframe_join (N-way) — only joins providers that ran.
+# Build the upstream_asset_keys list from the providers that have a defs.yaml on disk.
+$CLI add dataframe_join --auto-install 2>&1 | tail -2
+echo 'from .component import DataframeJoin
+__all__ = ["DataframeJoin"]' > "src/$PKG/components/dataframe_join/__init__.py"
 
-# Build the ins dict dynamically based on which provider assets exist.
-import os
-_PKG_NAME = __name__.split(".")[0]
-_DEFS_DIR = os.path.dirname(os.path.dirname(__file__))
+PROVIDERS=()
+for prov in gemini openai anthropic; do
+  [ -f "src/$PKG/defs/classified_$prov/defs.yaml" ] && PROVIDERS+=("classified_$prov")
+done
 
-_AVAILABLE = []
-for prov in ("gemini", "openai", "anthropic"):
-    if os.path.exists(os.path.join(_DEFS_DIR, f"classified_{prov}", "defs.yaml")):
-        _AVAILABLE.append(prov)
+if [ "${#PROVIDERS[@]}" -ge 2 ]; then
+  LEFT="${PROVIDERS[0]}"
+  RIGHT="${PROVIDERS[1]}"
+  EXTRA_KEYS=""
+  for k in "${PROVIDERS[@]:2}"; do EXTRA_KEYS+="    - $k"$'\n'; done
 
-_INS = {f"classified_{p}": AssetIn(key=AssetKey([f"classified_{p}"])) for p in _AVAILABLE}
-
-
-@dg.asset(
-    key=dg.AssetKey(["multi_provider_compare"]),
-    description="Side-by-side comparison of LiteLLM summaries from each provider on the same tickets.",
-    group_name="compare",
-    kinds={"pandas"},
-    ins=_INS,
-)
-def multi_provider_compare(**kwargs) -> pd.DataFrame:
-    base = None
-    for prov in _AVAILABLE:
-        df = kwargs[f"classified_{prov}"]
-        col = f"summary_{prov}"
-        if base is None:
-            base = df[["ticket_id", "ticket_text"] + ([col] if col in df.columns else [])].copy()
-        else:
-            if col in df.columns:
-                base = base.merge(df[["ticket_id", col]], on="ticket_id", how="left")
-    return base if base is not None else pd.DataFrame()
-
-
-defs = dg.Definitions(assets=[multi_provider_compare])
-PYEOF
+  mkdir -p "src/$PKG/defs/multi_provider_compare"
+  cat > "src/$PKG/defs/multi_provider_compare/defs.yaml" <<EOF
+type: $PKG.components.dataframe_join.component.DataframeJoin
+attributes:
+  asset_name: multi_provider_compare
+  left_asset_key: $LEFT
+  right_asset_key: $RIGHT
+$( if [ -n "$EXTRA_KEYS" ]; then echo "  additional_asset_keys:"; echo "$EXTRA_KEYS"; fi )
+  how: outer
+  on: [ticket_id]
+  suffixes: ["", "_dup"]
+  group_name: compare
+EOF
+elif [ "${#PROVIDERS[@]}" -eq 1 ]; then
+  echo ">>> Only one provider key set — skipping multi_provider_compare (single-input join is a no-op)."
+fi
 
 # 6) CSV sink
 cat > "src/$PKG/defs/dataframe_to_csv/defs.yaml" <<EOF

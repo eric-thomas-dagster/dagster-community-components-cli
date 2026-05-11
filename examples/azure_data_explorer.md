@@ -3,7 +3,7 @@
 **Code-validated only** — components built from each vendor's SDK / API spec; end-to-end validation requires vendor credentials.
 
 KQL query against an ADX cluster → DataFrame. Distinct from
-`azure_log_analytics_query` (different SDK + service): ADX is the
+[`azure_log_analytics_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/azure_log_analytics_query) (different SDK + service): ADX is the
 **raw Kusto cluster** you provision yourself for high-volume telemetry,
 security analytics, IoT log analysis. Log Analytics is the managed
 service built on top.
@@ -12,8 +12,8 @@ service built on top.
 
 | Component | Category | Role |
 |---|---|---|
-| `dataframe_from_kusto` | source | Run KQL → DataFrame |
-| `dataframe_to_kusto` | sink | DataFrame → Kusto table (queued or streaming ingest) |
+| [`dataframe_from_kusto`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_kusto) | source | Run KQL → DataFrame |
+| [`dataframe_to_kusto`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_kusto) | sink | DataFrame → Kusto table (queued or streaming ingest) |
 
 ## Status
 

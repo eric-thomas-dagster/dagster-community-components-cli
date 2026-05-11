@@ -1,6 +1,6 @@
 # Dagster Community Components CLI
 
-This repo provides `dagster-component`, a CLI for searching and installing community components into a Dagster project. It reads from a manifest of ~470 reusable components (resources, IO managers, ingestion patterns, transforms, etc.) hosted at:
+This repo provides `dagster-component`, a CLI for searching and installing community components into a Dagster project. It reads from a manifest of ~660 reusable components (resources, IO managers, ingestion patterns, transforms, etc.) hosted at:
 
 - **Registry source:** <https://github.com/eric-thomas-dagster/dagster-component-templates>
 - **Searchable web UI:** <https://dagster-component-ui.vercel.app/>

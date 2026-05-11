@@ -23,8 +23,8 @@ sample_images           (3 synthetic PNGs in /tmp/vision_translate_imgs/)
 
 | Component | What it does |
 |---|---|
-| `vision_api_asset` | Cloud Vision per-row image analysis. 11 supported feature types (labels, objects, faces, landmarks, logos, OCR, NSFW safe-search, image properties, web detection, crop hints, document text). |
-| `translation_api_asset` | Cloud Translation v3. Translate a column to N target languages — one new column per target. Per-row source-language auto-detect. |
+| [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) | Cloud Vision per-row image analysis. 11 supported feature types (labels, objects, faces, landmarks, logos, OCR, NSFW safe-search, image properties, web detection, crop hints, document text). |
+| [`translation_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/translation_api_asset) | Cloud Translation v3. Translate a column to N target languages — one new column per target. Per-row source-language auto-detect. |
 
 ## Validation status — both live
 
@@ -79,12 +79,12 @@ attributes:
   image_source: gcs              # or `auto`
 ```
 
-For document parsing (forms / tables / structured), use `document_ai_extractor` instead of Vision — Document AI parses field structure, Vision OCR returns flat text.
+For document parsing (forms / tables / structured), use [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor) instead of Vision — Document AI parses field structure, Vision OCR returns flat text.
 
 ## Sister components
 
-- `document_ai_extractor` (planned next) — structured document parsing.
-- `gemini_image_generation` — generate images.
-- `vision_model` — multi-vendor image-LLM wrapper.
-- `vertex_ai_text_embeddings_asset` — embeddings for the OCR'd text.
-- `gemini_llm` / `openai_llm` — LLM-based translation when Translation API isn't nuanced enough.
+- [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor) (planned next) — structured document parsing.
+- [`gemini_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_image_generation) — generate images.
+- [`vision_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_model) — multi-vendor image-LLM wrapper.
+- [`vertex_ai_text_embeddings_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vertex_ai_text_embeddings_asset) — embeddings for the OCR'd text.
+- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) / [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) — LLM-based translation when Translation API isn't nuanced enough.

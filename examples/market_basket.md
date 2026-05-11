@@ -14,11 +14,11 @@ Pipeline (7 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
-| 2 | `market_basket_rules` | analytics | Apriori association rules |
-| 3 | `filter` | transformation | Row filter by predicate |
-| 4 | `summarize` | transformation | Group-by aggregate |
-| 5 | `dataframe_to_csv` | sink | Write CSV |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read source CSV |
+| 2 | [`market_basket_rules`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/market_basket_rules) | analytics | Apriori association rules |
+| 3 | [`filter`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/filter) | transformation | Row filter by predicate |
+| 4 | [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) | transformation | Group-by aggregate |
+| 5 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
 
 ## Run
 

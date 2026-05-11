@@ -16,14 +16,14 @@ support_tickets             (3 synthetic tickets)
 ```
 
 Each provider gets its own Dagster asset (so you see them as parallel
-nodes in the graph), backed by the **single** `litellm_inference_asset`
+nodes in the graph), backed by the **single** [`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset)
 component — same shape, different `model:` + `api_key_env_var:`.
 
 ## Components covered (1, exercised across N providers)
 
 | Component | What it does |
 |---|---|
-| `litellm_inference_asset` | Per-row LLM inference via LiteLLM. Routes to 100+ providers (OpenAI, Anthropic, Google, Bedrock, Azure, Groq, OpenRouter, Together, Fireworks, etc.) through one component — change `model:` and `api_key_env_var:` to switch. |
+| [`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset) | Per-row LLM inference via LiteLLM. Routes to 100+ providers (OpenAI, Anthropic, Google, Bedrock, Azure, Groq, OpenRouter, Together, Fireworks, etc.) through one component — change `model:` and `api_key_env_var:` to switch. |
 
 ## Validation status — live
 
@@ -63,7 +63,7 @@ cat /tmp/litellm_multi_provider.csv
 
 ## Bugs surfaced and fixed validating this demo
 
-1. **`litellm_inference_asset` shipped `example.yaml` had bogus fields**
+1. **[`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset) shipped `example.yaml` had bogus fields**
    `database_url_env_var` and `table_name` — not on the Pydantic
    model. The CLI installed the example as the active defs.yaml,
    so a fresh install raised `extra_forbidden` at load time. Fixed
@@ -74,18 +74,18 @@ cat /tmp/litellm_multi_provider.csv
 
 | Pattern | Components | Best for |
 |---|---|---|
-| **Multi-vendor / model-switching** | `litellm_inference_asset`, `litellm_embedding_batch`, `litellm_image_generation` | A/B tests, fallback strategies, multi-vendor resilience, comparison demos like this one |
-| **Single-vendor / deepest features** | `openai_llm` / `anthropic_llm` / `gemini_llm` | Production shops that standardize on one provider and want vendor-specific features (prompt caching, thinking_budget, structured outputs, etc.) |
+| **Multi-vendor / model-switching** | [`litellm_inference_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_inference_asset), [`litellm_embedding_batch`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_embedding_batch), [`litellm_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_image_generation) | A/B tests, fallback strategies, multi-vendor resilience, comparison demos like this one |
+| **Single-vendor / deepest features** | [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) / [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) | Production shops that standardize on one provider and want vendor-specific features (prompt caching, thinking_budget, structured outputs, etc.) |
 
 You can mix: use native components for production paths, LiteLLM for
 the cost/quality comparison harness behind the scenes.
 
 ## Sister components
 
-- `litellm_embedding_batch` — same multi-provider pattern for embeddings.
-- `litellm_image_generation` — same for image generation.
-- `litellm_audio_transcription` — same for audio.
-- `litellm_structured_output` — same for tool-use / JSON-mode.
-- `openai_llm` / `anthropic_llm` / `gemini_llm` — native single-vendor peers.
+- [`litellm_embedding_batch`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_embedding_batch) — same multi-provider pattern for embeddings.
+- [`litellm_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_image_generation) — same for image generation.
+- [`litellm_audio_transcription`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_audio_transcription) — same for audio.
+- [`litellm_structured_output`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/litellm_structured_output) — same for tool-use / JSON-mode.
+- [`openai_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_llm) / [`anthropic_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_llm) / [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) — native single-vendor peers.
 - `groq_llm_asset` (planned) — Groq native (very fast, free tier).
 - `openrouter_llm_asset` (planned) — one key for 100+ models.

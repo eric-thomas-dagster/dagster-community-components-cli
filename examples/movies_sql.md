@@ -2,7 +2,7 @@
 
 Computes a "Top 250" ranking from **real MovieLens data** (officially published
 by GroupLens), parses year out of the title, and lands the result in SQLite via
-`dataframe_to_table`. Set `DATABASE_URL` to `postgresql://…` or `mysql://…` and
+[`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table). Set `DATABASE_URL` to `postgresql://…` or `mysql://…` and
 the same pipeline lands data there instead — that's the point.
 
 ```
@@ -13,10 +13,10 @@ csv_file_ingestion → type_coercer → formula → dataframe_to_table
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read MovieLens-derived CSV |
-| 2 | `type_coercer` | transformation | Coerce `year` → int, `rating` → float |
-| 3 | `formula` | transformation | Compute `decade` from `year` |
-| 4 | `dataframe_to_table` | sink | Write to SQLite via SQLAlchemy |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read MovieLens-derived CSV |
+| 2 | [`type_coercer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/type_coercer) | transformation | Coerce `year` → int, `rating` → float |
+| 3 | [`formula`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/formula) | transformation | Compute `decade` from `year` |
+| 4 | [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) | sink | Write to SQLite via SQLAlchemy |
 
 ## Source data
 

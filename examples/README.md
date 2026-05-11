@@ -9,6 +9,38 @@ Each demo:
 
 The demos are grouped by what they need to run.
 
+## Table of contents
+
+- [No auth required (synthetic or public data)](#no-auth-required-synthetic-or-public-data)
+  - [Core ETL patterns](#core-etl-patterns)
+  - [Time series + forecasting](#time-series--forecasting)
+  - [ML pipelines](#ml-pipelines)
+  - [Customer + subscription analytics](#customer--subscription-analytics)
+  - [Geospatial](#geospatial)
+  - [Public APIs (no auth)](#public-apis-no-auth)
+  - [OCSF / Security](#ocsf--security)
+  - [Op jobs (no asset materialized)](#op-jobs-no-asset-materialized)
+  - [Patterns](#patterns)
+- [Azure (subscription required)](#azure-subscription-required)
+  - [Storage + lakehouse](#storage--lakehouse)
+  - [Databases](#databases)
+  - [Orchestration + workflow](#orchestration--workflow)
+  - [Streaming + queues](#streaming--queues)
+  - [Microsoft Fabric (next-gen Synapse)](#microsoft-fabric-next-gen-synapse)
+  - [Observability](#observability)
+  - [Auth: managed identity in Azure compute](#auth-managed-identity-in-azure-compute)
+- [Google Cloud (GCP, subscription required)](#google-cloud-gcp-subscription-required)
+  - [Workspace (Drive, Docs, Sheets, Calendar)](#workspace-drive-docs-sheets-calendar)
+  - [Warehouse (BigQuery)](#warehouse-bigquery)
+  - [AI / LLM](#ai--llm)
+  - [Real-pipeline patterns (multi-component chains)](#real-pipeline-patterns-multi-component-chains)
+  - [Auth: workload identity in GCP compute](#auth-workload-identity-in-gcp-compute)
+- [Dagster+ required](#dagster-required)
+- [Catalog Lineage Sync — multi-target](#catalog-lineage-sync--multi-target-no-auth-required-for-the-file-demo)
+- [How a demo is built](#how-a-demo-is-built)
+- [Auth-required demos: comprehensive prereqs](#auth-required-demos-comprehensive-prereqs)
+- [Components verified by examples](#components-verified-by-examples)
+
 ---
 
 ## No auth required (synthetic or public data)
@@ -89,7 +121,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [arXiv PDF Extraction](arxiv_pdf.md) | csv → pdf_text_extractor → formula → CSV | Document → text → word counts |
 | [Cars → SQL](cars_sql.md) | rest → datetime → formula → dataframe_to_table | Land DataFrame in SQLite |
 | [Movies → SQL](movies_sql.md) | csv → type_coercer → formula → SQL | Real MovieLens Top 250 → SQLite |
-| [NBA Scoreboard](nba_scoreboard.md) | http_poll_sensor → rest → json_path → CSV | `http_poll_sensor` with targeted hashing |
+| [NBA Scoreboard](nba_scoreboard.md) | http_poll_sensor → rest → json_path → CSV | [`http_poll_sensor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/http_poll_sensor) with targeted hashing |
 | [RSS Sensor](rss_sensor.md) | rss_feed_sensor → rest → xml_parser → CSV | Sensor-driven HN frontpage ingestion |
 
 ### OCSF / Security
@@ -125,45 +157,45 @@ subscriptions.
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [ADLS Round-Trip](adls_round_trip.md) | `dataframe_to_adls`, `external_adls_asset` | 1 storage account + container | <$0.05/mo |
-| [ADLS Inbox](adls_inbox.md) | `adls_monitor` (sensor) → `asset_job` → `adls_to_database_asset` | same storage account, files in `demo/inbox/` | <$0.05/mo |
-| [Bicep Self-Provision](bicep_self_provision.md) | `bicep_asset` provisions storage; downstream uses it | none upfront — Bicep creates it | <$0.05/mo |
+| [ADLS Round-Trip](adls_round_trip.md) | [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls), [`external_adls_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_adls_asset) | 1 storage account + container | <$0.05/mo |
+| [ADLS Inbox](adls_inbox.md) | [`adls_monitor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/adls_monitor) (sensor) → [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job) → [`adls_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/adls_to_database_asset) | same storage account, files in `demo/inbox/` | <$0.05/mo |
+| [Bicep Self-Provision](bicep_self_provision.md) | [`bicep_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/bicep_asset) provisions storage; downstream uses it | none upfront — Bicep creates it | <$0.05/mo |
 
 ### Databases
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [Cosmos DB Round-Trip](cosmosdb_round_trip.md) | `cosmosdb_writer` → `cosmosdb_reader` → `dataframe_to_csv` | Cosmos DB account (free tier) | $0 |
-| [Azure SQL Database](azure_sql.md) | `synthetic_data_generator` → `dataframe_to_table` (mssql+pymssql) | SQL Server + serverless DB | <$0.05/mo idle |
-| [Azure PostgreSQL Flexible](azure_postgres.md) | `synthetic_data_generator` → `dataframe_to_table` (postgresql+psycopg2) | Flexible Server B1ms | ~$13/mo |
-| [Azure MySQL Flexible](azure_mysql.md) | `synthetic_data_generator` → `dataframe_to_table` (mysql+pymysql) | Flexible Server B1ms | ~$13/mo |
-| [Azure Cache for Redis](azure_redis.md) | `redis_writer` (TLS) → `redis_reader` (TLS) → `dataframe_to_csv` | Cache Basic C0 | ~$16/mo |
+| [Cosmos DB Round-Trip](cosmosdb_round_trip.md) | [`cosmosdb_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/cosmosdb_writer) → [`cosmosdb_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/cosmosdb_reader) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Cosmos DB account (free tier) | $0 |
+| [Azure SQL Database](azure_sql.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) → [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) (mssql+pymssql) | SQL Server + serverless DB | <$0.05/mo idle |
+| [Azure PostgreSQL Flexible](azure_postgres.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) → [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) (postgresql+psycopg2) | Flexible Server B1ms | ~$13/mo |
+| [Azure MySQL Flexible](azure_mysql.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) → [`dataframe_to_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_table) (mysql+pymysql) | Flexible Server B1ms | ~$13/mo |
+| [Azure Cache for Redis](azure_redis.md) | [`redis_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/redis_writer) (TLS) → [`redis_reader`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/redis_reader) (TLS) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Cache Basic C0 | ~$16/mo |
 
 ### Orchestration + workflow
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [Azure Data Factory](azure_data_factory.md) | `azure_data_factory` (import + trigger ADF pipelines, capture per-activity metadata) | ADF instance + service principal | $0 idle, $0.001/activity |
-| [Azure Synapse Analytics](azure_synapse.md) | `azure_synapse` (import + trigger Synapse pipelines; Spark/notebook discovery) | Synapse workspace + ADLS Gen2 storage + service principal | $0 idle, free serverless SQL <1TB/mo |
-| [Synapse Serverless SQL (OPENROWSET)](azure_synapse_serverless.md) | `dataframe_to_adls` → `dataframe_from_sql` (no Synapse-specific component needed!) | Same Synapse workspace + a demo db with master key + db-scoped credential + external data source | $0 — first 1TB/mo scanned is free |
+| [Azure Data Factory](azure_data_factory.md) | [`azure_data_factory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_data_factory) (import + trigger ADF pipelines, capture per-activity metadata) | ADF instance + service principal | $0 idle, $0.001/activity |
+| [Azure Synapse Analytics](azure_synapse.md) | [`azure_synapse`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_synapse) (import + trigger Synapse pipelines; Spark/notebook discovery) | Synapse workspace + ADLS Gen2 storage + service principal | $0 idle, free serverless SQL <1TB/mo |
+| [Synapse Serverless SQL (OPENROWSET)](azure_synapse_serverless.md) | [`dataframe_to_adls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_adls) → [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) (no Synapse-specific component needed!) | Same Synapse workspace + a demo db with master key + db-scoped credential + external data source | $0 — first 1TB/mo scanned is free |
 
 ### Streaming + queues
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [Azure Event Hubs Round-Trip](azure_eventhubs.md) | `dataframe_to_eventhub` (NEW) → `eventhubs_to_database_asset` → Postgres | EH Basic namespace + hub | ~$11/mo + $0.028/M events |
+| [Azure Event Hubs Round-Trip](azure_eventhubs.md) | [`dataframe_to_eventhub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_eventhub) (NEW) → [`eventhubs_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/eventhubs_to_database_asset) → Postgres | EH Basic namespace + hub | ~$11/mo + $0.028/M events |
 
 ### Microsoft Fabric (next-gen Synapse)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [Fabric Full-Stack](fabric_full_stack.md) | All 6 Fabric components: `fabric_workspace`, `fabric_workspace_resource`, `fabric_lakehouse_resource`, `fabric_lakehouse_io_manager`, `dataframe_to_fabric_lakehouse`, `fabric_pipeline_trigger_job` (+ existing `dataframe_from_sql` for the Warehouse SQL endpoint) | F2 capacity + workspace + Lakehouse + Warehouse | ~$0.21/hr ($154/mo always-on) |
+| [Fabric Full-Stack](fabric_full_stack.md) | All 6 Fabric components: [`fabric_workspace`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/fabric_workspace), [`fabric_workspace_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/fabric_workspace_resource), [`fabric_lakehouse_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/fabric_lakehouse_resource), [`fabric_lakehouse_io_manager`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/io_managers/fabric_lakehouse_io_manager), [`dataframe_to_fabric_lakehouse`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_fabric_lakehouse), [`fabric_pipeline_trigger_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/fabric_pipeline_trigger_job) (+ existing [`dataframe_from_sql`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dataframe_from_sql) for the Warehouse SQL endpoint) | F2 capacity + workspace + Lakehouse + Warehouse | ~$0.21/hr ($154/mo always-on) |
 
 ### Observability
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [Dagster+ → Sentinel](dagster_plus_to_sentinel.md) **(Dagster+ + Azure)** | `dagster_plus_audit_log_ingestion` → `ocsf_normalizer` → `audit_logs_to_sentinel` | Log Analytics workspace | $0 (5GB/mo free tier) |
+| [Dagster+ → Sentinel](dagster_plus_to_sentinel.md) **(Dagster+ + Azure)** | [`dagster_plus_audit_log_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/ingestion/dagster_plus_audit_log_ingestion) → [`ocsf_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/ocsf_normalizer) → [`audit_logs_to_sentinel`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sinks/audit_logs_to_sentinel) | Log Analytics workspace | $0 (5GB/mo free tier) |
 
 **Validated end-to-end** against a real Azure subscription with a real
 Dagster+ deployment. Examples include:
@@ -200,33 +232,33 @@ demos.
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [Google Sheets](google_sheets.md) | `google_sheets_ingestion` → pandas → CSV | SA shared on a sheet, Sheets API enabled | $0 |
-| [Google Calendar](google_calendar.md) | `google_calendar_ingestion` → pandas → CSV + `dataframe_to_bigquery` | SA shared on a calendar, Calendar API enabled | $0 |
-| [Drive + Docs + Gemini](google_drive_docs.md) | `google_drive_ingestion` → `google_docs_extractor` → `gemini_llm` → CSV | SA shared on a Drive folder, Drive + Docs + Generative Language APIs enabled | $0 |
+| [Google Sheets](google_sheets.md) | [`google_sheets_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_sheets_ingestion) (single-component demo) | SA shared on a sheet, Sheets API enabled | $0 |
+| [Google Calendar](google_calendar.md) | [`google_calendar_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_calendar_ingestion) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) + [`dataframe_to_bigquery`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_bigquery) | SA shared on a calendar, Calendar API enabled | $0 |
+| [Drive + Docs + Gemini](google_drive_docs.md) | [`google_drive_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_drive_ingestion) → [`google_docs_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_docs_extractor) → [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) → CSV | SA shared on a Drive folder, Drive + Docs + Generative Language APIs enabled | $0 |
 
 ### Warehouse (BigQuery)
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [BigQuery Query](bigquery_query.md) | `bigquery_query_asset` against `bigquery-public-data.samples.shakespeare` → pandas | BigQuery API enabled, `roles/bigquery.jobUser` | $0.0001 |
-| [BigQuery ML Pipeline](bigquery_ml_pipeline.md) | `bigquery_create_table_from_query_asset` (CTAS) → `bigquery_ml_train_asset` (LOGISTIC_REG) → `bigquery_ml_predict_asset` → CSV | BQ dataset, `roles/bigquery.dataEditor` + `jobUser` | <$0.001 |
-| [BigQuery ↔ GCS Bulk Bridge](bigquery_bulk_bridge.md) | `bigquery_export_to_gcs_asset` (EXTRACT) → `bigquery_load_from_gcs_asset` (LOAD JOB) — round-trip | BQ dataset + GCS bucket | $0 (extract + load free) |
+| [BigQuery Query](bigquery_query.md) | [`bigquery_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/bigquery_query_asset) against `bigquery-public-data.samples.shakespeare` (single-component demo) | BigQuery API enabled, `roles/bigquery.jobUser` | $0.0001 |
+| [BigQuery ML Pipeline](bigquery_ml_pipeline.md) | [`bigquery_create_table_from_query_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/bigquery_create_table_from_query_asset) (CTAS) → [`bigquery_ml_train_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_train_asset) (LOGISTIC_REG) → [`bigquery_ml_predict_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bigquery_ml_predict_asset) → CSV | BQ dataset, `roles/bigquery.dataEditor` + `jobUser` | <$0.001 |
+| [BigQuery ↔ GCS Bulk Bridge](bigquery_bulk_bridge.md) | [`bigquery_export_to_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigquery_export_to_gcs_asset) (EXTRACT) → [`bigquery_load_from_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/bigquery_load_from_gcs_asset) (LOAD JOB) — round-trip | BQ dataset + GCS bucket | $0 (extract + load free) |
 
 ### AI / LLM
 
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
-| [Gemini LLM](gemini_llm.md) | `synthetic_data_generator` → `gemini_llm` (gemini-2.5-flash) | Gemini API key | $0 (free tier 5 RPM) |
-| [Nano Banana](nano_banana.md) | `gemini_image_generation` (gemini-2.5-flash-image) → pandas dimension report | Gemini API key, billing enabled (image gen requires it) | ~$0.01–$0.10 |
-| [Vertex AI Embeddings](vertex_ai_embeddings.md) | `vertex_ai_text_embeddings_asset` (text-embedding-004) → pandas → CSV | Vertex AI API enabled, `roles/aiplatform.user` | $0 (under free tier) |
-| [Vision + Translation](vision_translate.md) | `vision_api_asset` (LABEL + OBJECT) → pandas → `translation_api_asset` (es/fr/de/ja) → CSV | Vision + Translation APIs enabled | ~$0.005 |
-| [Speech + Translation](speech_translate.md) | `speech_to_text_asset` (Cloud Speech v2) → `translation_api_asset` (es/fr/de/ja) → CSV | Speech + Translation APIs enabled | ~$0.001 |
+| [Gemini LLM](gemini_llm.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) → [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) (gemini-2.5-flash) | Gemini API key | $0 (free tier 5 RPM) |
+| [Nano Banana](nano_banana.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) (image_prompts) → [`gemini_image_generation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_image_generation) (gemini-2.5-flash-image) | Gemini API key, billing enabled (image gen requires it) | ~$0.01–$0.10 |
+| [Vertex AI Embeddings](vertex_ai_embeddings.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) (image_prompts) → [`vertex_ai_text_embeddings_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vertex_ai_text_embeddings_asset) (text-embedding-004) → [`dataframe_to_gcs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_gcs) (parquet) | Vertex AI API enabled, `roles/aiplatform.user` | $0 (under free tier) |
+| [Vision + Translation](vision_translate.md) | [`synthetic_image_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/source/synthetic_image_generator) → [`vision_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vision_api_asset) (LABEL + OBJECT) → [`dataframe_extract_field`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/dataframe_extract_field) (top label) → [`translation_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/translation_api_asset) (es/fr/de/ja) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Vision + Translation APIs enabled | ~$0.005 |
+| [Speech + Translation](speech_translate.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) (audio_samples) → [`speech_to_text_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/speech_to_text_asset) (Cloud Speech v2) → [`translation_api_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/translation_api_asset) (es/fr/de/ja) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Speech + Translation APIs enabled | ~$0.001 |
 
 ### Real-pipeline patterns (multi-component chains)
 
 | Demo | Components exercised | Highlights |
 |---|---|---|
-| [HRIS Normalizer](hris_normalizer.md) | `hris_normalizer` (vendor-agnostic) → pandas headcount-by-dept → CSV | 20-row synthetic vendor export → canonical schema mapped (status `T`→`terminated` etc.) → headcount + tenure aggregations |
+| [HRIS Normalizer](hris_normalizer.md) | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) (employees) → [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) (vendor-agnostic) → [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | Synthetic vendor export → canonical schema mapped via `value_maps` (case-insensitive: `Active`/`active`/`ACTIVE` → `active`; `Full-Time`/`FT`/`FULL_TIME` → `full_time`) |
 
 ### Auth: workload identity in GCP compute
 
@@ -250,10 +282,10 @@ attached SA.
 ### Bug-finds during validation
 
 Live runs surfaced several real bugs the components now handle cleanly:
-- `gemini_llm` thinking_budget vs max_output_tokens (truncated output)
-- `google_sheets_ingestion` wrong import (`dlt.sources.google_sheets` isn't pip-installable)
-- `bigquery_export_to_gcs_asset` ExtractJob has no `total_bytes_processed`
-- `hris_normalizer` case-insensitive map didn't lowercase user-supplied keys
+- [`gemini_llm`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_llm) thinking_budget vs max_output_tokens (truncated output)
+- [`google_sheets_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/google_sheets_ingestion) wrong import (`dlt.sources.google_sheets` isn't pip-installable)
+- [`bigquery_export_to_gcs_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/bigquery_export_to_gcs_asset) ExtractJob has no `total_bytes_processed`
+- [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) case-insensitive map didn't lowercase user-supplied keys
 - Service account project's Sheets / Docs / Calendar APIs needing per-project enable
 
 ---
@@ -270,7 +302,7 @@ Live runs surfaced several real bugs the components now handle cleanly:
 
 | Demo | Components used | Highlights |
 |---|---|---|
-| [Catalog Lineage Sync](lineage_catalogs.md) | `lineage_graph_extractor` (source) → `lineage_to_file` (sink) — swap in `lineage_to_purview`, `lineage_to_datahub`, `lineage_to_alation`, `lineage_to_collibra`, `lineage_to_openlineage`, `lineage_to_webhook` for real catalogs | Lock-step fan-out across N catalogs; per-sink change-detection skip via payload hashing. Validated locally end-to-end with file sink. |
+| [Catalog Lineage Sync](lineage_catalogs.md) | [`lineage_graph_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/lineage_graph_extractor) (source) → [`lineage_to_file`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_file) (sink) — swap in [`lineage_to_purview`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_purview), [`lineage_to_datahub`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_datahub), [`lineage_to_alation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_alation), [`lineage_to_collibra`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_collibra), [`lineage_to_openlineage`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_openlineage), [`lineage_to_webhook`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/lineage_to_webhook) for real catalogs | Lock-step fan-out across N catalogs; per-sink change-detection skip via payload hashing. Validated locally end-to-end with file sink. |
 
 ---
 

@@ -1,6 +1,6 @@
 # Router demo
 
-Multi-output conditional split on 30 synthetic orders — `router` emits one
+Multi-output conditional split on 30 synthetic orders — [`router`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/router) emits one
 asset per route, exclusive matching (each row goes to exactly one bucket).
 
 Equivalent to ADF's Conditional Split / Informatica Router.
@@ -15,9 +15,9 @@ csv → router ─────┼─→ medium_value_orders → CSV
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | 30 synthetic orders with mixed totals |
-| 2 | `router` | transformation | Split into high/medium/low by `total` |
-| 3-5 | `dataframe_to_csv` × 3 | sink | One CSV per bucket |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | 30 synthetic orders with mixed totals |
+| 2 | [`router`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/router) | transformation | Split into high/medium/low by `total` |
+| 3-5 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) × 3 | sink | One CSV per bucket |
 
 ## Routes
 

@@ -42,61 +42,23 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing image_metadata_extractor + vision_model"
-$CLI add image_metadata_extractor --auto-install
+$CLI add synthetic_image_generator --auto-install
+$CLI add image_metadata_extractor  --auto-install
 $CLI add vision_model              --auto-install
 
-# ─── Synthetic image generator (custom asset, returns DataFrame) ──────────
+echo 'from .component import SyntheticImageGeneratorComponent
+__all__ = ["SyntheticImageGeneratorComponent"]' > "src/$PKG/components/synthetic_image_generator/__init__.py"
+
+# ─── Synthetic image generator (component) ────────────────────────────────
 mkdir -p "src/$PKG/defs/sample_images"
-cat > "src/$PKG/defs/sample_images/definitions.py" <<'PYEOF'
-"""Generate 3 synthetic PNG images and yield a DataFrame of file paths.
-
-This sidesteps the need to pull from a public CDN and keeps the demo
-hermetic. Each image is a solid colored rectangle with text — enough
-shape for the metadata extractor and a plausibly-describable scene
-for the vision model.
-"""
-import os
-import pandas as pd
-import dagster as dg
-from PIL import Image, ImageDraw, ImageFont
-
-_OUT_DIR = "/tmp/vision_pipeline_images"
-
-
-def _make_image(path: str, color: tuple, label: str) -> None:
-    img = Image.new("RGB", (320, 240), color=color)
-    draw = ImageDraw.Draw(img)
-    try:
-        font = ImageFont.load_default(size=28)
-    except Exception:
-        font = ImageFont.load_default()
-    draw.text((20, 100), label, fill="white", font=font)
-    img.save(path, "PNG")
-
-
-@dg.asset(
-    key=dg.AssetKey(["sample_images_df"]),
-    description="Generates 3 synthetic 320x240 PNG images and returns a DataFrame of paths.",
-    group_name="ingest",
-    kinds={"pillow"},
-)
-def sample_images_df() -> pd.DataFrame:
-    os.makedirs(_OUT_DIR, exist_ok=True)
-    images = [
-        ("red_apple",  (200, 30, 30),  "Red Apple"),
-        ("blue_car",   (40, 80, 200),  "Blue Car"),
-        ("green_tree", (40, 160, 60),  "Green Tree"),
-    ]
-    rows = []
-    for name, color, label in images:
-        path = os.path.join(_OUT_DIR, f"{name}.png")
-        _make_image(path, color, label)
-        rows.append({"file_path": path, "name": name, "label": label})
-    return pd.DataFrame(rows)
-
-
-defs = dg.Definitions(assets=[sample_images_df])
-PYEOF
+cat > "src/$PKG/defs/sample_images/defs.yaml" <<EOF
+type: $PKG.components.synthetic_image_generator.component.SyntheticImageGeneratorComponent
+attributes:
+  asset_name: sample_images_df
+  output_dir: /tmp/vision_pipeline_images
+  samples: default
+  group_name: ingest
+EOF
 
 # ─── image_metadata_extractor configuration ──────────────────────────────
 cat > "src/$PKG/defs/image_metadata_extractor/defs.yaml" <<EOF

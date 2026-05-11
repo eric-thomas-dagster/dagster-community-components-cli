@@ -80,19 +80,19 @@ uv run dg dev   # → http://localhost:3000 → Assets graph
 
 | Domain | Component |
 |---|---|
-| Job applicants → typed candidate records | `resume_extractor` |
-| AP automation → vendor invoices into ERP | `invoice_extractor` |
-| Expense reimbursement → digital receipts | `receipt_extractor` |
-| Legal review → contract parties / clauses / dates | `contract_extractor` |
-| Cash-flow analysis → bank statement transactions | `bank_statement_extractor` |
-| T&E spend → categorized expense reports | `expense_report_extractor` |
-| Claims processing → structured claim records | `insurance_claim_extractor` |
-| Talent intake → job posting metadata | `job_posting_extractor` |
-| eDiscovery → motion / brief metadata | `legal_document_extractor` |
-| EHR integration → diagnoses / medications | `medical_record_extractor` |
-| Procurement → PO line items | `purchase_order_extractor` |
-| Lit-review automation → paper metadata | `scientific_paper_extractor` |
-| Shipping operations → tracking / weight / addresses | `shipping_label_extractor` |
+| Job applicants → typed candidate records | [`resume_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/resume_extractor) |
+| AP automation → vendor invoices into ERP | [`invoice_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/invoice_extractor) |
+| Expense reimbursement → digital receipts | [`receipt_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/receipt_extractor) |
+| Legal review → contract parties / clauses / dates | [`contract_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/contract_extractor) |
+| Cash-flow analysis → bank statement transactions | [`bank_statement_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/bank_statement_extractor) |
+| T&E spend → categorized expense reports | [`expense_report_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/expense_report_extractor) |
+| Claims processing → structured claim records | [`insurance_claim_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/insurance_claim_extractor) |
+| Talent intake → job posting metadata | [`job_posting_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/job_posting_extractor) |
+| eDiscovery → motion / brief metadata | [`legal_document_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/legal_document_extractor) |
+| EHR integration → diagnoses / medications | [`medical_record_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/medical_record_extractor) |
+| Procurement → PO line items | [`purchase_order_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/purchase_order_extractor) |
+| Lit-review automation → paper metadata | [`scientific_paper_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/scientific_paper_extractor) |
+| Shipping operations → tracking / weight / addresses | [`shipping_label_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/shipping_label_extractor) |
 
 ## Cost
 

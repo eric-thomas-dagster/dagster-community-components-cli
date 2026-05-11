@@ -55,9 +55,9 @@ export DATABASE_URL=sqlite:////tmp/adls_inbox.db    # or postgresql:// / mysql:/
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `adls_monitor` | sensor | Lists `demo/inbox/*.csv` every 30s; emits one RunRequest per new blob |
-| 2 | `adls_to_database_asset` | ingestion | Pydantic-Config-driven asset; downloads + parses + writes per file |
-| 3 | `asset_job` | infrastructure | Named job (`ingest_one_file`) that materializes just the ingest asset |
+| 1 | [`adls_monitor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/adls_monitor) | sensor | Lists `demo/inbox/*.csv` every 30s; emits one RunRequest per new blob |
+| 2 | [`adls_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/adls_to_database_asset) | ingestion | Pydantic-Config-driven asset; downloads + parses + writes per file |
+| 3 | [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job) | infrastructure | Named job (`ingest_one_file`) that materializes just the ingest asset |
 
 ## Run
 
@@ -111,7 +111,7 @@ End-to-end:
 
 ## How the sensor talks to the asset
 
-The pivotal piece is `target_op_name` on `adls_monitor`. Without it, the
+The pivotal piece is `target_op_name` on [`adls_monitor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/adls_monitor). Without it, the
 sensor would emit a generic `ops.config.{container, file_path}` shape that
 the asset's Pydantic `ADLSFileConfig` (which expects `container_name` and
 `blob_name`) can't consume. With it set to the asset's name, the sensor
@@ -156,5 +156,5 @@ az group delete --name dagster-demo-rg --yes
 - Switch destination from SQLite → Postgres / Snowflake / etc. by setting
   `DATABASE_URL=postgresql://...` — the asset uses SQLAlchemy.
 - Add `if_exists: replace` for full-refresh-per-file semantics.
-- Add a downstream `summarize` asset that depends on `orders_ingest` — it'll
+- Add a downstream [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) asset that depends on `orders_ingest` — it'll
   re-materialize as new files arrive.

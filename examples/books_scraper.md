@@ -13,9 +13,9 @@ rest_api_fetcher (text)  → html_parser (extract_links)  → dataframe_to_json
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET `/catalogue/page-{partition_key}.html` — `output_format: text` returns raw HTML |
-| 2 | `html_parser` | transformation | `mode: extract_links` parses every `<a href>` |
-| 3 | `dataframe_to_json` | sink | One file per partition: `/tmp/books_page_{partition_key}.json` |
+| 1 | [`rest_api_fetcher`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/rest_api_fetcher) | ingestion | GET `/catalogue/page-{partition_key}.html` — `output_format: text` returns raw HTML |
+| 2 | [`html_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/html_parser) | transformation | `mode: extract_links` parses every `<a href>` |
+| 3 | [`dataframe_to_json`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_json) | sink | One file per partition: `/tmp/books_page_{partition_key}.json` |
 
 All three are partitioned with `partition_type: static`, `partition_values: ["1","2","3","4","5"]`.
 
@@ -57,15 +57,15 @@ Each file is a JSON array with one record `{"content": [<list of URLs>]}`.
   retries, backfills, and parallelism work the same as for any other
   partitioned asset.
 - **`output_format: text` on rest_api_fetcher** — wraps raw response body
-  in a 1-row `content` column so transforms like `html_parser` and
-  `regex_parser` can chain off it.
-- **`html_parser` modes** — `extract_links`, `extract_tables`,
+  in a 1-row `content` column so transforms like [`html_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/html_parser) and
+  [`regex_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/regex_parser) can chain off it.
+- **[`html_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/html_parser) modes** — `extract_links`, `extract_tables`,
   `extract_text`, `strip_tags`. Same component, different downstream
   shapes.
 
 ## Extending
 
-Drop a `regex_parser` between html_parser and the sink to extract just
+Drop a [`regex_parser`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/regex_parser) between html_parser and the sink to extract just
 book detail URLs (`/catalogue/<slug>/index.html`), then chain another
 fetch+parse pair to scrape each book's detail page. Or swap
 `partition_values` for a date-based axis if your target paginates by

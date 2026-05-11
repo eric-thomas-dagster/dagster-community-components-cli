@@ -9,9 +9,9 @@ ordered queues + topics with DLQ + sessions + transactions.
 
 | Component | Category | Role |
 |---|---|---|
-| `dataframe_to_servicebus` (NEW) | sink | Push DataFrame rows as JSON messages |
-| `servicebus_to_database_asset` | ingestion | Drain messages → DB table |
-| `servicebus_monitor` | sensor | Trigger ingestion on new messages |
+| [`dataframe_to_servicebus`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_servicebus) (NEW) | sink | Push DataFrame rows as JSON messages |
+| [`servicebus_to_database_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/servicebus_to_database_asset) | ingestion | Drain messages → DB table |
+| [`servicebus_monitor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/servicebus_monitor) | sensor | Trigger ingestion on new messages |
 
 ## Status
 

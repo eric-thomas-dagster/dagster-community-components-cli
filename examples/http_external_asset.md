@@ -20,7 +20,7 @@ github_runs_by_day      ← http_external_asset (DAILY-partitioned;
 
 | Component | What it does |
 |---|---|
-| `http_external_asset` | Generic HTTP-driven external job wrapper (trigger → poll → fetch logs). Same shape as community wrappers like `fivetran_assets` / `airbyte_assets`, but declarative — a single component config defines N assets, each with its own trigger / status / logs spec. |
+| [`http_external_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/http_external_asset) | Generic HTTP-driven external job wrapper (trigger → poll → fetch logs). Same shape as community wrappers like [`fivetran_assets`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/fivetran_assets) / [`airbyte_assets`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/airbyte_assets), but declarative — a single component config defines N assets, each with its own trigger / status / logs spec. |
 
 ## Cost
 

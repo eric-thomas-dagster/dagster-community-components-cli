@@ -52,33 +52,33 @@ The setup script writes:
 ## Components used
 
 The four community components below compose into the full pattern. The
-star is **`asset_job`** — without it, the scheduler has no stable name to
+star is **[`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job)** — without it, the scheduler has no stable name to
 target.
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read partitioned source CSV |
-| 2 | `summarize` | transformation | Per-partition group-by aggregate |
-| 3 | `dataframe_to_csv` | sink | Write `daily_revenue_{partition_key}.csv` |
-| 4 | **`asset_job`** | infrastructure | **Bundles the 3 assets above into the named job `daily_revenue_refresh` that the scheduler launches.** Without this, you'd target `__ASSET_JOB` (auto-generated, materializes *everything*), so the scheduler would silently start running newly-added assets it never authorized. The `asset_job` keeps the scheduler-side contract stable: *"run job=daily_revenue_refresh, partition=$ODATE"*. |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read partitioned source CSV |
+| 2 | [`summarize`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/summarize) | transformation | Per-partition group-by aggregate |
+| 3 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write `daily_revenue_{partition_key}.csv` |
+| 4 | **[`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job)** | infrastructure | **Bundles the 3 assets above into the named job `daily_revenue_refresh` that the scheduler launches.** Without this, you'd target `__ASSET_JOB` (auto-generated, materializes *everything*), so the scheduler would silently start running newly-added assets it never authorized. The [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job) keeps the scheduler-side contract stable: *"run job=daily_revenue_refresh, partition=$ODATE"*. |
 
-The three asset components describe *what* runs; `asset_job` carves out the
+The three asset components describe *what* runs; [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job) carves out the
 exact slice the external scheduler is allowed to invoke. The Dagster project
 itself doesn't know or care about the scheduler — that's the design.
 
-### Is `asset_job` required?
+### Is [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job) required?
 
-**No** — the scheduler has three options for what to target. `asset_job`
+**No** — the scheduler has three options for what to target. [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job)
 is the recommended one once you have more than one or two assets, but the
 others work:
 
 | Approach | scheduler-side payload | When it's OK |
 |---|---|---|
-| **Named `asset_job` (this demo)** | `jobName=daily_revenue_refresh` | Recommended. Stable contract; safe as the project grows. |
+| **Named [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job) (this demo)** | `jobName=daily_revenue_refresh` | Recommended. Stable contract; safe as the project grows. |
 | **`__ASSET_JOB` + asset selection** | `jobName=__ASSET_JOB` + `assetSelection: ["daily_revenue_report"]` in run config | Works. But `__ASSET_JOB` is an implementation detail, and the asset list now lives on both sides — your scheduler config and the Dagster project. Two sources of truth = drift. |
 | **Single asset, no job wrapper** | `dg launch --assets daily_revenue_report --partition $ODATE` (CLI) | Fine when there's exactly one asset to materialize. Once it grows, you're back to one of the above. |
 
-The named `asset_job` is the version you'd ship to customers. It's a stable
+The named [`asset_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/asset_job) is the version you'd ship to customers. It's a stable
 GraphQL contract that doesn't change as you add unrelated assets — the
 scheduler stays out of the asset graph entirely.
 

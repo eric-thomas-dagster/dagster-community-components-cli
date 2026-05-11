@@ -17,7 +17,7 @@ azure_data_factory imports the ADF instance →
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `azure_data_factory` | integration | Discover ADF pipelines, expose each as a Dagster asset, trigger + poll runs, capture per-activity metadata |
+| 1 | [`azure_data_factory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/azure_data_factory) | integration | Discover ADF pipelines, expose each as a Dagster asset, trigger + poll runs, capture per-activity metadata |
 
 ## Comprehensive features
 

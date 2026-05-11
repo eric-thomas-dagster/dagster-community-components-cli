@@ -18,12 +18,12 @@ Pipeline (8 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
-| 2 | `feature_scaler` | transformation | Standardize features |
-| 3 | `create_samples` | transformation | Train/test split |
-| 4 | `decision_tree_model` | analytics | Fit decision tree |
-| 5 | `cross_validation` | analytics | k-fold CV scores |
-| 6 | `dataframe_to_csv` | sink | Write CSV |
+| 1 | [`csv_file_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ingestion/csv_file_ingestion) | ingestion | Read source CSV |
+| 2 | [`feature_scaler`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/feature_scaler) | transformation | Standardize features |
+| 3 | [`create_samples`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/create_samples) | transformation | Train/test split |
+| 4 | [`decision_tree_model`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/decision_tree_model) | analytics | Fit decision tree |
+| 5 | [`cross_validation`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/cross_validation) | analytics | k-fold CV scores |
+| 6 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
 
 ## Run
 

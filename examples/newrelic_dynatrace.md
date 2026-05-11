@@ -9,14 +9,14 @@ via NRQL (NR) / Metrics API v2 (Dynatrace).
 ## Components
 
 **New Relic:**
-- `newrelic_resource` — REST/NerdGraph wrapper
-- `dataframe_to_newrelic_logs` — push log events
-- `newrelic_nrql_query` — NRQL → DataFrame
+- [`newrelic_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/newrelic_resource) — REST/NerdGraph wrapper
+- [`dataframe_to_newrelic_logs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_newrelic_logs) — push log events
+- [`newrelic_nrql_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/newrelic_nrql_query) — NRQL → DataFrame
 
 **Dynatrace:**
-- `dynatrace_resource` — REST API v2 wrapper
-- `dataframe_to_dynatrace_events` — push events to annotate timeline
-- `dynatrace_metrics_query` — metrics → DataFrame
+- [`dynatrace_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/dynatrace_resource) — REST API v2 wrapper
+- [`dataframe_to_dynatrace_events`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_dynatrace_events) — push events to annotate timeline
+- [`dynatrace_metrics_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/dynatrace_metrics_query) — metrics → DataFrame
 
 ## Status
 
@@ -72,7 +72,7 @@ attributes:
 ## OpenTelemetry alternative
 
 Both NR and Dynatrace also accept OTLP/HTTP — you can use the
-universal `dataframe_to_otlp_logs` / `dataframe_to_otlp_metrics` sinks
+universal [`dataframe_to_otlp_logs`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_otlp_logs) / [`dataframe_to_otlp_metrics`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_otlp_metrics) sinks
 instead, with the appropriate OTLP endpoint + bearer token. See
 [opentelemetry_demo.md](opentelemetry_demo.md). One sink per signal,
 many backends.

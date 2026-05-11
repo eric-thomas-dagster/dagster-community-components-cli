@@ -12,12 +12,12 @@ Pipeline (10 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | Generate synthetic data |
-| 2 | `ab_treatments` | analytics | Assign variants by hash |
-| 3 | `ab_test_analysis` | analytics | Stat-test verdict |
-| 4 | `ab_trend` | analytics | Daily conversion trend |
-| 5 | `ab_controls` | analytics | Sample size for next experiment |
-| 6 | `dataframe_to_csv` | sink | Write CSV |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | Generate synthetic data |
+| 2 | [`ab_treatments`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ab_treatments) | analytics | Assign variants by hash |
+| 3 | [`ab_test_analysis`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ab_test_analysis) | analytics | Stat-test verdict |
+| 4 | [`ab_trend`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ab_trend) | analytics | Daily conversion trend |
+| 5 | [`ab_controls`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/analytics/ab_controls) | analytics | Sample size for next experiment |
+| 6 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | Write CSV |
 
 ## Run
 

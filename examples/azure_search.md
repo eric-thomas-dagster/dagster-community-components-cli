@@ -17,10 +17,10 @@ synthetic_data_generator → azure_search_indexer → azure_search_query → dat
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `synthetic_data_generator` | ai | 30 synthetic products |
-| 2 | `azure_search_indexer` | sink | Push docs to index (mergeOrUpload) |
-| 3 | `azure_search_query` | source | Filter `total gt 500`, order by total desc, top 100 |
-| 4 | `dataframe_to_csv` | sink | High-value report |
+| 1 | [`synthetic_data_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/synthetic_data_generator) | ai | 30 synthetic products |
+| 2 | [`azure_search_indexer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/azure_search_indexer) | sink | Push docs to index (mergeOrUpload) |
+| 3 | [`azure_search_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sources/azure_search_query) | source | Filter `total gt 500`, order by total desc, top 100 |
+| 4 | [`dataframe_to_csv`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/sinks/dataframe_to_csv) | sink | High-value report |
 
 ## Validated end-to-end
 
@@ -39,7 +39,7 @@ uv run dg launch --assets '*'
 ## Vector + semantic search
 
 For vector search (embeddings stored in the index), pre-compute embeddings
-upstream (e.g. with `embeddings_generator`) and add a vector field to the
+upstream (e.g. with [`embeddings_generator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/embeddings_generator)) and add a vector field to the
 index schema. The indexer component handles vectors via the same
 mergeOrUpload action — just include the vector column.
 

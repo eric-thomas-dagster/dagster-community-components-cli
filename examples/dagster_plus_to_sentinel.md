@@ -58,9 +58,9 @@ az sentinel workspace create -g "$RG" -n "$LAW"   # may require sentinel CLI ext
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `dagster_plus_audit_log_ingestion` | ingestion | GraphQL pull from `auditLog.auditLogEntries` |
-| 2 | `ocsf_normalizer` | transformation | Map Dagster+ event types → OCSF v1.1 |
-| 3 | `audit_logs_to_sentinel` | sink | POST to Log Analytics ingestion API |
+| 1 | [`dagster_plus_audit_log_ingestion`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/ingestion/dagster_plus_audit_log_ingestion) | ingestion | GraphQL pull from `auditLog.auditLogEntries` |
+| 2 | [`ocsf_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/transforms/ocsf_normalizer) | transformation | Map Dagster+ event types → OCSF v1.1 |
+| 3 | [`audit_logs_to_sentinel`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sinks/audit_logs_to_sentinel) | sink | POST to Log Analytics ingestion API |
 
 ## Run
 
@@ -117,8 +117,8 @@ az group delete --name dagster-demo-rg --yes
 - **Not a Sentinel-incidents demo.** Custom logs ingest fine without Sentinel
   enabled on the workspace; the incidents/hunts UX is its own setup.
 - **Not a real-time stream.** This is a polling pull on `dg launch`. For
-  every-15-min cadence, install `cron_schedule` and point it at this asset
-  graph, or use the `dagster_plus_to_siem_job` op-job (single-YAML version).
+  every-15-min cadence, install [`cron_schedule`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/schedules/cron_schedule) and point it at this asset
+  graph, or use the [`dagster_plus_to_siem_job`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/jobs/dagster_plus_to_siem_job) op-job (single-YAML version).
 
 ## Related
 
