@@ -1,13 +1,17 @@
 # FHIR Normalizer — synthetic FHIR R4 resources → flat per-resource DataFrames
 
-**Validated end-to-end** (pure Python, no external services). 12 generated FHIR resources → 4 Patient rows + 8 Observation rows, each as flat tabular data ready for BQ / parquet / etc.
+**Validated end-to-end** (pure Python, no external services). 28 generated FHIR resources covering 6 types → 4 specialized downstream tables, each as flat tabular data ready for BQ / parquet / etc.
 
 ```
-fhir_resources           ← synthetic_data_generator (fhir_patients, 12 resources)
+fhir_resources           ← synthetic_data_generator (fhir_patients, 28 resources)
        │
-       ├── patients_flat       ← fhir_resource_normalizer (filter: Patient)
-       └── observations_flat   ← fhir_resource_normalizer (filter: Observation)
+       ├── patients_flat        ← fhir_resource_normalizer (Patient only)
+       ├── observations_flat    ← fhir_resource_normalizer (Observation only)
+       ├── claims_flat          ← fhir_resource_normalizer (Claim + Coverage)
+       └── provider_directory   ← fhir_resource_normalizer (Practitioner + Organization)
 ```
+
+One component, four different `resource_types` filters → four purpose-built tables.
 
 ## Components covered (2)
 
@@ -47,9 +51,12 @@ Note: `gender` came through as `M`/`F` from the source FHIR; `value_maps` normal
 | `Encounter` | id, patient_id, status, class_code, class_display, start, end, reason_text |
 | `Condition` | id, patient_id, code_system, code, display, clinical_status, onset_dt, recorded_dt |
 | `MedicationRequest` | id, patient_id, status, intent, med_system, med_code, med_display, authored_on, dosage_text |
+| `Claim` | id, status, use, patient_id, provider_id, insurer_id, total_amount, total_currency, billable_start, billable_end, created, priority_code |
+| `Coverage` | id, status, type_code, type_display, policy_holder_id, subscriber_id, beneficiary_id, payor_id, subscriber_member_id, period_start, period_end, network |
+| `Practitioner` | id, active, first_name, last_name, prefix, suffix, gender, birth_date, **npi**, city, state, postal_code, country |
+| `Organization` | id, active, name, alias, type_code, type_display, city, state, postal_code, country, part_of_id |
+| `Bundle` | id, bundle_type, timestamp, total, entry_count, entries_by_type (dict) |
 | Other | Generic fallback: resource_type, id, status, patient_id |
-
-Wave 2 will add `Claim`, `Coverage`, `Practitioner`, `Organization`, `Bundle`, `Procedure`, `DiagnosticReport`, `Immunization`, etc.
 
 ## value_maps (inherited from [`hris_normalizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/transforms/hris_normalizer) pattern)
 

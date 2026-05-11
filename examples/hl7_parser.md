@@ -1,11 +1,11 @@
 # HL7 v2 Parser — synthetic hospital messages → flat segment DataFrame
 
-**Validated end-to-end** (pure Python). 8 alternating ADT^A01 admit + ORU^R01 lab-result HL7 messages → 24 flat segment rows.
+**Validated end-to-end** (pure Python). 12 messages rotating through ADT^A01 admit + ORU^R01 lab result + ORM^O01 order → 64 flat segment rows spanning all 9 supported segment types.
 
 ```
-hl7_messages         ← synthetic_data_generator (hl7_messages, 8 messages)
+hl7_messages         ← synthetic_data_generator (hl7_messages, 12 messages)
        │
-       └── hl7_segments  ← hl7_v2_parser (MSH + PID + OBX rows per message)
+       └── hl7_segments  ← hl7_v2_parser (all 9 supported segments)
 ```
 
 ## Components covered (2)
@@ -51,8 +51,14 @@ HL7 v2.x has been the dominant messaging format inside hospitals since the 1990s
 | `MSH` | Message header — sending app, datetime, message type, control id, version |
 | `PID` | Patient demographics — id, name, DOB, sex, address |
 | `OBX` | Observation result — code, value, units, ref range, abnormal flags |
+| `OBR` | Observation request — service code, observation/report times, status |
+| `ORC` | Order control — placer/filler order numbers, ordering provider, status |
+| `PV1` | Patient visit — class (I/O/E), location (poc^room^bed^facility), attending, admit/discharge dt, visit_number |
+| `EVN` | Event type — event code, recorded/occurred dt, operator |
+| `DG1` | Diagnosis — code (ICD-10), name, codeset, datetime, type (admitting/working/final) |
+| `AL1` | Patient allergy — allergen type (DA/FA/EA), allergen code, severity, reaction |
 
-Wave 2 will add `OBR` (observation request), `ORC` (order), `PV1` (visit), `EVN` (event), `DG1` (diagnosis), `AL1` (allergy), `IN1` (insurance), `GT1` (guarantor).
+Wave 4 backlog: `IN1` (insurance), `GT1` (guarantor), `NK1` (next of kin), `MRG` (merge patient).
 
 ## Run it
 
