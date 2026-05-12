@@ -238,8 +238,25 @@ else
   echo "==> 4/6: GitHub Actions CI API token — skipped (no .github/workflows/ to wire up)"
 fi
 
-# ── 5/7: scan + provision env vars ───────────────────────────────────────────
-echo "==> 5/7: Scanning your project for env var references"
+# ── 5/7: deployment target — CONFIRM FIRST (env-var step depends on it) ─────
+echo "==> 5/7: Deployment target"
+ORG_ARG=""; DEPLOY_ARG=""; BUILD_ARG=""
+[ -n "$DAGSTER_PLUS_ORG" ]        && ORG_ARG="--organization $DAGSTER_PLUS_ORG"
+[ -n "$DAGSTER_PLUS_DEPLOYMENT" ] && DEPLOY_ARG="--deployment $DAGSTER_PLUS_DEPLOYMENT"
+[ -n "$BUILD_STRATEGY" ]          && BUILD_ARG="--build-strategy $BUILD_STRATEGY"
+echo "    organization: ${DAGSTER_PLUS_ORG:-(from dg plus login)}"
+echo "    deployment:   $DAGSTER_PLUS_DEPLOYMENT"
+echo "    build:        ${BUILD_STRATEGY:-(auto: PEX for Serverless, Docker for Hybrid)}"
+if [ "$NON_INTERACTIVE" -ne 1 ]; then
+  CONFIRM_TARGET=$(ask "    Continue with this target? [Y/n]:" "Y")
+  if ! is_yes "$CONFIRM_TARGET"; then
+    echo "    Aborted. Re-run with --deployment <name> to target a different deployment."
+    exit 0
+  fi
+fi
+
+# ── 6/7: env vars (uses confirmed deployment + checks what's already set) ────
+echo "==> 6/7: Scanning your project for env var references"
 # Greps for the common reference patterns:
 #   - Python:  EnvVar("X"), os.environ["X"], os.getenv("X")
 #   - YAML:    *_env_var: X     and     ${env:X}
@@ -266,18 +283,46 @@ else
   echo "    Detected references:"
   echo "$ENV_VARS" | sed 's/^/      - /'
   echo ""
+  # Pull what's ALREADY set on this deployment so we don't blindly overwrite.
+  echo "    Checking what's already set in Dagster+ (dg plus pull env)..."
+  EXISTING_KEYS=""
+  if uv run dg plus pull env >/dev/null 2>&1 && [ -f .env ]; then
+    EXISTING_KEYS=$(grep -oE '^[A-Z_][A-Z0-9_]*=' .env 2>/dev/null | sed 's/=$//')
+  fi
+  if [ -n "$EXISTING_KEYS" ]; then
+    echo "    Already in Dagster+ deployment '$DAGSTER_PLUS_DEPLOYMENT':"
+    echo "$EXISTING_KEYS" | sed 's/^/      ✓ /'
+    echo ""
+  else
+    echo "    (none currently set on this deployment)"
+    echo ""
+  fi
+
   CREATED=0
+  ALREADY=()
   SHELL_USED=()
   PROMPTED=()
   SKIPPED=()
   while IFS= read -r var; do
     [ -z "$var" ] && continue
+
+    # Already set on Dagster+? Don't overwrite without explicit consent.
+    if echo "$EXISTING_KEYS" | grep -qx "$var"; then
+      if [ "$NON_INTERACTIVE" -eq 1 ]; then
+        ALREADY+=("$var"); continue
+      fi
+      reset=$(ask "      $var is already set on '$DAGSTER_PLUS_DEPLOYMENT'. Overwrite? [y/N]:" "N")
+      if ! is_yes "$reset"; then
+        ALREADY+=("$var"); continue
+      fi
+      # else fall through to set-new flow
+    fi
+
     current_val="${!var:-}"
     val=""
     origin=""
 
     if [ -n "$current_val" ]; then
-      # Truncate the displayed preview if value looks long (likely a secret)
       preview="$current_val"
       [ ${#preview} -gt 60 ] && preview="${preview:0:57}…"
       if [ "$NON_INTERACTIVE" -eq 1 ]; then
@@ -292,7 +337,6 @@ else
             SKIPPED+=("$var"); continue
             ;;
           *)
-            # No / anything else → ask for a new one
             val=$(ask "      $var = (paste new value, or Enter to skip):" "")
             if [ -z "$val" ]; then
               SKIPPED+=("$var"); continue
@@ -316,14 +360,15 @@ else
       echo "      ✓ $var set ($origin) → deployment '$DAGSTER_PLUS_DEPLOYMENT'"
       CREATED=$((CREATED + 1))
     else
-      echo "      ✗ $var: failed to set (insufficient permissions, already exists, or other — set via the UI)"
+      echo "      ✗ $var: failed to set (insufficient permissions or other — set via the UI)"
     fi
   done <<<"$ENV_VARS"
   echo ""
   echo "    Summary: $CREATED set"
-  [ ${#SHELL_USED[@]} -gt 0 ] && echo "      used your shell values for:  ${SHELL_USED[*]}"
-  [ ${#PROMPTED[@]} -gt 0 ]   && echo "      took values you entered for: ${PROMPTED[*]}"
-  [ ${#SKIPPED[@]} -gt 0 ]    && echo "      skipped:                     ${SKIPPED[*]}"
+  [ ${#ALREADY[@]} -gt 0 ]    && echo "      already on Dagster+ (kept):   ${ALREADY[*]}"
+  [ ${#SHELL_USED[@]} -gt 0 ] && echo "      used your shell values for:   ${SHELL_USED[*]}"
+  [ ${#PROMPTED[@]} -gt 0 ]   && echo "      took values you entered for:  ${PROMPTED[*]}"
+  [ ${#SKIPPED[@]} -gt 0 ]    && echo "      skipped:                      ${SKIPPED[*]}"
   echo ""
   echo "    Override or set additional vars anytime:"
   echo "      uv run dg plus create env <NAME> --value '...' --deployment $DAGSTER_PLUS_DEPLOYMENT"
@@ -331,16 +376,6 @@ else
   echo "    Note: the scan catches the most common patterns. If your project uses"
   echo "    dynamically-constructed env-var names, set those manually."
 fi
-
-# ── 6/7: deployment target summary ───────────────────────────────────────────
-echo "==> 6/7: Deployment target"
-ORG_ARG=""; DEPLOY_ARG=""; BUILD_ARG=""
-[ -n "$DAGSTER_PLUS_ORG" ]        && ORG_ARG="--organization $DAGSTER_PLUS_ORG"
-[ -n "$DAGSTER_PLUS_DEPLOYMENT" ] && DEPLOY_ARG="--deployment $DAGSTER_PLUS_DEPLOYMENT"
-[ -n "$BUILD_STRATEGY" ]          && BUILD_ARG="--build-strategy $BUILD_STRATEGY"
-echo "    organization: ${DAGSTER_PLUS_ORG:-(from dg plus login)}"
-echo "    deployment:   $DAGSTER_PLUS_DEPLOYMENT"
-echo "    build:        ${BUILD_STRATEGY:-(auto: PEX for Serverless, Docker for Hybrid)}"
 
 # ── 7/7: deploy ──────────────────────────────────────────────────────────────
 echo ""

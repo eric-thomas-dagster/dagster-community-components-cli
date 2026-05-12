@@ -47,15 +47,20 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        → A SEPARATE token for GitHub Actions runs (no browser available there).
        → Paste into GitHub secret DAGSTER_CLOUD_API_TOKEN.
        → Optional — skip this if you only deploy from your laptop.
-5/7  Scans your project for env var references — and offers to set each one.
+5/7  Confirms deployment target (org / deployment / build strategy)
+       → You see exactly which deployment env vars + the deploy will target
+         before any changes get made.
+6/7  Scans your project for env var references — and offers to set each one.
        → Greps for EnvVar("X"), os.environ["X"], *_env_var: X, ${env:X}.
-       → For each detected name:
+       → Runs `dg plus pull env` first to see what's ALREADY set on this
+         deployment, so we don't blindly overwrite. Existing vars get
+         a "kept" status by default; you can opt in to overwrite.
+       → For each new (not-yet-on-Dagster+) name:
            - If already set in your shell: shows a preview + asks "Use this value? [Y/n/skip]"
            - If not set: prompts for a value (Enter to skip)
        → Each provided value runs `dg plus create env X --value … --deployment …`.
        → Scan only catches the most common patterns — set any others manually:
            uv run dg plus create env MY_VAR --value '...' --deployment prod
-6/7  Confirms deployment target (org / deployment / build strategy)
 7/7  [prompts] Run dg plus deploy now?  (uses your step-2 user token, NOT the CI token)
 ```
 
