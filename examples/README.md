@@ -61,6 +61,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Window Calculation](window_calculation.md) | `csv_file_ingestion`, `window_calculation`, `dataframe_to_csv` | Every supported window function on stock prices |
 | [Regional Orders Union](regional_orders.md) | `csv_file_ingestion`, `dataframe_union`, `dataframe_to_csv` | Merge multi-region order extracts with mismatched columns |
 | [Data Hygiene](data_hygiene.md) | `synthetic_data_generator`, `audit_columns`, `schema_validator`, `field_mapper`, `map_values`, `data_masking`, `hash`, `surrogate_key`, `record_id`, `count_records` | Toolbox demo: audit / validate / rename / canonicalize / mask / hash / surrogate-key / number / aggregate |
+
 <a id="time-series--forecasting"></a>
 ### Time series + forecasting [¶](#time-series--forecasting)
 
@@ -71,6 +72,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Stocks — Anomaly Detection](stocks_anomaly.md) | `csv_file_ingestion`, `anomaly_detection`, `dataframe_to_csv` | Per-ticker z-score outlier flagging |
 | [Sensor Gap-Fill](sensor_gapfill.md) | `synthetic_data_generator`, `ts_filler`, `running_total`, `dataframe_to_csv` | Fill missing hourly readings + cumulative metrics |
 | [Synthetic Metrics + Anomalies](synthetic_metrics.md) | `time_series_generator`, `anomaly_detection`, `dataframe_to_csv` | No-upstream synthetic generator |
+
 <a id="ml-pipelines"></a>
 ### ML pipelines [¶](#ml-pipelines)
 
@@ -82,6 +84,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Titanic Complete](titanic_complete.md) | `csv_file_ingestion`, `unique_dedup`, `data_cleansing`, `outlier_clipper`, `imputation`, `type_coercer`, `tile_binning`, `one_hot_encoding`, `logistic_regression_model`, `summarize`, `filter`, `dataframe_to_csv`, `cron_schedule` | Full DS workflow: ingest → quality → ETL → model → 3 outputs |
 | [Churn Prediction](churn.md) | `synthetic_data_generator`, `churn_prediction`, `dataframe_to_csv` | Rule-based scoring with interpretable risk factors |
 | [Market Basket](market_basket.md) | `csv_file_ingestion`, `market_basket_rules`, `filter`, `summarize`, `dataframe_to_csv`, `cron_schedule` | Apriori association rules with lift filter |
+
 <a id="customer--subscription-analytics"></a>
 ### Customer + subscription analytics [¶](#customer--subscription-analytics)
 
@@ -93,6 +96,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Subscription Survival](subscription_survival.md) | `synthetic_data_generator`, `survival_analysis`, `dataframe_to_csv`, `cron_schedule` | Kaplan-Meier survival on SaaS subscriptions |
 | [Retail Analytics](retail_analytics.md) | `synthetic_data_generator`, `datetime_parser`, `rfm_segmentation`, `cohort_analysis`, `running_total`, `dataframe_to_csv`, `cron_schedule` | RFM segmentation + cohort analysis + running spend |
 | [A/B Full Pipeline](ab_full_pipeline.md) | `synthetic_data_generator`, `ab_treatments`, `ab_test_analysis`, `ab_trend`, `ab_controls`, `dataframe_to_csv`, `cron_schedule` | Assignment + analysis + trend + sample-size |
+
 <a id="geospatial"></a>
 ### Geospatial [¶](#geospatial)
 
@@ -103,6 +107,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Cities Nearest Neighbors](cities_nn.md) | `csv_file_ingestion`, `nearest_neighbors`, `dataframe_to_csv` | Top-3 closest cities (sklearn KD-tree) |
 | [West Coast Cities Filter](west_coast_cities.md) | `csv_file_ingestion`, `bounding_box_filter`, `dataframe_to_csv` | Geographic bounding-box filter |
 | [Store Coverage](store_coverage.md) | `csv_file_ingestion`, `create_points`, `buffer`, `smooth`, `make_grid`, `spatial_join`, `summarize`, `dataframe_to_csv`, `cron_schedule` | Buffer + spatial_join + summarize coverage |
+
 <a id="public-apis-no-auth"></a>
 ### Public APIs (no auth) [¶](#public-apis-no-auth)
 
@@ -125,12 +130,14 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Movies → SQL](movies_sql.md) | `csv_file_ingestion`, `type_coercer`, `formula`, `dataframe_to_table` | Real MovieLens Top 250 → SQLite |
 | [NBA Scoreboard](nba_scoreboard.md) | `rest_api_fetcher`, `json_path_extractor`, `dataframe_to_csv`, `http_poll_sensor` | `http_poll_sensor` with targeted hashing |
 | [RSS Sensor](rss_sensor.md) | `rest_api_fetcher`, `xml_parser`, `dataframe_to_csv`, `rss_feed_sensor` | Sensor-driven HN frontpage ingestion |
+
 <a id="ocsf--security"></a>
 ### OCSF / Security [¶](#ocsf--security)
 
 | Demo | Components | Highlights |
 |---|---|---|
 | [OCSF + Security Lake](ocsf_security_lake.md) | `csv_file_ingestion`, `ocsf_normalizer`, `ocsf_validator`, `dataframe_to_parquet` | Synthetic Dagster+ events through full OCSF pipeline (no AWS required) |
+
 <a id="op-jobs-no-asset-materialized"></a>
 ### Op jobs (no asset materialized) [¶](#op-jobs-no-asset-materialized)
 
@@ -139,6 +146,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Shell Command Job](shell_command_job.md) | `shell_command_job` | Scheduled shell command, no asset |
 | [Dynamic Fanout Job](dynamic_fanout_job.md) | `dynamic_fanout_job` | DynamicOut: discover N items, parallel process, optional collect |
 | [Per-File Processor](per_file_processor.md) | `per_file_processor_job` | Inbox-style fan-out: list local CSVs, parse each, archive on success |
+
 <a id="patterns"></a>
 ### Patterns [¶](#patterns)
 
@@ -146,6 +154,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 |---|---|---|
 | [DuckDB Warehouse](duckdb_warehouse.md) | `csv_file_ingestion`, `duckdb_io_manager`, `cron_schedule` | IO manager round-trip + downstream asset + daily schedule |
 | [External Scheduler](external_scheduler.md) | `csv_file_ingestion`, `summarize`, `dataframe_to_csv`, `asset_job` | Pattern for keeping Control-M / Autosys / cron as master with Dagster as executor (GraphQL launchRun) |
+
 ---
 
 <a id="azure-subscription-required"></a>
@@ -310,7 +319,7 @@ Live runs surfaced several real bugs the components now handle cleanly:
 
 | Demo | Pipeline | Highlights |
 |---|---|---|
-| [Dagster+ Audit → Security Lake](dagster_plus_security_lake.md) | dagster_plus_audit_log_ingestion → ocsf_normalizer → ocsf_validator → Parquet | Asset pipeline with full lineage; local Parquet by default. Validated with 176 real entries. |
+| [Dagster+ Audit → Security Lake](dagster_plus_security_lake.md) | `dagster_plus_audit_log_ingestion` → `ocsf_normalizer` → `ocsf_validator` → Parquet | Asset pipeline with full lineage; local Parquet by default. Validated with 176 real entries. |
 
 ---
 
