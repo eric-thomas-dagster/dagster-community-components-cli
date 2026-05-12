@@ -61,6 +61,9 @@ You can force a specific strategy with `--build-strategy docker` or `--build-str
   --organization my-org-slug \
   --deployment branch-feature-x \
   --build-strategy docker \
+  --agent-type hybrid \
+  --registry-url 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-repo \
+  --agent-platform k8s \
   --non-interactive \
   --with-ci             # scaffold GitHub Actions without prompting
 ```
@@ -70,8 +73,12 @@ You can force a specific strategy with `--build-strategy docker` or `--build-str
 | `--organization` | from `dg plus login` | Override the org chosen at login time |
 | `--deployment` | `prod` | Deploy to a branch deployment or a non-prod env |
 | `--build-strategy` | auto-detect | Force `docker` or `python-executable` |
+| `--agent-type` | prompt | `serverless` or `hybrid` |
+| `--registry-url` | prompt (Hybrid only) | Container registry URL for `docker push` / `docker pull` |
+| `--agent-platform` | prompt (Hybrid only) | `k8s` / `ecs` / `docker` — selects the right `container_context.yaml` shape |
+| `--git-provider` | `github` | `github` or `gitlab` — controls which CI workflow files get generated |
 | `--non-interactive` | (interactive) | Skip all prompts — accept defaults. Use in CI. |
-| `--with-ci` | (off) | Generate the GitHub Actions workflows without asking. Useful for CI bootstrap. |
+| `--with-ci` | (off) | Generate the workflows without asking. Useful for CI bootstrap. |
 
 ## Artifacts the script creates (via `dg plus deploy configure`)
 
@@ -82,10 +89,37 @@ For **Serverless** deployments:
 
 For **Hybrid** deployments:
 
-- `build.yaml` + `Dockerfile` + `container_context.yaml`
+- `build.yaml` + `Dockerfile` + `container_context.yaml` (platform-specific config)
 - `.github/workflows/*.yml`
 
-The exact contents come from the official `dg plus deploy configure` command, so they stay current with whatever Dagster+ expects. The script doesn't hand-write these.
+The exact contents come from the official `dg plus deploy configure` command, so they stay current with whatever Dagster+ expects.
+
+## Hybrid: the registry is your responsibility
+
+For **Serverless**, Dagster+ owns the build cache + image storage. Nothing to set up.
+
+For **Hybrid**, your agent runs in *your* infra and pulls Docker images from a registry *you* own. The script doesn't create the registry — it prompts you for the URL and bakes it into `build.yaml`. You're on the hook for:
+
+| Concern | Who handles it |
+|---|---|
+| Creating the registry (ECR / GAR / ACR / GHCR / Docker Hub) | You |
+| Auth so this machine can `docker push` | You (`aws ecr get-login-password`, `gcloud auth configure-docker`, etc.) |
+| Auth so the Dagster+ agent can `docker pull` | You (imagePullSecret for k8s, IAM role for ECS, etc.) |
+| Writing the registry URL into `build.yaml` | Script (via `--registry-url` flag or interactive prompt) |
+| The `docker build` + `docker push` lifecycle | `dg plus deploy` (uses build.yaml) |
+
+The script prints the credential-setup commands you need based on common registry types when it detects Hybrid:
+
+```
+aws ecr get-login-password --region us-east-1 | \
+  docker login --username AWS --password-stdin 123456789012.dkr.ecr.us-east-1.amazonaws.com
+
+gcloud auth configure-docker us-central1-docker.pkg.dev
+
+echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+```
+
+For Kubernetes agents pulling private images, you'll also need an `imagePullSecret` attached to the agent's service account — see the [Hybrid agent docs](https://docs.dagster.io/guides/deploy/dagster-plus/hybrid).
 
 ## The CI API token
 

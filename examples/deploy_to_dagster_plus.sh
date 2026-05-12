@@ -34,6 +34,9 @@ DAGSTER_PLUS_ORG=""
 DAGSTER_PLUS_DEPLOYMENT="prod"
 BUILD_STRATEGY=""
 GIT_PROVIDER="github"
+AGENT_TYPE=""           # serverless | hybrid (autodetect if empty)
+REGISTRY_URL=""         # required for hybrid
+AGENT_PLATFORM=""       # k8s | ecs | docker (hybrid only)
 NON_INTERACTIVE=0
 WITH_CI=0
 
@@ -43,6 +46,9 @@ while [ "$#" -gt 0 ]; do
     --deployment) DAGSTER_PLUS_DEPLOYMENT="$2"; shift 2;;
     --build-strategy) BUILD_STRATEGY="$2"; shift 2;;
     --git-provider) GIT_PROVIDER="$2"; shift 2;;
+    --agent-type) AGENT_TYPE="$2"; shift 2;;
+    --registry-url) REGISTRY_URL="$2"; shift 2;;
+    --agent-platform) AGENT_PLATFORM="$2"; shift 2;;
     --non-interactive) NON_INTERACTIVE=1; shift;;
     --with-ci) WITH_CI=1; shift;;
     --help|-h)
@@ -119,17 +125,64 @@ else
   WANT_CONFIGURE=$(ask "    Run 'dg plus deploy configure' to scaffold build.yaml + $GIT_PROVIDER CI workflows? [Y/n]:" "Y")
 fi
 if is_yes "$WANT_CONFIGURE"; then
-  echo "    Running: dg plus deploy configure --git-provider $GIT_PROVIDER"
-  echo "    (Auto-detects your agent type from the Dagster+ deployment.)"
-  # `dg plus deploy configure` interactively asks "serverless or hybrid?" if
-  # detection fails. We pipe `\n` to accept the auto-detected default.
-  if [ "$NON_INTERACTIVE" -eq 1 ]; then
-    echo "" | uv run dg plus deploy configure --git-provider "$GIT_PROVIDER" || true
-  else
-    uv run dg plus deploy configure --git-provider "$GIT_PROVIDER" || true
+  # If user didn't specify, ask which agent (else dg plus deploy configure prompts itself)
+  if [ -z "$AGENT_TYPE" ]; then
+    if [ "$NON_INTERACTIVE" -eq 1 ]; then
+      AGENT_TYPE="serverless"
+    else
+      AGENT_TYPE=$(ask "    Is your Dagster+ deployment Serverless or Hybrid? [serverless/hybrid]:" "serverless")
+    fi
   fi
-  echo "    ✓ generated:"
+
+  if [ "$AGENT_TYPE" = "hybrid" ]; then
+    # Hybrid needs a container registry + platform.
+    if [ -z "$REGISTRY_URL" ]; then
+      echo ""
+      echo "    Hybrid deployments need a container registry that your agent can pull from."
+      echo "    Common forms:"
+      echo "      AWS ECR     : 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-repo"
+      echo "      Google GAR  : us-central1-docker.pkg.dev/my-project/my-repo"
+      echo "      Azure ACR   : myacr.azurecr.io/my-repo"
+      echo "      GitHub GHCR : ghcr.io/my-org/my-repo"
+      echo "      Docker Hub  : docker.io/my-user/my-repo"
+      echo ""
+      REGISTRY_URL=$(ask "    Registry URL:" "")
+      if [ -z "$REGISTRY_URL" ]; then
+        echo "    ⚠️  No registry URL provided. You'll have to edit build.yaml manually before deploying."
+      fi
+    fi
+    if [ -z "$AGENT_PLATFORM" ]; then
+      AGENT_PLATFORM=$(ask "    Agent platform [k8s/ecs/docker]:" "k8s")
+    fi
+
+    REG_ARG=""; PLAT_ARG=""
+    [ -n "$REGISTRY_URL" ]   && REG_ARG="--registry-url $REGISTRY_URL"
+    [ -n "$AGENT_PLATFORM" ] && PLAT_ARG="--agent-platform $AGENT_PLATFORM"
+    echo "    Running: dg plus deploy configure hybrid --git-provider $GIT_PROVIDER $REG_ARG $PLAT_ARG"
+    # shellcheck disable=SC2086
+    uv run dg plus deploy configure hybrid --git-provider "$GIT_PROVIDER" $REG_ARG $PLAT_ARG || true
+  else
+    # Serverless: just go.
+    echo "    Running: dg plus deploy configure serverless --git-provider $GIT_PROVIDER"
+    uv run dg plus deploy configure serverless --git-provider "$GIT_PROVIDER" || true
+  fi
+  echo ""
+  echo "    ✓ generated artifacts:"
   ls -la build.yaml Dockerfile container_context.yaml .github/workflows/*.yml 2>/dev/null | sed 's/^/      /' || true
+
+  if [ "$AGENT_TYPE" = "hybrid" ] && [ -n "$REGISTRY_URL" ]; then
+    cat >&2 <<HINT
+
+    ⚠️  Hybrid registry auth — you'll need credentials so:
+        - This machine can 'docker push' to $REGISTRY_URL
+        - Your Dagster+ agent can 'docker pull' from $REGISTRY_URL
+        Examples:
+          aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin $REGISTRY_URL
+          gcloud auth configure-docker us-central1-docker.pkg.dev
+          echo \$GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+        For Kubernetes agents, set up an imagePullSecret OR attach a workload-identity service account.
+HINT
+  fi
 else
   echo "    skipped"
 fi
