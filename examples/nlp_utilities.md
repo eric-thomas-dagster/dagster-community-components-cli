@@ -44,7 +44,7 @@ OPENAI_API_KEY=sk-...
 ## Run it
 
 ```bash
-./setup_nlp_utilities_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_nlp_utilities_demo.sh | bash
 cd nlp-utilities-demo
 uv run dg launch --assets '*'
 ```

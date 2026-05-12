@@ -54,7 +54,7 @@ Real-world note: actual camera EXIF varies widely (Canon vs iPhone vs DSLR all u
 ## Run it
 
 ```bash
-./setup_image_exif_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_image_exif_demo.sh | bash
 cd image-exif-demo
 uv run dg launch --assets '*'
 ```

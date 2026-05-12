@@ -79,7 +79,7 @@ gcloud bigtable instances add-iam-policy-binding demo-instance \
 ## Run it
 
 ```bash
-./setup_bigtable_roundtrip_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bigtable_roundtrip_demo.sh | bash
 cd bigtable-roundtrip-demo
 uv run dg launch --assets '*'
 ```

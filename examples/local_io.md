@@ -36,7 +36,7 @@ naturally with the IO managers.
 ## Run it
 
 ```bash
-./setup_local_io_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_local_io_demo.sh | bash
 cd local-io-demo
 uv run dg launch --assets '*'
 ```

@@ -49,7 +49,7 @@ freshness, lineage, and metadata — but the demo itself is offline.
 ## Run it
 
 ```bash
-./setup_external_assets_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_external_assets_demo.sh | bash
 cd external-assets-demo
 uv run dg check defs        # validates all 21 components load
 uv run dg dev               # http://localhost:3000 → Assets graph

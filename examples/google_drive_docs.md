@@ -59,7 +59,7 @@ export GEMINI_API_KEY=...      # or GOOGLE_API_KEY (gemini_llm only)
 ## Run it
 
 ```bash
-./setup_google_drive_docs_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_google_drive_docs_demo.sh | bash
 cd google-drive-docs-demo
 uv run dg launch --assets '*'
 ```

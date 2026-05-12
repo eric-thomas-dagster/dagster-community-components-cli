@@ -32,7 +32,7 @@ churn_dataset (100 customers, 30% churn)
 ## Run it
 
 ```bash
-./setup_forecasting_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_forecasting_demo.sh | bash
 cd forecasting-demo
 uv run dg launch --assets '*'
 uv run dg dev   # http://localhost:3000

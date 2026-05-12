@@ -32,7 +32,7 @@ orders (synthetic source: 30 rows × 5 cols)
 ## Run it
 
 ```bash
-./setup_local_sinks_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_local_sinks_demo.sh | bash
 cd local-sinks-demo
 uv run dg launch --assets '*'
 

@@ -50,7 +50,7 @@ class_data_sheet     ← google_sheets_ingestion (Sheets API → DataFrame)
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 export GOOGLE_SHEET_ID=<your-sheet-id>      # optional, defaults to a public sample
-./setup_google_sheets_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_google_sheets_demo.sh | bash
 cd google-sheets-demo
 uv run dg launch --assets '*'
 ```

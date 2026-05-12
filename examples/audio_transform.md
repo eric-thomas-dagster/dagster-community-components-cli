@@ -46,7 +46,7 @@ The component fails fast at materialization time with a clear message if ffmpeg 
 ## Run it
 
 ```bash
-./setup_audio_transform_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_audio_transform_demo.sh | bash
 cd audio-transform-demo
 uv run dg launch --assets '*'
 

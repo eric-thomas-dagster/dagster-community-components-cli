@@ -35,7 +35,7 @@ ANTHROPIC_API_KEY=sk-ant-...
 ## Run it
 
 ```bash
-./setup_anthropic_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_anthropic_demo.sh | bash
 cd anthropic-demo
 uv run dg launch --assets '*'
 ```

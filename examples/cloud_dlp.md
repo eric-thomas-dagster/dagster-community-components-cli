@@ -68,7 +68,7 @@ export GCP_PROJECT_ID=your-project
 ## Run it
 
 ```bash
-./setup_cloud_dlp_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_cloud_dlp_demo.sh | bash
 cd cloud-dlp-demo
 uv run dg launch --assets '*'
 ```

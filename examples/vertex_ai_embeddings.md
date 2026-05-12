@@ -52,7 +52,7 @@ Required SA role: `roles/aiplatform.user` + Vertex AI API enabled.
 ## Run it
 
 ```bash
-./setup_vertex_ai_embeddings_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_vertex_ai_embeddings_demo.sh | bash
 cd vertex-ai-embeddings-demo
 uv run dg launch --assets '*'
 cat /tmp/vertex_embeddings.csv

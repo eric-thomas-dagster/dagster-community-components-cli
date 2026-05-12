@@ -70,7 +70,7 @@ export GCP_PROJECT_ID=your-project
 ## Run it
 
 ```bash
-./setup_document_ai_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_document_ai_demo.sh | bash
 cd document-ai-demo
 uv run dg launch --assets '*'
 ```

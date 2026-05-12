@@ -51,7 +51,7 @@ export GOOGLE_CALENDAR_ID=you@gmail.com   # owner's email or named cal ID
 ## Run it
 
 ```bash
-./setup_google_calendar_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_google_calendar_demo.sh | bash
 cd google-calendar-demo
 uv run dg launch --assets '*'
 ```

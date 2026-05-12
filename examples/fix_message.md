@@ -85,7 +85,7 @@ FIX is the global protocol for electronic trading — equities, fixed income, FX
 ## Run it
 
 ```bash
-./setup_fix_message_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_fix_message_demo.sh | bash
 cd fix-message-demo
 uv run dg launch --assets '*'
 ```

@@ -42,7 +42,7 @@ monthly_metrics (long-format)
 ## Run it
 
 ```bash
-./setup_dataframe_basics_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_dataframe_basics_demo.sh | bash
 cd dataframe-basics-demo
 uv run dg launch --assets '*'
 uv run dg dev   # http://localhost:3000

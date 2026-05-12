@@ -32,7 +32,7 @@ raw_sensors          → filled_sensors          ← ts_filler (forward-fill dat
 ## Run it
 
 ```bash
-./setup_data_combination_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_data_combination_demo.sh | bash
 cd data-combination-demo
 uv run dg launch --assets '*'
 uv run dg dev   # http://localhost:3000

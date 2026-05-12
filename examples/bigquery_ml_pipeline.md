@@ -71,7 +71,7 @@ dataset + `roles/bigquery.jobUser` on the project. (Or simpler:
 ## Run it
 
 ```bash
-./setup_bigquery_ml_pipeline_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bigquery_ml_pipeline_demo.sh | bash
 cd bigquery-ml-pipeline-demo
 uv run dg launch --assets '*'
 ```

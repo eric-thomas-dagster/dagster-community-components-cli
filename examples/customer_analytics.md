@@ -32,7 +32,7 @@ support_tickets       → support_clean_text          ← text_preprocessing
 ## Run it
 
 ```bash
-./setup_customer_analytics_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_customer_analytics_demo.sh | bash
 cd customer-analytics-demo
 uv run dg launch --assets '*'
 uv run dg dev   # http://localhost:3000

@@ -59,7 +59,7 @@ Or simpler for demos: `roles/owner` on the project.
 # iris_clean table created by setup_bigquery_ml_pipeline_demo.sh.
 # Override with BQ_SOURCE_TABLE / BQ_TARGET_TABLE / GCS_BUCKET if needed.
 
-./setup_bigquery_bulk_bridge_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bigquery_bulk_bridge_demo.sh | bash
 cd bigquery-bulk-bridge-demo
 uv run dg launch --assets '*'
 ```

@@ -28,7 +28,7 @@ orders (synthetic source: 30 rows, 4 cols)
 ## Run it
 
 ```bash
-./setup_data_quality_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_data_quality_demo.sh | bash
 cd data-quality-demo
 
 # Materialize the orders source

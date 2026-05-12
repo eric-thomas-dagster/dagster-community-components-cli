@@ -63,7 +63,7 @@ export BQ_TABLE=$GCP_PROJECT_ID.your_dataset.your_table   # must exist
 ## Run it
 
 ```bash
-./setup_bigquery_checks_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bigquery_checks_demo.sh | bash
 cd bigquery-checks-demo
 uv run dg launch --assets '*'
 ```

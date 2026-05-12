@@ -90,7 +90,7 @@ Originally the component called `server.login()` unconditionally, which broke ag
 ## Run it
 
 ```bash
-./setup_email_roundtrip_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_email_roundtrip_demo.sh | bash
 cd email-roundtrip-demo
 
 # Terminal 1: SMTP receiver

@@ -82,7 +82,7 @@ This is what banking, insurance, and federal-agency systems use every day to ing
 ## Run it
 
 ```bash
-./setup_codec_convert_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_codec_convert_demo.sh | bash
 cd codec-convert-demo
 uv run dg launch --assets '*'
 ```

@@ -43,7 +43,7 @@ trigger + poll), well under the budget.
 ## Run it
 
 ```bash
-./setup_http_external_asset_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_http_external_asset_demo.sh | bash
 cd http-external-asset-demo
 
 # Un-partitioned chain (http asset → downstream pandas summary):

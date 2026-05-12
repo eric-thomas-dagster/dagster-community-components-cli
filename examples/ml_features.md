@@ -33,7 +33,7 @@ raw_customers (100 rows: 5 numeric + 3 categorical, with NaNs and outliers)
 ## Run it
 
 ```bash
-./setup_ml_features_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_ml_features_demo.sh | bash
 cd ml-features-demo
 uv run dg launch --assets '*'
 uv run dg dev   # http://localhost:3000

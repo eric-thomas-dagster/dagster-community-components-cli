@@ -53,7 +53,7 @@ the cost goes to the SA's project, not the public-data project.
 ## Run it
 
 ```bash
-./setup_bigquery_query_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bigquery_query_demo.sh | bash
 cd bigquery-query-demo
 uv run dg launch --assets '*'
 ```

@@ -65,7 +65,7 @@ export BQ_DATASET=your_dataset
 ## Run it
 
 ```bash
-./setup_gcp_observability_snapshot_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_gcp_observability_snapshot_demo.sh | bash
 cd gcp-observability-snapshot-demo
 uv run dg launch --assets '*'
 ```

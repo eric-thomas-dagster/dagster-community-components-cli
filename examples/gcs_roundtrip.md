@@ -84,7 +84,7 @@ export BQ_DATASET=dagster_demo
 ## Run it
 
 ```bash
-./setup_gcs_roundtrip_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_gcs_roundtrip_demo.sh | bash
 cd gcs-roundtrip-demo
 uv run dg launch --assets '*'
 

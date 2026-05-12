@@ -55,7 +55,7 @@ corresponding `classified_*` assets — works with 1, 2, or 3 providers.
 ## Run it
 
 ```bash
-./setup_litellm_multi_provider_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_litellm_multi_provider_demo.sh | bash
 cd litellm-multi-provider-demo
 uv run dg launch --assets '*'
 cat /tmp/litellm_multi_provider.csv

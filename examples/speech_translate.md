@@ -44,7 +44,7 @@ Required SA roles: `roles/speech.client` + `roles/cloudtranslate.user`. Both API
 ## Run it
 
 ```bash
-./setup_speech_translate_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_speech_translate_demo.sh | bash
 cd speech-translate-demo
 uv run dg launch --assets '*'
 cat /tmp/speech_translate.csv

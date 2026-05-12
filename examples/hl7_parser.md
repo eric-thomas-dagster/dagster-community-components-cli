@@ -63,7 +63,7 @@ Wave 4 backlog: `IN1` (insurance), `GT1` (guarantor), `NK1` (next of kin), `MRG`
 ## Run it
 
 ```bash
-./setup_hl7_parser_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_hl7_parser_demo.sh | bash
 cd hl7-parser-demo
 uv run dg launch --assets '*'
 ```

@@ -67,7 +67,7 @@ ACORD XML is the lingua franca between US/UK/AU/CA carriers, MGAs, brokers, and 
 ## Run it
 
 ```bash
-./setup_acord_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_acord_demo.sh | bash
 cd acord-demo
 uv run dg launch --assets '*'
 ```

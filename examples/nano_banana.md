@@ -43,7 +43,7 @@ Get a key at <https://aistudio.google.com/app/apikey>.
 ## Run it
 
 ```bash
-./setup_nano_banana_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_nano_banana_demo.sh | bash
 cd nano-banana-demo
 uv run dg launch --assets '*'
 ```

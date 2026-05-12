@@ -49,7 +49,7 @@ Customer Success                3                 2           1415.0            
 ## Run it
 
 ```bash
-./setup_hris_normalizer_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_hris_normalizer_demo.sh | bash
 cd hris-normalizer-demo
 uv run dg launch --assets '*'
 

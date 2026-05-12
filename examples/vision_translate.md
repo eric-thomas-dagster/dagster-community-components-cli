@@ -53,7 +53,7 @@ Required SA roles: `roles/serviceusage.serviceUsageConsumer` + Vision API + Tran
 ## Run it
 
 ```bash
-./setup_vision_translate_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_vision_translate_demo.sh | bash
 cd vision-translate-demo
 uv run dg launch --assets '*'
 cat /tmp/vision_translate.csv

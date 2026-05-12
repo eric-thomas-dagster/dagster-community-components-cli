@@ -39,7 +39,7 @@ No Cloud APIs, no extra binaries. Runs anywhere Python + Pillow does (`pip insta
 ## Run it
 
 ```bash
-./setup_image_transform_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_image_transform_demo.sh | bash
 cd image-transform-demo
 uv run dg launch --assets '*'
 

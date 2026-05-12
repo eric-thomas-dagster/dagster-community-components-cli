@@ -42,7 +42,7 @@ curl http://localhost:11434/api/tags
 ## Run it
 
 ```bash
-./setup_ollama_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_ollama_demo.sh | bash
 cd ollama-demo
 uv run dg launch --assets '*'
 ```

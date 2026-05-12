@@ -67,7 +67,7 @@ ASC X12 is the dominant US-domestic EDI standard. Every major payer, retailer, l
 ## Run it
 
 ```bash
-./setup_x12_edi_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_x12_edi_demo.sh | bash
 cd x12-edi-demo
 uv run dg launch --assets '*'
 ```

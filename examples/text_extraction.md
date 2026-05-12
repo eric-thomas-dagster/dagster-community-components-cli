@@ -33,7 +33,7 @@ raw_events (synthetic source, 20 rows × 8 mixed-text cols)
 ## Run it
 
 ```bash
-./setup_text_extraction_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_text_extraction_demo.sh | bash
 cd text-extraction-demo
 uv run dg launch --assets '*'
 ```

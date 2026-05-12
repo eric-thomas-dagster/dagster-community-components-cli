@@ -75,7 +75,7 @@ videos → video_metadata_extractor
 ## Run it
 
 ```bash
-./setup_video_pipeline_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_video_pipeline_demo.sh | bash
 cd video-pipeline-demo
 uv run dg launch --assets '*'
 

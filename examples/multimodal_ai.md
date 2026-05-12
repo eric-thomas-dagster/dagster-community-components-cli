@@ -39,7 +39,7 @@ OPENAI_API_KEY=sk-...
 ## Run it
 
 ```bash
-./setup_multimodal_ai_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_multimodal_ai_demo.sh | bash
 cd multimodal-ai-demo
 uv run dg launch --assets '*'
 ```

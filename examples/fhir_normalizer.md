@@ -71,7 +71,7 @@ value_maps:
 ## Run it
 
 ```bash
-./setup_fhir_normalizer_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_fhir_normalizer_demo.sh | bash
 cd fhir-normalizer-demo
 uv run dg launch --assets '*'
 ```

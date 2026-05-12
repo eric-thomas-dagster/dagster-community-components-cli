@@ -87,7 +87,7 @@ export BQ_DATASET=your_dataset
 ## Run it
 
 ```bash
-./setup_bq_vector_search_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bq_vector_search_demo.sh | bash
 cd bq-vector-search-demo
 uv run dg launch --assets '*'
 ```

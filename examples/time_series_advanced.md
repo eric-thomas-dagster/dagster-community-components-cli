@@ -34,7 +34,7 @@ product_sales (5 products × 36 months)
 ## Run it
 
 ```bash
-./setup_time_series_advanced_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_time_series_advanced_demo.sh | bash
 cd time-series-advanced-demo
 uv run dg launch --assets '*'
 uv run dg dev   # http://localhost:3000

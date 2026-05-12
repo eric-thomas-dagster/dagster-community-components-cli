@@ -42,7 +42,7 @@ ANTHROPIC_API_KEY=sk-ant-...   # only needed for vision_model
 ## Run it
 
 ```bash
-./setup_vision_pipeline_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_vision_pipeline_demo.sh | bash
 cd vision-pipeline-demo
 
 # Just the metadata side ($0, no key required):

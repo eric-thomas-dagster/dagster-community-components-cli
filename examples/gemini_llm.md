@@ -37,7 +37,7 @@ Get a key at <https://aistudio.google.com/app/apikey>.
 ## Run it
 
 ```bash
-./setup_gemini_llm_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_gemini_llm_demo.sh | bash
 cd gemini-llm-demo
 uv run dg launch --assets '*'
 ```

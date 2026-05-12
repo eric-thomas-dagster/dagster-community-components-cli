@@ -55,7 +55,7 @@ None. Demo is fully local.
 ## Run it
 
 ```bash
-./setup_partitions_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_partitions_demo.sh | bash
 cd partitions-demo
 
 # 1. Materialize the source. Use +<asset> so DAGSTER_HOME state persists

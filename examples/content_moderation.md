@@ -35,7 +35,7 @@ OPENAI_API_KEY=sk-...      # SDK still needs a key even for the free endpoint
 ## Run it
 
 ```bash
-./setup_content_moderation_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_content_moderation_demo.sh | bash
 cd content-moderation-demo
 uv run dg launch --assets '*'
 ```
