@@ -30,8 +30,8 @@ $CLI add arima_forecast        --auto-install
 $CLI add ets_forecast          --auto-install
 $CLI add ts_compare            --auto-install
 $CLI add dataframe_to_csv      --auto-install
-$CLI add dataframe_to_csv      --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_ets"
-$CLI add dataframe_to_csv      --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_compare"
+mkdir -p "src/$PKG/defs/dataframe_to_csv_ets"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
+mkdir -p "src/$PKG/defs/dataframe_to_csv_compare"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 $CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml"

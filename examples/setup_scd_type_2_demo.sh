@@ -51,7 +51,7 @@ CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 3 community components"
 $CLI add csv_file_ingestion --auto-install
-$CLI add csv_file_ingestion --auto-install --target-dir "src/$PKG/defs/csv_today"
+mkdir -p "src/$PKG/defs/csv_today"  # only needs defs.yaml; component code is in components/csv_file_ingestion/
 $CLI add scd_type_2         --auto-install
 $CLI add dataframe_to_csv   --auto-install
 

@@ -66,9 +66,9 @@ $CLI add summarize          --auto-install
 $CLI add dataframe_to_csv   --auto-install
 
 # Dual ingest + dual create_points + dual sinks via target_dir
-$CLI add csv_file_ingestion --auto-install --target-dir "src/$PKG/defs/customers_ingest"
-$CLI add create_points      --auto-install --target-dir "src/$PKG/defs/customers_points"
-$CLI add dataframe_to_csv   --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_grid"
+mkdir -p "src/$PKG/defs/customers_ingest"  # only needs defs.yaml; component code is in components/csv_file_ingestion/
+mkdir -p "src/$PKG/defs/customers_points"  # only needs defs.yaml; component code is in components/create_points/
+mkdir -p "src/$PKG/defs/dataframe_to_csv_grid"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 $CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"

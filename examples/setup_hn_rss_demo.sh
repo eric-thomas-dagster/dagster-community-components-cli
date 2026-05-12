@@ -31,8 +31,7 @@ $CLI add regex_parser        --auto-install
 $CLI add filter              --auto-install
 $CLI add dataframe_to_csv    --auto-install
 # Second regex_parser for the extract step
-$CLI add regex_parser        --auto-install --target-dir "src/$PKG/defs/regex_extract"
-
+mkdir -p "src/$PKG/defs/regex_extract"  # only needs defs.yaml; component code is in components/regex_parser/
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Fetch the RSS feed as raw XML (output_format=text wraps in 1-row df)

@@ -31,10 +31,10 @@ $CLI add ab_trend                 --auto-install
 $CLI add ab_controls              --auto-install
 $CLI add dataframe_to_csv         --auto-install
 # Two synthetic instances (users + experiment) and 4 sinks
-$CLI add synthetic_data_generator --auto-install --target-dir "src/$PKG/defs/exposure_gen"
-$CLI add dataframe_to_csv         --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_assignments"
-$CLI add dataframe_to_csv         --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_trend"
-$CLI add dataframe_to_csv         --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_sizing"
+mkdir -p "src/$PKG/defs/exposure_gen"  # only needs defs.yaml; component code is in components/synthetic_data_generator/
+mkdir -p "src/$PKG/defs/dataframe_to_csv_assignments"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
+mkdir -p "src/$PKG/defs/dataframe_to_csv_trend"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
+mkdir -p "src/$PKG/defs/dataframe_to_csv_sizing"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 $CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml"

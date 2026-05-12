@@ -39,8 +39,7 @@ $CLI add csv_file_ingestion --auto-install
 $CLI add pivot              --auto-install
 $CLI add unpivot            --auto-install
 $CLI add dataframe_to_csv   --auto-install
-$CLI add dataframe_to_csv   --auto-install --target-dir "src/$PKG/defs/csv_long_again"
-
+mkdir -p "src/$PKG/defs/csv_long_again"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 echo ">>> Writing demo defs.yaml"
 
 cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF

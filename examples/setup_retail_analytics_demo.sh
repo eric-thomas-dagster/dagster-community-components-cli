@@ -38,8 +38,8 @@ $CLI add running_total            --auto-install
 $CLI add dataframe_to_csv         --auto-install
 
 # Three sinks → three target_dirs
-$CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_cohorts"
-$CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_spend"
+mkdir -p "src/$PKG/defs/dataframe_to_csv_cohorts"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
+mkdir -p "src/$PKG/defs/dataframe_to_csv_spend"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 $CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"

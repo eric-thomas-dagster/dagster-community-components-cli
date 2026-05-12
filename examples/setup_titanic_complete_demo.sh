@@ -48,8 +48,8 @@ $CLI add filter                    --auto-install
 $CLI add dataframe_to_csv          --auto-install
 
 # 3 sink instances (predictions, eda, survivors)
-$CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_eda"
-$CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_survivors"
+mkdir -p "src/$PKG/defs/dataframe_to_csv_eda"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
+mkdir -p "src/$PKG/defs/dataframe_to_csv_survivors"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 $CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"

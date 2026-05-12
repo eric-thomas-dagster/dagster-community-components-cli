@@ -34,8 +34,7 @@ $CLI add select_columns      --auto-install
 $CLI add dataframe_to_csv    --auto-install
 
 # Two REST fetches into separate dirs — same component used twice
-$CLI add rest_api_fetcher    --auto-install --target-dir "src/$PKG/defs/rest_rockets"
-
+mkdir -p "src/$PKG/defs/rest_rockets"  # only needs defs.yaml; component code is in components/rest_api_fetcher/
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1a. Fetch launches

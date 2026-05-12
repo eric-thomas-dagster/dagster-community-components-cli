@@ -51,8 +51,7 @@ $CLI add filter                   --auto-install
 $CLI add sort                     --auto-install
 $CLI add dataframe_to_csv         --auto-install
 # Second ingest for the right-side of the cross join
-$CLI add csv_file_ingestion       --auto-install --target-dir "src/$PKG/defs/csv_destinations"
-
+mkdir -p "src/$PKG/defs/csv_destinations"  # only needs defs.yaml; component code is in components/csv_file_ingestion/
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1a + 1b. Both ingests read the same file but produce two distinct assets

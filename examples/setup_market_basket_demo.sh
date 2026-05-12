@@ -63,7 +63,7 @@ $CLI add market_basket_rules   --auto-install
 $CLI add filter                --auto-install
 $CLI add summarize             --auto-install
 $CLI add dataframe_to_csv      --auto-install
-$CLI add dataframe_to_csv      --auto-install --target-dir "src/$PKG/defs/dataframe_to_csv_top"
+mkdir -p "src/$PKG/defs/dataframe_to_csv_top"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 $CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml"

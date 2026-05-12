@@ -47,9 +47,8 @@ CLI="uvx --from dagster-community-components-cli dagster-component"
 echo ">>> Installing 21 community components"
 # Ingest (1 base + 2 extra target dirs for customers, products)
 $CLI add synthetic_data_generator --auto-install
-$CLI add synthetic_data_generator --auto-install --target-dir "src/$PKG/defs/customers_gen"
-$CLI add synthetic_data_generator --auto-install --target-dir "src/$PKG/defs/products_gen"
-
+mkdir -p "src/$PKG/defs/customers_gen"  # only needs defs.yaml; component code is in components/synthetic_data_generator/
+mkdir -p "src/$PKG/defs/products_gen"  # only needs defs.yaml; component code is in components/synthetic_data_generator/
 # Quality
 $CLI add unique_dedup     --auto-install
 $CLI add type_coercer     --auto-install
@@ -66,17 +65,16 @@ $CLI add sort             --auto-install
 
 # Analytics
 $CLI add summarize        --auto-install
-$CLI add summarize        --auto-install --target-dir "src/$PKG/defs/summarize_by_city"
+mkdir -p "src/$PKG/defs/summarize_by_city"  # only needs defs.yaml; component code is in components/summarize/
 $CLI add rank             --auto-install
 $CLI add rfm_segmentation --auto-install
 
 # Sinks (5 total — base + 4 extras)
 $CLI add dataframe_to_csv --auto-install
-$CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/csv_city"
-$CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/csv_top_categories"
-$CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/csv_rfm"
-$CLI add dataframe_to_csv --auto-install --target-dir "src/$PKG/defs/csv_orders"
-
+mkdir -p "src/$PKG/defs/csv_city"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
+mkdir -p "src/$PKG/defs/csv_top_categories"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
+mkdir -p "src/$PKG/defs/csv_rfm"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
+mkdir -p "src/$PKG/defs/csv_orders"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 # Orchestration
 $CLI add cron_schedule    --auto-install
 
