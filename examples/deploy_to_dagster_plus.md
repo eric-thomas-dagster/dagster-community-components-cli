@@ -1,6 +1,6 @@
 # Deploy any demo to Dagster+
 
-You ran a demo locally with `curl … | bash`. Now you want it running on Dagster+ Serverless. This guide ships a single script that handles the auth + deploy in one shot.
+One script. Handles auth, generates artifacts, optionally scaffolds GitHub Actions CI/CD, then deploys.
 
 ## TL;DR
 
@@ -13,49 +13,46 @@ curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
   | bash -s kitchen-sink-demo
 ```
 
-That's it. The script:
+The script prompts you along the way. To accept defaults and skip prompts in CI:
 
-1. Ensures `dagster-cloud-cli` is in the project's dev deps
-2. Runs `dg plus login` if you aren't already logged in (opens a browser tab)
-3. Runs `dg plus deploy --build-strategy python-executable` (no Docker required)
+```bash
+curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-interactive
+```
 
-Within ~60s your demo is live at `https://<your-org>.dagster.cloud/prod`.
+## What the script does (6 steps)
+
+```
+1/6  Ensures dagster-cloud-cli is in dev deps                     (idempotent)
+2/6  Runs `dg plus login` if not already authed                   (browser flow)
+3/6  [prompts] Run `dg plus deploy configure --git-provider github`?
+       Auto-detects your agent type (Serverless vs Hybrid) and scaffolds:
+       → build.yaml                              (modern code-location manifest)
+       → Dockerfile + container_context.yaml     (Hybrid only)
+       → .github/workflows/*.yml                 (CI/CD)
+4/6  [prompts, if .github/ exists] Create a CI API token?
+       → Paste into GitHub secret DAGSTER_CLOUD_API_TOKEN
+5/6  Confirms deployment target (org / deployment / build strategy)
+6/6  [prompts] Run dg plus deploy now?
+```
+
+**Key:** step 3 uses the official `dg plus deploy configure` command — not hand-written YAML. That command auto-detects whether your Dagster+ workspace is Serverless or Hybrid, then writes the exact artifacts the official tooling expects. If you've migrated from a `dagster_cloud.yaml`-based project, the new build.yaml replaces it.
 
 ## Prerequisites
 
-- **A Dagster+ account** — free 30-day trial at <https://dagster.io/plus>. Pick the **Serverless** offering; the script defaults to that.
-- **`uvx` + `uv` on your machine** — you already have these from running any demo setup.
-- A demo project already created locally via one of the `setup_*_demo.sh` scripts.
+- **A Dagster+ account** — free 30-day trial at <https://dagster.io/plus>.
+- **`uv` + `uvx`** — already on your machine from running any demo.
+- A demo project on disk (created by one of the `setup_*_demo.sh` scripts).
 
-## Script flow (4 steps)
+## Build strategy is auto-detected
 
-### 1. Verify the project
+The script doesn't pass `--build-strategy` by default. `dg plus deploy` auto-detects your agent type from the deployment and picks:
 
-The script checks that `<project_dir>/pyproject.toml` contains `[tool.dg]` — i.e. it's a Dagster project. If not, you get a friendly error.
+| Agent type (in your Dagster+ workspace) | Build strategy | Notes |
+|---|---|---|
+| Serverless | `python-executable` (PEX) | ~60-120s deploys, no Docker needed |
+| Hybrid (your k8s) | `docker` | Builds + pushes a Docker image to a registry your agent can pull from |
 
-### 2. Add `dagster-cloud-cli` to dev deps
-
-```bash
-uv add --dev dagster-cloud-cli
-```
-
-Idempotent — skipped if already present.
-
-### 3. Authenticate (`dg plus login`)
-
-If you've never run `dg plus login` on this machine, the script triggers it. It opens a browser tab, you confirm the org/region, the token gets saved to `~/.dagster_cloud_cli/config`. One-time setup per machine.
-
-If you're already logged in (`dg plus config view` returns config), the script prints the existing settings and skips login.
-
-### 4. Deploy (`dg plus deploy`)
-
-```bash
-uv run dg plus deploy --build-strategy python-executable
-```
-
-`python-executable` = PEX build (Serverless agent default). Much faster than Docker — typically 60-120s end-to-end, vs. 5-10 min for Docker.
-
-For Dagster+ Hybrid (your own k8s agent), pass `--build-strategy docker`. You'll need Docker running locally + a container registry the agent can pull from.
+You can force a specific strategy with `--build-strategy docker` or `--build-strategy python-executable` if you have a reason.
 
 ## Optional flags
 
@@ -63,58 +60,92 @@ For Dagster+ Hybrid (your own k8s agent), pass `--build-strategy docker`. You'll
 ./deploy_to_dagster_plus.sh kitchen-sink-demo \
   --organization my-org-slug \
   --deployment branch-feature-x \
-  --build-strategy docker
+  --build-strategy docker \
+  --non-interactive \
+  --with-ci             # scaffold GitHub Actions without prompting
 ```
 
 | Flag | Default | When to set |
 |---|---|---|
 | `--organization` | from `dg plus login` | Override the org chosen at login time |
-| `--deployment` | `prod` | Deploy to a branch deployment instead of prod |
-| `--build-strategy` | `python-executable` | Use `docker` for Hybrid |
+| `--deployment` | `prod` | Deploy to a branch deployment or a non-prod env |
+| `--build-strategy` | auto-detect | Force `docker` or `python-executable` |
+| `--non-interactive` | (interactive) | Skip all prompts — accept defaults. Use in CI. |
+| `--with-ci` | (off) | Generate the GitHub Actions workflows without asking. Useful for CI bootstrap. |
 
-## What happens after deploy
+## Artifacts the script creates (via `dg plus deploy configure`)
 
-1. The script returns.
-2. Dagster+ runs the code-location bootstrap (you see "Loading definitions" in the UI).
-3. Your assets show up in the asset graph.
-4. You can materialize them via the UI or `uv run dg launch --assets '*'` (which now hits the cloud agent instead of your laptop).
+For **Serverless** deployments:
+
+- `build.yaml` — the modern code-location manifest (replaces older `dagster_cloud.yaml`)
+- `.github/workflows/*.yml` — deploy on push + branch deployments on PR
+
+For **Hybrid** deployments:
+
+- `build.yaml` + `Dockerfile` + `container_context.yaml`
+- `.github/workflows/*.yml`
+
+The exact contents come from the official `dg plus deploy configure` command, so they stay current with whatever Dagster+ expects. The script doesn't hand-write these.
+
+## The CI API token
+
+If you opt in to step 5, the script runs `dg plus create ci-api-token` and prints the token once. Copy it immediately — Dagster+ won't show it again.
+
+Then in GitHub:
+
+1. Your repo → Settings → Secrets and variables → Actions → New repository secret
+2. Name: `DAGSTER_CLOUD_API_TOKEN`
+3. Value: the token
+
+After that, your CI workflows can deploy without further prompts.
+
+## After the deploy
+
+Open your workspace:
+
+```bash
+open "https://<your-org>.dagster.cloud/prod"
+```
+
+The first run will take longer (cold-start the agent). Subsequent runs reuse the container.
 
 ## Caveats: which demos work as-is on Serverless
 
 | Demo type | Status |
 |---|---|
 | Pure synthetic-data demos (kitchen_sink, data_hygiene, x12_edi, etc.) | ✅ Work directly |
-| Public-API demos (USGS earthquakes, SpaceX, weather, etc.) | ✅ Work directly |
+| Public-API demos (USGS earthquakes, SpaceX, weather, NBA scoreboard) | ✅ Work directly |
 | Demos requiring env vars (DATABASE_URL, API keys) | ⚠️ Set via `dg plus create env` before deploying |
-| Demos using local `/tmp/...` paths for cross-asset file passing | ⚠️ Work within a single run, files vanish after — see the [Deployment note](https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples) on affected components |
-| Demos with local-server fixtures (email_roundtrip, mqtt, etc.) | ❌ Need to be re-pointed at real services |
-| Cloud-credential demos (azure_sql, bigquery_*) | ✅ Work — just set env vars via `dg plus create env` |
+| Demos using local `/tmp/...` paths for cross-asset file passing | ⚠️ Work within one Serverless run, files vanish after — see [the disk-IO deployment note](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/ai/synthetic_image_generator/README.md#%EF%B8%8F-deployment-note-dagster--kubernetes) on every affected component |
+| Demos with local-server fixtures (email_roundtrip's IMAP stub) | ❌ Re-point at real services before deploying |
+| Cloud-credential demos (azure_*, bigquery_*) | ✅ Work — set creds via `dg plus create env` |
 
-For env vars:
+To add an env var to your deployment:
 
 ```bash
 uv run dg plus create env API_KEY --value "..." --deployment prod
 uv run dg plus create env DATABASE_URL --value "..." --deployment prod
-# Then deploy:
-uv run dg plus deploy --build-strategy python-executable
 ```
 
 ## Troubleshooting
 
-**"No Dagster+ config found"** — Run `uv run dg plus login` manually first.
+**`No Dagster+ config found`** — Re-run `uv run dg plus login` manually first.
 
-**"Build failed: missing requirements.txt"** — Some demos forget `uv add <pkg>` for runtime deps. Check the demo's setup script for any `uv add` lines that didn't make it.
+**`Build failed: missing requirements.txt`** — Some demos forget `uv add <pkg>` for runtime deps. Check the demo's setup script.
 
-**"DagsterInvariantViolationError in code-location loading"** — A component referenced an env var that isn't set. Use `dg plus create env` to add it.
+**`DagsterInvariantViolationError in code-location loading`** — A component referenced an env var that isn't set. Use `dg plus create env` to add it.
 
-**"Asset materialization failed: timeout"** — Serverless agents have a default 1h step timeout. For longer-running steps, configure `MaxConcurrencyPerStep` in the run config.
+**`Asset materialization failed: timeout`** — Serverless agents have a default 1h step timeout. Configure via run-config tags if you need longer.
+
+**Hybrid build wants Docker but you don't have a registry** — Set `--build-strategy python-executable` to force PEX. Note: PEX deploys won't work with Hybrid agents in production; you'll need a registry eventually.
 
 ## Full reference
 
-The script wraps the official `dg plus` CLI. Underlying docs:
-- <https://docs.dagster.io/api/clis/dg-cli/dg-plus>
+The script wraps the official `dg plus` CLI:
+
+- <https://docs.dagster.io/api/clis/dg-cli/dg-plus> — top-level
 - <https://docs.dagster.io/api/clis/dg-cli/dg-plus#login>
 - <https://docs.dagster.io/api/clis/dg-cli/dg-plus#deploy>
 - <https://docs.dagster.io/api/clis/dg-cli/dg-plus#create>
 
-For deep customization (branch deployments, CI/CD workflows, GitHub PR integration, etc.), run `uv run dg plus deploy --help` or read the docs above.
+For deep CI/CD customization (matrix builds, deploy hooks, GitHub Status checks), see [dagster-cloud-action](https://github.com/dagster-io/dagster-cloud-action) — the official source for the workflow templates the script generates.

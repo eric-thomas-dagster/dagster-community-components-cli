@@ -1,41 +1,50 @@
 #!/usr/bin/env bash
-# Deploy any local demo project to Dagster+ Serverless.
+# Deploy any local demo project to Dagster+ (Serverless or Hybrid auto-detected).
 #
 # USAGE:
-#   ./deploy_to_dagster_plus.sh <project_dir> [--organization X] [--deployment Y]
+#   ./deploy_to_dagster_plus.sh <project_dir>
+#     [--organization X]
+#     [--deployment Y]
+#     [--build-strategy docker|python-executable]
+#     [--git-provider github|gitlab]
+#     [--non-interactive]    # skip prompts (CI use)
+#     [--with-ci]            # scaffold CI even without prompt
 #
-# Example:
-#   curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_kitchen_sink_demo.sh | bash
-#   curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/deploy_to_dagster_plus.sh | bash -s kitchen-sink-demo
+# Example (interactive):
+#   curl -fsSL .../setup_kitchen_sink_demo.sh | bash
+#   curl -fsSL .../deploy_to_dagster_plus.sh | bash -s kitchen-sink-demo
 #
-# What it does:
-#   1. Verifies the project directory exists + is a dagster project
-#   2. Adds dagster-cloud-cli as a dev dep (idempotent)
-#   3. Runs `dg plus login` if you aren't already logged in
-#      (opens a browser tab; one-time setup per machine)
-#   4. Runs `dg plus deploy --build-strategy python-executable`
-#      (Serverless agent default; no Docker build, much faster)
+# What it does (in order):
+#   1. Verifies the project dir is a dg project
+#   2. Adds dagster-cloud-cli to dev deps
+#   3. Runs `dg plus login` if not already authed (opens browser)
+#   4. Asks: scaffold deployment artifacts via `dg plus deploy configure`?
+#      → Creates build.yaml, Dockerfile (Hybrid only), .github/workflows/*
+#      Auto-detects whether your deployment is Serverless or Hybrid.
+#   5. Asks: create a CI API token? → prints once for GitHub secret
+#   6. Runs `dg plus deploy` (build strategy auto-detected from agent type)
 #
-# Requires:
-#   - A Dagster+ account at https://dagster.io/plus (free 30-day trial)
-#   - `uvx`, `uv` (you already have these from running the demo setup)
-#
-# For Dagster+ Hybrid (your own k8s) instead of Serverless, change
-# --build-strategy to `docker`. You'll need Docker running locally + a
-# registry the Hybrid agent can pull from.
+# Build strategy is auto-detected — leave --build-strategy unset and dg picks
+# PEX for Serverless, Docker for Hybrid. Override if you have a specific reason.
 
 set -euo pipefail
 
 PROJECT_DIR=""
 DAGSTER_PLUS_ORG=""
 DAGSTER_PLUS_DEPLOYMENT="prod"
-BUILD_STRATEGY="python-executable"
+BUILD_STRATEGY=""
+GIT_PROVIDER="github"
+NON_INTERACTIVE=0
+WITH_CI=0
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
     --organization|--org) DAGSTER_PLUS_ORG="$2"; shift 2;;
     --deployment) DAGSTER_PLUS_DEPLOYMENT="$2"; shift 2;;
     --build-strategy) BUILD_STRATEGY="$2"; shift 2;;
+    --git-provider) GIT_PROVIDER="$2"; shift 2;;
+    --non-interactive) NON_INTERACTIVE=1; shift;;
+    --with-ci) WITH_CI=1; shift;;
     --help|-h)
       grep -E "^#( |$)" "$0" | sed 's/^# \{0,1\}//'
       exit 0;;
@@ -44,7 +53,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$PROJECT_DIR" ]; then
-  echo "Usage: $0 <project_dir> [--organization X] [--deployment Y]"
+  echo "Usage: $0 <project_dir> [--organization X] [--deployment Y] [--git-provider github|gitlab] [--non-interactive] [--with-ci]"
   exit 2
 fi
 if [ ! -d "$PROJECT_DIR" ]; then
@@ -54,66 +63,128 @@ fi
 
 cd "$PROJECT_DIR"
 
-# Sanity-check this looks like a dg project
 if [ ! -f pyproject.toml ] || ! grep -q "tool.dg" pyproject.toml; then
   echo "ERROR: $PROJECT_DIR doesn't look like a Dagster project (no [tool.dg] in pyproject.toml)."
   exit 2
 fi
 
-echo "==> Step 1/4: Ensuring dagster-cloud-cli is installed in dev deps"
+# Interactive prompt that reads from /dev/tty so it works when piped from curl.
+ask() {
+  local prompt="$1"; local default="${2:-N}"
+  if [ "$NON_INTERACTIVE" -eq 1 ] || [ ! -e /dev/tty ]; then
+    echo "$default"; return
+  fi
+  local ans
+  echo -n "$prompt " >/dev/tty
+  read ans </dev/tty || ans="$default"
+  echo "${ans:-$default}"
+}
+is_yes() { case "$1" in y|Y|yes|YES|Yes) return 0;; *) return 1;; esac }
+
+# ── 1/6: dev deps ─────────────────────────────────────────────────────────────
+echo "==> 1/6: Ensuring dagster-cloud-cli is in dev deps"
 if ! grep -q "dagster-cloud-cli" pyproject.toml; then
   uv add --dev -q dagster-cloud-cli
-  echo "    ✓ added dagster-cloud-cli"
+  echo "    ✓ added"
 else
   echo "    ✓ already present"
 fi
 
-echo "==> Step 2/4: Checking Dagster+ login status"
-# `dg plus config view` errors if not configured
+# ── 2/6: login ────────────────────────────────────────────────────────────────
+echo "==> 2/6: Checking Dagster+ login"
 if ! uv run dg plus config view >/dev/null 2>&1; then
-  echo "    No Dagster+ config found. Running 'dg plus login' — this opens a browser tab."
-  echo "    You'll need a Dagster+ account (free trial: https://dagster.io/plus)."
-  echo ""
+  echo "    No saved config. Running 'dg plus login' — opens a browser tab."
+  echo "    No account? Free trial: https://dagster.io/plus"
   uv run dg plus login
 else
   echo "    ✓ already configured:"
   uv run dg plus config view 2>&1 | sed 's/^/      /'
 fi
 
-echo ""
-echo "==> Step 3/4: Confirming deployment target"
-ORG_ARG=""
-DEPLOY_ARG=""
-[ -n "$DAGSTER_PLUS_ORG" ] && ORG_ARG="--organization $DAGSTER_PLUS_ORG"
+if [ -z "$DAGSTER_PLUS_ORG" ]; then
+  DAGSTER_PLUS_ORG=$(uv run dg plus config view 2>/dev/null | grep -E "^organization" | awk '{print $2}' || true)
+fi
+
+# ── 3/6: scaffold deployment artifacts (build.yaml + Dockerfile + CI) ────────
+echo "==> 3/6: Deployment artifacts (build.yaml, CI workflows, Dockerfile)"
+NEED_CONFIGURE=0
+if [ ! -f build.yaml ] && [ ! -f dagster_cloud.yaml ]; then
+  NEED_CONFIGURE=1
+fi
+
+WANT_CONFIGURE="N"
+if [ "$WITH_CI" -eq 1 ] || [ "$NEED_CONFIGURE" -eq 1 ]; then
+  WANT_CONFIGURE="y"
+else
+  WANT_CONFIGURE=$(ask "    Run 'dg plus deploy configure' to scaffold build.yaml + $GIT_PROVIDER CI workflows? [Y/n]:" "Y")
+fi
+if is_yes "$WANT_CONFIGURE"; then
+  echo "    Running: dg plus deploy configure --git-provider $GIT_PROVIDER"
+  echo "    (Auto-detects your agent type from the Dagster+ deployment.)"
+  # `dg plus deploy configure` interactively asks "serverless or hybrid?" if
+  # detection fails. We pipe `\n` to accept the auto-detected default.
+  if [ "$NON_INTERACTIVE" -eq 1 ]; then
+    echo "" | uv run dg plus deploy configure --git-provider "$GIT_PROVIDER" || true
+  else
+    uv run dg plus deploy configure --git-provider "$GIT_PROVIDER" || true
+  fi
+  echo "    ✓ generated:"
+  ls -la build.yaml Dockerfile container_context.yaml .github/workflows/*.yml 2>/dev/null | sed 's/^/      /' || true
+else
+  echo "    skipped"
+fi
+
+# ── 4/6: CI API token ────────────────────────────────────────────────────────
+if [ -d .github/workflows ]; then
+  echo "==> 4/6: GitHub Actions secret"
+  WANT_TOKEN=$(ask "    Create a Dagster+ CI API token now? Token prints once — copy into your GitHub secret. [y/N]:" "N")
+  if is_yes "$WANT_TOKEN"; then
+    echo ""
+    echo "    Token (copy now, it won't be shown again):"
+    uv run dg plus create ci-api-token | sed 's/^/      /'
+    echo ""
+    echo "    Add this in GitHub: Settings → Secrets and variables → Actions → New repository secret"
+    echo "      Name:  DAGSTER_CLOUD_API_TOKEN"
+    echo "      Value: (the token above)"
+  else
+    echo "    skipped (you can run 'dg plus create ci-api-token' later)"
+  fi
+else
+  echo "==> 4/6: GitHub Actions secret — skipped (no .github/workflows/ to wire up)"
+fi
+
+# ── 5/6: deployment target summary ───────────────────────────────────────────
+echo "==> 5/6: Deployment target"
+ORG_ARG=""; DEPLOY_ARG=""; BUILD_ARG=""
+[ -n "$DAGSTER_PLUS_ORG" ]        && ORG_ARG="--organization $DAGSTER_PLUS_ORG"
 [ -n "$DAGSTER_PLUS_DEPLOYMENT" ] && DEPLOY_ARG="--deployment $DAGSTER_PLUS_DEPLOYMENT"
+[ -n "$BUILD_STRATEGY" ]          && BUILD_ARG="--build-strategy $BUILD_STRATEGY"
 echo "    organization: ${DAGSTER_PLUS_ORG:-(from dg plus login)}"
 echo "    deployment:   $DAGSTER_PLUS_DEPLOYMENT"
-echo "    build:        $BUILD_STRATEGY"
+echo "    build:        ${BUILD_STRATEGY:-(auto: PEX for Serverless, Docker for Hybrid)}"
 
+# ── 6/6: deploy ──────────────────────────────────────────────────────────────
 echo ""
-echo "==> Step 4/4: Running dg plus deploy"
-echo "    (Serverless agent — no Docker required.)"
-echo ""
-# shellcheck disable=SC2086
-uv run dg plus deploy --build-strategy "$BUILD_STRATEGY" $ORG_ARG $DEPLOY_ARG
+WANT_DEPLOY=$(ask "==> 6/6: Run 'dg plus deploy' now? [Y/n]:" "Y")
+if is_yes "$WANT_DEPLOY"; then
+  # shellcheck disable=SC2086
+  uv run dg plus deploy $BUILD_ARG $ORG_ARG $DEPLOY_ARG
+else
+  echo "    Skipped. Run manually:"
+  echo "      cd $PROJECT_DIR"
+  echo "      uv run dg plus deploy $BUILD_ARG $ORG_ARG $DEPLOY_ARG"
+  exit 0
+fi
 
 cat <<MSG
 
 >>> Deploy complete.
 
-Your demo is now running on Dagster+. To open it:
-
+Open your workspace:
     open "https://${DAGSTER_PLUS_ORG:-your-org}.dagster.cloud/$DAGSTER_PLUS_DEPLOYMENT"
 
-The first run will take longer (cold start). Subsequent runs reuse the
-Serverless agent container.
+For env vars (API keys / DATABASE_URL / etc.):
+    uv run dg plus create env MY_KEY --value "..." --deployment $DAGSTER_PLUS_DEPLOYMENT
 
-If anything failed:
-  - Check 'uv run dg plus config view' to verify org / deployment
-  - Re-run 'uv run dg plus login' if your token expired
-  - Check the Dagster+ UI logs for build failures
-  - See https://docs.dagster.io/api/clis/dg-cli/dg-plus
-
-For Hybrid (your own k8s) instead of Serverless:
-    $0 $PROJECT_DIR --build-strategy docker
+Docs: https://docs.dagster.io/api/clis/dg-cli/dg-plus
 MSG
