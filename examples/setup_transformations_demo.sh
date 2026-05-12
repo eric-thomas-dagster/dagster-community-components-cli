@@ -128,10 +128,18 @@ def orders_csv_file() -> str:
 
 @dg.asset(group_name="ingest", deps=[dg.AssetKey("orders")])
 def orders_in_duckdb(orders: pd.DataFrame) -> str:
-    """Load orders into DuckDB so sql_transform can query it."""
-    import sqlalchemy
-    engine = sqlalchemy.create_engine(os.environ["SQL_DB_URL"])
-    orders.to_sql("orders", engine, if_exists="replace", index=False)
+    """Load orders into DuckDB so sql_transform can query it.
+
+    Uses the duckdb library directly rather than SQLAlchemy because
+    pandas.to_sql() against duckdb-engine triggers PostgreSQL system-
+    catalog introspection (pg_collation) which DuckDB doesn't implement.
+    """
+    import duckdb
+    db_path = os.environ["SQL_DB_URL"].removeprefix("duckdb:///")
+    conn = duckdb.connect(db_path)
+    conn.register("orders_df", orders)
+    conn.execute("CREATE OR REPLACE TABLE orders AS SELECT * FROM orders_df")
+    conn.close()
     return os.environ["SQL_DB_URL"]
 
 
