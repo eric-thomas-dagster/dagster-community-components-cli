@@ -362,8 +362,25 @@ cat <<MSG
 Open your workspace:
     open "https://${DAGSTER_PLUS_ORG:-your-org}.dagster.cloud/$DAGSTER_PLUS_DEPLOYMENT"
 
-For env vars (API keys / DATABASE_URL / etc.):
-    uv run dg plus create env MY_KEY --value "..." --deployment $DAGSTER_PLUS_DEPLOYMENT
+──────────────────────────────────────────────────────────────────────────────
+Next time — redeploy this project (after a code change)
+
+  cd $(pwd)
+  uv run dg plus deploy --deployment $DAGSTER_PLUS_DEPLOYMENT
+
+That's it. Your login token + build.yaml + env vars are already saved, so
+subsequent deploys just push the latest code.
+
+If your token has expired (after ~30 days):
+  uv run dg plus login
+  uv run dg plus deploy --deployment $DAGSTER_PLUS_DEPLOYMENT
+
+Add or update an env var anytime:
+  uv run dg plus create env MY_KEY --value "..." --deployment $DAGSTER_PLUS_DEPLOYMENT
+
+If you scaffolded GitHub Actions in step 3, pushing to 'main' will redeploy
+automatically — no local command needed.
+──────────────────────────────────────────────────────────────────────────────
 
 Docs: https://docs.dagster.io/api/clis/dg-cli/dg-plus
 MSG

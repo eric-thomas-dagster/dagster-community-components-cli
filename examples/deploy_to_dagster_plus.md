@@ -200,6 +200,30 @@ open "https://<your-org>.dagster.cloud/prod"
 
 The first run will take longer (cold-start the agent). Subsequent runs reuse the container.
 
+### Redeploying later
+
+After a code change, you don't need to re-run this whole script — your login token + `build.yaml` + env vars are all saved. Just:
+
+```bash
+cd <your_project_dir>
+uv run dg plus deploy --deployment prod
+```
+
+If your login token has expired (default ~30 days):
+
+```bash
+uv run dg plus login
+uv run dg plus deploy --deployment prod
+```
+
+To add or update an env var anytime:
+
+```bash
+uv run dg plus create env MY_KEY --value "..." --deployment prod
+```
+
+If you opted into GitHub Actions in step 3, **you don't need to run anything manually** — pushing to `main` redeploys automatically.
+
 ## Caveats: which demos work as-is on Serverless
 
 | Demo type | Status |
