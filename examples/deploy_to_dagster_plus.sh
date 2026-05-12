@@ -125,12 +125,18 @@ else
   WANT_CONFIGURE=$(ask "    Run 'dg plus deploy configure' to scaffold build.yaml + $GIT_PROVIDER CI workflows? [Y/n]:" "Y")
 fi
 if is_yes "$WANT_CONFIGURE"; then
-  # If user didn't specify, ask which agent (else dg plus deploy configure prompts itself)
+  # Default to Serverless. The "click-to-deploy from a demo" UX is Serverless-first:
+  # Hybrid needs prior infra (agent, registry, credentials) that this script
+  # can't bootstrap from scratch. Users who already have Hybrid set up can
+  # explicitly pass --agent-type hybrid.
   if [ -z "$AGENT_TYPE" ]; then
-    if [ "$NON_INTERACTIVE" -eq 1 ]; then
-      AGENT_TYPE="serverless"
-    else
-      AGENT_TYPE=$(ask "    Is your Dagster+ deployment Serverless or Hybrid? [serverless/hybrid]:" "serverless")
+    AGENT_TYPE="serverless"
+    if [ "$NON_INTERACTIVE" -ne 1 ]; then
+      echo ""
+      echo "    Defaulting to Serverless agent type."
+      echo "    If you have an existing Hybrid agent + registry, re-run with:"
+      echo "      $0 $PROJECT_DIR --agent-type hybrid --registry-url <your-registry>"
+      echo ""
     fi
   fi
 

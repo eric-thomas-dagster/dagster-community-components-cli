@@ -1,6 +1,8 @@
 # Deploy any demo to Dagster+
 
-One script. Handles auth, generates artifacts, optionally scaffolds GitHub Actions CI/CD, then deploys.
+> **Serverless-first.** This script is the easy button for Dagster+ Serverless: `curl | bash` → running demo in ~60 seconds.
+>
+> **For Hybrid deployments**, this script is helpful but not magical — it generates the artifacts (`build.yaml`, Dockerfile, container_context.yaml, CI workflows) and runs `dg plus deploy`, but assumes you already have a Hybrid agent running, a container registry provisioned, and Docker auth set up. See the [Hybrid section](#hybrid-additional-setup-required) below.
 
 ## TL;DR
 
@@ -94,11 +96,35 @@ For **Hybrid** deployments:
 
 The exact contents come from the official `dg plus deploy configure` command, so they stay current with whatever Dagster+ expects.
 
-## Hybrid: the registry is your responsibility
+## Hybrid: additional setup required
 
-For **Serverless**, Dagster+ owns the build cache + image storage. Nothing to set up.
+The script defaults to Serverless. To use Hybrid, pass `--agent-type hybrid` explicitly:
 
-For **Hybrid**, your agent runs in *your* infra and pulls Docker images from a registry *you* own. The script doesn't create the registry — it prompts you for the URL and bakes it into `build.yaml`. You're on the hook for:
+```bash
+./deploy_to_dagster_plus.sh kitchen-sink-demo \
+  --agent-type hybrid \
+  --registry-url 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-repo \
+  --agent-platform k8s
+```
+
+**What this script can do for Hybrid:**
+
+- Run `dg plus deploy configure hybrid --registry-url … --agent-platform …` to scaffold `build.yaml`, `Dockerfile`, `container_context.yaml`, and CI workflows
+- Print the right `docker login` command for your registry provider
+- Run `dg plus deploy --build-strategy docker` once the artifacts exist
+
+**What this script can NOT do for Hybrid (you must set up beforehand):**
+
+| Concern | One-time setup | How |
+|---|---|---|
+| Hybrid agent running in your cluster | Once per cluster | [Hybrid agent install docs](https://docs.dagster.io/guides/deploy/dagster-plus/hybrid) |
+| Container registry provisioned | Once | `aws ecr create-repository`, GCP Artifact Registry UI, etc. |
+| Local Docker authed to push | Per machine | `aws ecr get-login-password`, `gcloud auth configure-docker`, etc. |
+| Agent authed to pull | Once per cluster | Kubernetes `imagePullSecret`, ECS task IAM role, etc. |
+
+For **Serverless**, Dagster+ owns the build cache + image storage. Nothing of the above applies.
+
+For **Hybrid**, your agent runs in *your* infra and pulls Docker images from a registry *you* own. The script can't bootstrap that from a stranger's `curl | bash`. You're on the hook for:
 
 | Concern | Who handles it |
 |---|---|
