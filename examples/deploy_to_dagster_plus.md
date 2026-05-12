@@ -198,7 +198,7 @@ Open your workspace:
 open "https://<your-org>.dagster.cloud/prod"
 ```
 
-The first run will take longer (cold-start the agent). Subsequent runs reuse the container.
+The agent is already running (Dagster+ keeps it warm). On each deploy / redeploy, your **code location** restarts — that takes a few seconds. After it's loaded, you can materialize assets right away.
 
 ### Redeploying later
 
