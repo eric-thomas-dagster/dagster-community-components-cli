@@ -257,7 +257,7 @@ uv run dg plus create env DATABASE_URL --value "..." --deployment prod
 
 **`Asset materialization failed: timeout`** — Serverless agents have a default 1h step timeout. Configure via run-config tags if you need longer.
 
-**Hybrid build wants Docker but you don't have a registry** — Set `--build-strategy python-executable` to force PEX. Note: PEX deploys won't work with Hybrid agents in production; you'll need a registry eventually.
+**Hybrid build wants Docker but you don't have a registry** — Hybrid only supports Docker images; the Hybrid agent has no PEX runtime. You need to provision a registry (ECR / GAR / ACR / GHCR / Docker Hub) and pass `--registry-url <url>` before deploying. There's no PEX shortcut for Hybrid.
 
 ## Full reference
 
