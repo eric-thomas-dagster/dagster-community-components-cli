@@ -32,6 +32,7 @@ __all__ = ["SyntheticImageGeneratorComponent"]' > "src/$PKG/components/synthetic
 echo 'from .component import ImageTransformAssetComponent
 __all__ = ["ImageTransformAssetComponent"]' > "src/$PKG/components/image_transform_asset/__init__.py"
 
+rm -rf "src/$PKG/defs/synthetic_image_generator" "src/$PKG/defs/image_transform_asset"
 # 1) Synthetic PNGs
 mkdir -p "src/$PKG/defs/sample_images"
 cat > "src/$PKG/defs/sample_images/defs.yaml" <<EOF
