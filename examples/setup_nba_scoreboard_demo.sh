@@ -1,11 +1,13 @@
 #!/usr/bin/env bash
 # NBA Scoreboard demo — http_poll_sensor with TARGETED hashing.
 #
-# The NBA's public scoreboard JSON includes server timestamps that change
-# on every poll. A naive whole-body hash would fire the sensor every
-# minute. Instead, http_poll_sensor uses `json_path` to hash only the
-# game date + a derived game count — fires only when something
-# meaningful changes.
+# Public TheSportsDB endpoint, NBA games on Christmas Day 2024 (a known-
+# good date with full results). A naive whole-body hash would fire the
+# sensor on every server tick. Instead, http_poll_sensor uses `json_path`
+# to hash only the events array — fires when results actually change.
+#
+# Switched to thesportsdb.com from cdn.nba.com (which now 403s public
+# requests). 2024-12-25 is hardcoded so the demo is reproducible.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
 #   http_poll_sensor (sensor) ─⟶ triggers ─⟶
@@ -37,14 +39,12 @@ cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
 type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
 attributes:
   asset_name: nba_scoreboard_raw
-  api_url: "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
+  api_url: "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2024-12-25&l=4387"
   method: GET
   auth_type: none
   output_format: dataframe
-  headers:
-    User-Agent: dagster-community-components-demo/0.3
-  json_path: "scoreboard.games"
-  description: Today's NBA games + scores (public, no auth)
+  json_path: "events"
+  description: NBA games on a known-good date (Christmas 2024). Public, no auth.
   group_name: ingest
 EOF
 
@@ -54,12 +54,14 @@ attributes:
   asset_name: nba_scoreboard_summary
   upstream_asset_key: nba_scoreboard_raw
   extractions:
-    game_id: "\$.gameId"
-    home_team: "\$.homeTeam.teamTricode"
-    home_score: "\$.homeTeam.score"
-    away_team: "\$.awayTeam.teamTricode"
-    away_score: "\$.awayTeam.score"
-    status: "\$.gameStatusText"
+    game_id: "\$.idEvent"
+    home_team: "\$.strHomeTeam"
+    home_score: "\$.intHomeScore"
+    away_team: "\$.strAwayTeam"
+    away_score: "\$.intAwayScore"
+    status: "\$.strStatus"
+    date: "\$.dateEvent"
+    venue: "\$.strVenue"
   group_name: transform
 EOF
 
@@ -78,10 +80,9 @@ type: $PKG.components.http_poll_sensor.component.HttpPollSensorComponent
 attributes:
   sensor_name: nba_scores_changed
   asset_keys: [nba_scoreboard_summary]
-  url: "https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json"
-  # The naive whole-body hash would fire on every server timestamp tick.
-  # Instead, hash only the games list — fires when scores actually change.
-  json_path: "scoreboard.games"
+  url: "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2024-12-25&l=4387"
+  # Hash only the events list — fires when results actually change.
+  json_path: "events"
   minimum_interval_seconds: 120
   default_status: STOPPED
 EOF
@@ -103,7 +104,7 @@ uv run dg dev                   # then enable nba_scores_changed in the UI
 ## ⚠️ Fragility warning
 
 This demo depends on a **public, undocumented NBA endpoint**:
-`https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json`
+`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2024-12-25&l=4387`
 
 If the NBA changes the JSON shape (renames fields, restructures the games
 array, etc.), the `json_path_extractor` config in
@@ -112,7 +113,7 @@ shape was last validated **2026-05-02** during the BOS-PHI Game 7 East
 First Round.
 
 If you hit a parse failure:
-1. `curl https://cdn.nba.com/static/json/liveData/scoreboard/todaysScoreboard_00.json | jq .scoreboard.games[0]`
+1. `curl https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2024-12-25&l=4387 | jq .scoreboard.games[0]`
 2. Compare the keys to the `extractions:` block in the json_path_extractor defs.yaml
 3. Update field names accordingly
 
