@@ -16,13 +16,17 @@
 #
 # What it does (in order):
 #   1. Verifies the project dir is a dg project
-#   2. Adds dagster-cloud-cli to dev deps
-#   3. Runs `dg plus login` if not already authed (opens browser)
-#   4. Asks: scaffold deployment artifacts via `dg plus deploy configure`?
+#   2. Adds dagster-cloud-cli to dev deps; runs `dg plus login` if not authed
+#   3. Asks: scaffold deployment artifacts via `dg plus deploy configure`?
 #      → Creates build.yaml, Dockerfile (Hybrid only), .github/workflows/*
 #      Auto-detects whether your deployment is Serverless or Hybrid.
-#   5. Asks: create a CI API token? → prints once for GitHub secret
-#   6. Runs `dg plus deploy` (build strategy auto-detected from agent type)
+#   4. Asks: create a CI API token? → prints once for GitHub secret
+#      Optional. The local deploy in step 7 uses your `dg plus login` token,
+#      not this one. The CI token is only for GitHub Actions runs.
+#   5. Scans your project for env var references (EnvVar, os.environ,
+#      *_env_var: X) and prompts you to set values via `dg plus create env`.
+#   6. Confirms deployment target.
+#   7. Runs `dg plus deploy` (build strategy auto-detected from agent type).
 #
 # Build strategy is auto-detected — leave --build-strategy unset and dg picks
 # PEX for Serverless, Docker for Hybrid. Override if you have a specific reason.
@@ -214,8 +218,58 @@ else
   echo "==> 4/6: GitHub Actions CI API token — skipped (no .github/workflows/ to wire up)"
 fi
 
-# ── 5/6: deployment target summary ───────────────────────────────────────────
-echo "==> 5/6: Deployment target"
+# ── 5/7: scan + provision env vars ───────────────────────────────────────────
+echo "==> 5/7: Scanning your project for env var references"
+# Greps for the common reference patterns:
+#   - Python:  EnvVar("X"), os.environ["X"], os.getenv("X")
+#   - YAML:    *_env_var: X     and     ${env:X}
+# Filters out shell/dagster/python infrastructure names that the user shouldn't set manually.
+EXCLUDE_PATTERN='^(DAGSTER_HOME|DAGSTER_CLOUD_.*|PATH|HOME|USER|PWD|OLDPWD|SHELL|TERM|LANG|LC_.*|TZ|TMPDIR|VIRTUAL_ENV|UV_.*|PIP_.*|PYTHONPATH|PYTHONUNBUFFERED|CI|GITHUB_.*|GITLAB_.*|GIT_.*)$'
+
+ENV_VARS=$(
+  {
+    grep -rhoE 'EnvVar\("([A-Z_][A-Z0-9_]*)"\)' src/ 2>/dev/null | sed -E 's/EnvVar\("([^"]+)"\)/\1/'
+    grep -rhoE 'os\.(environ\[|getenv\()"([A-Z_][A-Z0-9_]*)"' src/ 2>/dev/null | sed -E 's/.*"([A-Z_][A-Z0-9_]*)"/\1/'
+    grep -rhoE '_env_var:\s*([A-Z_][A-Z0-9_]*)' src/ 2>/dev/null | sed -E 's/.*:\s*//'
+    grep -rhoE '\$\{env:([A-Z_][A-Z0-9_]*)\}' src/ 2>/dev/null | sed -E 's/\$\{env:([^}]+)\}/\1/'
+  } | sort -u | grep -vE "$EXCLUDE_PATTERN" || true
+)
+
+if [ -z "$ENV_VARS" ]; then
+  echo "    ✓ No env-var references found. Skipping env-var provisioning."
+else
+  echo "    Detected references:"
+  echo "$ENV_VARS" | sed 's/^/      - /'
+  echo ""
+  if [ "$NON_INTERACTIVE" -eq 1 ]; then
+    echo "    [non-interactive] Skipping. Set manually before/after deploy:"
+    echo "$ENV_VARS" | sed "s|^|      uv run dg plus create env |;s|\$| --value '...' --deployment $DAGSTER_PLUS_DEPLOYMENT|"
+  else
+    echo "    For each one: paste a value to set now (will run 'dg plus create env'),"
+    echo "    or press Enter to skip (you can set it later in the Dagster+ UI)."
+    echo ""
+    CREATED=0
+    while IFS= read -r var; do
+      [ -z "$var" ] && continue
+      val=$(ask "      $var =" "")
+      if [ -n "$val" ]; then
+        if uv run dg plus create env "$var" --value "$val" --deployment "$DAGSTER_PLUS_DEPLOYMENT" >/dev/null 2>&1; then
+          echo "        ✓ created on deployment '$DAGSTER_PLUS_DEPLOYMENT'"
+          CREATED=$((CREATED + 1))
+        else
+          echo "        ✗ failed (you may not have permission, or it already exists — try the UI)"
+        fi
+      else
+        echo "        (skipped)"
+      fi
+    done <<<"$ENV_VARS"
+    echo ""
+    echo "    ✓ Created $CREATED env var(s). To update later: dg plus create env <NAME> --value ... --deployment $DAGSTER_PLUS_DEPLOYMENT"
+  fi
+fi
+
+# ── 6/7: deployment target summary ───────────────────────────────────────────
+echo "==> 6/7: Deployment target"
 ORG_ARG=""; DEPLOY_ARG=""; BUILD_ARG=""
 [ -n "$DAGSTER_PLUS_ORG" ]        && ORG_ARG="--organization $DAGSTER_PLUS_ORG"
 [ -n "$DAGSTER_PLUS_DEPLOYMENT" ] && DEPLOY_ARG="--deployment $DAGSTER_PLUS_DEPLOYMENT"
@@ -224,9 +278,9 @@ echo "    organization: ${DAGSTER_PLUS_ORG:-(from dg plus login)}"
 echo "    deployment:   $DAGSTER_PLUS_DEPLOYMENT"
 echo "    build:        ${BUILD_STRATEGY:-(auto: PEX for Serverless, Docker for Hybrid)}"
 
-# ── 6/6: deploy ──────────────────────────────────────────────────────────────
+# ── 7/7: deploy ──────────────────────────────────────────────────────────────
 echo ""
-WANT_DEPLOY=$(ask "==> 6/6: Run 'dg plus deploy' now? [Y/n]:" "Y")
+WANT_DEPLOY=$(ask "==> 7/7: Run 'dg plus deploy' now? [Y/n]:" "Y")
 if is_yes "$WANT_DEPLOY"; then
   # shellcheck disable=SC2086
   uv run dg plus deploy $BUILD_ARG $ORG_ARG $DEPLOY_ARG

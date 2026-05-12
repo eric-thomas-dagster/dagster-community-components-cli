@@ -31,24 +31,28 @@ The script prompts you along the way. To accept defaults and skip prompts in CI:
 curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-interactive
 ```
 
-## What the script does (6 steps)
+## What the script does (7 steps)
 
 ```
-1/6  Ensures dagster-cloud-cli is in dev deps                     (idempotent)
-2/6  Runs `dg plus login` if not already authed                   (browser OAuth)
+1/7  Ensures dagster-cloud-cli is in dev deps                     (idempotent)
+2/7  Runs `dg plus login` if not already authed                   (browser OAuth)
        → Saves a USER token to ~/.dagster_cloud_cli/config.
-       → THIS token is what powers the local deploy in step 6.
-3/6  [prompts] Run `dg plus deploy configure --git-provider github`?
+       → THIS token is what powers the local deploy in step 7.
+3/7  [prompts] Run `dg plus deploy configure --git-provider github`?
        Auto-detects your agent type (Serverless vs Hybrid) and scaffolds:
        → build.yaml                              (modern code-location manifest)
        → Dockerfile + container_context.yaml     (Hybrid only)
        → .github/workflows/*.yml                 (CI/CD)
-4/6  [prompts, if .github/ exists] Create a CI API token?
+4/7  [prompts, if .github/ exists] Create a CI API token?
        → A SEPARATE token for GitHub Actions runs (no browser available there).
        → Paste into GitHub secret DAGSTER_CLOUD_API_TOKEN.
        → Optional — skip this if you only deploy from your laptop.
-5/6  Confirms deployment target (org / deployment / build strategy)
-6/6  [prompts] Run dg plus deploy now?  (uses your step-2 user token, NOT the CI token)
+5/7  Scans your project for env var references — and offers to set each one.
+       → Greps for EnvVar("X"), os.environ["X"], *_env_var: X, ${env:X}.
+       → For each detected name, prompts: "X =" (paste value, or Enter to skip).
+       → Each set value runs `dg plus create env X --value … --deployment …`.
+6/7  Confirms deployment target (org / deployment / build strategy)
+7/7  [prompts] Run dg plus deploy now?  (uses your step-2 user token, NOT the CI token)
 ```
 
 **Why two tokens?**
@@ -198,7 +202,7 @@ The first run will take longer (cold-start the agent). Subsequent runs reuse the
 |---|---|
 | Pure synthetic-data demos (kitchen_sink, data_hygiene, x12_edi, etc.) | ✅ Work directly |
 | Public-API demos (USGS earthquakes, SpaceX, weather, NBA scoreboard) | ✅ Work directly |
-| Demos requiring env vars (DATABASE_URL, API keys) | ⚠️ Set via `dg plus create env` before deploying |
+| Demos requiring env vars (DATABASE_URL, API keys) | ✅ Step 5 of this script detects + prompts for each one |
 | Demos using local `/tmp/...` paths for cross-asset file passing | ⚠️ Work within one Serverless run, files vanish after — see [the disk-IO deployment note](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/ai/synthetic_image_generator/README.md#%EF%B8%8F-deployment-note-dagster--kubernetes) on every affected component |
 | Demos with local-server fixtures (email_roundtrip's IMAP stub) | ❌ Re-point at real services before deploying |
 | Cloud-credential demos (azure_*, bigquery_*) | ✅ Work — set creds via `dg plus create env` |
