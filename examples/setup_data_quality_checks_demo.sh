@@ -86,7 +86,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/enhanced_data_quality_checks/defs.yaml" <<EOF
-type: $PKG.components.enhanced_data_quality_checks.component.EnhancedDataQualityChecksComponent
+type: $PKG.components.enhanced_data_quality_checks.component.EnhancedDataQualityChecks
 attributes:
   assets:
     orders_raw:
