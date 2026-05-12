@@ -37,7 +37,8 @@ PROJECT_DIR=""
 DAGSTER_PLUS_ORG=""
 DAGSTER_PLUS_DEPLOYMENT="prod"
 BUILD_STRATEGY=""
-GIT_PROVIDER="github"
+GIT_PROVIDER=""         # blank = ask interactively (default: github)
+GIT_PROVIDER_EXPLICIT=0 # set to 1 if user passed --git-provider
 AGENT_TYPE=""           # serverless | hybrid (autodetect if empty)
 REGISTRY_URL=""         # required for hybrid
 AGENT_PLATFORM=""       # k8s | ecs | docker (hybrid only)
@@ -49,7 +50,7 @@ while [ "$#" -gt 0 ]; do
     --organization|--org) DAGSTER_PLUS_ORG="$2"; shift 2;;
     --deployment) DAGSTER_PLUS_DEPLOYMENT="$2"; shift 2;;
     --build-strategy) BUILD_STRATEGY="$2"; shift 2;;
-    --git-provider) GIT_PROVIDER="$2"; shift 2;;
+    --git-provider) GIT_PROVIDER="$2"; GIT_PROVIDER_EXPLICIT=1; shift 2;;
     --agent-type) AGENT_TYPE="$2"; shift 2;;
     --registry-url) REGISTRY_URL="$2"; shift 2;;
     --agent-platform) AGENT_PLATFORM="$2"; shift 2;;
@@ -126,9 +127,28 @@ WANT_CONFIGURE="N"
 if [ "$WITH_CI" -eq 1 ] || [ "$NEED_CONFIGURE" -eq 1 ]; then
   WANT_CONFIGURE="y"
 else
-  WANT_CONFIGURE=$(ask "    Run 'dg plus deploy configure' to scaffold build.yaml + $GIT_PROVIDER CI workflows? [Y/n]:" "Y")
+  WANT_CONFIGURE=$(ask "    Run 'dg plus deploy configure' to scaffold build.yaml + CI workflows? [Y/n]:" "Y")
 fi
 if is_yes "$WANT_CONFIGURE"; then
+  # Ask for git provider if not passed explicitly
+  if [ "$GIT_PROVIDER_EXPLICIT" -eq 0 ]; then
+    if [ -z "$GIT_PROVIDER" ]; then
+      if [ "$NON_INTERACTIVE" -eq 1 ]; then
+        GIT_PROVIDER="github"
+      else
+        # If there's a git remote, sniff it
+        DEFAULT_GP="github"
+        if [ -f .git/config ] && grep -qi "gitlab" .git/config; then
+          DEFAULT_GP="gitlab"
+        fi
+        GIT_PROVIDER=$(ask "    Git provider for CI workflows [github/gitlab]:" "$DEFAULT_GP")
+        if [ "$GIT_PROVIDER" != "github" ] && [ "$GIT_PROVIDER" != "gitlab" ]; then
+          echo "    (unknown '$GIT_PROVIDER' — defaulting to github)"
+          GIT_PROVIDER="github"
+        fi
+      fi
+    fi
+  fi
   # Default to Serverless. The "click-to-deploy from a demo" UX is Serverless-first:
   # Hybrid needs prior infra (agent, registry, credentials) that this script
   # can't bootstrap from scratch. Users who already have Hybrid set up can
@@ -237,35 +257,79 @@ ENV_VARS=$(
 
 if [ -z "$ENV_VARS" ]; then
   echo "    ✓ No env-var references found. Skipping env-var provisioning."
+  echo ""
+  echo "    Note: this scan only catches the most common patterns. If you've added"
+  echo "    custom code with other env-var references (constructed names, dynamic"
+  echo "    lookup, etc.), set them manually:"
+  echo "      uv run dg plus create env MY_VAR --value '...' --deployment $DAGSTER_PLUS_DEPLOYMENT"
 else
   echo "    Detected references:"
   echo "$ENV_VARS" | sed 's/^/      - /'
   echo ""
-  if [ "$NON_INTERACTIVE" -eq 1 ]; then
-    echo "    [non-interactive] Skipping. Set manually before/after deploy:"
-    echo "$ENV_VARS" | sed "s|^|      uv run dg plus create env |;s|\$| --value '...' --deployment $DAGSTER_PLUS_DEPLOYMENT|"
-  else
-    echo "    For each one: paste a value to set now (will run 'dg plus create env'),"
-    echo "    or press Enter to skip (you can set it later in the Dagster+ UI)."
-    echo ""
-    CREATED=0
-    while IFS= read -r var; do
-      [ -z "$var" ] && continue
-      val=$(ask "      $var =" "")
-      if [ -n "$val" ]; then
-        if uv run dg plus create env "$var" --value "$val" --deployment "$DAGSTER_PLUS_DEPLOYMENT" >/dev/null 2>&1; then
-          echo "        ✓ created on deployment '$DAGSTER_PLUS_DEPLOYMENT'"
-          CREATED=$((CREATED + 1))
-        else
-          echo "        ✗ failed (you may not have permission, or it already exists — try the UI)"
-        fi
+  CREATED=0
+  SHELL_USED=()
+  PROMPTED=()
+  SKIPPED=()
+  while IFS= read -r var; do
+    [ -z "$var" ] && continue
+    current_val="${!var:-}"
+    val=""
+    origin=""
+
+    if [ -n "$current_val" ]; then
+      # Truncate the displayed preview if value looks long (likely a secret)
+      preview="$current_val"
+      [ ${#preview} -gt 60 ] && preview="${preview:0:57}…"
+      if [ "$NON_INTERACTIVE" -eq 1 ]; then
+        val="$current_val"; origin="from your shell environment"
       else
-        echo "        (skipped)"
+        confirm=$(ask "      $var is set in your shell ('$preview'). Use this value? [Y/n/skip]:" "Y")
+        case "$confirm" in
+          y|Y|yes|YES|Yes|"")
+            val="$current_val"; origin="from your shell environment"
+            ;;
+          s|skip|SKIP)
+            SKIPPED+=("$var"); continue
+            ;;
+          *)
+            # No / anything else → ask for a new one
+            val=$(ask "      $var = (paste new value, or Enter to skip):" "")
+            if [ -z "$val" ]; then
+              SKIPPED+=("$var"); continue
+            fi
+            origin="entered now (overrides shell value)"
+            ;;
+        esac
       fi
-    done <<<"$ENV_VARS"
-    echo ""
-    echo "    ✓ Created $CREATED env var(s). To update later: dg plus create env <NAME> --value ... --deployment $DAGSTER_PLUS_DEPLOYMENT"
-  fi
+      [ "$origin" = "from your shell environment" ] && SHELL_USED+=("$var") || PROMPTED+=("$var")
+    elif [ "$NON_INTERACTIVE" -eq 1 ]; then
+      SKIPPED+=("$var"); continue
+    else
+      val=$(ask "      $var = (not set in your shell — paste value or Enter to skip):" "")
+      if [ -z "$val" ]; then
+        SKIPPED+=("$var"); continue
+      fi
+      PROMPTED+=("$var"); origin="entered now"
+    fi
+
+    if uv run dg plus create env "$var" --value "$val" --deployment "$DAGSTER_PLUS_DEPLOYMENT" >/dev/null 2>&1; then
+      echo "      ✓ $var set ($origin) → deployment '$DAGSTER_PLUS_DEPLOYMENT'"
+      CREATED=$((CREATED + 1))
+    else
+      echo "      ✗ $var: failed to set (insufficient permissions, already exists, or other — set via the UI)"
+    fi
+  done <<<"$ENV_VARS"
+  echo ""
+  echo "    Summary: $CREATED set"
+  [ ${#SHELL_USED[@]} -gt 0 ] && echo "      used your shell values for:  ${SHELL_USED[*]}"
+  [ ${#PROMPTED[@]} -gt 0 ]   && echo "      took values you entered for: ${PROMPTED[*]}"
+  [ ${#SKIPPED[@]} -gt 0 ]    && echo "      skipped:                     ${SKIPPED[*]}"
+  echo ""
+  echo "    Override or set additional vars anytime:"
+  echo "      uv run dg plus create env <NAME> --value '...' --deployment $DAGSTER_PLUS_DEPLOYMENT"
+  echo ""
+  echo "    Note: the scan catches the most common patterns. If your project uses"
+  echo "    dynamically-constructed env-var names, set those manually."
 fi
 
 # ── 6/7: deployment target summary ───────────────────────────────────────────
