@@ -369,6 +369,7 @@ attributes:
   connection_url_env_var: SQL_DB_URL
   destination_table: orders_sql
   sql: 'SELECT category, SUM(quantity) AS total_qty FROM orders GROUP BY category'
+  upstream_asset_keys: [orders_in_duckdb]   # waits for orders table to exist in DuckDB
   group_name: transforms"
 
 # 25. text_to_columns
