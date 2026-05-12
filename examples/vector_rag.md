@@ -30,26 +30,6 @@ chat_log (3 turns) ────► chat_history
 | `rag_pipeline` | `rag_response` | end-to-end RAG: retrieve from same Chroma DB + answer with gpt-4o-mini |
 | `conversation_memory` | `chat_history` | persists user/assistant turns into a JSON memory file |
 
-## Bugs found + fixed during validation
-
-1. **`vector_store_writer`** referenced an undefined variable `result`
-   in the post-write metadata block — should have been `df`. Fixed.
-
-2. **`vector_store_query`** didn't preserve the original query text in
-   its output rows — only `query_row_index`, `id`, `document`,
-   `metadata`, `distance`. This made downstream rerankers (which need
-   both query and document side-by-side) impossible to wire up. Added
-   an optional `query_text_column` field that copies the upstream
-   query column into output rows.
-
-3. **`rag_pipeline`** field for the chromadb path is
-   `vector_store_connection`, but `vector_store_writer` and
-   `vector_store_query` use `connection_string`. Naming inconsistency
-   left intact for backwards compat — documented in this demo's YAML.
-
-4. **`conversation_memory`, `rag_pipeline`** had the recurring `ctx` →
-   `context` asset-fn parameter bug. Already fixed in earlier sweep.
-
 ## Run
 
 ```bash

@@ -60,11 +60,6 @@ InsurancePolicyQuoteInqRq    3
 
 Other envelopes fall through with envelope-only rows (no entity extraction); easy to extend by adding a new function to `_TYPE_EXTRACTORS`.
 
-## Bugs surfaced during this demo
-
-1. **First-child detection picked up `<SignonRq>`** as the message type instead of the actual envelope. Fixed in the parser: skip `<SignonRq>` boilerplate and pick the next sibling.
-2. **`transaction_id` was probed at root level** but ACORD nests `<RqUID>` inside the envelope. Fixed: probe within the envelope element first, fall back to root.
-
 ## Why ACORD matters
 
 ACORD XML is the lingua franca between US/UK/AU/CA carriers, MGAs, brokers, and rating engines. Every policy admin system, claims platform, and reinsurance reporting pipeline ingests ACORD daily. The standard is intentionally verbose (carriers extend it with vendor namespaces) — this component handles the high-traffic ~80% of fields without forcing a full ACORD-spec compiler.

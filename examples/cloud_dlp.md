@@ -65,10 +65,6 @@ export GCP_PROJECT_ID=your-project
 # IAM:    roles/dlp.user on the service account
 ```
 
-## Bugs surfaced fixing this demo
-
-None — clean live validation. Both components worked first try once DLP API was enabled.
-
 ## Run it
 
 ```bash

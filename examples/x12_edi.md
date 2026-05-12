@@ -60,10 +60,6 @@ Other transaction sets fall through with the ISA/GS/ST envelope context populate
 
 ISA fields are positionally fixed-width per spec, so element/component/segment separators are read from byte offsets in the header — no configuration. Works with both `~`-segment / `*`-element (canonical) and pipe-rendered logs.
 
-## Bugs surfaced fixing this demo
-
-1. **BPR16 payment_date positional mismatch**: synthetic data placed the date at offset 15 (BPR15) rather than 16. Fixed in the generator by adding one element separator. Parser was correct per spec.
-
 ## Why X12 EDI matters
 
 ASC X12 is the dominant US-domestic EDI standard. Every major payer, retailer, logistics provider, and bank speaks it. Migrations to FHIR + JSON are happening but the legacy X12 fire-hose isn't going away — claims clearinghouses, ERP integrations, and supply-chain ETL all ingest these envelopes daily.

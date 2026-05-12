@@ -39,13 +39,6 @@ BigQuery tables created:
 
 **Free.** Cloud Logging reads are free up to 50 GB/mo, Monitoring metric reads are free, BQ loads at this volume are well under the free tier.
 
-## Bugs surfaced and fixed validating this demo
-
-1. **`google.cloud.monitoring_v3` has no `MetricDescriptor` attribute** at the top level. Original code did `monitoring_v3.MetricDescriptor.ValueType(...)`. Replaced with an inline `_VALUE_TYPE_NAMES` dict (the proto enum is stable: BOOL/INT64/DOUBLE/STRING/DISTRIBUTION/MONEY).
-2. **Time interval start_time/end_time aren't Timestamp protos in current API** — they're `DatetimeWithNanoseconds` objects already. `.ToDatetime()` blew up. Added a `_ts_to_datetime()` helper that handles both shapes.
-3. **`dataframe_to_bigquery` rejects dict/list columns** with `Empty schema specified for the load job`. Cloud Logging entries (`resource_labels`, `json_payload`, `labels`) and Monitoring points (`metric_labels`, `resource_labels`) emit dicts. Added a pandas flatten step between source and sink that JSON-stringifies any column containing dicts/lists. Keeps the sources rich + the sink generic.
-4. **Class name is `DataframeToBigqueryComponent` (lowercase q)** — not `DataframeToBigQueryComponent`. Worth knowing when writing YAML by hand.
-
 ## Required env vars
 
 ```bash

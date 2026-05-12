@@ -26,10 +26,6 @@ sensor_readings        ← synthetic_data_generator (sensors schema)
 - **Writer**: 5 docs written to `devices` collection. Mode `set` (creates or overwrites).
 - **Reader**: filter `status == "active"` → 4 docs (dev-001, dev-002, dev-004, dev-005). dev-003 (inactive) correctly excluded.
 
-## Bugs surfaced fixing this demo
-
-1. **`WHERE + ORDER BY` on different fields requires a composite index.** Initial reader config had `where: status == active` + `order_by: -temp_c` — Firestore returned a `FailedPrecondition` with a console link to create the composite index. Either follow the link (1-click) or sort client-side. Updated the demo to skip `order_by` for zero-config; documented the workaround.
-
 ## Patterns
 
 | Goal | Setup |

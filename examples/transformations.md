@@ -60,16 +60,6 @@ All 34 components materialize successfully on first run. Total wall-clock
 | `sql_transform` | Needs a SQLAlchemy connection URL env var (postgres://, etc.) |
 | `dataframe_transformer` | Component has a `retry_policy_max_retries` attribute bug at runtime |
 
-## Bugs found + fixed during validation
-
-- **`document_merger.on` and `lookup.on`**: YAML 1.1 parses `on:` as
-  boolean `True`, not the string key the components expect. Fixed in
-  the demo by quoting the key: `"on": product`.
-
-- **`dataframe_transformer`**: tries to read `self.retry_policy_max_retries`
-  but the field doesn't exist on the model — runtime AttributeError.
-  Excluded from this demo. Should be fixed in the component itself.
-
 ## Field-name reference (cheat sheet)
 
 The transformation components don't follow a fully consistent naming

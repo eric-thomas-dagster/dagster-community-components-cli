@@ -86,18 +86,6 @@ validation walkthrough because:
 - **Filterable by date** via the `?created=YYYY-MM-DD` query param —
   ideal for proving the daily-partition pattern.
 
-## Bugs surfaced and fixed validating this demo
-
-1. **`trigger.run_id` source default.** The `_ConditionExtractor` field
-   `source` defaults to `status_response`, but at trigger time only
-   `trigger_response` is available — so the extractor read None. Fixed
-   by forcing `source=trigger_response` for the run-id extractor at
-   evaluation time.
-2. **`from __future__ import annotations` was at the top of
-   `component.py`.** Dagster's `_validate_context_type_hint` reads
-   parameter annotations at runtime, and the future import turns them
-   into strings — breaking the `is`-checks. Removed.
-
 ## Convert into a real (write-side) trigger
 
 The demo is read-only. To wire this up to actually trigger a workflow:

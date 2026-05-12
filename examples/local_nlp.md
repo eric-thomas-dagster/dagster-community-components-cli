@@ -49,46 +49,6 @@ support_tickets (synthetic_data_generator: 30 multilingual tickets)
 | `ticket_classifier` | `ticket_classified` | classify into category/urgency/sentiment/department |
 | `sql_generator` | `tickets_sql_query` | natural-language question → SQL |
 
-## Bugs found + fixed during validation
-
-1. **`document_chunker`** rejected `output_column` (extra field) — its
-   actual fields are `source_column`, `strategy`, `chunk_size`,
-   `chunk_overlap`. Demo YAML fixed.
-
-2. **`text_chunker`** required field `chunking_strategy` (not just
-   `strategy`); didn't accept `output_column`. Fixed.
-
-3. **`text_chunker`** referenced undefined `chunks` variable in its
-   metadata block (should have been `result_df`). Same `result/df`
-   pattern bug as `vector_store_writer`. Fixed.
-
-4. **`text_similarity`** field for the fixed comparison string is
-   `query`, not `reference_text`. Documented.
-
-5. **`topic_modeler`** uses `n_topics`, not `num_topics`. Documented.
-
-6. **`schema_fit`** missing `target_schema` was the real required field
-   (not optional). Demo YAML now provides it.
-
-7. **`schema_fit`** didn't pass `response_format={"type":
-   "json_object"}` to the LLM, so the model returned natural-language
-   explanations and `json.loads` failed. Added `response_format`.
-
-8. **`precision_match`** required fields are `column` (which column to
-   standardize) and `reference_values` (canonical list). Demo YAML
-   updated.
-
-9. **`sql_generator`** required field is `question_column`. Documented.
-
-10. **`ticket_classifier`** had the recurring `prompt_template.format()`
-    bug — its template builds dynamic JSON examples with literal `{`
-    and `}` braces, which `.format()` interprets as field markers.
-    Switched to manual `.replace()` per context variable. Same fix
-    pattern as `sentiment_analyzer` / `entity_extractor` / `text_moderator`.
-
-11. **`llm_output_parser`** had the `ctx → context` asset-fn parameter
-    bug. Already fixed in earlier sweep.
-
 ## Run
 
 ```bash

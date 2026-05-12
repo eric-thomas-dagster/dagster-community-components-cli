@@ -34,11 +34,6 @@ gcloud pubsub subscriptions pull demo-events-sub --limit=10 --auto-ack
 
 All 5 acked SUCCESS.
 
-## Bugs surfaced fixing this demo
-
-1. **`ordering_key_column` without explicit publisher option** silently failed every publish with `"Cannot publish a message with an ordering key when message ordering is not enabled"`. Component now auto-sets `PublisherOptions(enable_message_ordering=True)` when `ordering_key_column` is configured.
-2. **`gcloud pubsub subscriptions pull` returns 0 if there's no backlog at the moment of the call** — not a bug, but a gotcha. The Pub/Sub client publishes async; allow a 2-3s wait between publish and pull.
-
 ## Attribute-based routing
 
 Pub/Sub subscriptions can filter by message attributes — meaning one topic can fan out to multiple consumers, each seeing only relevant events:

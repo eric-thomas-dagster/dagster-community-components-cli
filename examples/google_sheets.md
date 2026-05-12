@@ -69,24 +69,6 @@ This is intentional — the asset still materializes (with empty
 output), so downstream-dependent jobs aren't bricked, and the log
 contains the exact remediation URL.
 
-## Bugs surfaced and fixed validating this demo
-
-1. **Component imported `dlt.sources.google_sheets`**, but that's a
-   dlt verified-source template that gets copied via `dlt init`,
-   not a pip-installable package — so the import always failed.
-   Rewrote the data-fetch path to use `google-api-python-client`
-   directly (cleaner, fewer indirections, well-supported).
-2. **Credentials field accepted only an inline dict** (or JSON
-   string in an env var). Added `credentials_path` and a fallback
-   to `GOOGLE_APPLICATION_CREDENTIALS` — the standard google-auth
-   convention every Google SDK consumer expects.
-3. **Google Sheets API has to be enabled per-project.** Service
-   accounts often live in a different GCP project than the user's
-   "main" one; if the SA's project hasn't enabled the Sheets API,
-   you get a `403 SERVICE_DISABLED` with an exact remediation URL
-   in the error message. Click the link, hit Enable, ~30s to
-   propagate. Caught + documented during this demo's first run.
-
 ## Service account setup
 
 If you don't already have a service-account JSON:

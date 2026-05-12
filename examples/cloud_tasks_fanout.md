@@ -86,10 +86,6 @@ gcloud tasks list --queue=demo-queue --location=us-central1
 
 After dispatch (typically seconds), the queue is empty — successful tasks are removed. To see them mid-flight, use a longer `dispatch_deadline_seconds` or schedule them in the future via `schedule_time_column`.
 
-## Bugs surfaced fixing this demo
-
-None — clean validation. (The component was code-only before this demo, so live validation was the first end-to-end exercise.)
-
 ## What you can do downstream
 
 - **Real workers**: replace `target_url` with a Cloud Run or Cloud Function URL + `oidc_service_account_email`. The queue handles retries / throttling for you.

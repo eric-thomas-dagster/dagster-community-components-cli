@@ -59,54 +59,6 @@ synthetic_data_generator → support_tickets
 Total wall-clock: ~1 minute (parallel execution via Dagster's
 multiprocess executor). Cost on `gpt-4o-mini`: ~$0.30–$1.00.
 
-## Bugs found + fixed during validation
-
-Validating 12 components against a real key surfaced **9 distinct
-bugs** in the registry — all now fixed:
-
-1. **`langchain_chain_asset`, `litellm_inference_asset`,
-   `moderation_scorer`, `ollama_inference_asset`** — declared `List[str]`
-   fields but only imported `Optional` from `typing`. Module-load
-   `NameError`. Fixed: imports updated.
-
-2. **`llm_chain_executor.chain_steps` typed as `str`** — Dagster's YAML
-   resolver auto-parses bracket syntax to lists regardless of quoting.
-   Changed to `List[Dict[str, Any]]`.
-
-3. **`llm_output_parser`** — asset-fn parameter named `ctx` instead of
-   `context`, so Dagster treated it as an input asset. Same `ctx →
-   context` fix applied earlier to 6 other AI components.
-
-4. **`openai_llm` `user_prompt_template`** — Dagster runs string fields
-   through Jinja2 templating. The template had `{{"intent": ...}}`
-   which Jinja2 tried to evaluate. Switched the demo prompt to
-   single-brace `{column}` references.
-
-5. **`llm_chain_executor`** — `prompt_template.format(**context_data)`
-   raised `KeyError: 'input'` when users referenced `{input}` in their
-   prompts. The component validated `input_column` existed but never
-   aliased it to `'input'`. Fixed: now `context_data["input"] =
-   row[input_column]`.
-
-6. **`llm_prompt_executor`** — same bug as #5; same fix.
-
-7. **`litellm_batch_completion`** — same pattern with `text_column` →
-   `{text}`. Now aliases `text` key in row dict.
-
-8. **`llm_chain_executor`** — `json.dumps(context_data)` failed with
-   `TypeError: Object of type Timestamp is not JSON serializable` when
-   upstream rows contained datetime columns. Fixed with
-   `json.dumps(..., default=str)`.
-
-9. **`llm_judge`** — used `api_key=api_key` in `litellm.completion()`
-   call but `api_key` was never defined as a local variable (the actual
-   key is in `kwargs`). Caused `NameError` for every row. Removed the
-   redundant kwarg.
-
-10. **`instructor_extractor`** — uses `os.environ.get(...)` in
-    `_make_openai_client` but never imported `os`. Module-load NameError
-    at runtime.
-
 ## Run
 
 ```bash

@@ -279,15 +279,6 @@ attached SA.
 - Vision + Translation: 3 synthetic PNGs → labels (`Red`, `Blue`, `Clip art`) → translated to es/fr/de/ja (赤 / 青 / クリップアート)
 - Speech + Translation: `brooklyn_bridge.mp3` → "How old is the Brooklyn Bridge?" → translated to es/fr/de/ja (`ブルックリン橋は何年前にできたのですか？`)
 
-### Bug-finds during validation
-
-Live runs surfaced several real bugs the components now handle cleanly:
-- `gemini_llm` thinking_budget vs max_output_tokens (truncated output)
-- `google_sheets_ingestion` wrong import (`dlt.sources.google_sheets` isn't pip-installable)
-- `bigquery_export_to_gcs_asset` ExtractJob has no `total_bytes_processed`
-- `hris_normalizer` case-insensitive map didn't lowercase user-supplied keys
-- Service account project's Sheets / Docs / Calendar APIs needing per-project enable
-
 ---
 
 ## Dagster+ required

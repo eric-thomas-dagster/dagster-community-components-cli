@@ -35,11 +35,6 @@ sensor_readings        ← synthetic_data_generator (sensors schema)
   device#002  meta:ts=2026-05-11T08:01:00Z, ...
   ```
 
-## Bugs surfaced fixing this demo
-
-1. **`bigtable_reader_asset` passed bytes to `add_row_range_with_prefix`** — that method's implementation does `chr(ord(prefix[-1]) + 1)` to compute the end key, which fails on bytes (`TypeError: ord() expected string of length 1, but int found`). Fixed by passing the prefix as `str`.
-2. **Bigtable `cbt` CLI isn't shipped with gcloud by default** — used Python admin client to create the table + families instead. Worth noting in setup docs.
-
 ## Performance
 
 - Writer batches 500 rows per `mutate_rows()` call by default. Tune via `batch_size`.

@@ -36,25 +36,6 @@ synthetic_data_generator → orders_raw → dataframe_to_csv
 | `orders_total_in_range` | passed (all totals in 0–100000) |
 | `orders_dtype` | passed (total: float64, status: object) |
 
-## Bugs found + fixed during validation
-
-While building this demo, three real bugs surfaced in the registry:
-
-1. **`freshness_check`** was emitting a new AssetSpec for the same key as
-   the existing asset, causing `Duplicate asset key` errors when paired
-   with any component-defined asset. Fixed: switched to Dagster's
-   `build_last_update_freshness_checks` factory — same declarative
-   freshness contract, materialized as asset_checks under the hood
-   (Dagster's recommended pattern in 1.10+). User config unchanged.
-
-2. **`enhanced_data_quality_checks`** was using `sanitized_name` in 4
-   `_create_*_check` methods without first defining it, raising
-   `NameError`. Fixed by adding the missing assignment.
-
-3. **`enhanced_data_quality_checks._get_check_severity`** returned a
-   string but `AssetCheckResult.severity` requires an `AssetCheckSeverity`
-   enum. Fixed.
-
 ## Run
 
 ```bash

@@ -38,10 +38,6 @@ us-east,11250,5
 us-west,10000,5
 ```
 
-## Bugs surfaced fixing this demo
-
-1. **`dataframe_to_gcs` needs `gcsfs` at runtime** but `pip install dataframe_to_gcs` doesn't pull it transitively (lives behind pyarrow's fsspec layer for parquet writes to gs://). The setup script now `uv add`s it explicitly. Worth a note in the component's README too.
-
 ## Why this pattern matters
 
 This is the canonical "warehouse ingest from GCS" loop:

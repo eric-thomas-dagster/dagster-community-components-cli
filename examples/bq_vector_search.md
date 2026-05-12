@@ -29,10 +29,6 @@ The demo table has 5 docs in 2 semantic clusters (billing vs. account) plus 1 ou
 
 Top-2 results per query land in the correct cluster. The third result is a distant "filler" — exactly what you'd expect with `top_k: 3` on a 5-row table.
 
-## Bugs surfaced fixing this demo
-
-1. **`VECTOR_SEARCH` SQL syntax was wrong** — initial code combined `distance_type` + `use_brute_force` into a single `options` clause like `'{distance_type=>'COSINE', use_brute_force=>true}'`. Real syntax: `distance_type` and `top_k` are **top-level named args**, and `options` is a JSON STRING for tuning params only (`use_brute_force`, `fraction_lists_to_search`). Fixed in the component.
-
 ## SQL emitted (after fix)
 
 ```sql

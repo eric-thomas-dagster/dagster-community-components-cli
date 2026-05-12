@@ -91,13 +91,6 @@ take a `platform: <enum>` field that pins the source schema.
 | `priority_scorer` | Declares `**kwargs` ins= without binding any AssetIn → raises `Priority Scorer requires an upstream DataFrame` regardless of YAML |
 | `subscription_metrics` | Silent subprocess crash on synthetic data — likely needs Stripe-shaped subscription history |
 
-## Bugs found + fixed during validation
-
-1. **`campaign_performance`** — emitted `numpy.float64` values directly
-   into Dagster metadata, causing `SerializationError: Unhandled value
-   type <class 'numpy.float64'>`. Fixed by coercing to native `float()`
-   and `int()` in the metadata dict.
-
 ## Field-name reference (cheat sheet)
 
 The analytics category has very inconsistent input-asset patterns. Key gotchas:

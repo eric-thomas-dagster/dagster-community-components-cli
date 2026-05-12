@@ -41,18 +41,6 @@ If these defaults don't match your install's API, override the field
 in your `defs.yaml` — the component logic will still poll the correct
 Job Status endpoint regardless.
 
-## Bugs found and fixed
-
-The pre-fix component used a **completely fictional** API surface:
-
-- ❌ Status path: `GET /api/v1/jobs/{job_id}/runs/{run_id}` returning JSON
-- ❌ Status enum: looked for `SUCCESS` / `SUCCEEDED` / `ABORTED` (none of which Precisely returns)
-- ❌ Treated response as JSON; would crash on plain-text response
-
-After the fix, the verified Job Status path is wired correctly. The
-unverified submit / list-runs paths are field-overridable so customers
-can plug in their actual paths without modifying the component.
-
 ## Sensor: two modes
 
 The fix added a second sensor mode that uses **only** the verified API:

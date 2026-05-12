@@ -64,12 +64,6 @@ cd google-drive-docs-demo
 uv run dg launch --assets '*'
 ```
 
-## Bugs surfaced and fixed validating this demo
-
-1. **Docs API not enabled per-project.** Same gotcha as Sheets — service accounts often live in a project that hasn't enabled the API yet. Component surfaces the activation URL.
-2. **Gemini 2.5 thinking-token consumption.** Caught the silent-truncation issue: with `max_output_tokens=80`, Gemini 2.5 Flash burned 73 tokens on internal "thinking" and emitted only 3 visible tokens, producing a 3-word "summary." Added `thinking_budget` config field to `gemini_llm`; setting `thinking_budget: 0` for short structured outputs frees all the budget for visible response.
-3. **Failed Doc rows dropped columns.** Original `google_docs_extractor` only wrote `id/title/word_count` for failed rows, breaking downstream components that expected a `text` column. Now writes `text=None` / `headings=None` consistently.
-
 ## Asset graph in the UI
 
 `uv run dg dev` → http://localhost:3000 shows the chain. Click any asset to see metadata: row counts, model, preview tables, and the actual extracted text / summary.

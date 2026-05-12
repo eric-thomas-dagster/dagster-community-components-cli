@@ -61,15 +61,6 @@ uv run dg launch --assets '*'
 cat /tmp/litellm_multi_provider.csv
 ```
 
-## Bugs surfaced and fixed validating this demo
-
-1. **`litellm_inference_asset` shipped `example.yaml` had bogus fields**
-   `database_url_env_var` and `table_name` — not on the Pydantic
-   model. The CLI installed the example as the active defs.yaml,
-   so a fresh install raised `extra_forbidden` at load time. Fixed
-   the source example to match the actual fields + added inline
-   docs showing how to swap providers.
-
 ## Why LiteLLM vs the native components?
 
 | Pattern | Components | Best for |

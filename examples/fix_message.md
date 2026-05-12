@@ -78,10 +78,6 @@ attributes:
   msg_type_filter: [D, 8]   # orders + executions only
 ```
 
-## Bugs surfaced fixing this demo
-
-1. **YAML int vs str MsgType**: `msg_type_filter: [D, 8]` was rejected because Dagster's Resolvable auto-generates a strict `List[str]` validator before any field_validator can run. Fixed by changing the type annotation to `List[Union[str, int]]` and coercing inside `build_defs` — naturally accepts both forms.
-
 ## Why FIX matters
 
 FIX is the global protocol for electronic trading — equities, fixed income, FX, derivatives. Every buyside firm, broker, exchange, and ECN speaks it. Trading-ops pipelines ingest FIX firehoses for compliance reporting, P&L attribution, execution analytics, regulatory TCA.

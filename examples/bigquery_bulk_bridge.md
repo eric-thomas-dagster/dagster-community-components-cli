@@ -72,14 +72,6 @@ bq query --nouse_legacy_sql \
 gsutil ls gs://servicepulse-490502-dagster-demo/bridge/iris_*.parquet
 ```
 
-## Bug surfaced and fixed validating this demo
-
-`google.cloud.bigquery.ExtractJob` doesn't expose
-`total_bytes_processed` — that attribute lives on `QueryJob`. Caught
-on the first run; the component now falls back to fetching the
-source table's `num_bytes` for metadata display when running in
-`source_table_id` mode.
-
 ## Why these vendor-native components vs the DataFrame-mediated peers?
 
 The registry has two parallel paths for any warehouse ↔ object-storage

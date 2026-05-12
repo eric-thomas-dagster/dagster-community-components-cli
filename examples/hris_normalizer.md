@@ -101,11 +101,6 @@ value_maps:
 AND the user-supplied map keys before lookup, so `T` and `t` and `Active`
 and `active` all match the same way.
 
-## Bug surfaced and fixed validating this demo
-
-1. **`case_insensitive_map` only lowercased the input value, not the map keys** — so user maps like `{A: active, T: terminated}` never matched the lowercased `'a'` / `'t'` lookup keys. Fixed: lowercase both sides at lookup time. Caught immediately on the first run when the CSV showed raw `T` / `L` instead of the canonical values.
-2. **Hardcoded value-normalization for status + type only** — refactored to a generic `value_maps` dict that works on any canonical field. `status_map` / `type_map` are kept as ergonomic sugar.
-
 ## Sister components (planned)
 
 - `merge_dev_hris_ingestion` — Merge.dev's unified HRIS API: one client → 50+ HRIS systems.

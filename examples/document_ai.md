@@ -67,10 +67,6 @@ export GCP_PROJECT_ID=your-project
 - `roles/documentai.apiUser` — to invoke processors
 - `roles/documentai.editor` — additionally needed if you want the setup script to auto-create the processor
 
-## Bugs surfaced fixing this demo
-
-None — clean live validation on first attempt. The processor list-and-create flow worked first try (SA had `documentai.editor` from prior session).
-
 ## Run it
 
 ```bash
