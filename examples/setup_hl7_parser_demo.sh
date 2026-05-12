@@ -33,6 +33,9 @@ __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_
 echo 'from .component import Hl7V2ParserComponent
 __all__ = ["Hl7V2ParserComponent"]' > "src/$PKG/components/hl7_v2_parser/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/hl7_v2_parser"
+
 # Remove auto-installed example defs (their asset_names collide with ours)
 rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/hl7_v2_parser"
 

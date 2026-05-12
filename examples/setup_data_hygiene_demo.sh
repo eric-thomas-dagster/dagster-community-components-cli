@@ -52,6 +52,9 @@ for c in synthetic_data_generator audit_columns schema_validator field_mapper ma
   CLS=$(grep -oE '^class\s+\w+\s*\(' "src/$PKG/components/$c/component.py" | awk '{print $2}' | tr -d '(' | tail -1)
   if [ -n "$CLS" ]; then
     echo "from .component import $CLS" > "src/$PKG/components/$c/__init__.py"
+
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/audit_columns" "src/$PKG/defs/schema_validator" "src/$PKG/defs/field_mapper" "src/$PKG/defs/map_values" "src/$PKG/defs/data_masking" "src/$PKG/defs/hash" "src/$PKG/defs/surrogate_key" "src/$PKG/defs/record_id" "src/$PKG/defs/count_records"
   fi
 done
 

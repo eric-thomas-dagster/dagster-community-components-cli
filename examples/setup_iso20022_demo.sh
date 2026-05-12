@@ -33,6 +33,9 @@ __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_
 echo 'from .component import Iso20022PaymentParserComponent
 __all__ = ["Iso20022PaymentParserComponent"]' > "src/$PKG/components/iso20022_payment_parser/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/iso20022_payment_parser"
+
 # 1) Synthetic ISO 20022 messages (alternating pacs.008 + pacs.002)
 mkdir -p "src/$PKG/defs/iso20022_messages"
 cat > "src/$PKG/defs/iso20022_messages/defs.yaml" <<EOF

@@ -60,6 +60,9 @@ __all__ = ["BigqueryDryRunCheckComponent"]' > "src/$PKG/components/bigquery_dry_
 echo 'from .component import BigqueryTableFreshnessCheckComponent
 __all__ = ["BigqueryTableFreshnessCheckComponent"]' > "src/$PKG/components/bigquery_table_freshness_check/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/external_bigquery_table" "src/$PKG/defs/bigquery_dry_run_check" "src/$PKG/defs/bigquery_table_freshness_check"
+
 # 1) Declare-only external asset (the BQ table)
 mkdir -p "src/$PKG/defs/warehouse_table"
 # Parse $BQ_TABLE = project.dataset.table into pieces

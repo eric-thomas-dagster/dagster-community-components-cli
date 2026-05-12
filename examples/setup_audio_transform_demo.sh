@@ -39,6 +39,9 @@ __all__ = ["SyntheticAudioGeneratorComponent"]' > "src/$PKG/components/synthetic
 echo 'from .component import AudioTransformAssetComponent
 __all__ = ["AudioTransformAssetComponent"]' > "src/$PKG/components/audio_transform_asset/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/audio_transform_asset"
+
 # Remove auto-installed example defs (their asset names + upstream refs collide with ours)
 rm -rf "src/$PKG/defs/synthetic_audio_generator" "src/$PKG/defs/audio_transform_asset"
 # 1) Synthetic sine-tone WAVs

@@ -33,6 +33,9 @@ __all__ = ["SyntheticImageGeneratorComponent"]' > "src/$PKG/components/synthetic
 echo 'from .component import ImageExifExtractorComponent
 __all__ = ["ImageExifExtractorComponent"]' > "src/$PKG/components/image_exif_extractor/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/image_exif_extractor"
+
 rm -rf "src/$PKG/defs/synthetic_image_generator" "src/$PKG/defs/image_exif_extractor"
 # 1) Synthetic JPEGs with injected EXIF (Make / Model / ISO / GPS)
 mkdir -p "src/$PKG/defs/sample_images"

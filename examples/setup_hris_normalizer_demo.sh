@@ -41,6 +41,9 @@ $CLI add dataframe_to_csv         --auto-install
 echo 'from .component import SyntheticDataGeneratorComponent
 __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_data_generator/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/hris_normalizer" "src/$PKG/defs/dataframe_to_csv"
+
 # 1) Synthetic raw HRIS export — synthetic_data_generator (employees schema)
 mkdir -p "src/$PKG/defs/employees_raw"
 cat > "src/$PKG/defs/employees_raw/defs.yaml" <<EOF

@@ -50,6 +50,9 @@ $CLI add litellm_image_generation --auto-install
 echo 'from .component import SyntheticDataGeneratorComponent
 __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_data_generator/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/litellm_image_generation"
+
 # ─── Upstream prompts: synthetic_data_generator (image_prompts schema) ──
 mkdir -p "src/$PKG/defs/image_prompts"
 cat > "src/$PKG/defs/image_prompts/defs.yaml" <<EOF

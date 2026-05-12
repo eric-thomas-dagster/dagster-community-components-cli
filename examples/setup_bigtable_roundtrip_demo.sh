@@ -80,6 +80,9 @@ __all__ = ["BigtableWriterAssetComponent"]' > "src/$PKG/components/bigtable_writ
 echo 'from .component import BigtableReaderAssetComponent
 __all__ = ["BigtableReaderAssetComponent"]' > "src/$PKG/components/bigtable_reader_asset/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/bigtable_writer_asset" "src/$PKG/defs/bigtable_reader_asset"
+
 # 1) Upstream: 10 synthetic sensor readings (sensors schema has sensor_id, timestamp, sensor_type, location, value, unit, status)
 mkdir -p "src/$PKG/defs/sensor_readings"
 cat > "src/$PKG/defs/sensor_readings/defs.yaml" <<EOF

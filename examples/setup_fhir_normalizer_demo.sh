@@ -37,6 +37,9 @@ __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_
 echo 'from .component import FhirResourceNormalizerComponent
 __all__ = ["FhirResourceNormalizerComponent"]' > "src/$PKG/components/fhir_resource_normalizer/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/fhir_resource_normalizer"
+
 # Remove auto-installed example defs (their asset_names collide with ours)
 rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/fhir_resource_normalizer"
 

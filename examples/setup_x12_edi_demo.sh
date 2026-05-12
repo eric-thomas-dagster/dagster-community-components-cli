@@ -33,6 +33,9 @@ __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_
 echo 'from .component import X12EdiParserComponent
 __all__ = ["X12EdiParserComponent"]' > "src/$PKG/components/x12_edi_parser/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/x12_edi_parser"
+
 # 1) Synthetic X12 EDI messages (rotates through 270/271/835/837/850)
 mkdir -p "src/$PKG/defs/x12_messages"
 cat > "src/$PKG/defs/x12_messages/defs.yaml" <<EOF

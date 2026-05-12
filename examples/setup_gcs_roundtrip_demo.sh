@@ -78,6 +78,9 @@ __all__ = ["BigQueryLoadFromGcsAssetComponent"]' > "src/$PKG/components/bigquery
 echo 'from .component import BigQueryExportToGcsAssetComponent
 __all__ = ["BigQueryExportToGcsAssetComponent"]' > "src/$PKG/components/bigquery_export_to_gcs_asset/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/dataframe_to_gcs" "src/$PKG/defs/bigquery_load_from_gcs_asset" "src/$PKG/defs/bigquery_export_to_gcs_asset"
+
 # 1) Upstream: 20 synthetic transactions
 mkdir -p "src/$PKG/defs/transactions"
 cat > "src/$PKG/defs/transactions/defs.yaml" <<EOF

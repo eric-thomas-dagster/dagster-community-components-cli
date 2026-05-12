@@ -41,6 +41,9 @@ $CLI add imap_inbox_source        --auto-install 2>&1 | tail -1
 for c in synthetic_data_generator smtp_send_asset imap_inbox_source; do
   CLS=$(grep -oE '^class\s+\w+\s*\(' "src/$PKG/components/$c/component.py" | awk '{print $2}' | tr -d '(' | tail -1)
   echo "from .component import $CLS" > "src/$PKG/components/$c/__init__.py"
+
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/smtp_send_asset" "src/$PKG/defs/imap_inbox_source"
 done
 
 # Remove auto-installed example defs (their asset names collide with ours)

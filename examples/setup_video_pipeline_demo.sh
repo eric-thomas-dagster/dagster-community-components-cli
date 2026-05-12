@@ -46,6 +46,9 @@ for pair in \
   DIR="${pair%%:*}"; CLS="${pair#*:}"
   echo "from .component import $CLS
 __all__ = [\"$CLS\"]" > "src/$PKG/components/$DIR/__init__.py"
+
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_video_generator" "src/$PKG/defs/video_metadata_extractor" "src/$PKG/defs/video_frame_extract_asset" "src/$PKG/defs/video_audio_extract_asset"
 done
 
 # 1) Synthetic test videos

@@ -72,6 +72,9 @@ $CLI add bigquery_vector_search_asset --auto-install 2>&1 | tail -2
 echo 'from .component import BigqueryVectorSearchAssetComponent
 __all__ = ["BigqueryVectorSearchAssetComponent"]' > "src/$PKG/components/bigquery_vector_search_asset/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/bigquery_vector_search_asset"
+
 mkdir -p "src/$PKG/defs/doc_search"
 cat > "src/$PKG/defs/doc_search/defs.yaml" <<EOF
 type: $PKG.components.bigquery_vector_search_asset.component.BigqueryVectorSearchAssetComponent

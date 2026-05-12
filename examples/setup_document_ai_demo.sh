@@ -77,6 +77,9 @@ __all__ = ["SyntheticPdfGeneratorComponent"]' > "src/$PKG/components/synthetic_p
 echo 'from .component import DocumentAiExtractorComponent
 __all__ = ["DocumentAiExtractorComponent"]' > "src/$PKG/components/document_ai_extractor/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_pdf_generator" "src/$PKG/defs/document_ai_extractor"
+
 # 1) Synthetic PDFs (built-in invoice + letter)
 mkdir -p "src/$PKG/defs/sample_documents"
 cat > "src/$PKG/defs/sample_documents/defs.yaml" <<EOF

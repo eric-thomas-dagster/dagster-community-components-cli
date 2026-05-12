@@ -34,6 +34,9 @@ __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_
 echo 'from .component import AcordXmlParserComponent
 __all__ = ["AcordXmlParserComponent"]' > "src/$PKG/components/acord_xml_parser/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/acord_xml_parser"
+
 rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/acord_xml_parser"
 
 mkdir -p "src/$PKG/defs/acord_messages"

@@ -36,6 +36,9 @@ __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_
 echo 'from .component import TextCodecConvertAssetComponent
 __all__ = ["TextCodecConvertAssetComponent"]' > "src/$PKG/components/text_codec_convert_asset/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/text_codec_convert_asset"
+
 # Remove auto-installed example defs (their upstream refs collide with ours)
 rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/text_codec_convert_asset"
 # 1) Multilingual support tickets (has German Müller, Spanish é/í, em dashes)

@@ -132,6 +132,9 @@ $CLI add dataframe_join --auto-install 2>&1 | tail -2
 echo 'from .component import DataframeJoin
 __all__ = ["DataframeJoin"]' > "src/$PKG/components/dataframe_join/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/litellm_inference_asset" "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/dataframe_to_csv" "src/$PKG/defs/dataframe_join"
+
 PROVIDERS=()
 for prov in gemini openai anthropic; do
   [ -f "src/$PKG/defs/classified_$prov/defs.yaml" ] && PROVIDERS+=("classified_$prov")

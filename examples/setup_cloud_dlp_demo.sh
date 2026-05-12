@@ -55,6 +55,9 @@ __all__ = ["CloudDlpInspectAssetComponent"]' > "src/$PKG/components/cloud_dlp_in
 echo 'from .component import CloudDlpPiiCheckComponent
 __all__ = ["CloudDlpPiiCheckComponent"]' > "src/$PKG/components/cloud_dlp_pii_check/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/cloud_dlp_inspect_asset" "src/$PKG/defs/cloud_dlp_pii_check"
+
 # 1) Synthetic support tickets with embedded PII (names, emails, phones, CC fragments)
 mkdir -p "src/$PKG/defs/support_tickets"
 cat > "src/$PKG/defs/support_tickets/defs.yaml" <<EOF

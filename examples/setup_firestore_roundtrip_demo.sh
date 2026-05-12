@@ -63,6 +63,9 @@ __all__ = ["FirestoreWriterAssetComponent"]' > "src/$PKG/components/firestore_wr
 echo 'from .component import FirestoreReaderAssetComponent
 __all__ = ["FirestoreReaderAssetComponent"]' > "src/$PKG/components/firestore_reader_asset/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/firestore_writer_asset" "src/$PKG/defs/firestore_reader_asset"
+
 # 1) Upstream: 10 synthetic sensor readings
 mkdir -p "src/$PKG/defs/sensor_readings"
 cat > "src/$PKG/defs/sensor_readings/defs.yaml" <<EOF

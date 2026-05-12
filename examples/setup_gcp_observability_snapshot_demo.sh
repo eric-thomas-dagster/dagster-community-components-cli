@@ -79,6 +79,9 @@ __all__ = ["CloudMonitoringMetricsAssetComponent"]' > "src/$PKG/components/cloud
 echo 'from .component import DataframeFlattenNestedColumnsComponent
 __all__ = ["DataframeFlattenNestedColumnsComponent"]' > "src/$PKG/components/dataframe_flatten_nested_columns/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/cloud_logging_query_asset" "src/$PKG/defs/cloud_monitoring_metrics_asset" "src/$PKG/defs/dataframe_flatten_nested_columns" "src/$PKG/defs/dataframe_to_bigquery"
+
 # 1) Cloud Logging — recent errors from anywhere in the project
 mkdir -p "src/$PKG/defs/recent_errors"
 cat > "src/$PKG/defs/recent_errors/defs.yaml" <<EOF

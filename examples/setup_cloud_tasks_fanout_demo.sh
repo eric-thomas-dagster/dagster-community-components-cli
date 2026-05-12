@@ -67,6 +67,9 @@ __all__ = ["SyntheticDataGeneratorComponent"]' > "src/$PKG/components/synthetic_
 echo 'from .component import CloudTasksEnqueueAssetComponent
 __all__ = ["CloudTasksEnqueueAssetComponent"]' > "src/$PKG/components/cloud_tasks_enqueue_asset/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_data_generator" "src/$PKG/defs/cloud_tasks_enqueue_asset"
+
 # 1) Upstream: 10 synthetic events (each becomes one Cloud Tasks job)
 mkdir -p "src/$PKG/defs/events"
 cat > "src/$PKG/defs/events/defs.yaml" <<EOF

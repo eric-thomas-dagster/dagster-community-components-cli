@@ -49,6 +49,9 @@ $CLI add vision_model              --auto-install
 echo 'from .component import SyntheticImageGeneratorComponent
 __all__ = ["SyntheticImageGeneratorComponent"]' > "src/$PKG/components/synthetic_image_generator/__init__.py"
 
+# Remove auto-installed example defs (their asset names collide with ours)
+rm -rf "src/$PKG/defs/synthetic_image_generator" "src/$PKG/defs/image_metadata_extractor" "src/$PKG/defs/vision_model"
+
 # ─── Synthetic image generator (component) ────────────────────────────────
 mkdir -p "src/$PKG/defs/sample_images"
 cat > "src/$PKG/defs/sample_images/defs.yaml" <<EOF
