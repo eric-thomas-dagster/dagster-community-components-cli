@@ -21,6 +21,10 @@ The demos are grouped by what they need to run.
   - [OCSF / Security](#ocsf--security)
   - [Op jobs (no asset materialized)](#op-jobs-no-asset-materialized)
   - [Patterns](#patterns)
+  - [Industry data standards](#industry-data-standards)
+  - [Media transforms](#media-transforms)
+  - [AI / NLP (no auth required)](#ai--nlp-no-auth-required)
+  - [Cloud observability + enterprise SaaS](#cloud-observability--enterprise-saas)
 - [Azure (subscription required)](#azure-subscription-required)
   - [Storage + lakehouse](#storage--lakehouse)
   - [Databases](#databases)
@@ -59,6 +63,11 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Window Calculation](window_calculation.md) | `csv_file_ingestion`, `window_calculation`, `dataframe_to_csv` | Every supported window function on stock prices |
 | [Regional Orders Union](regional_orders.md) | `csv_file_ingestion`, `dataframe_union`, `dataframe_to_csv` | Merge multi-region order extracts with mismatched columns |
 | [Data Hygiene](data_hygiene.md) | `synthetic_data_generator`, `audit_columns`, `schema_validator`, `field_mapper`, `map_values`, `data_masking`, `hash`, `surrogate_key`, `record_id`, `count_records` | Toolbox demo: audit / validate / rename / canonicalize / mask / hash / surrogate-key / number / aggregate |
+| [DataFrame Basics](dataframe_basics.md) | `filter`, `sort`, `unique_dedup`, `select_columns`, `data_cleansing`, `summarize`, `rank`, `running_total`, `transpose` | 9 fundamental shape-preserving transforms |
+| [Data Combination](data_combination.md) | `dataframe_join`, `dataframe_union`, `formula`, `type_coercer`, `datetime_parser`, `array_exploder`, `ts_filler` | Joins / unions / reshape / coerce — the toolbox for stitching shapes |
+| [Text Extraction](text_extraction.md) | `xml_parser`, `html_parser`, `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `regex_parser` | Pull structured fields from semi-structured columns (XML, HTML, nested JSON) |
+| [Transformations Mega-Demo](transformations.md) | 34 transforms — every shape-preserving + shape-changing transform in one chain | Comprehensive toolbox showcase |
+| [Partitions](partitions.md) | `dataframe_to_csv`, `per_partition_backfill_job` | The four canonical partition shapes (daily/weekly/monthly + static dimensions) end-to-end |
 
 ### Time series + forecasting
 
@@ -69,6 +78,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Stocks — Anomaly Detection](stocks_anomaly.md) | `csv_file_ingestion`, `anomaly_detection`, `dataframe_to_csv` | Per-ticker z-score outlier flagging |
 | [Sensor Gap-Fill](sensor_gapfill.md) | `synthetic_data_generator`, `ts_filler`, `running_total`, `dataframe_to_csv` | Fill missing hourly readings + cumulative metrics |
 | [Synthetic Metrics + Anomalies](synthetic_metrics.md) | `time_series_generator`, `anomaly_detection`, `dataframe_to_csv` | No-upstream synthetic generator |
+| [Forecasting (ARIMA + ETS)](forecasting.md) | `arima_forecast`, `ets_forecast`, `create_samples` | Side-by-side ARIMA + ETS with train/val/test splitting |
+| [Time-Series Advanced](time_series_advanced.md) | `ts_forecast`, `ts_compare`, `ts_covariate_forecast`, `ts_model_factory` | Comparison + covariates + per-group factory |
 
 ### ML pipelines
 
@@ -80,6 +91,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Titanic Complete](titanic_complete.md) | `csv_file_ingestion`, `unique_dedup`, `data_cleansing`, `outlier_clipper`, `imputation`, `type_coercer`, `tile_binning`, `one_hot_encoding`, `logistic_regression_model`, `summarize`, `filter`, `dataframe_to_csv`, `cron_schedule` | Full DS workflow: ingest → quality → ETL → model → 3 outputs |
 | [Churn Prediction](churn.md) | `synthetic_data_generator`, `churn_prediction`, `dataframe_to_csv` | Rule-based scoring with interpretable risk factors |
 | [Market Basket](market_basket.md) | `csv_file_ingestion`, `market_basket_rules`, `filter`, `summarize`, `dataframe_to_csv`, `cron_schedule` | Apriori association rules with lift filter |
+| [ML Feature Engineering](ml_features.md) | `imputation`, `outlier_clipper`, `label_encoder`, `one_hot_encoding`, `feature_scaler`, `tile_binning` | 6 pre-modeling transforms (drop-in for sklearn pipelines) |
 
 ### Customer + subscription analytics
 
@@ -91,6 +103,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Subscription Survival](subscription_survival.md) | `synthetic_data_generator`, `survival_analysis`, `dataframe_to_csv`, `cron_schedule` | Kaplan-Meier survival on SaaS subscriptions |
 | [Retail Analytics](retail_analytics.md) | `synthetic_data_generator`, `datetime_parser`, `rfm_segmentation`, `cohort_analysis`, `running_total`, `dataframe_to_csv`, `cron_schedule` | RFM segmentation + cohort analysis + running spend |
 | [A/B Full Pipeline](ab_full_pipeline.md) | `synthetic_data_generator`, `ab_treatments`, `ab_test_analysis`, `ab_trend`, `ab_controls`, `dataframe_to_csv`, `cron_schedule` | Assignment + analysis + trend + sample-size |
+| [Customer Analytics](customer_analytics.md) | `customer_journey_mapping`, `customer_segmentation`, `multi_touch_attribution`, `random_forest_model`, `text_preprocessing`, `topic_modeling` | Journey / segmentation / attribution / ML / NLP all in one chain |
+| [Analytics Mega-Demo](analytics.md) | 40 analytics components | Comprehensive showcase |
 
 ### Geospatial
 
@@ -144,8 +158,61 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 |---|---|---|
 | [DuckDB Warehouse](duckdb_warehouse.md) | `csv_file_ingestion`, `duckdb_io_manager`, `cron_schedule` | IO manager round-trip + downstream asset + daily schedule |
 | [External Scheduler](external_scheduler.md) | `csv_file_ingestion`, `summarize`, `dataframe_to_csv`, `asset_job` | Pattern for keeping Control-M / Autosys / cron as master with Dagster as executor (GraphQL launchRun) |
+| [Data Quality](data_quality.md) | `pandas_dataframe_check`, `pandera_asset_check`, `enhanced_data_quality_checks`, `freshness_check`, `great_expectations_check` | 4 asset_check components on a synthetic orders asset |
+| [Data Quality Checks](data_quality_checks.md) | `synthetic_data_generator`, `dataframe_to_csv`, `enhanced_data_quality_checks`, `pandas_dataframe_check`, `pandera_asset_check`, `freshness_check` | End-to-end DQ pipeline |
+| [Email Round-Trip (SMTP + IMAP)](email_roundtrip.md) | `synthetic_data_generator`, `smtp_send_asset`, `imap_inbox_source` | Fan out via SMTP, pull replies via IMAP. Local aiosmtpd + pure-Python IMAP stub for offline testing |
+| [External Assets](external_assets.md) | 21 external-system integrations as declared assets | Declare external systems without owning their execution (Sigma / Hex / Tableau / Looker / etc.) |
+| [HTTP External Asset](http_external_asset.md) | `http_external_asset` | Wraps any HTTP-driven external job runner as a Dagster asset |
+| [Local IO Managers](local_io.md) | 9 IO managers + 3 source/sink components — duckdb / sqlite / lance / polars / parquet / csv / json | Round-trip a DataFrame through every local format |
+| [Local Sinks](local_sinks.md) | `dataframe_to_csv`, `dataframe_to_parquet`, `dataframe_to_json`, `dataframe_to_excel`, `dataframe_to_table` | 5 file/table format sinks side by side |
+| [Document Extractors](document_extractors.md) | 13 document-source components — PDF / Word / HTML / RST / Markdown / etc. | Mega-demo: every shipped document-extraction component |
 
 ---
+
+### Industry data standards
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [ACORD (Insurance XML)](acord.md) | `synthetic_data_generator`, `acord_xml_parser` | Carrier / broker / quote XML → flat Policy/Claim/Quote rows. Auto-strips namespaces, handles SignonRq boilerplate |
+| [FHIR R4 / R5 (Healthcare)](fhir_normalizer.md) | `synthetic_data_generator`, `fhir_resource_normalizer` | 10 resource types (Patient/Observation/Claim/Coverage/Practitioner/Organization/Bundle/Encounter/Condition/MedicationRequest) |
+| [HL7 v2 (Healthcare)](hl7_parser.md) | `synthetic_data_generator`, `hl7_v2_parser` | ADT^A01 + ORU^R01 + ORM^O01 → 9 segments parsed (MSH/PID/OBX/ORC/OBR/PV1/EVN/DG1/AL1) |
+| [ISO 20022 (Payments)](iso20022.md) | `synthetic_data_generator`, `iso20022_payment_parser` | pacs.008 + pacs.002 XML → flat transaction rows; SEPA/Fedwire/CHIPS compatible |
+| [X12 EDI (US B2B)](x12_edi.md) | `synthetic_data_generator`, `x12_edi_parser` | 270/271/835/837/850 transaction sets, ISA/GS envelope walking with auto-detected delimiters |
+| [FIX 4.4 (Trading)](fix_message.md) | `synthetic_data_generator`, `fix_message_parser` | NewOrderSingle + ExecutionReport with checksum-correct wire format; tag→column resolution |
+
+### Media transforms
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [Audio Transform](audio_transform.md) | `synthetic_audio_generator`, `audio_transform_asset` | Resample to 16kHz mono WAVs — Whisper-ready output |
+| [Image Transform](image_transform.md) | `synthetic_image_generator`, `image_transform_asset` | PNG → resized WebP thumbnails (Pillow) |
+| [Image EXIF Extractor](image_exif.md) | `synthetic_image_generator`, `image_exif_extractor` | JPEGs with injected EXIF → flat DataFrame of metadata |
+| [Video Pipeline](video_pipeline.md) | `synthetic_video_generator`, `video_metadata_extractor`, `video_frame_extract_asset`, `video_audio_extract_asset` | MP4 → metadata + sampled frames + extracted audio (ffmpeg/ffprobe) |
+| [Text Codec Convert](codec_convert.md) | `synthetic_data_generator`, `text_codec_convert_asset` | Sanitize multilingual text to ASCII (NFD + transliteration) |
+| [Vision Pipeline](vision_pipeline.md) | `synthetic_image_generator`, `image_metadata_extractor`, `vision_model` | Image metadata + vision-LLM description |
+
+### AI / NLP (no auth required)
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [AI without LLMs](ai_no_llm.md) | `synthetic_data_generator`, `keyword_extractor`, `language_detector`, `pii_detector`, `pii_redactor`, `embeddings_generator` | Rule-based + local-model AI — no API keys needed |
+| [Local NLP Mega-Demo](local_nlp.md) | 13 components — `document_chunker`, `text_chunker`, `part_of_speech_tagger`, … | Full local NLP toolbox (spaCy / nltk / regex / heuristics) |
+| [Content Moderation](content_moderation.md) | `moderation_scorer`, `text_moderator` | Rule-based + ML-based moderation side by side |
+| [Ollama (local LLM)](ollama.md) | `synthetic_data_generator`, `ollama_inference_asset` | Local Llama / Mistral / etc. inference — zero API cost (requires Ollama installed) |
+| [NLP Utilities](nlp_utilities.md) | 6 standalone transforms — `document_chunker`, `word_cloud`, `part_of_speech_tagger`, `topic_modeler`, `text_similarity` | Drop-in NLP helpers |
+| [Text Extraction](text_extraction.md) | `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `xml_parser`, `html_parser`, `regex_parser` | Pull structured fields from semi-structured columns |
+
+### Cloud observability + enterprise SaaS
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [AWS CloudWatch](aws_cloudwatch.md) | `cloudwatch_metrics_query`, `cloudwatch_logs_insights` | Pull metrics + Logs Insights query results into a DataFrame |
+| [New Relic + Dynatrace](newrelic_dynatrace.md) | `newrelic_event_sink`, `dynatrace_metric_sink` | Emit pipeline-row events to APM SaaS |
+| [OpenTelemetry Full-Stack](opentelemetry_demo.md) | `otel_metrics_emitter`, `otel_logs_emitter`, `otel_traces_emitter` | Metrics + logs + traces in one demo |
+| [Prometheus](prometheus_demo.md) | `prometheus_push_gateway`, `prometheus_query_asset` | Push + pull patterns side by side |
+| [Enterprise SaaS Resources](enterprise_saas.md) | `workday_resource`, `marketo_resource`, `intercom_resource`, `plaid_resource` | Declare 4 SaaS APIs in one code location |
+| [SAP HANA via SQLAlchemy](sap_hana.md) | `dataframe_to_table` (mssql adapter pattern) | SAP HANA via SQLAlchemy |
+| [Precisely Connect ETL](precisely_validation.md) | `precisely_connect_run`, `precisely_data_integrity_run` | Validated against public Precisely docs (no live cluster needed) |
 
 ## Azure (subscription required)
 
@@ -170,6 +237,10 @@ subscriptions.
 | [Azure PostgreSQL Flexible](azure_postgres.md) | `synthetic_data_generator` → `dataframe_to_table` (postgresql+psycopg2) | Flexible Server B1ms | ~$13/mo |
 | [Azure MySQL Flexible](azure_mysql.md) | `synthetic_data_generator` → `dataframe_to_table` (mysql+pymysql) | Flexible Server B1ms | ~$13/mo |
 | [Azure Cache for Redis](azure_redis.md) | `redis_writer` (TLS) → `redis_reader` (TLS) → `dataframe_to_csv` | Cache Basic C0 | ~$16/mo |
+| [Azure Data Explorer (Kusto)](azure_data_explorer.md) | `adx_query_asset`, `dataframe_to_adx` | ADX cluster (Free tier OK) | $0 free tier |
+| [Azure AI Search](azure_search.md) | `synthetic_data_generator`, `azure_search_indexer`, `azure_search_query`, `dataframe_to_csv` | Azure AI Search Free F1 | $0 free tier |
+| [Azure Tables](azure_tables.md) | `synthetic_data_generator`, `dataframe_to_azure_table`, `azure_table_reader`, `dataframe_to_csv` | Storage account + tables | <$0.05/mo |
+| [Azure Key Vault](key_vault.md) | `synthetic_data_generator`, `key_vault_resource`, `dataframe_to_table` | Key Vault standard | $0.03/10k operations |
 
 ### Orchestration + workflow
 
@@ -184,6 +255,7 @@ subscriptions.
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
 | [Azure Event Hubs Round-Trip](azure_eventhubs.md) | `dataframe_to_eventhub` (NEW) → `eventhubs_to_database_asset` → Postgres | EH Basic namespace + hub | ~$11/mo + $0.028/M events |
+| [Azure Service Bus](azure_servicebus.md) | `dataframe_to_servicebus`, `servicebus_to_database_asset` | Service Bus Basic namespace + queue | ~$0.05/M operations |
 
 ### Microsoft Fabric (next-gen Synapse)
 
@@ -196,6 +268,7 @@ subscriptions.
 | Demo | Components exercised | Infra needed | ~Cost |
 |---|---|---|---|
 | [Dagster+ → Sentinel](dagster_plus_to_sentinel.md) **(Dagster+ + Azure)** | `dagster_plus_audit_log_ingestion` → `ocsf_normalizer` → `audit_logs_to_sentinel` | Log Analytics workspace | $0 (5GB/mo free tier) |
+| [Azure Log Analytics KQL](azure_log_analytics.md) | `log_analytics_query_asset` | Log Analytics workspace | $0 (5GB/mo free) |
 
 **Validated end-to-end** against a real Azure subscription with a real
 Dagster+ deployment. Examples include:
@@ -243,6 +316,9 @@ demos.
 | [BigQuery Query](bigquery_query.md) | `bigquery_query_asset` against `bigquery-public-data.samples.shakespeare` (single-component demo) | BigQuery API enabled, `roles/bigquery.jobUser` | $0.0001 |
 | [BigQuery ML Pipeline](bigquery_ml_pipeline.md) | `bigquery_create_table_from_query_asset` (CTAS) → `bigquery_ml_train_asset` (LOGISTIC_REG) → `bigquery_ml_predict_asset` → CSV | BQ dataset, `roles/bigquery.dataEditor` + `jobUser` | <$0.001 |
 | [BigQuery ↔ GCS Bulk Bridge](bigquery_bulk_bridge.md) | `bigquery_export_to_gcs_asset` (EXTRACT) → `bigquery_load_from_gcs_asset` (LOAD JOB) — round-trip | BQ dataset + GCS bucket | $0 (extract + load free) |
+| [BigQuery Asset Checks](bigquery_checks.md) | `external_bigquery_table`, `bigquery_dry_run_check`, `bigquery_table_freshness_check` | BQ dataset | $0 (dry-runs free) |
+| [BigQuery Vector Search](bq_vector_search.md) | `bigquery_vector_search_asset` | BQ with vector column | $0 with free tier |
+| [GCS Round-Trip](gcs_roundtrip.md) | `synthetic_data_generator`, `dataframe_to_gcs`, `bigquery_load_from_gcs_asset`, `bigquery_export_to_gcs_asset` | GCS bucket + BQ dataset | $0 (extract + load free) |
 
 ### AI / LLM
 
@@ -253,12 +329,26 @@ demos.
 | [Vertex AI Embeddings](vertex_ai_embeddings.md) | `synthetic_data_generator` (image_prompts) → `vertex_ai_text_embeddings_asset` (text-embedding-004) → `dataframe_to_gcs` (parquet) | Vertex AI API enabled, `roles/aiplatform.user` | $0 (under free tier) |
 | [Vision + Translation](vision_translate.md) | `synthetic_image_generator` → `vision_api_asset` (LABEL + OBJECT) → `dataframe_extract_field` (top label) → `translation_api_asset` (es/fr/de/ja) → `dataframe_to_csv` | Vision + Translation APIs enabled | ~$0.005 |
 | [Speech + Translation](speech_translate.md) | `synthetic_data_generator` (audio_samples) → `speech_to_text_asset` (Cloud Speech v2) → `translation_api_asset` (es/fr/de/ja) → `dataframe_to_csv` | Speech + Translation APIs enabled | ~$0.001 |
+| [Anthropic Claude](anthropic.md) | `synthetic_data_generator`, `anthropic_llm` | Anthropic API key | usage-priced |
+| [Gemini LLM](gemini_llm.md) | `synthetic_data_generator`, `gemini_llm` | Gemini API key, billing enabled | $0 free tier / usage |
+| [LiteLLM Multi-Provider](litellm_multi_provider.md) | `litellm_inference_asset`, `synthetic_data_generator`, `dataframe_to_csv`, `dataframe_join` | API key for at least one provider | usage-priced |
+| [LLM Execution Mega-Demo](llm_execution.md) | 13 LLM components — OpenAI / LiteLLM / prompt-executor / batch / etc. | OpenAI API key | usage-priced |
+| [Vector / RAG](vector_rag.md) | `embeddings_generator`, `vector_store_writer`, `vector_store_query`, `reranker`, `rag_pipeline`, `conversation_memory` | Vector store + embeddings model | usage-priced (~$0.0001/doc) |
+| [AI with LLMs](ai_with_llm.md) | `synthetic_data_generator`, `text_classifier`, `entity_extractor`, `sentiment_analyzer`, `document_summarizer`, `data_enricher` | OpenAI / Azure OpenAI key | usage-priced |
+| [Multi-modal AI](multimodal_ai.md) | `image_captioner`, `image_llm_extractor`, `litellm_embedding_batch` | OpenAI API key (vision-capable) | usage-priced |
 
 ### Real-pipeline patterns (multi-component chains)
 
 | Demo | Components exercised | Highlights |
 |---|---|---|
 | [HRIS Normalizer](hris_normalizer.md) | `synthetic_data_generator` (employees) → `hris_normalizer` (vendor-agnostic) → `dataframe_to_csv` | Synthetic vendor export → canonical schema mapped via `value_maps` (case-insensitive: `Active`/`active`/`ACTIVE` → `active`; `Full-Time`/`FT`/`FULL_TIME` → `full_time`) |
+| [Bigtable Round-Trip](bigtable_roundtrip.md) | `synthetic_data_generator`, `bigtable_writer_asset`, `bigtable_reader_asset` | Bigtable instance + table | $0.65/hr (dev instance) |
+| [Cloud DLP (PII detection)](cloud_dlp.md) | `synthetic_data_generator`, `cloud_dlp_inspect_asset`, `cloud_dlp_pii_check` | DLP API enabled | usage-priced |
+| [Cloud Tasks Fan-out](cloud_tasks_fanout.md) | `synthetic_data_generator`, `cloud_tasks_enqueue_asset` | Cloud Tasks queue | $0 free tier |
+| [Document AI (OCR)](document_ai.md) | `synthetic_pdf_generator`, `document_ai_extractor` | Document AI API + processor | $1.50/1k pages |
+| [Firestore Round-Trip](firestore_roundtrip.md) | `synthetic_data_generator`, `firestore_writer_asset`, `firestore_reader_asset` | Firestore database | $0 free tier |
+| [GCP Observability Snapshot](gcp_observability_snapshot.md) | `cloud_logging_query_asset`, `cloud_monitoring_metrics_asset`, `dataframe_flatten_nested_columns`, `dataframe_to_bigquery` | Cloud Logging + Monitoring access | $0 |
+| [Pub/Sub Publish](pubsub_publish.md) | `synthetic_data_generator`, `pubsub_publish_asset` | Pub/Sub topic | $0 free tier |
 
 ### Auth: workload identity in GCP compute
 
