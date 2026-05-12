@@ -1,5 +1,15 @@
 # Deploy any demo to Dagster+
 
+### 👋 New to Dagster+?
+
+| | |
+|---|---|
+| 🚀 **Start free** | [Sign up for a 30-day trial](https://dagster.io/plus) — no credit card. Serverless agent included. |
+| 💬 **Talk to sales** | [Contact Sales](https://dagster.io/contact-sales) — enterprise pricing, SSO, dedicated support, custom SLAs |
+| 📖 **Learn more** | [Dagster+ overview](https://dagster.io/plus) · [Hybrid vs Serverless](https://docs.dagster.io/guides/deploy/dagster-plus) · [Pricing](https://dagster.io/pricing) |
+
+---
+
 > **Serverless-first.** This script is the easy button for Dagster+ Serverless: `curl | bash` → running demo in ~60 seconds.
 >
 > **For Hybrid deployments**, this script is helpful but not magical — it generates the artifacts (`build.yaml`, Dockerfile, container_context.yaml, CI workflows) and runs `dg plus deploy`, but assumes you already have a Hybrid agent running, a container registry provisioned, and Docker auth set up. See the [Hybrid section](#hybrid-additional-setup-required) below.
