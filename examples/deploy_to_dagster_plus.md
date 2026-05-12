@@ -35,19 +35,32 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
 
 ```
 1/6  Ensures dagster-cloud-cli is in dev deps                     (idempotent)
-2/6  Runs `dg plus login` if not already authed                   (browser flow)
+2/6  Runs `dg plus login` if not already authed                   (browser OAuth)
+       → Saves a USER token to ~/.dagster_cloud_cli/config.
+       → THIS token is what powers the local deploy in step 6.
 3/6  [prompts] Run `dg plus deploy configure --git-provider github`?
        Auto-detects your agent type (Serverless vs Hybrid) and scaffolds:
        → build.yaml                              (modern code-location manifest)
        → Dockerfile + container_context.yaml     (Hybrid only)
        → .github/workflows/*.yml                 (CI/CD)
 4/6  [prompts, if .github/ exists] Create a CI API token?
-       → Paste into GitHub secret DAGSTER_CLOUD_API_TOKEN
+       → A SEPARATE token for GitHub Actions runs (no browser available there).
+       → Paste into GitHub secret DAGSTER_CLOUD_API_TOKEN.
+       → Optional — skip this if you only deploy from your laptop.
 5/6  Confirms deployment target (org / deployment / build strategy)
-6/6  [prompts] Run dg plus deploy now?
+6/6  [prompts] Run dg plus deploy now?  (uses your step-2 user token, NOT the CI token)
 ```
 
-**Key:** step 3 uses the official `dg plus deploy configure` command — not hand-written YAML. That command auto-detects whether your Dagster+ workspace is Serverless or Hybrid, then writes the exact artifacts the official tooling expects. If you've migrated from a `dagster_cloud.yaml`-based project, the new build.yaml replaces it.
+**Why two tokens?**
+
+| Token | Lives in | Used by | Created by |
+|---|---|---|---|
+| **User login token** | `~/.dagster_cloud_cli/config` on your laptop | The local `dg plus deploy` from this script | `dg plus login` — step 2 |
+| **CI API token** | GitHub repo secret `DAGSTER_CLOUD_API_TOKEN` | GitHub Actions runs scaffolded in step 3 | `dg plus create ci-api-token` — step 4 |
+
+The CI token in step 4 is **optional for the current script run** — your `dg plus login` token from step 2 is what powers step 6. Step 4's token only matters if you want pushes to `main` to redeploy automatically via the GitHub Actions workflow.
+
+**Key on step 3:** uses the official `dg plus deploy configure` command — not hand-written YAML. That command auto-detects whether your Dagster+ workspace is Serverless or Hybrid, then writes the exact artifacts the official tooling expects. If you've migrated from a `dagster_cloud.yaml`-based project, the new build.yaml replaces it.
 
 ## Prerequisites
 

@@ -195,8 +195,10 @@ fi
 
 # ── 4/6: CI API token ────────────────────────────────────────────────────────
 if [ -d .github/workflows ]; then
-  echo "==> 4/6: GitHub Actions secret"
-  WANT_TOKEN=$(ask "    Create a Dagster+ CI API token now? Token prints once — copy into your GitHub secret. [y/N]:" "N")
+  echo "==> 4/6: GitHub Actions CI API token (optional — only for unattended CI runs)"
+  echo "    The local deploy in step 6 uses your 'dg plus login' token from step 2."
+  echo "    A separate CI token is needed if you want GitHub Actions to deploy on push."
+  WANT_TOKEN=$(ask "    Create a Dagster+ CI API token now? [y/N]:" "N")
   if is_yes "$WANT_TOKEN"; then
     echo ""
     echo "    Token (copy now, it won't be shown again):"
@@ -209,7 +211,7 @@ if [ -d .github/workflows ]; then
     echo "    skipped (you can run 'dg plus create ci-api-token' later)"
   fi
 else
-  echo "==> 4/6: GitHub Actions secret — skipped (no .github/workflows/ to wire up)"
+  echo "==> 4/6: GitHub Actions CI API token — skipped (no .github/workflows/ to wire up)"
 fi
 
 # ── 5/6: deployment target summary ───────────────────────────────────────────
