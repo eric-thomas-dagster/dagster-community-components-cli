@@ -138,6 +138,56 @@ Jenkins:      shell step:      sh "bin/kick_off_run.sh ${BUILD_DATE}"
 
 The pattern is identical across all of them: the master scheduler shells out to a small script that calls Dagster's GraphQL `launchRun` mutation, polls the run status until terminal, and returns 0 on success / non-zero otherwise. Whatever the scheduler's date-substitution variable is (Control-M's `%%$ODATE`, ESP's `%ESP.APPL.BIZ_DATE%`, Autosys's `$$AUTODATE`, Airflow's `{{ ds }}`), pass it as the script's first argument and the run inherits it via tag or run config.
 
+## Observability — the reverse direction (per-scheduler)
+
+The pattern above is **universal** for the kick-off direction (scheduler → Dagster). The reverse — Dagster knowing what the scheduler has scheduled / running / last-ran — is **per-scheduler** because every workload-automation product has its own API and concept model:
+
+| Scheduler | API for observing jobs / runs | Component status |
+|---|---|---|
+| Control-M | REST API (`/automation-api/run/jobs`, etc.) | not in registry — would need a custom `control_m_observation_sensor` |
+| CA WA ESP | iXp REST API + console screens | not in registry — would need `esp_observation_sensor` |
+| Autosys | WAAE REST API / `autorep -J` shell command | not in registry — would need `autosys_observation_sensor` |
+| IBM TWS | conman REST / Z/OS DDR | not in registry |
+| JAMS | JAMS REST API + PowerShell module | not in registry |
+| Stonebranch | UAC REST API | not in registry |
+| Redwood RMS | RMS REST API | not in registry |
+| Airflow | Airflow REST API (`/api/v1/dagRuns`, etc.) | `airflow_dag_observation_sensor` — already in registry |
+| cron | crontab parsing + system logs | not in registry — could be done; few people ask |
+| Jenkins | Jenkins REST API | partial — `external_assets` covers declaring Jenkins jobs as external assets |
+
+**The pattern for each is the same shape — only the SDK differs:**
+
+```python
+# Pseudo-code shared by every scheduler-observation sensor:
+@sensor(asset_selection=AssetSelection.assets("scheduler_job_X"))
+def scheduler_obs_sensor(context):
+    client = <vendor SDK>
+    jobs = client.list_jobs(filter=...)
+    for job in jobs:
+        if job.last_run_id not in seen(context.cursor):
+            yield AssetObservation(
+                asset_key="scheduler_job_X",
+                metadata={
+                    "scheduler_run_id": job.last_run_id,
+                    "scheduler_status": job.status,
+                    "scheduler_start_time": job.start_time.isoformat(),
+                    "scheduler_business_date": job.business_date,
+                    "scheduler_duration_seconds": job.duration_seconds,
+                },
+            )
+    return SensorResult(cursor=...)
+```
+
+It's `~80 lines of vendor SDK glue` per scheduler — small enough to be tractable, distinct enough across products that one generic component can't reasonably wrap them all.
+
+**If you need scheduler observability today**, the practical options:
+
+1. **Build a custom component** following the shape above. The vendor's REST API doc is the only required reading; we ship a [`_template_observation_sensor`](../../dagster-component-templates/observations/) shape pattern that you can copy.
+2. **Use [`http_external_asset`](https://dagster-community-components-cli.vercel.app/c/http_external_asset)** as a quick wrapper: declare the scheduled job as an external asset with an HTTP URL pointing at the scheduler's status endpoint. Less rich than a dedicated sensor (no per-run metadata mapping) but works as a stopgap.
+3. **Open an issue** in the registry repo — we'll prioritize building one for whichever scheduler family you're on.
+
+A custom component per scheduler is the right shape. The kick-off direction is trivial precisely because it's just `curl` to Dagster's GraphQL; the observation direction is per-scheduler precisely because every scheduler models "what's scheduled" differently.
+
 The script returns 0 only on `LaunchRunSuccess` *and* a `success` final run
 status. That's how the scheduler knows whether to retry, alert, or chain
 forward.
