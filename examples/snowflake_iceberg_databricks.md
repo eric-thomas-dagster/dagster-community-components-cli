@@ -194,6 +194,109 @@ LEFT JOIN main.dim.customers d USING (customer_id);
 
 Alternative: connect UC to a REST catalog (Snowflake Open Catalog, Polaris, or UC-as-REST). The catalog tracks the current metadata version, and reads always see the latest snapshot without any refresh.
 
+## Customizing for your customer's data
+
+The demo uses generic `customer_metrics` to keep it readable. Adapting it to a real workload (a chain-restaurant POS pipeline like Jollibee's) requires changes in **four** places — three on the customer's platforms, one in the Dagster YAML.
+
+### 1. The Snowflake Dynamic Iceberg Table (customer-side SQL)
+
+This is where the real transformation lives. Replace the toy `customer_metrics` with the actual aggregation:
+
+```sql
+USE DATABASE JOLLIBEE_ANALYTICS;
+USE SCHEMA SILVER;
+
+CREATE OR REPLACE DYNAMIC ICEBERG TABLE STORE_DAILY_SALES
+  EXTERNAL_VOLUME = 'jollibee_s3_iceberg'
+  CATALOG = 'SNOWFLAKE'
+  BASE_LOCATION = 'jollibee/silver/store_daily_sales/'
+  TARGET_LAG = '1 hour'
+  WAREHOUSE = COMPUTE_WH
+AS
+  SELECT
+    store_id,
+    DATE_TRUNC('day', transaction_ts) AS sales_date,
+    COUNT(*)                          AS transactions,
+    SUM(total_amount)                 AS gross_sales,
+    AVG(total_amount)                 AS avg_ticket,
+    SUM(CASE WHEN item_id IN (SELECT item_id FROM RAW.MENU WHERE category='chickenjoy')
+             THEN line_total ELSE 0 END) AS chickenjoy_sales,
+    COUNT(DISTINCT loyalty_id) FILTER (WHERE loyalty_id IS NOT NULL) AS loyalty_customers
+  FROM RAW.POS.TRANSACTIONS t
+  JOIN RAW.POS.TRANSACTION_LINES l USING (transaction_id)
+  WHERE transaction_ts >= DATEADD('day', -3, CURRENT_DATE)
+  GROUP BY store_id, DATE_TRUNC('day', transaction_ts);
+```
+
+### 2. The Databricks Lakeflow pipeline SQL (customer-side)
+
+The pipeline that wraps Snowflake's output and joins it with Databricks-side dimensions:
+
+```sql
+-- Lakeflow pipeline: jollibee_store_sales_enrichment
+REFRESH FOREIGN TABLE main.silver.store_daily_sales;   -- if path-based UC external table
+
+CREATE OR REFRESH STREAMING TABLE store_sales_enriched
+AS SELECT
+  s.store_id,
+  s.sales_date,
+  s.transactions,
+  s.gross_sales,
+  s.avg_ticket,
+  s.chickenjoy_sales,
+  s.loyalty_customers,
+  d.store_name,
+  d.region,
+  d.country,
+  d.opening_date,
+  CASE WHEN s.gross_sales > d.daily_target THEN 'above_target' ELSE 'below_target' END AS performance
+FROM main.silver.store_daily_sales s                  -- ← Iceberg from Snowflake
+LEFT JOIN main.dim.stores      d USING (store_id)     -- ← Databricks-resident dim
+LEFT JOIN main.dim.regions     r USING (region);
+```
+
+### 3. The Databricks Job (customer-side, in the Workflows UI)
+
+Create a Job that wraps this Lakeflow pipeline (task type: **Pipeline**), name it something like `jollibee_store_sales_enrichment`. Note the Job ID.
+
+### 4. The Dagster defs (this repo's setup script)
+
+Two YAML edits — change names + the Job ID env var:
+
+```yaml
+# defs/snowflake_silver/defs.yaml
+attributes:
+  database: JOLLIBEE_ANALYTICS
+  schema: SILVER
+  filter_by_name_pattern: "^STORE_DAILY_SALES$"
+  description: SILVER-layer Jollibee POS — Dynamic Iceberg Table on TARGET_LAG=1h
+
+# defs/databricks_lakeflow/defs.yaml
+attributes:
+  assets_by_task_key:
+    jollibee_store_sales_enrichment:    # ← match the Lakeflow pipeline name
+      - key: databricks/lakeflow/store_sales_enriched
+        deps:
+          - snowflake_silver/STORE_DAILY_SALES
+```
+
+And the env vars:
+
+```bash
+export DATABRICKS_LAKEFLOW_JOB_ID=87654   # the new Job ID
+```
+
+That's the whole edit surface. The Dagster wiring shape doesn't change — only the names, the SQL, and the Job ID. The pattern (Snowflake transforms → Iceberg → Databricks Lakeflow Job, orchestrated by Dagster) is identical regardless of what's inside the SQL.
+
+### What to demo to the customer
+
+1. **One catalog, two engines.** Open Dagster's UI, show both `snowflake_silver/STORE_DAILY_SALES` and `databricks/lakeflow/store_sales_enriched` in one asset graph with the deps edge between them.
+2. **One schedule, both sides.** Show the cron schedule firing the Snowflake Dynamic Table refresh and then the Databricks Job in order.
+3. **Out-of-band visibility.** Trigger a Lakeflow pipeline from the Databricks UI directly; show the Dagster sensor picking up the materialization 60s later.
+4. **Freshness alerts.** Set `TARGET_LAG` to an aggressive value, let it fall behind, show the freshness policy turning the asset red in Dagster.
+
+---
+
 ## Trade-offs & gotchas (read before you demo)
 
 - **Metadata-file freshness.** Snowflake writes new Iceberg metadata files on each Dynamic Table refresh, but UC doesn't auto-detect them. This blueprint solves that with the explicit `customer_metrics_uc_refreshed` asset — a one-line SQL `REFRESH TABLE` call that runs after the Snowflake step. Without it (or without Lakeflow's incremental refresh doing it implicitly), Databricks reads stale data.
