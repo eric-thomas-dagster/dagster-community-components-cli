@@ -196,20 +196,20 @@ Alternative: connect UC to a REST catalog (Snowflake Open Catalog, Polaris, or U
 
 ## Customizing for your customer's data
 
-The demo uses generic `customer_metrics` to keep it readable. Adapting it to a real workload (a chain-restaurant POS pipeline like Jollibee's) requires changes in **four** places — three on the customer's platforms, one in the Dagster YAML.
+The demo uses generic `customer_metrics` to keep it readable. Adapting it to a real workload — say, a chain-restaurant POS pipeline — requires changes in **four** places — three on the customer's platforms, one in the Dagster YAML.
 
 ### 1. The Snowflake Dynamic Iceberg Table (customer-side SQL)
 
 This is where the real transformation lives. Replace the toy `customer_metrics` with the actual aggregation:
 
 ```sql
-USE DATABASE JOLLIBEE_ANALYTICS;
+USE DATABASE RETAIL_ANALYTICS;
 USE SCHEMA SILVER;
 
 CREATE OR REPLACE DYNAMIC ICEBERG TABLE STORE_DAILY_SALES
-  EXTERNAL_VOLUME = 'jollibee_s3_iceberg'
+  EXTERNAL_VOLUME = 'retail_s3_iceberg'
   CATALOG = 'SNOWFLAKE'
-  BASE_LOCATION = 'jollibee/silver/store_daily_sales/'
+  BASE_LOCATION = 'retail/silver/store_daily_sales/'
   TARGET_LAG = '1 hour'
   WAREHOUSE = COMPUTE_WH
 AS
@@ -219,11 +219,11 @@ AS
     COUNT(*)                          AS transactions,
     SUM(total_amount)                 AS gross_sales,
     AVG(total_amount)                 AS avg_ticket,
-    SUM(CASE WHEN item_id IN (SELECT item_id FROM RAW.MENU WHERE category='chickenjoy')
-             THEN line_total ELSE 0 END) AS chickenjoy_sales,
+    SUM(CASE WHEN m.category = 'signature_item' THEN l.line_total ELSE 0 END) AS signature_item_sales,
     COUNT(DISTINCT loyalty_id) FILTER (WHERE loyalty_id IS NOT NULL) AS loyalty_customers
   FROM RAW.POS.TRANSACTIONS t
   JOIN RAW.POS.TRANSACTION_LINES l USING (transaction_id)
+  JOIN RAW.MENU                   m USING (item_id)
   WHERE transaction_ts >= DATEADD('day', -3, CURRENT_DATE)
   GROUP BY store_id, DATE_TRUNC('day', transaction_ts);
 ```
@@ -233,7 +233,7 @@ AS
 The pipeline that wraps Snowflake's output and joins it with Databricks-side dimensions:
 
 ```sql
--- Lakeflow pipeline: jollibee_store_sales_enrichment
+-- Lakeflow pipeline: store_sales_enrichment
 REFRESH FOREIGN TABLE main.silver.store_daily_sales;   -- if path-based UC external table
 
 CREATE OR REFRESH STREAMING TABLE store_sales_enriched
@@ -243,7 +243,7 @@ AS SELECT
   s.transactions,
   s.gross_sales,
   s.avg_ticket,
-  s.chickenjoy_sales,
+  s.signature_item_sales,
   s.loyalty_customers,
   d.store_name,
   d.region,
@@ -257,7 +257,7 @@ LEFT JOIN main.dim.regions     r USING (region);
 
 ### 3. The Databricks Job (customer-side, in the Workflows UI)
 
-Create a Job that wraps this Lakeflow pipeline (task type: **Pipeline**), name it something like `jollibee_store_sales_enrichment`. Note the Job ID.
+Create a Job that wraps this Lakeflow pipeline (task type: **Pipeline**), name it something like `store_sales_enrichment`. Note the Job ID.
 
 ### 4. The Dagster defs (this repo's setup script)
 
@@ -266,15 +266,15 @@ Two YAML edits — change names + the Job ID env var:
 ```yaml
 # defs/snowflake_silver/defs.yaml
 attributes:
-  database: JOLLIBEE_ANALYTICS
+  database: RETAIL_ANALYTICS
   schema: SILVER
   filter_by_name_pattern: "^STORE_DAILY_SALES$"
-  description: SILVER-layer Jollibee POS — Dynamic Iceberg Table on TARGET_LAG=1h
+  description: SILVER-layer retail POS — Dynamic Iceberg Table on TARGET_LAG=1h
 
 # defs/databricks_lakeflow/defs.yaml
 attributes:
   assets_by_task_key:
-    jollibee_store_sales_enrichment:    # ← match the Lakeflow pipeline name
+    store_sales_enrichment:    # ← match the Lakeflow pipeline name
       - key: databricks/lakeflow/store_sales_enriched
         deps:
           - snowflake_silver/STORE_DAILY_SALES
