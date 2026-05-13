@@ -81,6 +81,19 @@ rules:
   # (For TRUE composition you write a custom Python rule; see below.)
 ```
 
+### Cadence propagation through deeper chains
+
+The applicator processes assets in **topological order** so derived cadences flow downstream:
+
+```
+A (root, metadata.cron_schedule: daily)        → effective: daily
+B (root, metadata.cron_schedule: monthly)      → effective: monthly
+C (deps: [A, B]; rule: least_frequent)         → effective: monthly  ← bound by B
+D (deps: [C]; rule: derive most_frequent)      → effective: monthly  ← inherits C's effective cadence
+```
+
+Without topological propagation, D would see C as having no cron (C's automation_condition wasn't applied yet when D was processed) and fall through. The applicator gets this right.
+
 ### Way 3 — Custom Python (full Dagster power)
 
 For complex conditions the YAML can't express:
