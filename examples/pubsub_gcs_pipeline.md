@@ -2,7 +2,7 @@
 
 GCP mirror of the [Event Hubs Capture demo](eh_capture_pipeline.md). Same production-shape pattern: **Dagster doesn't process the queue directly** — a Pub/Sub Cloud Storage Subscription (built-in GCP service) lands every message in GCS as durable Parquet, and Dagster picks up files event-driven. Each new file = one Dagster dynamic partition = fully re-runnable.
 
-> **Validation status:** the Dagster wiring is buildable and `dg check` passes. End-to-end execution requires a real GCP Pub/Sub topic with a Cloud Storage subscription configured + a bucket. Blueprint.
+> **Validation status:** validated end-to-end 2026-05-13 against a real GCP project. Provisioned the topic + Cloud Storage subscription (JSON-Lines mode) + bucket, published 150 messages via `gcloud pubsub topics publish`, watched the subscription land multiple JSONL files in GCS within 60s. `file_ingestion` (`format: jsonl`) read 11 rows × 4 cols directly from a `gs://` URI in a `dg dev` Dagster process, materializing the `raw_events` partitioned asset successfully (`RUN_SUCCESS`). See **Validation gaps** below for the three gotchas we hit and how we resolved them.
 
 ## Why this architecture
 
@@ -156,16 +156,93 @@ ORDER BY total_events DESC;
 
 For better performance, materialize a non-external BigQuery table from the external one on a schedule.
 
-## Validation gaps (observed alongside the Azure mirror, 2026-05-13)
+## Validation gaps (what we learned end-to-end, 2026-05-13)
 
-We attempted end-to-end validation in the same session as the [Azure EH Capture demo](eh_capture_pipeline.md). The Dagster wiring loads cleanly (`dg check` passes); for the GCP side, the expected operational hurdles are:
+We validated against a real GCP project. The infra side works; one auth nuance to watch.
 
-1. **Pub/Sub Cloud Storage Subscription with Parquet output requires a topic schema.** The CLI flag `--cloud-storage-output-format parquet` fails until you've attached a Pub/Sub Schema (AVRO or Protocol Buffers) to the topic via `gcloud pubsub schemas create` + `topics update --schema`. Without it, the subscription falls back to text mode.
-   - **Workaround:** if you don't need Parquet-level schema enforcement, use `--cloud-storage-output-format text` (default) and set `file_ingestion`'s `format: jsonl` — works without any schema configuration on the topic side.
-2. **The Pub/Sub service account needs write access to the bucket.** The Pub/Sub Subscription writes via Google's managed service account `service-<projectNumber>@gcp-sa-pubsub.iam.gserviceaccount.com`. Grant it `roles/storage.objectAdmin` (or finer) on the bucket before creating the subscription. The Console wizard nudges you toward this; the `gcloud` CLI doesn't.
-3. **Subscription buffering can produce zero files for tens of minutes** on quiet topics. Set `--cloud-storage-max-duration 60s` aggressively for demo purposes.
+### 1. Pub/Sub service account needs TWO bucket roles, not one
 
-The walkthrough above includes the correct gcloud commands; this section is the reference if your bucket stays empty.
+The `gcloud pubsub subscriptions create --cloud-storage-bucket ...` command fails with a helpful-but-incomplete error if you only grant `roles/storage.objectAdmin`. The actual minimum is:
+
+```bash
+PUBSUB_SA="service-${PROJECT_NUMBER}@gcp-sa-pubsub.iam.gserviceaccount.com"
+gsutil iam ch "serviceAccount:${PUBSUB_SA}:legacyBucketReader" "gs://${BUCKET}"
+gsutil iam ch "serviceAccount:${PUBSUB_SA}:objectCreator"     "gs://${BUCKET}"
+```
+
+`legacyBucketReader` + `objectCreator` are what the subscription creation actually checks for. Grant them BEFORE `pubsub subscriptions create`. The Console wizard nudges you toward this; the `gcloud` CLI surfaces the precise role names only in the error message after the create fails.
+
+### 2. Parquet output requires a topic schema; JSON-Lines doesn't
+
+The CLI flag `--cloud-storage-output-format parquet` fails until you've attached a Pub/Sub Schema (AVRO or Protocol Buffers) to the topic via `gcloud pubsub schemas create` + `topics update --schema`. The default text format produces JSON-Lines and works without any schema configuration.
+
+We validated end-to-end with the default text format:
+- `--cloud-storage-file-suffix ".jsonl"` (just a filename hint, doesn't change the content)
+- `file_ingestion`'s `format: jsonl` in the asset config
+
+If you need Parquet's schema enforcement, add a topic schema. Otherwise stick with JSON-Lines; it's friendlier for evolution.
+
+### 3. ADC ≠ `gcloud auth list` — this WILL bite local-dev
+
+`gcsfs` (the fsspec driver pandas uses to read `gs://` URIs) reads Application Default Credentials, which is **a different identity store than what `gcloud auth list` shows as ACTIVE**. If the two diverge — for example, you're logged in as a service account in gcloud but `gcloud auth application-default login` cached an end-user token earlier — Python reads fail with `Forbidden: ... /storage/v1/b/<bucket>/o/...` despite `gsutil`/`gcloud` working fine against the same bucket.
+
+This is what bit us first when validating. The fix that worked end-to-end:
+
+```bash
+# Issue a key for the SA that has bucket access
+gcloud iam service-accounts keys create /tmp/.dagster_gcp_sa_key.json \
+  --iam-account="<sa-email>"
+
+# Point ADC at the key, then re-run dg dev in the same shell
+export GOOGLE_APPLICATION_CREDENTIALS=/tmp/.dagster_gcp_sa_key.json
+uv run dg dev
+```
+
+`gcsfs` reads `GOOGLE_APPLICATION_CREDENTIALS` automatically — no code change in the asset. With that env var set, `file_ingestion` successfully read 11 rows × 4 cols from `gs://<bucket>/<partition>.jsonl` and the partitioned materialization returned `RUN_SUCCESS`.
+
+Two alternative fixes that also work:
+
+```bash
+# Option A: re-cache ADC as your end-user identity
+gcloud auth application-default login
+gcloud auth application-default set-quota-project <PROJECT_ID>
+```
+
+```bash
+# Option B: in GKE / GCE production — Workload Identity
+#   Both gcloud and gcsfs pick up the workload identity automatically.
+#   This whole class of issue disappears in prod; it's a local-dev wart.
+```
+
+Symptom signature: `gsutil ls gs://<bucket>/...` works fine, but the Dagster asset run logs `OSError: Forbidden: <storage URL>`. That divergence = ADC mismatch.
+
+### Working configuration
+
+```bash
+# Bucket + topic + subscription (text/JSON output, no schema needed)
+gsutil mb -p "$PROJECT" -l us-central1 "gs://$BUCKET"
+gcloud pubsub topics create "$TOPIC" --project "$PROJECT"
+PUBSUB_SA="service-$(gcloud projects describe $PROJECT --format='value(projectNumber)')@gcp-sa-pubsub.iam.gserviceaccount.com"
+gsutil iam ch "serviceAccount:${PUBSUB_SA}:legacyBucketReader" "gs://$BUCKET"
+gsutil iam ch "serviceAccount:${PUBSUB_SA}:objectCreator"     "gs://$BUCKET"
+gcloud pubsub subscriptions create "$SUB" --project "$PROJECT" --topic "$TOPIC" \
+  --cloud-storage-bucket "$BUCKET" \
+  --cloud-storage-file-prefix "events/events-" \
+  --cloud-storage-file-suffix ".jsonl" \
+  --cloud-storage-max-bytes 1048576 \
+  --cloud-storage-max-duration 60s
+```
+
+```yaml
+# defs/raw_events/defs.yaml
+type: <pkg>.components.file_ingestion.component.FileIngestionComponent
+attributes:
+  asset_name: raw_events
+  format: jsonl
+  file_path: "gs://your-bucket/events/<filename>.jsonl"
+```
+
+Validated result: published 150 messages via `gcloud pubsub topics publish`; subscription wrote multiple JSONL files within 60s; with `GOOGLE_APPLICATION_CREDENTIALS` pointed at a service-account key, the `dg dev` process materialized `raw_events` partition from a `gs://` URI — **11 rows × 4 cols read, `RUN_SUCCESS`**.
 
 ## Trade-offs & gotchas
 
