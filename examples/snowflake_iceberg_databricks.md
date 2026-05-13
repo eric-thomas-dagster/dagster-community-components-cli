@@ -1,10 +1,10 @@
 # Snowflake → Iceberg → Databricks Lakeflow — blueprint
 
-A common production pattern: **Snowflake** does the heavy SQL transformations on raw data, lands the result as an **Apache Iceberg** table in a shared catalog, and **Databricks Lakeflow Declarative Pipelines** (formerly DLT) pick that table up via Unity Catalog federation to feed downstream models / dashboards / lakehouse silver-gold layers.
+A common production pattern: **Snowflake** does the heavy SQL transformations on raw data, lands the result as an **Apache Iceberg** table in cloud storage (S3 / ADLS / GCS), and **Databricks Lakeflow Declarative Pipelines** (formerly DLT) read the same Iceberg table directly to feed downstream models / dashboards / lakehouse silver-gold layers.
 
-Dagster orchestrates both sides and surfaces the cross-engine lineage in one catalog.
+Iceberg is an open table format — the table's metadata + data files in object storage are self-describing. Databricks Unity Catalog can register the same Iceberg table by its storage location, so the two engines share data without an intermediate REST-catalog server. Dagster orchestrates both sides and surfaces the cross-engine lineage in one catalog.
 
-> **Validation status:** the Dagster wiring is buildable and passes `dg check` once env vars are set. The end-to-end pipeline has **not** been validated in this repo — it requires real Snowflake + Databricks accounts and a configured shared Iceberg catalog. This is a common, production-shape pattern, presented as a blueprint to copy into your environment.
+> **Validation status:** the Dagster wiring is buildable and passes `dg check` once env vars are set. The end-to-end pipeline has **not** been validated in this repo — it requires real Snowflake + Databricks accounts. This is a common, production-shape pattern, presented as a blueprint to copy into your environment.
 
 ## Architecture
 
@@ -14,21 +14,21 @@ Dagster orchestrates both sides and surfaces the cross-engine lineage in one cat
                     │                                                │
    RAW.ORDERS  ─┐  ┌─►  Dynamic Iceberg Table                       │
    RAW.CUSTOMERS├──┤    SILVER.CUSTOMER_METRICS                     │
-                 │  │    (writes to S3 via external volume +         │
-                 │  │     registers in Snowflake Open Catalog)       │
+                 │  │    writes to s3://my-iceberg-bucket/.../       │
+                 │  │    (Iceberg metadata + data files)             │
                  │  └─────────────────────┬──────────────────────────┘
                  │                        │
-                 │            ┌───────────▼────────────┐
-                 │            │  SHARED ICEBERG CATALOG │
-                 │            │  Snowflake Open Catalog │ ◄── Apache Polaris under the hood
-                 │            │  ANALYTICS.SILVER.*     │
-                 │            └───────────┬────────────┘
+                 │           ┌────────────▼─────────────┐
+                 │           │  OBJECT STORAGE (S3/ADLS) │
+                 │           │  Iceberg table files       │
+                 │           │  + metadata.json snapshots │
+                 │           └────────────┬─────────────┘
                  │                        │
                  │  ┌─────────────────────▼──────────────────────────┐
-                 │  │  DATABRICKS (Unity Catalog Iceberg federation) │
+                 │  │  DATABRICKS (Unity Catalog external Iceberg)   │
                  │  │                                                │
-                 │  │  External table:  uc_catalog.silver.           │
-                 │  │                   customer_metrics             │
+                 │  │  CREATE TABLE uc_catalog.silver.customer_metrics
+                 │  │    USING ICEBERG LOCATION 's3://my-iceberg-bucket/...';
                  │  │              │                                 │
                  │  │              ▼                                 │
                  │  │  Lakeflow Declarative Pipeline                 │
@@ -75,42 +75,14 @@ All three are wrappers around the **official** `dagster-snowflake` / `dagster-da
      ));
    ```
 
-3. **Catalog integration** — pick one:
-
-   - **Snowflake Open Catalog** (recommended for Databricks federation; managed Polaris):
-     ```sql
-     CREATE OR REPLACE CATALOG INTEGRATION snowflake_open_catalog
-       CATALOG_SOURCE = POLARIS
-       TABLE_FORMAT = ICEBERG
-       CATALOG_NAMESPACE = 'ANALYTICS'
-       REST_CONFIG = (
-         CATALOG_URI = 'https://<account>.snowflakecomputing.com/polaris/api/catalog'
-         WAREHOUSE = 'my_open_catalog_warehouse'
-       )
-       REST_AUTHENTICATION = (...)
-       ENABLED = TRUE;
-     ```
-   - **AWS Glue** (if your customer is AWS-centric):
-     ```sql
-     CREATE OR REPLACE CATALOG INTEGRATION glue_catalog
-       CATALOG_SOURCE = GLUE
-       TABLE_FORMAT = ICEBERG
-       GLUE_AWS_ROLE_ARN = 'arn:aws:iam::...'
-       GLUE_CATALOG_ID = '123456789012'
-       GLUE_REGION = 'us-east-1'
-       CATALOG_NAMESPACE = 'analytics'
-       ENABLED = TRUE;
-     ```
-   - **Self-hosted Apache Polaris**: standard Iceberg REST catalog config.
-
-4. **The actual Dynamic Iceberg Table** — the thing the Snowflake side materializes:
+3. **The Dynamic Iceberg Table** — Snowflake-managed, writes directly to S3:
    ```sql
    USE DATABASE ANALYTICS;
    USE SCHEMA SILVER;
 
    CREATE OR REPLACE DYNAMIC ICEBERG TABLE CUSTOMER_METRICS
      EXTERNAL_VOLUME = 'my_s3_iceberg_volume'
-     CATALOG = 'snowflake_open_catalog'
+     CATALOG = 'SNOWFLAKE'                       -- Snowflake-managed catalog
      BASE_LOCATION = 'analytics/customer_metrics/'
      TARGET_LAG = '1 hour'
      WAREHOUSE = COMPUTE_WH
@@ -124,17 +96,26 @@ All three are wrappers around the **official** `dagster-snowflake` / `dagster-da
      GROUP BY customer_id;
    ```
 
+   The data + metadata files land at `s3://my-iceberg-bucket/analytics/customer_metrics/`. Snowflake writes the standard Iceberg metadata (`metadata.json`, manifest lists, data files in Parquet) that any Iceberg reader can consume.
+
+   You can find the active metadata file location any time with:
+   ```sql
+   SELECT SYSTEM$GET_ICEBERG_TABLE_INFORMATION('ANALYTICS.SILVER.CUSTOMER_METRICS');
+   ```
+
 ### Databricks side
 
 1. **Unity Catalog** workspace with metastore.
-2. **Iceberg federation** to the Snowflake Open Catalog (or whatever you picked for the catalog):
+
+2. **External Iceberg table** in UC pointing at the same S3 location — no REST-catalog federation required, just the storage path:
    ```sql
    -- In a Databricks SQL editor or notebook
-   CREATE CATALOG iceberg_silver
-     USING CONNECTION my_polaris_connection
-     OPTIONS (catalog = 'snowflake_open_catalog');
+   CREATE TABLE main.silver.customer_metrics
+     USING ICEBERG
+     LOCATION 's3://my-iceberg-bucket/analytics/customer_metrics/';
    ```
-   (See Databricks docs for the exact `CREATE CONNECTION` syntax for Polaris / Glue.)
+
+   Databricks reads the Iceberg metadata files from S3 to discover the latest snapshot. After Snowflake refreshes the Dynamic Table, run `REFRESH TABLE main.silver.customer_metrics` (or let Lakeflow's incremental refresh handle it) so Databricks picks up the new metadata.
 
 3. **Lakeflow Declarative Pipeline** named `customer_metrics_enrichment` defined as (illustrative SQL):
    ```sql
@@ -146,7 +127,7 @@ All three are wrappers around the **official** `dagster-snowflake` / `dagster-da
      CASE WHEN m.lifetime_revenue > 1000 THEN 'high' ELSE 'low' END AS tier,
      d.region,
      d.signup_date
-   FROM iceberg_silver.silver.customer_metrics m   -- ← federated Iceberg table
+   FROM main.silver.customer_metrics m            -- ← UC external Iceberg
    LEFT JOIN main.dim.customers d USING (customer_id);
    ```
 
@@ -183,22 +164,25 @@ Three assets, with lineage flowing left → right:
 
 ## Trade-offs & gotchas (read before you demo)
 
-- **Federation latency.** When Snowflake refreshes the Iceberg Dynamic Table, Databricks doesn't see new data until the Iceberg catalog is refreshed on Databricks' side (UC federation polls periodically; `REFRESH FOREIGN CATALOG` is the manual trigger). Dagster's sensor doesn't make this faster — it just observes when each side has materialized.
-- **Schema evolution.** If Snowflake evolves the Iceberg schema (adds a column), Databricks' federated view needs to refresh metadata. Lakeflow pipelines that `SELECT *` will pick it up; explicit column lists may break.
-- **Storage costs.** Iceberg tables on S3 hold all snapshots until you `VACUUM` / expire them. The Snowflake side has knobs for this; Databricks' federated reads don't manage retention.
+- **Metadata-file freshness.** Snowflake writes new Iceberg metadata files on each Dynamic Table refresh. Databricks reads the metadata file location from UC's external table — it doesn't auto-detect when Snowflake has written a new snapshot. You need a `REFRESH TABLE` call (or let Lakeflow's incremental refresh handle it) for Databricks to see new data. Dagster can drive this via a hook on the Snowflake asset or a sensor.
+- **Schema evolution.** If Snowflake evolves the Iceberg schema (adds a column), the UC external table needs `REFRESH TABLE` to pick up the new metadata. Lakeflow pipelines that `SELECT *` will see the new columns after refresh; explicit column lists may break.
+- **Storage costs.** Iceberg tables on S3 hold all snapshots until you `VACUUM` / expire them. Snowflake exposes retention knobs on the Dynamic Table; Databricks won't manage retention for Snowflake-written tables.
 - **Two SLAs.** Snowflake Dynamic Table's `TARGET_LAG = '1 hour'` is a Snowflake-side SLA; the Lakeflow pipeline has its own. Dagster gives you one place to set freshness expectations across both — use `freshness_policy:` on the assets.
 - **Egress.** If the Iceberg storage is in one cloud and Databricks is in another, expect egress. Same-region same-cloud is the cheap path.
+- **Writes from both sides.** This blueprint is one-way (Snowflake writes, Databricks reads). If you want both engines writing to the same Iceberg table, you need a coordinating catalog (Glue or REST catalog) for concurrency control — see "Catalog-coordinated alternative" below.
 
-## Alternatives if Snowflake Open Catalog doesn't fit
+## Catalog-coordinated alternative (optional — stronger consistency)
+
+If you need stronger guarantees (concurrent writes from both engines, transactional ACID across writers, central governance), introduce a shared Iceberg REST catalog:
 
 | Catalog | When to pick |
 |---|---|
-| **Snowflake Open Catalog** (managed Polaris) | Default if you have Snowflake — no extra infra, native to Snowflake. |
-| **AWS Glue** | Customer is AWS-native and already has Glue tables. Databricks federates Glue cleanly. |
+| **Snowflake Open Catalog** (managed Polaris) | You're Snowflake-first and want a managed catalog. Snowflake hosts it; Databricks federates via `CREATE CATALOG ... USING CONNECTION`. |
+| **AWS Glue** | AWS-native, already have Glue tables. Snowflake writes via `CATALOG = 'glue_catalog'`; Databricks federates Glue cleanly. |
+| **Databricks Unity Catalog as Iceberg REST** | Newer pattern (2024–2025). UC exposes a REST endpoint; Snowflake writes to it. Databricks reads natively. |
 | **Self-hosted Apache Polaris** | Open-source, you control deployment. More ops burden. |
-| **Tabular** (acquired by Databricks) | Often the answer if you're going Databricks-first; Snowflake still federates. |
 
-The Dagster wiring is the same shape regardless — only the `CATALOG` argument in the Snowflake `CREATE DYNAMIC ICEBERG TABLE` and the Databricks federation config change.
+In the catalog-coordinated shape, you replace the storage-path `CREATE TABLE ... USING ICEBERG LOCATION ...` on the Databricks side with a federated catalog reference (e.g., `iceberg_silver.silver.customer_metrics` from a federated catalog). The Dagster wiring is identical — only the SQL on both sides changes.
 
 ## Cleanup
 

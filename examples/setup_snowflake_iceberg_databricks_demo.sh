@@ -5,20 +5,26 @@
 #
 #   Snowflake transforms                Iceberg landing                  Databricks Lakeflow
 #   ─────────────────────              ──────────────────              ──────────────────────
-#   Dynamic Table / Task               External Iceberg table          Lakeflow Declarative
-#   writes to Iceberg via              in shared catalog               Pipeline reads via
-#   external volume +                  (Snowflake Open Catalog,        Unity Catalog Iceberg
-#   catalog integration                Glue, or Polaris)               federation, materializes
-#                                                                       Delta tables
+#   Dynamic Iceberg Table              Object storage                  Lakeflow Declarative
+#   writes Iceberg files               (S3/ADLS/GCS) holds              Pipeline reads via UC
+#   directly to S3 via                 standard Iceberg                 external Iceberg table
+#   external volume                    metadata + data files            pointed at the same
+#                                                                       storage path
+#
+# Iceberg is an open table format — the metadata + data files in object
+# storage are self-describing. Databricks UC registers the table by storage
+# location; no intermediate REST-catalog server required. A catalog-
+# coordinated alternative is documented in the walkthrough.
 #
 # Dagster wires both sides via the existing community components:
-#   - snowflake_workspace          → imports Snowflake tasks/dynamic tables as assets
-#   - external_snowflake_table     → declares the landing Iceberg table for explicit lineage
+#   - snowflake_workspace          → imports Snowflake dynamic tables as assets
+#   - external_snowflake_table     → declares the Iceberg landing for explicit lineage
 #   - databricks_workspace         → imports the Lakeflow (DLT) pipeline + its outputs as assets
 #
 # NOTE: This setup script builds the Dagster project + defs.yaml. It does NOT
-# stand up Snowflake / Databricks / the Iceberg catalog — that requires real
-# accounts. Pre-reqs are detailed in snowflake_iceberg_databricks.md.
+# stand up Snowflake / Databricks — that requires real accounts. Pre-reqs
+# (external volume, UC external Iceberg table SQL, Lakeflow pipeline) are in
+# snowflake_iceberg_databricks.md.
 #
 # Validation status:
 #   - dg check: passes against the YAML
@@ -58,11 +64,11 @@ mkdir -p "src/$PKG/defs/snowflake_silver" \
 echo ">>> Writing defs.yaml"
 
 # --- 1. Snowflake side: import Dynamic Tables + Tasks from the SILVER schema.
-# In Snowflake, the Dynamic Table `CUSTOMER_METRICS` is defined as:
+# In Snowflake, the Dynamic Iceberg Table `CUSTOMER_METRICS` is defined as:
 #
 #   CREATE OR REPLACE DYNAMIC ICEBERG TABLE CUSTOMER_METRICS
 #     EXTERNAL_VOLUME = 'my_s3_iceberg_volume'
-#     CATALOG = 'snowflake_open_catalog'
+#     CATALOG = 'SNOWFLAKE'                       -- Snowflake-managed
 #     BASE_LOCATION = 'analytics/customer_metrics/'
 #     TARGET_LAG = '1 hour'
 #     WAREHOUSE = COMPUTE_WH
@@ -73,6 +79,10 @@ echo ">>> Writing defs.yaml"
 #            MAX(order_date)          AS last_order_date
 #     FROM RAW.PUBLIC.ORDERS
 #     GROUP BY customer_id;
+#
+# The Iceberg files land at s3://my-iceberg-bucket/analytics/customer_metrics/
+# (metadata.json + Parquet data files + manifest lists — standard Iceberg).
+# Databricks UC reads them directly via storage location.
 #
 # snowflake_workspace imports this as an observable asset that materializes
 # whenever the Dynamic Table refreshes.
@@ -113,10 +123,10 @@ attributes:
 EOF
 
 # --- 2. Iceberg landing table: declare as an explicit external asset so
-# lineage is visible in the catalog. The Snowflake-managed Iceberg table
-# is registered in Snowflake Open Catalog (a managed Apache Polaris) under
-# the namespace ANALYTICS.SILVER. Databricks reads it from there via
-# Unity Catalog Iceberg federation.
+# lineage is visible in the catalog. Snowflake writes the Iceberg files
+# under the namespace ANALYTICS.SILVER directly to S3. Databricks UC
+# reads the same S3 path as an external Iceberg table — no REST-catalog
+# server required.
 cat > "src/$PKG/defs/customer_metrics_iceberg/defs.yaml" <<EOF
 type: $PKG.components.external_snowflake_table.component.ExternalSnowflakeTableAsset
 attributes:
@@ -136,15 +146,21 @@ attributes:
 EOF
 
 # --- 3. Databricks side: import Lakeflow Declarative Pipeline as an asset.
-# The Databricks workspace has a Lakeflow pipeline named
-# "customer_metrics_enrichment" defined as (illustrative SQL):
+# Pre-req: register the Iceberg table in Unity Catalog by storage location:
+#
+#   CREATE TABLE main.silver.customer_metrics
+#     USING ICEBERG
+#     LOCATION 's3://my-iceberg-bucket/analytics/customer_metrics/';
+#
+# Then a Lakeflow Declarative Pipeline named "customer_metrics_enrichment"
+# reads it (illustrative SQL):
 #
 #   CREATE OR REFRESH STREAMING TABLE customer_metrics_enriched
 #   AS SELECT
 #     m.customer_id, m.lifetime_orders, m.lifetime_revenue,
 #     CASE WHEN m.lifetime_revenue > 1000 THEN 'high' ELSE 'low' END AS tier,
 #     d.region, d.signup_date
-#   FROM <uc_catalog>.silver.customer_metrics m       -- ← Iceberg federated table
+#   FROM main.silver.customer_metrics m
 #   LEFT JOIN main.dim.customers d USING (customer_id);
 #
 # databricks_workspace imports this pipeline as a materializable asset.
