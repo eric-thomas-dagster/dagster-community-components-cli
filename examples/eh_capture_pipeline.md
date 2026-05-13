@@ -1,6 +1,8 @@
 # Event Hubs Capture → ADLS → Dagster → Synapse — blueprint
 
-Production-shape streaming pipeline. **Dagster doesn't process the queue directly** — Event Hubs Capture (a built-in Azure service) lands every event in ADLS as durable Parquet, and Dagster picks up files event-driven. Each new file = one Dagster dynamic partition = fully re-runnable.
+Production-shape streaming pipeline. **Dagster doesn't process the queue directly** — Event Hubs Capture (a built-in Azure service) lands every event in ADLS as durable **Avro** files (the Standard-tier default; Parquet capture is Premium/preview), and Dagster picks up files event-driven. Each new file = one Dagster dynamic partition = fully re-runnable.
+
+`file_ingestion` reads Avro natively (via `fastavro`); the curated sink can write Parquet for downstream Athena-style queries, or stay in Avro via `dataframe_to_avro` if your downstream consumers prefer it.
 
 > **Validation status:** the Dagster wiring is buildable and `dg check` passes. End-to-end execution requires a real Azure Event Hubs namespace with Capture enabled + a Storage Account. Blueprint.
 

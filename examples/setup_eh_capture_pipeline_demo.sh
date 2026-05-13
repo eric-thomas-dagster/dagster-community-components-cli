@@ -85,7 +85,7 @@ attributes:
   storage_account_name: "{{ env('AZURE_STORAGE_ACCOUNT') }}"
   container_name: eh-capture
   directory_path: "namespace/eventhub"
-  file_pattern: ".*\\\\.parquet\$"
+  file_pattern: ".*\\\\.avro\$"
   recursive: true
   job_name: __ASSET_JOB
   minimum_interval_seconds: 30
@@ -101,14 +101,15 @@ cat > "src/$PKG/defs/raw_events/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: raw_events
-  format: parquet
+  # EH Capture writes Avro by default on Standard tier (Parquet is Premium/preview).
+  format: avro
   partition_type: dynamic
   dynamic_partition_name: "eh_parquet_files"
   from_run_config:
     # CUSTOMIZE: match your storage account + container; {partition_key}
     # comes from the sensor's partition_key_template above.
     uri_template: "abfss://eh-capture@{{ env('AZURE_STORAGE_ACCOUNT') }}.dfs.core.windows.net/{partition_key}"
-  description: One DataFrame per EH Capture Parquet file (per partition)
+  description: One DataFrame per EH Capture Avro file (per partition)
   group_name: raw
 EOF
 
