@@ -41,6 +41,7 @@ The demos are grouped by what they need to run.
   - [Auth: workload identity in GCP compute](#auth-workload-identity-in-gcp-compute)
 - [Dagster+ required](#dagster-required)
 - [Catalog Lineage Sync — multi-target](#catalog-lineage-sync--multi-target-no-auth-required-for-the-file-demo)
+- [Cross-vendor blueprints (not validated)](#cross-vendor-blueprints-not-validated)
 - [How a demo is built](#how-a-demo-is-built)
 - [Auth-required demos: comprehensive prereqs](#auth-required-demos-comprehensive-prereqs)
 
@@ -166,6 +167,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Local IO Managers](local_io.md) | 9 IO managers + 3 source/sink components — duckdb / sqlite / lance / polars / parquet / csv / json | Round-trip a DataFrame through every local format |
 | [Local Sinks](local_sinks.md) | `dataframe_to_csv`, `dataframe_to_parquet`, `dataframe_to_json`, `dataframe_to_excel`, `dataframe_to_table` | 5 file/table format sinks side by side |
 | [Document Extractors](document_extractors.md) | 13 document-source components — PDF / Word / HTML / RST / Markdown / etc. | Mega-demo: every shipped document-extraction component |
+| [S3 Dynamic-Partition Pipeline](s3_pipeline.md) | `s3_monitor` (dynamic_partition mode), `file_ingestion` (partitioned), `summarize`, `dataframe_to_parquet` | Sensor-driven round-trip on **local Minio S3** (Docker). Each detected file becomes a tracked dynamic partition → processed → parquet back to S3. Real S3 / GCS / ADLS by swapping the URI scheme. |
 
 ---
 
@@ -384,6 +386,16 @@ attached SA.
 | Demo | Components used | Highlights |
 |---|---|---|
 | [Catalog Lineage Sync](lineage_catalogs.md) | `lineage_graph_extractor` (source) → `lineage_to_file` (sink) — swap in `lineage_to_purview`, `lineage_to_datahub`, `lineage_to_alation`, `lineage_to_collibra`, `lineage_to_openlineage`, `lineage_to_webhook` for real catalogs | Lock-step fan-out across N catalogs; per-sink change-detection skip via payload hashing. Validated locally end-to-end with file sink. |
+
+---
+
+## Cross-vendor blueprints (not validated)
+
+Multi-vendor production patterns that require the customer's own cloud accounts. These demos scaffold the Dagster project + defs.yaml and document the architecture + infra prerequisites, but materialization end-to-end requires you to bring real accounts.
+
+| Demo | Pipeline | What you bring |
+|---|---|---|
+| [Snowflake → Iceberg → Databricks Lakeflow](snowflake_iceberg_databricks.md) | `snowflake_workspace` (Dynamic Iceberg Tables) → `external_snowflake_table` (Iceberg landing) → `databricks_workspace` (Lakeflow Declarative Pipelines) | Snowflake account with external volume + catalog integration; Databricks workspace with Unity Catalog + Iceberg federation; shared catalog (Snowflake Open Catalog / AWS Glue / self-hosted Polaris). Full prereq SQL in the walkthrough. |
 
 ---
 
