@@ -1,0 +1,259 @@
+# Broadly applying automation conditions
+
+How to set Dagster `AutomationCondition`s across many assets at once — without editing every `defs.yaml`. With fall-through priority (narrow > broad), preserve-existing (per-asset > rules), and auto-derive from upstream cadences.
+
+> **Validation status:** validated end-to-end 2026-05-13. Scaffolded a project with 4 test assets (3 upstreams of different cadences + 1 silver derived asset). Ran the applicator with `derive_from_upstreams: most_frequent` + catchall `eager`. Confirmed the silver asset got `on_cron("0 * * * *").ignore([daily_upstream])` (the hourly cadence) automatically; siblings got `eager`. `dg check defs` clean.
+
+## Why this exists
+
+Dagster lets you set ONE `automation_condition` per asset. Customers with hundreds of assets typically want:
+
+1. **Set broadly**: "Everything in `group:gold` runs daily at 9am"
+2. **Override narrowly**: "But `critical_metrics` runs every 5 minutes"
+3. **Handle the mixed-cadence case**: "This asset has 3 daily upstreams + 1 monthly — fire daily, but on the 1st also wait for the monthly"
+
+Without this component, you edit every asset's `defs.yaml` to set its automation_condition. That's brittle at 100+ assets — drift sets in fast.
+
+## Architecture
+
+```
+   ┌────────────────────────────────────────────────────────┐
+   │ defs/ folder — your existing components                │
+   │   bronze/daily_upstream    (cadence=daily)             │
+   │   bronze/hourly_upstream   (cadence=hourly)            │
+   │   bronze/monthly_upstream  (cadence=monthly)           │
+   │   silver/revenue_marts     (deps on bronze/*)          │
+   │   gold/exec_dashboard      (deps on silver/*)          │
+   └─────────────────────────┬──────────────────────────────┘
+                             │ load_from_defs_folder
+                             ▼
+   ┌────────────────────────────────────────────────────────┐
+   │ definitions.py wraps with apply_rules(...)             │
+   │   Rules evaluated TOP-TO-BOTTOM, first-match-wins:     │
+   │     - critical-tag → on_cron("0 * * * *")              │
+   │     - group:silver → derive_from_upstreams (most_freq) │
+   │     - group:gold → on_cron("0 9 * * *")                │
+   │     - *           → eager                              │
+   └─────────────────────────┬──────────────────────────────┘
+                             │
+                             ▼
+   ┌────────────────────────────────────────────────────────┐
+   │ Each asset gets exactly ONE final automation_condition │
+   │ - Preserves any explicitly-set per-asset condition     │
+   │ - First-match-wins fall-through                        │
+   └────────────────────────────────────────────────────────┘
+```
+
+## Component used
+
+[`automation_condition_applicator`](https://dagster-component-ui.vercel.app/c/automation_condition_applicator) — applies rules to a `Definitions` at project load time.
+
+## The "3 daily + 1 monthly upstream" pattern (the customer ask)
+
+Customer Jay's exact problem: *"I have an asset with 3 daily upstreams and 1 monthly upstream. I want it to fire daily, ignoring the monthly. But on month boundaries I want both."*
+
+The Dagster-skill answer is correct: compose `on_cron(DAILY).ignore(monthly)` + `all_deps_updated_since_cron(MONTHLY).allow(monthly)`. But writing that manually across 50 assets is painful. The applicator handles it three ways:
+
+### Way 1 — Auto-derive from upstreams (the simplest)
+
+```yaml
+- selection: "group:silver"
+  derive_from_upstreams: true
+  strategy: most_frequent     # fire on the fastest upstream's cron; ignore slower
+```
+
+The applicator walks each silver asset's deps, finds their cron schedules (from `automation_condition.cron_schedule` or `freshness_policy.cron_schedule` or `metadata["cron_schedule"]`), picks the most frequent, and generates `on_cron(daily).ignore(<monthly_upstream_keys>)`.
+
+**Result for the 3-daily + 1-monthly case**: `on_cron("0 9 * * *").ignore(monthly_upstream)`. The asset fires daily without blocking on the monthly.
+
+### Way 2 — Two rules, AND-composed (the boundary case)
+
+For the "fire daily, AND on the 1st also wait for monthly":
+
+```yaml
+rules:
+  - name: silver_daily_skeleton
+    selection: "group:silver"
+    cron: "0 9 * * *"
+    ignore_selection: "tag:cadence=monthly"
+
+  # Same selection — Dagster ANDs them via composition implicit in fall-through
+  # (For TRUE composition you write a custom Python rule; see below.)
+```
+
+### Way 3 — Custom Python (full Dagster power)
+
+For complex conditions the YAML can't express:
+
+```python
+import dagster as dg
+from dagster_community_components import apply_rules
+
+DAILY = "0 9 * * *"
+MONTHLY = "0 9 1 * *"
+
+monthly_sel = dg.AssetSelection.tag("cadence", "monthly")
+
+complex_cond = (
+    dg.AutomationCondition.in_latest_time_window()
+    & dg.AutomationCondition.cron_tick_passed(DAILY).since_last_handled()
+    & dg.AutomationCondition.all_deps_updated_since_cron(DAILY).ignore(monthly_sel)
+    & dg.AutomationCondition.all_deps_updated_since_cron(MONTHLY).allow(monthly_sel)
+).with_label("daily_with_monthly_boundary")
+
+@definitions
+def defs():
+    base = load_from_defs_folder(...)
+    # Apply the complex condition to silver, eager to the rest
+    base = base.map_asset_specs(
+        func=lambda spec: spec.replace_attributes(automation_condition=complex_cond)
+                          if "silver" in spec.group_name else spec,
+    )
+    return apply_rules(base, rules=[{"selection": "*", "preset": "eager"}])
+```
+
+The applicator stays out of your way when you need full control.
+
+## Fall-through priority — like CSS specificity
+
+```yaml
+rules:
+  # 1. Narrowest first — specific tag wins for matching assets
+  - selection: "tag:cadence=hourly"
+    cron: "0 * * * *"
+
+  # 2. Group-scoped — wins for silver assets that didn't match above
+  - selection: "group:silver"
+    derive_from_upstreams: true
+
+  # 3. Catchall last — wins only if nothing above matched
+  - selection: "*"
+    preset: eager
+```
+
+`preserve_existing: true` (default) acts like CSS `!important` on per-asset settings: if an asset already has `automation_condition` set explicitly in its own component config, no rule overrides it. **Per-asset always wins.**
+
+## Wiring it in (`definitions.py`)
+
+Components in Dagster can't post-process other components' output via `build_defs` alone. You wire the applicator at the project level:
+
+```python
+from pathlib import Path
+from dagster import definitions, load_from_defs_folder
+from dagster_community_components import apply_rules
+
+@definitions
+def defs():
+    base = load_from_defs_folder(path_within_project=Path(__file__).parent)
+    return apply_rules(
+        base,
+        rules=[
+            {
+                "name": "critical_hourly",
+                "selection": "tag:cadence=hourly",
+                "cron": "0 * * * *",
+            },
+            {
+                "name": "silver_from_upstreams",
+                "selection": "group:silver",
+                "derive_from_upstreams": True,
+                "strategy": "most_frequent",
+            },
+            {
+                "name": "gold_daily_morning",
+                "selection": "group:gold",
+                "cron": "0 9 * * *",
+                "ignore_selection": "tag:cadence=monthly",
+            },
+            {"name": "catchall_eager", "selection": "*", "preset": "eager"},
+        ],
+        preserve_existing=True,
+    )
+```
+
+That's the entire wiring. No defs.yaml changes needed.
+
+## Validation script
+
+To confirm what got applied to each asset:
+
+```python
+from your_project.definitions import defs
+
+resolved = defs()
+for spec in resolved.resolve_all_asset_specs():
+    print(f"{spec.key.to_user_string():30s} → {spec.automation_condition}")
+```
+
+You'll see for each asset:
+- `daily_upstream` → `eager(...)` (matched catchall)
+- `hourly_upstream` → `on_cron("0 * * * *")` (matched tag rule)
+- `silver_revenue` → `on_cron(<derived>).ignore(<slower_deps>)` (derive mode)
+- `gold_exec` → `on_cron("0 9 * * *").ignore(monthly_*)` (group rule)
+
+If the result isn't what you expected, fall-through ordering is the most common cause — re-order rules.
+
+## Customer scenarios
+
+### Scenario A — Brownfield "we have 200 assets, want consistent automation"
+
+```yaml
+rules:
+  # Pre-existing critical assets with explicit settings stay (preserve_existing: true)
+  # Add tag-based overrides for special cases:
+  - selection: "tag:tier=realtime"
+    cron: "*/5 * * * *"
+  # Everything else → eager (default for new projects)
+  - selection: "*"
+    preset: eager
+```
+
+Onboarding: tag a handful of special assets, drop in the applicator. Done.
+
+### Scenario B — Greenfield medallion architecture
+
+```yaml
+rules:
+  - selection: "group:bronze"
+    preset: eager        # bronze gets refreshed eagerly (raw ingestion)
+  - selection: "group:silver"
+    derive_from_upstreams: true
+    strategy: most_frequent
+  - selection: "group:gold"
+    cron: "0 9 * * *"     # gold runs daily at 9am
+  - selection: "*"
+    preset: eager
+```
+
+Bronze hot-keeps, silver follows upstream cadence, gold publishes on a fixed schedule.
+
+### Scenario C — Per-team SLAs via tags
+
+```yaml
+rules:
+  - selection: "tag:team=marketing and tag:sla=realtime"
+    cron: "*/15 * * * *"
+  - selection: "tag:team=marketing"
+    cron: "0 6,12,18 * * *"
+  - selection: "tag:team=finance"
+    cron: "0 6 * * *"
+  - selection: "*"
+    preset: eager
+```
+
+Teams own their tags; SLAs translate to cron without code changes per asset.
+
+## Trade-offs & gotchas
+
+- **`Definitions.map_asset_specs` is in preview** (Dagster ~1.10). The component uses it; you'll see preview warnings. Not blocking, but be aware.
+- **Selection ordering matters.** First match wins. If `"*"` is first, nothing else fires.
+- **`derive_from_upstreams` needs cron metadata on upstreams.** If your bronze layer doesn't expose cron schedules in `metadata` or `freshness_policy`, the derive mode falls through (returns None). Tag upstreams with `metadata: {cron_schedule: "..."}` for the applicator to find them.
+- **Composition limits.** YAML rules use fall-through (first-match-wins), not AND-composition. For ANDed conditions across rules, use the Python escape hatch.
+- **Per-asset wins.** If you find a rule isn't applying, check whether the asset's own component set `automation_condition:` — that always overrides rules unless you flip `preserve_existing: false`.
+
+## See also
+
+- [`asset_job`](https://dagster-community-components-cli.vercel.app/c/asset_job) — bundle assets into a stable job
+- [`cron_schedule`](https://dagster-community-components-cli.vercel.app/c/cron_schedule) — fixed-cadence schedule (alternative to AutomationCondition)
+- [Dagster AutomationCondition docs](https://docs.dagster.io/concepts/automation/declarative-automation)
+- [Component README](https://dagster-component-ui.vercel.app/c/automation_condition_applicator)
