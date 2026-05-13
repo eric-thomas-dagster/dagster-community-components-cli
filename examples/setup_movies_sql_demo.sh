@@ -84,24 +84,26 @@ attributes:
   group_name: ingest
 EOF
 
-# --- 2. movies_raw: read movies.csv after archive extraction
+# --- 2. movies_raw: read movies.csv via the upstream archive's dict (no hardcoded path)
 cat > "src/$PKG/defs/movies_raw/defs.yaml" <<EOF
 type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: movies_raw
-  file_path: /tmp/movies_demo/movies.csv
-  deps: [ml_archive]
+  from_upstream:
+    asset: ml_archive
+    dict_key: "movies.csv"
   description: Movies catalog (movieId, title, genres)
   group_name: ingest
 EOF
 
-# --- 3. ratings_raw: read ratings.csv after archive extraction
+# --- 3. ratings_raw: same shape — resolve the path from ml_archive's dict
 cat > "src/$PKG/defs/ratings_raw/defs.yaml" <<EOF
 type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
 attributes:
   asset_name: ratings_raw
-  file_path: /tmp/movies_demo/ratings.csv
-  deps: [ml_archive]
+  from_upstream:
+    asset: ml_archive
+    dict_key: "ratings.csv"
   description: Per-user movie ratings (userId, movieId, rating, timestamp)
   group_name: ingest
 EOF
