@@ -42,28 +42,36 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
-uv add -q snowflake-connector-python databricks-sdk
+# Official Dagster integrations — these provide DatabricksWorkspaceComponent
+# and SnowflakeResource. The community components below wrap or extend them.
+uv add -q dagster-databricks dagster-snowflake snowflake-connector-python databricks-sdk databricks-sql-connector
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components"
+echo ">>> Installing 3 community components (Snowflake side has no official"
+echo "    DynamicTable/Task importer; Databricks side uses the OFFICIAL component)"
 $CLI add snowflake_workspace      --auto-install
 $CLI add external_snowflake_table --auto-install
-$CLI add databricks_workspace     --auto-install
+$CLI add cron_schedule            --auto-install
 
 # Suppress the auto-installed example defs that would conflict
 rm -rf "src/$PKG/defs/snowflake_workspace" \
        "src/$PKG/defs/external_snowflake_table" \
-       "src/$PKG/defs/databricks_workspace"
+       "src/$PKG/defs/cron_schedule"
 
 mkdir -p "src/$PKG/defs/snowflake_silver" \
          "src/$PKG/defs/customer_metrics_iceberg" \
-         "src/$PKG/defs/databricks_lakeflow"
+         "src/$PKG/defs/refresh_uc_table" \
+         "src/$PKG/defs/databricks_lakeflow" \
+         "src/$PKG/defs/refresh_schedule"
 
 echo ">>> Writing defs.yaml"
 
 # --- 1. Snowflake side: import Dynamic Tables + Tasks from the SILVER schema.
+# Uses the COMMUNITY snowflake_workspace component — there is no official
+# dagster-snowflake component for Dynamic Tables / Tasks / Streams. The
+# community component sits on top of dagster-snowflake's SnowflakeResource.
 # In Snowflake, the Dynamic Iceberg Table `CUSTOMER_METRICS` is defined as:
 #
 #   CREATE OR REPLACE DYNAMIC ICEBERG TABLE CUSTOMER_METRICS
@@ -96,9 +104,8 @@ attributes:
   database: ANALYTICS
   schema: SILVER
 
-  # The Dynamic Table that writes the Iceberg landing table is what we want
-  # to materialize on a schedule. Tasks are imported too in case the customer
-  # has additional orchestration via Snowflake Tasks.
+  # The Dynamic Iceberg Table — what we want to materialize as our SILVER
+  # output. Tasks imported too so any Snowflake-side orchestration shows up.
   import_dynamic_tables: true
   import_tasks: true
   import_streams: false
@@ -118,8 +125,12 @@ attributes:
   generate_sensor: true
   poll_interval_seconds: 60
 
+  # Freshness policy — tells Dagster (+ alerts) when this is stale.
+  # Snowflake's TARGET_LAG='1 hour' is the SLA; give Dagster 30min headroom.
+  freshness_max_lag_minutes: 90
+
   group_name: snowflake_silver
-  description: SILVER-layer Snowflake — Dynamic Tables writing Iceberg
+  description: SILVER-layer Snowflake — Dynamic Iceberg Table refreshed on TARGET_LAG
 EOF
 
 # --- 2. Iceberg landing table: declare as an explicit external asset so
@@ -145,62 +156,110 @@ attributes:
     (Lakeflow pipeline reads it via UC federation).
 EOF
 
-# --- 3. Databricks side: import Lakeflow Declarative Pipeline as an asset.
-# Pre-req: register the Iceberg table in Unity Catalog by storage location:
+# --- 3. The "REFRESH TABLE" glue asset.
+# Snowflake writes new Iceberg metadata files on each Dynamic Table refresh.
+# Databricks UC doesn't auto-discover them — we have to call REFRESH TABLE.
+# This asset uses the official dagster-databricks SnowflakeResource pattern
+# but inverted: it executes a Databricks SQL Warehouse statement.
 #
-#   CREATE TABLE main.silver.customer_metrics
-#     USING ICEBERG
-#     LOCATION 's3://my-iceberg-bucket/analytics/customer_metrics/';
+# This is a small inline @asset (the one place we break "100% components"
+# for a one-line SQL call). Defines a Python file alongside defs.yaml.
+mkdir -p "src/$PKG/defs/refresh_uc_table"
+cat > "src/$PKG/defs/refresh_uc_table/refresh_uc_table.py" <<'PY'
+"""Tiny glue asset: tell Databricks UC to refresh its external Iceberg view
+so it picks up Snowflake's latest metadata.json. Materialize after the
+Snowflake Dynamic Table refreshes; downstream Lakeflow reads the new data."""
+
+import os
+from dagster import asset, AssetExecutionContext, AssetKey
+
+
+@asset(
+    name="customer_metrics_uc_refreshed",
+    deps=[AssetKey.from_user_string("silver/customer_metrics_iceberg")],
+    group_name="iceberg_landing",
+    description=(
+        "Calls REFRESH TABLE on the Databricks UC external Iceberg table so "
+        "it picks up Snowflake's latest metadata.json snapshot. Materialize "
+        "this after the Snowflake side completes to bridge the metadata gap."
+    ),
+    freshness_policy={"maximum_lag_minutes": 120},
+)
+def customer_metrics_uc_refreshed(context: AssetExecutionContext) -> None:
+    from databricks import sql as dbx_sql
+    host = os.environ["DATABRICKS_HOST"].replace("https://", "")
+    token = os.environ["DATABRICKS_TOKEN"]
+    http_path = os.environ["DATABRICKS_HTTP_PATH"]  # e.g. /sql/1.0/warehouses/<id>
+
+    context.log.info(f"Refreshing UC external Iceberg table on {host}")
+    with dbx_sql.connect(server_hostname=host, http_path=http_path, access_token=token) as conn:
+        with conn.cursor() as cur:
+            cur.execute("REFRESH TABLE main.silver.customer_metrics")
+    context.log.info("REFRESH TABLE main.silver.customer_metrics completed")
+PY
+
+# --- 4. Databricks side: OFFICIAL DatabricksWorkspaceComponent from
+# dagster-databricks. Imports Databricks Jobs (with task-level assets).
+# Lakeflow pipelines are typically wrapped in a Job (task type =
+# pipeline_task) so the official component picks them up via the Job.
 #
-# Then a Lakeflow Declarative Pipeline named "customer_metrics_enrichment"
-# reads it (illustrative SQL):
-#
-#   CREATE OR REFRESH STREAMING TABLE customer_metrics_enriched
-#   AS SELECT
-#     m.customer_id, m.lifetime_orders, m.lifetime_revenue,
-#     CASE WHEN m.lifetime_revenue > 1000 THEN 'high' ELSE 'low' END AS tier,
-#     d.region, d.signup_date
-#   FROM main.silver.customer_metrics m
-#   LEFT JOIN main.dim.customers d USING (customer_id);
-#
-# databricks_workspace imports this pipeline as a materializable asset.
+# Pre-req in Databricks:
+#   1. Register the Iceberg table in UC by storage location:
+#      CREATE TABLE main.silver.customer_metrics
+#        USING ICEBERG
+#        LOCATION 's3://my-iceberg-bucket/analytics/customer_metrics/';
+#   2. Create a Lakeflow Declarative Pipeline that reads it (SQL like):
+#      CREATE OR REFRESH STREAMING TABLE customer_metrics_enriched AS
+#      SELECT m.*, d.region FROM main.silver.customer_metrics m
+#      LEFT JOIN main.dim.customers d USING (customer_id);
+#   3. Wrap the pipeline in a Job (Databricks UI: New Job → Task type
+#      "Pipeline" → pick customer_metrics_enrichment). Note the job_id.
 cat > "src/$PKG/defs/databricks_lakeflow/defs.yaml" <<EOF
-type: $PKG.components.databricks_workspace.component.DatabricksWorkspaceComponent
+type: dagster_databricks.DatabricksWorkspaceComponent
 attributes:
-  workspace_url: "{{ env('DATABRICKS_HOST') }}"
-  access_token: "{{ env('DATABRICKS_TOKEN') }}"
+  workspace:
+    host: "{{ env('DATABRICKS_HOST') }}"
+    token: "{{ env('DATABRICKS_TOKEN') }}"
 
-  # Only import Lakeflow pipelines (formerly DLT). The component's flag is
-  # `import_dlt_pipelines` — DLT = Lakeflow Declarative Pipelines as of 2025.
-  import_dlt_pipelines: true
-  import_jobs: false
-  import_notebooks: false
-  import_model_endpoints: false
+  # Replace with the Databricks Job ID that wraps the Lakeflow pipeline.
+  # Find it in the Databricks UI → Workflows → your job → Job details.
+  databricks_filter:
+    include_jobs:
+      job_ids:
+        - {{ env('DATABRICKS_LAKEFLOW_JOB_ID') }}
 
-  # Filter to the specific Lakeflow pipeline we care about
-  filter_by_name_pattern: "^customer_metrics_enrichment\$"
-
-  # Auto-generate a sensor so Dagster observes Lakeflow runs that fire
-  # outside of Dagster (e.g., from Databricks' own schedule)
-  generate_sensor: true
-  poll_interval_seconds: 60
-
-  group_name: databricks_gold
-  description: Databricks Lakeflow pipelines that consume the Iceberg landing
-
-  # Override the pipeline's asset key + add explicit dependency on the
-  # Iceberg landing for visible lineage in the Dagster catalog
-  assets_by_pipeline_name:
+  # Map the Lakeflow Job's task → a Dagster asset key, with an explicit
+  # dependency on the UC-refreshed Iceberg landing so lineage shows
+  # Snowflake → REFRESH TABLE → Lakeflow.
+  assets_by_task_key:
     customer_metrics_enrichment:
-      key: databricks/lakeflow/customer_metrics_enriched
-      group_name: databricks_gold
-      description: |
-        Enriches the Iceberg landing with dim_customers, adds tier classification.
-      deps:
-        - silver/customer_metrics_iceberg
-      metadata:
-        catalog: snowflake_open_catalog
-        federated_table: ANALYTICS.SILVER.CUSTOMER_METRICS
+      - key: databricks/lakeflow/customer_metrics_enriched
+        group_name: databricks_gold
+        description: |
+          Lakeflow Declarative Pipeline output. Enriches the UC external
+          Iceberg table with dim_customers + tier classification.
+        deps:
+          - customer_metrics_uc_refreshed
+        metadata:
+          databricks_job_id: "{{ env('DATABRICKS_LAKEFLOW_JOB_ID') }}"
+EOF
+
+# --- 5. Schedule — daily at 06:00 UTC. Materializes the chain end-to-end:
+# Snowflake Dynamic Table refresh → REFRESH TABLE on UC → Lakeflow pipeline.
+# Each asset on the list runs in topological order (deps from defs.yaml).
+cat > "src/$PKG/defs/refresh_schedule/defs.yaml" <<EOF
+type: $PKG.components.cron_schedule.component.CronScheduleComponent
+attributes:
+  schedule_name: silver_to_gold_daily
+  cron_expression: "0 6 * * *"
+  execution_timezone: UTC
+  asset_keys:
+    - snowflake_silver/CUSTOMER_METRICS
+    - customer_metrics_uc_refreshed
+    - databricks/lakeflow/customer_metrics_enriched
+  default_status: STOPPED
+  tags:
+    pipeline: snowflake_to_databricks_lakeflow
 EOF
 
 cat <<MSG
@@ -225,6 +284,8 @@ To wire up your environment:
        export SNOWFLAKE_PASSWORD=...
        export DATABRICKS_HOST=https://dbc-xxx.cloud.databricks.com
        export DATABRICKS_TOKEN=...
+       export DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/<warehouse_id>
+       export DATABRICKS_LAKEFLOW_JOB_ID=12345    # the Job that wraps the Lakeflow pipeline
 
   3. Validate the YAML loads:
        cd $PROJECT_DIR && uv run dg check defs
@@ -232,9 +293,19 @@ To wire up your environment:
   4. Launch the UI:
        cd $PROJECT_DIR && uv run dg dev
 
-  5. In the Dagster catalog you'll see:
-       - snowflake_silver/CUSTOMER_METRICS         (Dynamic Table)
-       - silver/customer_metrics_iceberg            (Iceberg landing)
-       - databricks/lakeflow/customer_metrics_enriched (Lakeflow)
-     with lineage flowing left to right.
+  5. In the Dagster catalog you'll see four assets with lineage flowing
+     left to right:
+       - snowflake_silver/CUSTOMER_METRICS              (Snowflake Dynamic Iceberg Table)
+       - silver/customer_metrics_iceberg                 (Iceberg landing, external asset)
+       - customer_metrics_uc_refreshed                    (REFRESH TABLE glue — bridges metadata)
+       - databricks/lakeflow/customer_metrics_enriched   (Lakeflow pipeline output via Job)
+
+     Plus a schedule (silver_to_gold_daily, 06:00 UTC) that materializes
+     the whole chain in topological order. Freshness policies on each
+     asset surface SLA breaches in the catalog.
+
+     Sensors auto-generated by each component poll Snowflake + Databricks
+     for out-of-band runs (e.g., Snowflake's TARGET_LAG-driven refreshes,
+     Databricks-side manual reruns) and surface them as materializations
+     in Dagster's catalog.
 MSG
