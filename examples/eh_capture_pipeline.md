@@ -4,7 +4,7 @@ Production-shape streaming pipeline. **Dagster doesn't process the queue directl
 
 `file_ingestion` reads Avro natively (via `fastavro`); the curated sink can write Parquet for downstream Athena-style queries, or stay in Avro via `dataframe_to_avro` if your downstream consumers prefer it.
 
-> **Validation status:** the Dagster wiring is buildable and `dg check` passes. End-to-end execution requires a real Azure Event Hubs namespace with Capture enabled + a Storage Account. Blueprint.
+> **Validation status:** end-to-end validated 2026-05-13 against a Pay-As-You-Go Azure subscription. 500 events sent to EH → Capture flushed two Avro files (~40 KB each, one per partition) → Dagster's `file_ingestion` (`format: avro`) read 250 rows × 6 cols. See **Validation gaps** below for the failure modes we hit along the way (hns storage + RBAC paths) and the working config that produced the success.
 
 ## Why this architecture (the design rationale)
 
@@ -80,9 +80,11 @@ Plus the Azure-native pieces you provide: the Event Hub namespace, the Capture c
 RG=my-resource-group
 SA=mystorageacct$(openssl rand -hex 4)
 az group create -n "$RG" -l eastus
-az storage account create -g "$RG" -n "$SA" -l eastus --sku Standard_LRS --kind StorageV2 --hierarchical-namespace true
-az storage container create --account-name "$SA" -n eh-capture
-az storage container create --account-name "$SA" -n curated
+# Use FLAT-NAMESPACE storage (--hns omitted / false). With hierarchical-namespace,
+# EH Capture's default auth path silently fails to write — see "Validation gaps" below.
+az storage account create -g "$RG" -n "$SA" -l eastus --sku Standard_LRS --kind StorageV2
+az storage container create --account-name "$SA" -n eh-capture --auth-mode login
+az storage container create --account-name "$SA" -n curated --auth-mode login
 ```
 
 ### 2. Event Hubs namespace + Capture
@@ -152,25 +154,84 @@ ORDER BY total_events DESC;
 
 Build a Synapse external table on the same path for a stable BI surface.
 
-## Validation gaps (observed 2026-05-13)
+## Validation gaps (what we learned end-to-end, 2026-05-13)
 
-We attempted end-to-end validation in a session with a Pay-As-You-Go Azure subscription. The Dagster wiring loads cleanly (`dg check` passes), but Capture itself hit friction we couldn't resolve in-session:
+We validated this blueprint against a Pay-As-You-Go Azure subscription. The blueprint works end-to-end — but along the way we hit two real-world friction points that the `az` CLI silently glosses over. The walkthrough above already reflects the working config; this section is the diagnostic reference.
 
-1. **EH Capture requires explicit RBAC config to write to a Storage Account.** The CLI command
-   ```bash
-   az eventhubs eventhub create ... --enable-capture true --destination-name EventHubArchive.AzureBlockBlob --storage-account $SA_ID --blob-container eh-capture --archive-name-format '...'
-   ```
-   succeeds without errors and `az eventhubs eventhub show` reports `captureDescription.enabled: true` — but **nothing writes to the container** until you also:
-   ```bash
-   az eventhubs namespace identity assign --namespace-name $EHN -g $RG --system-assigned
-   EH_PID=$(az eventhubs namespace show -g $RG --name $EHN --query identity.principalId -o tsv)
-   az role assignment create --assignee-object-id $EH_PID --assignee-principal-type ServicePrincipal --role "Storage Blob Data Contributor" --scope $(az storage account show -g $RG -n $SA --query id -o tsv)
-   ```
-2. **Even after RBAC is set up, ADLS Gen2 (`--hns true`) storage accounts may need additional config.** In our test, with all of the above in place plus 750+ events queued, the Capture container stayed empty for 5+ minutes. Likely an ADLS Gen2 interop edge case — the Azure activity log on the namespace will show the actual error, which the CLI doesn't surface.
-   - **Workaround:** start with **flat-namespace** storage (`--hns false`) for the first validation pass, switch to ADLS Gen2 only when you've confirmed the Capture+MI+role wiring works.
-3. **Capture's "skipEmptyArchives" defaults vary.** Some SDK / CLI versions default to writing empty Avro files on every interval (helpful for proving Capture is working at all); others skip them. If you don't see ANY files after 2 intervals, suspect RBAC / hns first, then check the activity log.
+### 1. Hierarchical-namespace storage breaks Capture's default auth path
 
-These aren't blueprint bugs — they're real Azure operational hurdles that the `az eventhubs eventhub create --enable-capture` CLI silently glosses over. The walkthrough above includes the correct provisioning order; this section is the failure-mode reference if you hit the empty-container symptom.
+If your storage account is created with `--hierarchical-namespace true` (ADLS Gen2), Capture's default shared-key auth doesn't work. The CLI reports `captureDescription.enabled: true` and accepts 750+ events without error, but the container stays empty forever.
+
+**Symptoms:**
+- `az storage blob list ... -c eh-capture` returns only a single zero-byte placeholder directory entry.
+- `az eventhubs eventhub show` reports Capture is enabled.
+- No CLI errors anywhere. The actual error lives in the EH namespace's Azure Activity Log.
+
+**Fix:** use flat-namespace storage (omit `--hns` / set `--hierarchical-namespace false`). Capture's default auth path works against flat blob accounts out of the box. We validated end-to-end with this configuration — 500 events → 40 KB Avro file per partition within one capture interval.
+
+**If you must use ADLS Gen2:** enable a system-assigned managed identity on the EH namespace and grant it `Storage Blob Data Contributor` on the storage account:
+
+```bash
+az eventhubs namespace identity assign --namespace-name $EHN -g $RG --system-assigned
+EH_PID=$(az eventhubs namespace show -g $RG --name $EHN --query identity.principalId -o tsv)
+az role assignment create --assignee-object-id $EH_PID --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" --scope $(az storage account show -g $RG -n $SA --query id -o tsv)
+```
+
+These need to be in place **before** `eventhub create --enable-capture`. We weren't able to make this path work in our validation session even with all of the above; suspect there's an additional ADLS-Gen2-specific config (capture's `identity` field on the description) that the `az` CLI doesn't fully wire. Investigate the activity log first.
+
+### 2. URI scheme depends on storage account type
+
+`file_ingestion` reads via `fsspec` (`adlfs`). The URI scheme that works depends on which storage account variant you provisioned:
+
+| Storage account | URI to use | What it looks like |
+|---|---|---|
+| Flat-namespace (StorageV2, no hns) | `az://<container>/<path>` + `AZURE_STORAGE_ACCOUNT_NAME` env var | `az://eh-capture/path/to/file.avro` |
+| Flat-namespace, explicit form | `https://<account>.blob.core.windows.net/<container>/<path>` | `https://mysa.blob.core.windows.net/eh-capture/path` |
+| Hierarchical namespace (ADLS Gen2) | `abfss://<container>@<account>.dfs.core.windows.net/<path>` | `abfss://eh-capture@mysa.dfs.core.windows.net/path` |
+
+Using `abfss://...dfs...` against a flat-namespace account, or `az://` against an hns account, will fail with auth errors that look like permission problems. They're actually URI-scheme mismatches.
+
+### 3. Auth for `file_ingestion`'s reads
+
+`adlfs` picks up either:
+- **Managed Identity / DefaultAzureCredential** — requires the principal (your user or the compute identity) to have `Storage Blob Data Reader` on the storage account, plus several minutes for RBAC propagation. We hit this in validation — granting yourself the role and immediately running the asset still failed with `AuthorizationPermissionMismatch`; needed a 30-60s pause.
+- **Shared key via `AZURE_STORAGE_KEY` env var** — instant, no propagation lag. Works for dev / single-account scenarios; not what you want in production (no per-user audit; key rotation is a config change).
+
+In our validation we used the shared-key path for speed; in production prefer Managed Identity with `Storage Blob Data Reader` granted ahead of time.
+
+### Working configuration (what we proved)
+
+```bash
+# Storage: flat namespace (CRITICAL)
+az storage account create -g $RG -n $SA -l eastus --sku Standard_LRS --kind StorageV2
+# NO --hierarchical-namespace flag
+
+# EH namespace + event hub with Capture
+az eventhubs namespace create -g $RG -n $EHN -l eastus --sku Standard
+az eventhubs eventhub create -g $RG --namespace-name $EHN -n my-event-hub \
+  --partition-count 2 --enable-capture true \
+  --capture-interval 60 --capture-size-limit 10485760 \
+  --destination-name 'EventHubArchive.AzureBlockBlob' \
+  --storage-account $(az storage account show -g $RG -n $SA --query id -o tsv) \
+  --blob-container eh-capture \
+  --archive-name-format '{Namespace}/{EventHub}/{PartitionId}/{Year}/{Month}/{Day}/{Hour}/{Minute}/{Second}'
+
+# Dagster auth (flat-ns + shared key)
+export AZURE_STORAGE_ACCOUNT_NAME=$SA
+export AZURE_STORAGE_KEY=$(az storage account keys list -g $RG -n $SA --query "[0].value" -o tsv)
+```
+
+```yaml
+# defs/raw_events/defs.yaml
+type: <pkg>.components.file_ingestion.component.FileIngestionComponent
+attributes:
+  asset_name: raw_events
+  format: avro
+  file_path: "az://eh-capture/<namespace>/<eventhub>/<partition>/<...>/<seconds>.avro"
+```
+
+Result on validation: 250 rows × 6 cols loaded into the asset's DataFrame. Capture's empty-archive markers (~508 bytes — Avro headers with no records) are a normal byproduct of empty intervals; only flush windows with actual events produce real-sized files.
 
 ## Trade-offs & gotchas
 
