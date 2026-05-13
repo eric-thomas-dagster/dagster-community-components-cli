@@ -194,11 +194,11 @@ LEFT JOIN main.dim.customers d USING (customer_id);
 
 Alternative: connect UC to a REST catalog (Snowflake Open Catalog, Polaris, or UC-as-REST). The catalog tracks the current metadata version, and reads always see the latest snapshot without any refresh.
 
-## Customizing for your customer's data
+## Customizing for your data
 
-The scaffold uses generic `customer_metrics` to keep it readable. Adapting it to a real workload — say, a chain-restaurant POS pipeline — requires changes in **four** places: three in the Snowflake / Databricks accounts, one in the Dagster YAML.
+The scaffold uses generic `customer_metrics` names to keep it readable. Adapting to your own workload — say, a chain-restaurant POS pipeline — requires changes in **four** places: three in your Snowflake / Databricks accounts, one in the Dagster YAML.
 
-### 1. The Snowflake Dynamic Iceberg Table (customer-side SQL)
+### 1. The Snowflake Dynamic Iceberg Table (Snowflake-side SQL)
 
 This is where the real transformation lives. Replace the toy `customer_metrics` with the actual aggregation:
 
@@ -228,7 +228,7 @@ AS
   GROUP BY store_id, DATE_TRUNC('day', transaction_ts);
 ```
 
-### 2. The Databricks Lakeflow pipeline SQL (customer-side)
+### 2. The Databricks Lakeflow pipeline SQL (Databricks-side)
 
 The pipeline that wraps Snowflake's output and joins it with Databricks-side dimensions:
 
@@ -255,7 +255,7 @@ LEFT JOIN main.dim.stores      d USING (store_id)     -- ← Databricks-resident
 LEFT JOIN main.dim.regions     r USING (region);
 ```
 
-### 3. The Databricks Job (customer-side, in the Workflows UI)
+### 3. The Databricks Job (in the Workflows UI)
 
 Create a Job that wraps this Lakeflow pipeline (task type: **Pipeline**), name it something like `store_sales_enrichment`. Note the Job ID.
 
