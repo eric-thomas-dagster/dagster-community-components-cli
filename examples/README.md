@@ -391,11 +391,11 @@ attached SA.
 
 ## Cross-vendor blueprints (not validated)
 
-Multi-vendor production patterns that require the customer's own cloud accounts. These demos scaffold the Dagster project + defs.yaml and document the architecture + infra prerequisites, but materialization end-to-end requires you to bring real accounts.
+Multi-vendor production patterns. These scaffold the Dagster project + defs.yaml and document the architecture + infra prerequisites, but materialization end-to-end requires real Snowflake / Databricks / cloud accounts — bring your own.
 
-| Demo | Pipeline | What you bring |
+| Blueprint | Pipeline | What you bring |
 |---|---|---|
-| [Snowflake → Iceberg → Databricks Lakeflow](snowflake_iceberg_databricks.md) | `snowflake_workspace` (Dynamic Iceberg Tables) → `external_snowflake_table` (Iceberg landing) → `databricks_workspace` (Lakeflow Declarative Pipelines) | Snowflake account with external volume + catalog integration; Databricks workspace with Unity Catalog + Iceberg federation; shared catalog (Snowflake Open Catalog / AWS Glue / self-hosted Polaris). Full prereq SQL in the walkthrough. |
+| [Snowflake → Iceberg → Databricks Lakeflow](snowflake_iceberg_databricks.md) | `snowflake_workspace` (Dynamic Iceberg Tables) → object storage (Iceberg files) → official `DatabricksWorkspaceComponent` (Lakeflow pipelines wrapped in Jobs) | Snowflake account with external volume for Iceberg; Databricks workspace with Unity Catalog; the Lakeflow pipeline wrapped in a Databricks Job. Full prereq SQL in the walkthrough. |
 
 ---
 
