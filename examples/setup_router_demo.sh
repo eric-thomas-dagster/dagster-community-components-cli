@@ -24,43 +24,63 @@ uv add -q pandas
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 mkdir -p /tmp/router_demo
-echo ">>> Generating 30 synthetic orders"
-uv run python - <<'PY'
-import csv, random
-random.seed(7)
-rows = []
-for i in range(1, 31):
-    total = round(random.choice([
-        random.uniform(20, 99),       # low
-        random.uniform(100, 1000),    # medium
-        random.uniform(1001, 5000),   # high
-    ]), 2)
-    rows.append({"order_id": f"ORD{i:04d}", "customer_id": f"C{i:03d}", "total": total})
-with open("/tmp/router_demo/orders.csv", "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=rows[0].keys())
-    w.writeheader(); w.writerows(rows)
-print(f"wrote {len(rows)} orders")
-PY
+# Synthetic orders now generated 100%-components via parametric_data_generator.
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing components"
-$CLI add csv_file_ingestion --auto-install
-$CLI add router             --auto-install
-$CLI add dataframe_to_csv   --auto-install
+$CLI add parametric_data_generator --auto-install
+$CLI add router                    --auto-install
+$CLI add dataframe_to_csv          --auto-install
 mkdir -p "src/$PKG/defs/csv_med"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 mkdir -p "src/$PKG/defs/csv_low"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 echo ">>> Writing demo defs.yaml"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+mkdir -p "src/$PKG/defs/orders"
+cat > "src/$PKG/defs/orders/defs.yaml" <<EOF
+type: $PKG.components.parametric_data_generator.component.ParametricDataGeneratorComponent
 attributes:
   asset_name: orders
-  file_path: /tmp/router_demo/orders.csv
-  description: 30 synthetic orders with mixed totals
+  row_count: 30
+  random_state: 7
+  description: 30 synthetic orders, biased across low/medium/high totals
   group_name: router_demo
+  columns:
+    order_id:
+      type: id
+      prefix: "ORD"
+      width: 4
+    customer_id:
+      type: id
+      prefix: "C"
+      width: 3
+    bucket:
+      type: choice
+      values: [low, medium, high]
+    low_v:
+      type: float
+      min: 20
+      max: 99
+      precision: 2
+    med_v:
+      type: float
+      min: 100
+      max: 1000
+      precision: 2
+    high_v:
+      type: float
+      min: 1001
+      max: 5000
+      precision: 2
+    total:
+      type: formula
+      formula: "low_v if bucket == 'low' else (med_v if bucket == 'medium' else high_v)"
 EOF
 
+# Suppress the auto-installed example defs that would conflict
+rm -rf "src/$PKG/defs/parametric_data_generator" "src/$PKG/defs/router" "src/$PKG/defs/dataframe_to_csv"
+
+mkdir -p "src/$PKG/defs/router" "src/$PKG/defs/dataframe_to_csv"
 cat > "src/$PKG/defs/router/defs.yaml" <<EOF
 type: $PKG.components.router.component.RouterComponent
 attributes:

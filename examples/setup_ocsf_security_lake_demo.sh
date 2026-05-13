@@ -24,58 +24,64 @@ uv add -q pandas pyarrow tabulate
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 mkdir -p /tmp/ocsf_demo
-echo ">>> Generating 25 synthetic Dagster+ audit events"
-uv run python - <<'PY'
-import csv, json, random
-from datetime import datetime, timedelta, timezone
-random.seed(13)
-event_types = [
-    "LOG_IN",                    # → 3002 Authentication
-    "CREATE_USER_TOKEN",         # → 3005 Account Change
-    "REVOKE_USER_TOKEN",         # → 3005 Account Change
-    "CHANGE_USER_PERMISSIONS",   # → 3006 User Access Management
-    "CREATE_CODE_LOCATION",      # → 6002 Application Lifecycle
-    "UPDATE_CODE_LOCATION",      # → 6002 Application Lifecycle
-    "DELETE_CODE_LOCATION",      # → 6002 Application Lifecycle
-    "LAUNCH_RUN",                # → 6003 API Activity
-]
-emails = [f"u{i}@acme.com" for i in range(1, 9)]
-deployments = ["prod", "staging", "dev"]
-now = datetime.now(timezone.utc)
-rows = []
-for i in range(25):
-    et = random.choice(event_types)
-    rows.append({
-        "timestamp": (now - timedelta(minutes=random.randint(1, 1440))).isoformat(),
-        "userEmail": random.choice(emails),
-        "eventType": et,
-        "targetType": "Deployment" if "DEPLOYMENT" in et else ("User" if "USER" in et or "ROLE" in et else "Session"),
-        "targetIdentifier": random.choice(deployments) if "DEPLOYMENT" in et else random.choice(emails),
-        "metadata": json.dumps({"source": "synthetic"}),
-    })
-with open("/tmp/ocsf_demo/dagster_plus_audit_raw.csv", "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=rows[0].keys())
-    w.writeheader(); w.writerows(rows)
-print(f"wrote {len(rows)} synthetic Dagster+ audit events")
-PY
+# Synthetic audit events now generated 100%-components via parametric_data_generator.
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing components"
-$CLI add csv_file_ingestion   --auto-install
-$CLI add ocsf_normalizer      --auto-install
-$CLI add ocsf_validator       --auto-install
-$CLI add dataframe_to_parquet --auto-install
+$CLI add parametric_data_generator --auto-install
+$CLI add ocsf_normalizer           --auto-install
+$CLI add ocsf_validator            --auto-install
+$CLI add dataframe_to_parquet      --auto-install
+
+# Suppress the auto-installed example defs that would conflict
+rm -rf "src/$PKG/defs/parametric_data_generator" "src/$PKG/defs/ocsf_normalizer" \
+       "src/$PKG/defs/ocsf_validator" "src/$PKG/defs/dataframe_to_parquet"
+
+mkdir -p "src/$PKG/defs/audit_raw" "src/$PKG/defs/ocsf_normalizer" \
+         "src/$PKG/defs/ocsf_validator" "src/$PKG/defs/dataframe_to_parquet"
 
 echo ">>> Writing demo defs.yaml"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/audit_raw/defs.yaml" <<EOF
+type: $PKG.components.parametric_data_generator.component.ParametricDataGeneratorComponent
 attributes:
   asset_name: dagster_plus_audit_raw
-  file_path: /tmp/ocsf_demo/dagster_plus_audit_raw.csv
+  row_count: 25
+  random_state: 13
   description: 25 synthetic Dagster+ audit events
   group_name: ocsf_demo
+  columns:
+    timestamp:
+      type: datetime
+      start: "2026-05-10T00:00:00"
+      end: "2026-05-11T23:59:59"
+      format: "%Y-%m-%dT%H:%M:%S+00:00"
+    userEmail:
+      type: choice
+      values: [u1@acme.com, u2@acme.com, u3@acme.com, u4@acme.com,
+               u5@acme.com, u6@acme.com, u7@acme.com, u8@acme.com]
+    eventType:
+      type: choice
+      values:
+        - LOG_IN                  # → 3002 Authentication
+        - CREATE_USER_TOKEN       # → 3005 Account Change
+        - REVOKE_USER_TOKEN       # → 3005 Account Change
+        - CHANGE_USER_PERMISSIONS # → 3006 User Access Management
+        - CREATE_CODE_LOCATION    # → 6002 Application Lifecycle
+        - UPDATE_CODE_LOCATION    # → 6002 Application Lifecycle
+        - DELETE_CODE_LOCATION    # → 6002 Application Lifecycle
+        - LAUNCH_RUN              # → 6003 API Activity
+    targetType:
+      type: formula
+      formula: "'User' if 'USER' in eventType or 'ROLE' in eventType else 'Session'"
+    targetIdentifier:
+      type: choice
+      values: [u1@acme.com, u2@acme.com, u3@acme.com, u4@acme.com,
+               u5@acme.com, u6@acme.com, u7@acme.com, u8@acme.com]
+    metadata:
+      type: constant
+      value: '{"source": "synthetic"}'
 EOF
 
 cat > "src/$PKG/defs/ocsf_normalizer/defs.yaml" <<EOF
