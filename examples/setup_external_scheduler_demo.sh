@@ -1,8 +1,9 @@
 #!/usr/bin/env bash
-# External Scheduler demo — show how Control-M, Autosys, Tidal, cron, or any
-# other "master scheduler" can keep ownership of WHEN a job runs while
-# Dagster owns HOW it runs. The scheduler doesn't need a Dagster integration
-# component; it just calls a companion script.
+# External Scheduler demo — show how Control-M, CA WA ESP, Autosys, Tidal,
+# IBM TWS, JAMS, Stonebranch, Redwood, Airflow, cron, or any other "master
+# scheduler" can keep ownership of WHEN a job runs while Dagster owns HOW
+# it runs. The scheduler doesn't need a Dagster integration component; it
+# just calls a companion script.
 #
 # What gets scaffolded:
 #   1. A normal daily-partitioned Dagster project (3 components)
@@ -11,9 +12,16 @@
 #      from the scheduler-supplied date, exits with the run's status code.
 #
 # How it ties to a real scheduler:
-#   - Control-M:  job step calls `bin/kick_off_run.sh %%ODATE`
-#   - Autosys:    `command: bin/kick_off_run.sh $$AUTODATE`
-#   - cron:       `0 2 * * *  cd /opt/proj && bin/kick_off_run.sh`
+#   - Control-M:    job step calls `bin/kick_off_run.sh %%$ODATE`
+#   - CA WA ESP:    INVOKE command  `bin/kick_off_run.sh %ESP.APPL.BIZ_DATE%`
+#   - Autosys:      `command: bin/kick_off_run.sh $$AUTODATE`
+#   - Tidal:        `bin/kick_off_run.sh ${TID_BUS_DATE}`
+#   - IBM TWS:      script step  `bin/kick_off_run.sh ^DATE^`
+#   - JAMS:         exec method  `bin/kick_off_run.sh {{$Date.Today}}`
+#   - Stonebranch:  Universal Task `bin/kick_off_run.sh ${BUSINESS_DATE}`
+#   - Redwood RMS:  process step `bin/kick_off_run.sh #{ScheduleDate}`
+#   - Airflow:      BashOperator `bin/kick_off_run.sh {{ ds }}`
+#   - cron:         `0 2 * * *  cd /opt/proj && bin/kick_off_run.sh`
 #   - GitHub Actions / Jenkins / etc.: same shape
 
 set -euo pipefail
@@ -114,7 +122,7 @@ mkdir -p bin
 # GraphQL endpoint, polls for completion, exits with the run's status code.
 cat > bin/kick_off_run.sh <<'GRAPHQL'
 #!/usr/bin/env bash
-# What a real external scheduler (Control-M, Autosys, Tidal, cron, ...) calls.
+# What a real external scheduler (Control-M, ESP, Autosys, Tidal, TWS, JAMS, ...) calls.
 # Launches a Dagster run via the GraphQL API — only requires curl + jq.
 #
 # Required env:

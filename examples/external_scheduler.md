@@ -1,6 +1,6 @@
 # External Scheduler demo
 
-How to keep an existing master scheduler — Control-M, Autosys, Tidal, cron,
+How to keep an existing master scheduler — Control-M, Autosys, CA WA ESP, Tidal, IBM TWS, JAMS, Stonebranch, Redwood, Airflow, cron,
 Jenkins, anything — in charge of *when* a Dagster job runs, without writing
 a Dagster integration component for it.
 
@@ -10,7 +10,7 @@ The bridge between them is a shell script that calls Dagster's GraphQL API.
 
 ```
    external scheduler  ──────┐
-   (Control-M, Autosys,      │ shells out
+   (Control-M, ESP, Autosys, │ shells out
    cron, Jenkins, ...)       ▼
                           bin/kick_off_run.sh
                               │ POST /graphql launchRun
@@ -123,11 +123,20 @@ checked out — that's not how Control-M agents look.
 ## Wiring to real schedulers
 
 ```
-Control-M:  job step calls   bin/kick_off_run.sh %%$ODATE
-Autosys:    command:         bin/kick_off_run.sh $$AUTODATE
-cron:       crontab line:    0 2 * * *  cd /opt/proj && bin/kick_off_run.sh
-Jenkins:    shell step:      sh "bin/kick_off_run.sh ${BUILD_DATE}"
+Control-M:    job step calls   bin/kick_off_run.sh %%$ODATE
+Autosys:      command:         bin/kick_off_run.sh $$AUTODATE
+CA WA ESP:    INVOKE command   bin/kick_off_run.sh %ESP.APPL.BIZ_DATE%
+Tidal:        command:         bin/kick_off_run.sh ${TID_BUS_DATE}
+IBM TWS:      script step:     bin/kick_off_run.sh ^DATE^
+JAMS:         execution method bin/kick_off_run.sh {{$Date.Today}}
+Stonebranch:  Universal Task   bin/kick_off_run.sh ${BUSINESS_DATE}
+Redwood RMS:  Process script   bin/kick_off_run.sh #{ScheduleDate}
+Airflow:      BashOperator:    bin/kick_off_run.sh {{ ds }}
+cron:         crontab line:    0 2 * * *  cd /opt/proj && bin/kick_off_run.sh
+Jenkins:      shell step:      sh "bin/kick_off_run.sh ${BUILD_DATE}"
 ```
+
+The pattern is identical across all of them: the master scheduler shells out to a small script that calls Dagster's GraphQL `launchRun` mutation, polls the run status until terminal, and returns 0 on success / non-zero otherwise. Whatever the scheduler's date-substitution variable is (Control-M's `%%$ODATE`, ESP's `%ESP.APPL.BIZ_DATE%`, Autosys's `$$AUTODATE`, Airflow's `{{ ds }}`), pass it as the script's first argument and the run inherits it via tag or run config.
 
 The script returns 0 only on `LaunchRunSuccess` *and* a `success` final run
 status. That's how the scheduler knows whether to retry, alert, or chain
