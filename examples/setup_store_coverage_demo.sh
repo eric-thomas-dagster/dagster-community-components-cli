@@ -35,35 +35,22 @@ S004,Bronx,40.8448,-73.8648
 S005,Jersey City,40.7178,-74.0431
 EOF
 
-uv run python - <<'PY'
-import csv, random
-random.seed(42)
-# 100 customers spread across NYC metro (lat 40.5-40.9, lng -74.2 to -73.7)
-rows = []
-for i in range(1, 101):
-    rows.append({
-        "customer_id": f"C{i:04d}",
-        "lat": round(random.uniform(40.55, 40.90), 4),
-        "lng": round(random.uniform(-74.20, -73.70), 4),
-        "lifetime_value": round(random.uniform(100, 5000), 2),
-    })
-with open("/tmp/customers.csv", "w", newline="") as f:
-    w = csv.DictWriter(f, fieldnames=rows[0].keys())
-    w.writeheader(); w.writerows(rows)
-print(f"wrote /tmp/customers.csv: {len(rows)} customers")
-PY
+# Note: customers are generated 100%-components via parametric_data_generator
+# below — no inline Python, no /tmp/customers.csv. The stores still come from
+# the inline CSV above since they're a small fixed set.
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 9 community components"
-$CLI add csv_file_ingestion --auto-install
-$CLI add create_points      --auto-install
-$CLI add buffer             --auto-install
-$CLI add smooth             --auto-install
-$CLI add make_grid          --auto-install
-$CLI add spatial_join       --auto-install
-$CLI add summarize          --auto-install
-$CLI add dataframe_to_csv   --auto-install
+$CLI add csv_file_ingestion        --auto-install
+$CLI add parametric_data_generator --auto-install
+$CLI add create_points             --auto-install
+$CLI add buffer                    --auto-install
+$CLI add smooth                    --auto-install
+$CLI add make_grid                 --auto-install
+$CLI add spatial_join              --auto-install
+$CLI add summarize                 --auto-install
+$CLI add dataframe_to_csv          --auto-install
 
 # Dual ingest + dual create_points + dual sinks via target_dir
 mkdir -p "src/$PKG/defs/customers_ingest"  # only needs defs.yaml; component code is in components/csv_file_ingestion/
@@ -113,14 +100,35 @@ attributes:
   group_name: spatial
 EOF
 
-# --- Customers branch ---
+# --- Customers branch (100% components — synthetic via parametric_data_generator) ---
 cat > "src/$PKG/defs/customers_ingest/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.parametric_data_generator.component.ParametricDataGeneratorComponent
 attributes:
   asset_name: customers_raw
-  file_path: /tmp/customers.csv
+  row_count: 100
+  random_state: 42
   description: 100 synthetic NYC-area customers with lat/lng + lifetime value
   group_name: ingest
+  columns:
+    customer_id:
+      type: id
+      prefix: "C"
+      width: 4
+    lat:
+      type: float
+      min: 40.55
+      max: 40.90
+      precision: 4
+    lng:
+      type: float
+      min: -74.20
+      max: -73.70
+      precision: 4
+    lifetime_value:
+      type: float
+      min: 100
+      max: 5000
+      precision: 2
 EOF
 
 cat > "src/$PKG/defs/customers_points/defs.yaml" <<EOF
