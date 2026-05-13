@@ -290,14 +290,18 @@ That's the whole edit surface. The Dagster wiring shape doesn't change — only 
 
 ---
 
-## Trade-offs & gotchas
+## What Dagster solves vs. what's outside its scope
 
-- **Metadata-file freshness.** Snowflake writes new Iceberg metadata files on each Dynamic Table refresh, but a path-based UC external Iceberg table (created via `CREATE TABLE ... USING ICEBERG LOCATION ...`) caches its metadata pointer — Databricks reads stale data until you call `REFRESH FOREIGN TABLE` (or `REFRESH TABLE`). Put it at the top of the Lakeflow pipeline SQL. UC connected through a REST catalog (Snowflake Open Catalog / Polaris / UC-as-REST) auto-refreshes — no extra step.
-- **Schema evolution.** If Snowflake evolves the Iceberg schema (adds a column), the path-based UC external table needs `REFRESH TABLE` to pick up the new metadata. Lakeflow pipelines that `SELECT *` will see the new columns after refresh; explicit column lists may break. REST-catalog-coordinated tables track schema evolution natively.
-- **Storage costs.** Iceberg tables on S3 hold all snapshots until you `VACUUM` / expire them. Snowflake exposes retention knobs on the Dynamic Table; Databricks won't manage retention for Snowflake-written tables.
-- **Two SLAs.** Snowflake Dynamic Table's `TARGET_LAG = '1 hour'` is a Snowflake-side SLA; the Lakeflow pipeline has its own. Dagster gives you one place to set freshness expectations across both — use `freshness_policy:` on the assets.
-- **Egress.** If the Iceberg storage is in one cloud and Databricks is in another, expect egress. Same-region same-cloud is the cheap path.
-- **Writes from both sides.** This blueprint is one-way (Snowflake writes, Databricks reads). If you want both engines writing to the same Iceberg table, use a coordinating catalog (Glue or REST catalog) for concurrency control — see "Catalog-coordinated alternative" below.
+### Dagster handles these:
+
+- **Refresh timing.** A path-based UC external Iceberg table (created via `CREATE TABLE ... USING ICEBERG LOCATION ...`) caches its metadata pointer — Databricks reads stale data until you call `REFRESH FOREIGN TABLE` (or `REFRESH TABLE`). Put that statement at the top of the Lakeflow pipeline SQL **once**; Dagster's `deps:` + schedule guarantee the Snowflake refresh is complete before the Lakeflow Job runs. UC connected through a REST catalog (Snowflake Open Catalog / Polaris / UC-as-REST) skips the REFRESH entirely.
+- **Unified freshness SLA.** Snowflake's `TARGET_LAG = '1 hour'` is one SLA; the Lakeflow pipeline has its own. Set `freshness_policy:` on both Dagster assets and you have a single place to see SLA breaches — the catalog turns the asset red, sensors / alerts pick it up.
+- **Schema drift detection.** Both `snowflake_workspace` and the official `DatabricksWorkspaceComponent` emit `dagster/column_schema` metadata on each materialization. Add `build_column_schema_change_checks` to the project and Dagster auto-emits an asset check when a column appears, disappears, or changes type between runs. Catches the case where Snowflake evolves the Iceberg schema before Databricks consumers are ready.
+
+### Outside Dagster's scope (be aware):
+
+- **Storage retention.** Iceberg tables on S3 hold all snapshots until you `VACUUM` / expire them. Configure retention on the Snowflake side via the Dynamic Table's storage parameters; Iceberg's snapshot expiration runs from whichever engine owns the catalog.
+- **Egress.** If the Iceberg storage is in one cloud and Databricks is in another, expect inter-cloud egress charges. Same-region, same-cloud is the cheap path.
 
 ## Catalog-coordinated alternative (optional — stronger consistency)
 
