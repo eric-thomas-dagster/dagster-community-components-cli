@@ -42,6 +42,7 @@ The demos are grouped by what they need to run.
 - [Dagster+ required](#dagster-required)
 - [Catalog Lineage Sync — multi-target](#catalog-lineage-sync--multi-target-no-auth-required-for-the-file-demo)
 - [Cross-vendor blueprints (not validated)](#cross-vendor-blueprints-not-validated)
+- [SAP family + OData ecosystem (one component covers many vendors)](#sap-family--odata-ecosystem-one-component-covers-many-vendors)
 - [How a demo is built](#how-a-demo-is-built)
 - [Auth-required demos: comprehensive prereqs](#auth-required-demos-comprehensive-prereqs)
 
@@ -399,6 +400,25 @@ Multi-vendor production patterns. These scaffold the Dagster project + defs.yaml
 | [Event Hubs Capture → ADLS → Dagster → Synapse](eh_capture_pipeline.md) | EH Capture writes Parquet to ADLS → `adls_monitor` (dynamic_partition) → `file_ingestion` → `summarize` → curated Parquet → Synapse Serverless OPENROWSET | Azure Event Hubs namespace with Capture enabled; ADLS Gen2 storage account; optionally Synapse Serverless. Stream→durable-storage→batch — production-shape pattern that solves the "queues aren't re-runnable" problem by landing every event in ADLS first. |
 | [Pub/Sub → GCS Subscription → Dagster → BigQuery](pubsub_gcs_pipeline.md) | Pub/Sub Cloud Storage Subscription writes Parquet to GCS → `gcs_monitor` (dynamic_partition) → `file_ingestion` → `summarize` → curated Parquet → BigQuery external table | GCP Pub/Sub topic with a Cloud Storage Subscription; GCS bucket; optionally BigQuery dataset. GCP mirror of the EH Capture pattern. |
 | [Kinesis Firehose → S3 → Dagster → Athena](kinesis_firehose_pipeline.md) | Kinesis Firehose writes Parquet to S3 (Glue schema) → `s3_monitor` (dynamic_partition) → `file_ingestion` → `summarize` → curated Parquet → Athena external table | Kinesis Data Stream (or direct-PUT to Firehose), Firehose delivery stream, S3 bucket, Glue table, optionally Athena. AWS mirror of the EH Capture / Pub/Sub patterns. |
+
+---
+
+## SAP family + OData ecosystem (one component covers many vendors)
+
+The OData protocol is the dominant enterprise-ERP machine interface. One `odata_ingestion` component covers SAP S/4HANA, SuccessFactors, Datasphere, Microsoft Dynamics 365 / Dataverse, MS Graph, Oracle Fusion, Epicor, IFS Cloud. Plus the headless-OAuth stack (`oauth_token_resource` + `oauth_rest_ingestion`) for Concur, Ariba, and any other Bearer-token REST API.
+
+| Blueprint | Pipeline | What you bring |
+|---|---|---|
+| **[OData generic — Northwind](odata_pipeline.md)** ✅ validated | `odata_ingestion` → `summarize` → `dataframe_to_parquet`. Public `services.odata.org/V4/Northwind`. **Validated end-to-end 2026-05-13 — 10 rows × 5 cols, RUN_SUCCESS.** | Nothing — no credentials, no infra. The fastest way to prove the OData component works. |
+| **[Dremio (Docker, end-to-end)](dremio_pipeline.md)** | `dremio_ingestion` → `summarize` → `dataframe_to_parquet`. Docker Dremio OSS + PAT auth. | Docker Desktop. The setup script handles everything else (~2 min UI clicks for first-user + PAT). |
+| **[SAP S/4HANA](sap_s4hana_pipeline.md)** | `odata_ingestion` against S/4HANA — three modes documented: API Business Hub sandbox (free signup), Cloud basic auth (Communication User), Cloud OAuth (XSUAA). Plus `dataframe_to_odata` for write-back with CSRF handling. | Free SAP account at api.sap.com (sandbox); OR an S/4HANA tenant. |
+| **[SAP SuccessFactors](sap_successfactors_pipeline.md)** | `odata_ingestion` against SuccessFactors HRIS — employees, jobs, departments, comp, performance reviews. `User@CompanyID` basic auth or SAML-assertion OAuth. | SuccessFactors API user credentials. |
+| **[SAP Concur](sap_concur_pipeline.md)** | `oauth_token_resource` (refresh_token grant + writeback rotation) → `oauth_rest_ingestion` (next_url pagination). Full headless flow with AWS SM / Azure KV / Vault writeback patterns documented. | Concur OAuth app credentials. |
+| **[SAP Ariba](sap_ariba_pipeline.md)** | `oauth_token_resource` (client_credentials — easy headless) → `oauth_rest_ingestion` (cursor pagination). Operational Reporting / Sourcing / Supplier endpoints. | Ariba Developer Portal app with the right scopes. |
+| **[SAP Datasphere](sap_datasphere_pipeline.md)** | `odata_ingestion` over Datasphere consumption APIs (analytic models). XSUAA OAuth flow. | Datasphere tenant + Space + OAuth client. |
+| **[SAP HANA](sap_hana_pipeline.md)** | `sap_hana_ingestion` for direct SQL — Cloud + on-prem + Calculation Views in `_SYS_BIC`. Pairs with `sap_hana_resource`. | HANA Cloud or on-prem tenant. |
+| **[Microsoft Dynamics 365 / Dataverse](dynamics365_pipeline.md)** | `odata_ingestion` v4 against Dataverse. Azure AD app permissions + workload identity option. | Azure AD app registration with Dataverse access. |
+| **[Microsoft Graph](msgraph_pipeline.md)** | `odata_ingestion` v4 against `graph.microsoft.com`. Users, mail, calendar, Teams, OneDrive, SharePoint. App permissions + workload identity. | Azure AD app registration with Graph application permissions. |
 
 ---
 
