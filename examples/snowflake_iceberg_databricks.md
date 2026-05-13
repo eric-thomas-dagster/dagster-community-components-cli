@@ -9,43 +9,47 @@ Iceberg is an open table format — the table's metadata + data files in object 
 ## Architecture
 
 ```
-                    ┌────────────────────────────────────────────────┐
-                    │  SNOWFLAKE (transformations + Iceberg writes)  │
-                    │                                                │
-   RAW.ORDERS  ─┐  ┌─►  Dynamic Iceberg Table                       │
-   RAW.CUSTOMERS├──┤    SILVER.CUSTOMER_METRICS                     │
-                 │  │    writes to s3://my-iceberg-bucket/.../       │
-                 │  │    (Iceberg metadata + data files)             │
-                 │  └─────────────────────┬──────────────────────────┘
-                 │                        │
-                 │           ┌────────────▼─────────────┐
-                 │           │  OBJECT STORAGE (S3/ADLS) │
-                 │           │  Iceberg table files       │
-                 │           │  + metadata.json snapshots │
-                 │           └────────────┬─────────────┘
-                 │                        │
-                 │  ┌─────────────────────▼──────────────────────────┐
-                 │  │  DATABRICKS (Unity Catalog external Iceberg)   │
-                 │  │                                                │
-                 │  │  CREATE TABLE uc_catalog.silver.customer_metrics
-                 │  │    USING ICEBERG LOCATION 's3://my-iceberg-bucket/...';
-                 │  │              │                                 │
-                 │  │              ▼                                 │
-                 │  │  Lakeflow Declarative Pipeline                 │
-                 │  │  customer_metrics_enrichment                   │
-                 │  │   → joins with main.dim.customers              │
-                 │  │   → writes gold.customer_metrics_enriched      │
-                 │  └────────────────────────────────────────────────┘
-                 │                        │
-                 │  ┌─────────────────────▼──────────────────────────┐
-                 │  │   DAGSTER (cross-engine orchestrator)          │
-                 │  │                                                │
-                 │  │   snowflake_workspace ──┐                      │
-                 │  │   external_snowflake_table  ──┐                │
-                 │  │   databricks_workspace ──────────►  catalog +  │
-                 │  │                                    sensors +   │
-                 │  │                                    lineage     │
-                 │  └────────────────────────────────────────────────┘
+   ┌────────────────────────────────────────┐
+   │  SNOWFLAKE                              │
+   │                                         │
+   │   RAW.ORDERS ─┐                         │
+   │              ├─► DYNAMIC ICEBERG TABLE  │
+   │   RAW.CUSTS ─┘   SILVER.CUSTOMER_METRICS│
+   │                  writes Iceberg files    │
+   │                  to s3://bucket/.../     │
+   └──────────────────────┬──────────────────┘
+                          │
+                ┌─────────▼─────────┐
+                │ S3 / ADLS / GCS   │
+                │ Iceberg metadata  │
+                │ + data files       │
+                └─────────┬─────────┘
+                          │
+   ┌──────────────────────▼──────────────────────────┐
+   │  DATABRICKS                                      │
+   │                                                  │
+   │  Job: customer_metrics_enrichment                │
+   │    └─ task_type: pipeline_task                   │
+   │        └─ Lakeflow Declarative Pipeline:         │
+   │             [REFRESH FOREIGN TABLE silver...]    │
+   │             CREATE OR REFRESH STREAMING TABLE    │
+   │               customer_metrics_enriched AS       │
+   │               SELECT ... FROM silver.customer_   │
+   │               metrics LEFT JOIN dim.customers    │
+   └──────────────────────┬───────────────────────────┘
+                          │
+   ┌──────────────────────▼───────────────────────────┐
+   │  DAGSTER                                          │
+   │                                                   │
+   │   snowflake_workspace                             │
+   │     → snowflake_silver/CUSTOMER_METRICS  ────┐    │
+   │                                              │    │
+   │   DatabricksWorkspaceComponent (official)    │    │
+   │     → databricks/lakeflow/                   │    │
+   │       customer_metrics_enriched  ◄───deps────┘    │
+   │                                                   │
+   │   cron_schedule: silver_to_gold_daily @ 06:00 UTC │
+   └───────────────────────────────────────────────────┘
 ```
 
 ## Components used
@@ -53,12 +57,10 @@ Iceberg is an open table format — the table's metadata + data files in object 
 | Component | Source | Role |
 |---|---|---|
 | `snowflake_workspace` | **community** (no official equivalent) | Imports Snowflake Dynamic Tables / Tasks / Streams / Snowpipes as Dagster assets. The Dynamic Iceberg Table becomes a materializable asset; a sensor observes refreshes. Sits on top of `dagster-snowflake`'s `SnowflakeResource`. |
-| `external_snowflake_table` | community | Declares the Iceberg landing table as an explicit external asset so the Iceberg handoff is visible in the lineage graph. |
-| `DatabricksWorkspaceComponent` | **official** (`dagster-databricks`) | Imports Databricks Jobs as Dagster assets (each job's tasks become assets). Lakeflow pipelines are surfaced by wrapping them in a Job with a `pipeline_task` — the standard Databricks pattern. |
-| `customer_metrics_uc_refreshed` (inline `@asset`) | this project | Calls `REFRESH TABLE` on the UC external Iceberg table after Snowflake completes — bridges the metadata gap so Databricks sees Snowflake's new snapshots. |
+| `DatabricksWorkspaceComponent` | **official** (`dagster-databricks`) | Imports Databricks Jobs as Dagster assets (each job's tasks become assets). Lakeflow pipelines are surfaced by wrapping them in a Job with a `pipeline_task` — the standard Databricks pattern, which is how this customer already has them defined. |
 | `cron_schedule` | community | Daily 06:00 UTC schedule that materializes the chain end-to-end in topological order. |
 
-Why a custom inline `@asset` for the UC refresh: it's a single SQL statement (`REFRESH TABLE main.silver.customer_metrics`) executed via `databricks-sql-connector`. No registry component justifies dedicated existence for it — but the operational glue between the two engines is the whole point of this blueprint.
+That's it — two assets in a deps chain (`snowflake_silver/CUSTOMER_METRICS` → `databricks/lakeflow/customer_metrics_enriched`), a schedule, and the two auto-generated sensors. Dagster sequences the materialization, the Lakeflow pipeline reads the Iceberg table when it runs.
 
 ## Prerequisites (you provide these)
 
@@ -151,7 +153,6 @@ export SNOWFLAKE_USER=dagster_user
 export SNOWFLAKE_PASSWORD=...
 export DATABRICKS_HOST=https://dbc-xxx.cloud.databricks.com
 export DATABRICKS_TOKEN=dapi...
-export DATABRICKS_HTTP_PATH=/sql/1.0/warehouses/abcd1234         # SQL warehouse for REFRESH TABLE
 export DATABRICKS_LAKEFLOW_JOB_ID=12345                           # the Job wrapping the Lakeflow pipeline
 
 # Validate the YAML loads + components resolve
@@ -164,14 +165,12 @@ uv run dg dev
 
 ## What you'll see in the catalog
 
-Four assets in a topological chain (left → right), one schedule, two sensors, one job, and freshness policies:
+Two assets in a deps chain, one schedule, two sensors, one freshness policy:
 
 | Asset | Type | Materialization |
 |---|---|---|
-| `snowflake_silver/CUSTOMER_METRICS` | Snowflake Dynamic Iceberg Table (observable) | Triggered by Snowflake's `TARGET_LAG = '1 hour'` or by the daily schedule; sensor observes external refreshes |
-| `silver/customer_metrics_iceberg` | External asset (Iceberg landing in S3) | Lineage only — no execution |
-| `customer_metrics_uc_refreshed` | Inline `@asset` (this project) | Executes `REFRESH TABLE main.silver.customer_metrics` on the Databricks SQL warehouse so UC picks up Snowflake's latest metadata |
-| `databricks/lakeflow/customer_metrics_enriched` | Databricks Job → Lakeflow pipeline (via official `DatabricksWorkspaceComponent`) | Triggers the Job that runs the Lakeflow pipeline; sensor observes Databricks-side runs |
+| `snowflake_silver/CUSTOMER_METRICS` | Snowflake Dynamic Iceberg Table | Triggered by Snowflake's `TARGET_LAG = '1 hour'` or by the daily schedule; sensor observes external refreshes |
+| `databricks/lakeflow/customer_metrics_enriched` | Databricks Job → Lakeflow pipeline (official `DatabricksWorkspaceComponent`) | `deps: [snowflake_silver/CUSTOMER_METRICS]`. Materializing triggers the Databricks Job that runs the Lakeflow pipeline; sensor observes Databricks-side runs |
 
 **Schedule:** `silver_to_gold_daily` — daily 06:00 UTC, materializes the chain in topological order.
 
@@ -179,10 +178,21 @@ Four assets in a topological chain (left → right), one schedule, two sensors, 
 - `snowflake_workspace`'s polling sensor (60s interval) emits AssetMaterializations whenever Snowflake's Dynamic Table refreshes outside of Dagster.
 - `DatabricksWorkspaceComponent`'s state polling picks up Job runs that fire outside of Dagster.
 
-**Freshness policies:**
-- `snowflake_silver/CUSTOMER_METRICS`: `maximum_lag_minutes: 90` — Snowflake's TARGET_LAG of 1h + 30min headroom
-- `customer_metrics_uc_refreshed`: `maximum_lag_minutes: 120`
-- (Lakeflow asset freshness: set per the customer's downstream SLA)
+**Freshness policy:** `snowflake_silver/CUSTOMER_METRICS` set to `maximum_lag_minutes: 90` (Snowflake's `TARGET_LAG=1h` + 30min headroom). Customer adds their own SLA on the Lakeflow asset based on the downstream consumer's expectations.
+
+## About metadata refresh
+
+If the Lakeflow pipeline reads from a UC external Iceberg table created via `CREATE TABLE ... USING ICEBERG LOCATION 's3://...'`, UC caches the metadata pointer — new Snowflake snapshots aren't auto-discovered. Fix this at the **Lakeflow SQL** level (where it costs nothing extra), not by adding a separate Dagster asset:
+
+```sql
+REFRESH FOREIGN TABLE main.silver.customer_metrics;    -- or REFRESH TABLE
+CREATE OR REFRESH STREAMING TABLE customer_metrics_enriched AS
+SELECT ...
+FROM main.silver.customer_metrics m
+LEFT JOIN main.dim.customers d USING (customer_id);
+```
+
+Alternative: connect UC to a REST catalog (Snowflake Open Catalog, Polaris, or UC-as-REST). The catalog tracks the current metadata version, and reads always see the latest snapshot without any refresh.
 
 ## Trade-offs & gotchas (read before you demo)
 
