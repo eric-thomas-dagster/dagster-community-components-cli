@@ -50,11 +50,11 @@ Dagster orchestrates both sides and surfaces the cross-engine lineage in one cat
 
 ## Components used
 
-| Component | Source | Role |
-|---|---|---|
-| [`snowflake_workspace`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/snowflake_workspace) | community | Imports Snowflake Dynamic Tables / Tasks / Streams / Snowpipes as Dagster assets. The Dynamic Iceberg Table becomes a materializable asset; a sensor observes refreshes. |
-| [`external_snowflake_table`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/external_assets/external_snowflake_table) | community | Declares the Iceberg landing table as an explicit external asset so the Iceberg handoff is visible in the lineage graph. |
-| [`databricks_workspace`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations/databricks_workspace) | community | Imports Databricks Lakeflow Declarative Pipelines (the flag is still `import_dlt_pipelines:` — DLT was renamed to Lakeflow in 2025), jobs, notebooks, ML endpoints. |
+| Component | Role |
+|---|---|
+| `snowflake_workspace` | Imports Snowflake Dynamic Tables / Tasks / Streams / Snowpipes as Dagster assets. The Dynamic Iceberg Table becomes a materializable asset; a sensor observes refreshes. |
+| `external_snowflake_table` | Declares the Iceberg landing table as an explicit external asset so the Iceberg handoff is visible in the lineage graph. |
+| `databricks_workspace` | Imports Databricks Lakeflow Declarative Pipelines (the flag is still `import_dlt_pipelines:` — DLT was renamed to Lakeflow in 2025), jobs, notebooks, ML endpoints. |
 
 All three are wrappers around the **official** `dagster-snowflake` / `dagster-databricks` packages — no reinvention.
 
