@@ -66,9 +66,45 @@ The applicator walks each silver asset's deps, finds their cron schedules (from 
 
 **Result for the 3-daily + 1-monthly case**: `on_cron("0 9 * * *").ignore(monthly_upstream)`. The asset fires daily without blocking on the monthly.
 
-### Way 2 — Two rules, AND-composed (the boundary case)
+### Way 2 — Tiered strategy (mixed-cadence with month-boundary gate)
 
-For the "fire daily, AND on the 1st also wait for monthly":
+The customer follow-up: *"what if I want daily when the dailies finish, but monthly when daily AND monthly finish?"* — fire on the daily cadence with the daily deps; on the month boundary, also wait for the monthly. The `tiered` strategy generates this exact pattern automatically:
+
+```yaml
+- selection: "group:silver"
+  derive_from_upstreams: true
+  strategy: tiered           # buckets upstreams by cron, ANDs them
+```
+
+For an asset with 3 daily upstreams + 1 monthly upstream, the applicator generates the equivalent of:
+
+```python
+# What the applicator hand-builds for you:
+condition = (
+    dg.AutomationCondition.in_latest_time_window()
+    & dg.AutomationCondition.cron_tick_passed("0 9 * * *").since_last_handled()
+    & dg.AutomationCondition.all_deps_updated_since_cron("0 9 * * *").ignore(monthly_keys)
+    & dg.AutomationCondition.all_deps_updated_since_cron("0 9 1 * *").allow(monthly_keys)
+).with_label("tiered_on_cron(0 9 * * *)")
+```
+
+**Mid-month evaluation** (e.g., Jan 15 9:30am): MONTHLY's most-recent tick is Jan 1 9am, monthly upstream already updated then → monthly clause is True. Daily deps fresh since today's 9am → asset fires.
+
+**Month boundary** (Feb 1 9:30am): the MONTHLY tick just rolled to Feb 1 9am — the monthly clause now demands monthly fresh since Feb 1 9am. Daily asset blocks until the monthly lands, then both fire together.
+
+**N-tier generalization**: works for any number of cron buckets (hourly + daily + weekly + monthly, etc.). Each tier gets its own `all_deps_updated_since_cron(...).allow(<tier_keys>)`. Single-tier degenerate case (all upstreams share one cron) falls back to plain `on_cron`.
+
+**Strategy comparison**:
+
+| Strategy | What it does | Use when |
+|---|---|---|
+| `most_frequent` | Fire on fastest upstream; **ignore** slower tiers entirely | Slow deps are nice-to-have but shouldn't block |
+| `least_frequent` | Fire on slowest upstream; require **all** deps | Downstream must see every dep's update |
+| `tiered` | Fire on fastest, **gate by each tier on its own cron boundary** | Want the daily/weekly/monthly heartbeat with boundary-aligned waits |
+
+### Way 2b — Two-rule AND via raw `cron` + `ignore_selection` / `allow_selection`
+
+Manual control over the cron strings (e.g., monthly tick set conservatively):
 
 ```yaml
 rules:
@@ -80,6 +116,8 @@ rules:
   # Same selection — Dagster ANDs them via composition implicit in fall-through
   # (For TRUE composition you write a custom Python rule; see below.)
 ```
+
+Use `tiered` for auto-derivation; use this when you need explicit cron control.
 
 ### Cadence propagation through deeper chains
 
