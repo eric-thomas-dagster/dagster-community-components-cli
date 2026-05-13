@@ -48,6 +48,87 @@ Without this component, you edit every asset's `defs.yaml` to set its automation
 
 [`automation_condition_applicator`](https://dagster-component-ui.vercel.app/c/automation_condition_applicator) — applies rules to a `Definitions` at project load time.
 
+## Full surface — every rule shape
+
+The component exposes six derive strategies, three escape-hatch shapes (cron / preset / python), and three modifiers. Pick exactly one **shape** per rule + optional **modifiers**:
+
+| Shape | YAML | What it produces |
+|---|---|---|
+| **Explicit cron** | `cron: "0 9 * * *"` (+ optional `ignore_selection` / `allow_selection`) | `on_cron(cron)` with optional dep filtering |
+| **Preset** | `preset: eager` (or `on_missing` / `any_downstream_conditions` / any zero-arg `AutomationCondition.*` factory) | The named factory's return value |
+| **Derive: most_frequent** | `derive_from_upstreams: true, strategy: most_frequent` | Fire on fastest upstream's cron, ignore slower deps |
+| **Derive: least_frequent** | `derive_from_upstreams: true, strategy: least_frequent` | Fire on slowest upstream's cron, require all deps |
+| **Derive: tiered** | `derive_from_upstreams: true, strategy: tiered` | Fire fastest + per-tier allow-gated wait (the "daily-with-monthly-boundary" pattern) |
+| **Derive: staggered** | `derive_from_upstreams: true, strategy: staggered, offset_minutes: 60` | Like most_frequent but cron shifted by N min |
+| **Derive: any_dep_updated** | `derive_from_upstreams: true, strategy: any_dep_updated` | No cron — fire whenever ANY upstream updates |
+| **Derive: all_deps_updated** | `derive_from_upstreams: true, strategy: all_deps_updated` | No cron — wait until ALL upstreams refreshed |
+| **Python escape hatch** | `python: "module.path:function_name"` | Calls user's function returning `AutomationCondition` |
+
+Modifiers (compose on top of any cron-producing shape):
+
+| Modifier | YAML | Effect |
+|---|---|---|
+| **Label override** | `label: "my_custom_label"` | Replace auto-label with explicit name (UI clarity) |
+| **Business hours only** | `business_hours_only: true` + optional `business_hours: "9-17"` / `business_days: "1-5"` (both follow cron syntax) | Constrain cron to working hours/days. Refuses for tiered + no-cron strategies |
+| **Min interval floor** | `min_interval_minutes: 60` | Debounce: replace cron if its period is faster than the floor. Picks sane round crons |
+
+### Business hours — defaults and overrides
+
+The defaults are US-style 9-5 weekdays:
+
+```yaml
+business_hours_only: true        # implies business_hours: "9-17", business_days: "1-5"
+```
+
+Both fields follow cron syntax — override for any region/schedule:
+
+```yaml
+# Retail dashboards — 8am-6pm Mon-Sat
+business_hours_only: true
+business_hours: "8-18"
+business_days: "1-6"
+
+# Always-on (24/7) — degenerate case, equivalent to no constraint
+business_hours_only: true
+business_hours: "0-23"
+business_days: "*"
+
+# Specific hour-of-day list — only run at 9am, noon, 3pm on weekdays
+business_hours_only: true
+business_hours: "9,12,15"
+business_days: "1-5"
+```
+
+**Timezone caveat**: cron expressions evaluate in the Dagster instance's timezone (usually UTC). If your team is in PST and you want 9am-5pm PST, the UTC equivalent is 17:00-01:00 — which wraps midnight and isn't expressible as a single cron range. Options:
+1. Run Dagster in your local TZ (simplest)
+2. Adjust to UTC manually (`business_hours: "17-23"` covers 9am-3pm PST only)
+3. Use the `python` escape hatch with `pytz`/`zoneinfo` for timezone math
+
+### Python escape hatch — the universal answer
+
+For anything YAML can't express (e.g. the `@automation_condition` decorator from [Dagster's arbitrary-Python docs](https://docs.dagster.io/guides/automate/declarative-automation/customizing-automation-conditions/arbitrary-python-automation-conditions)):
+
+```python
+# my_project/custom_conditions.py
+import dagster as dg
+
+def hourly_when_any_dep_updates() -> dg.AutomationCondition:
+    return (
+        dg.AutomationCondition.in_latest_time_window()
+        & dg.AutomationCondition.cron_tick_passed("0 * * * *").since_last_handled()
+        & dg.AutomationCondition.any_deps_updated()
+    ).with_label("hourly_when_any_dep_updates")
+```
+
+```yaml
+# defs/automation/defs.yaml
+rules:
+  - selection: "tag:cadence=event_driven"
+    python: "my_project.custom_conditions:hourly_when_any_dep_updates"
+```
+
+The function can take zero args, or one arg (the asset spec — for per-asset customization).
+
 ## The "3 daily + 1 monthly upstream" pattern (the customer ask)
 
 Customer Jay's exact problem: *"I have an asset with 3 daily upstreams and 1 monthly upstream. I want it to fire daily, ignoring the monthly. But on month boundaries I want both."*
