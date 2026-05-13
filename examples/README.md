@@ -43,6 +43,7 @@ The demos are grouped by what they need to run.
 - [Catalog Lineage Sync — multi-target](#catalog-lineage-sync--multi-target-no-auth-required-for-the-file-demo)
 - [Cross-vendor blueprints (not validated)](#cross-vendor-blueprints-not-validated)
 - [SAP family + OData ecosystem (one component covers many vendors)](#sap-family--odata-ecosystem-one-component-covers-many-vendors)
+- [Lakehouse — external Iceberg + Delta tables (cross-engine)](#lakehouse--external-iceberg--delta-tables-cross-engine)
 - [How a demo is built](#how-a-demo-is-built)
 - [Auth-required demos: comprehensive prereqs](#auth-required-demos-comprehensive-prereqs)
 
@@ -419,6 +420,19 @@ The OData protocol is the dominant enterprise-ERP machine interface. One `odata_
 | **[SAP HANA](sap_hana_pipeline.md)** | `sap_hana_ingestion` for direct SQL — Cloud + on-prem + Calculation Views in `_SYS_BIC`. Pairs with `sap_hana_resource`. | HANA Cloud or on-prem tenant. |
 | **[Microsoft Dynamics 365 / Dataverse](dynamics365_pipeline.md)** | `odata_ingestion` v4 against Dataverse. Azure AD app permissions + workload identity option. | Azure AD app registration with Dataverse access. |
 | **[Microsoft Graph](msgraph_pipeline.md)** | `odata_ingestion` v4 against `graph.microsoft.com`. Users, mail, calendar, Teams, OneDrive, SharePoint. App permissions + workload identity. | Azure AD app registration with Graph application permissions. |
+
+---
+
+## Lakehouse — external Iceberg + Delta tables (cross-engine)
+
+Read from and write to Iceberg / Delta tables owned by **other engines** — Snowflake, Trino, Spark, Flink, Databricks. The official `dagster_iceberg` / `dagster_deltalake` packages only ship IO managers (Dagster owns the table); these blueprints cover the cross-engine pattern using `pyiceberg` and `delta-rs` directly. No Spark / no JVM.
+
+| Blueprint | Pipeline | What you bring |
+|---|---|---|
+| **[Iceberg generic](iceberg_pipeline.md)** | `iceberg_catalog_resource` → `iceberg_ingestion` → transform → `dataframe_to_iceberg_table`. Catalog matrix: REST (Polaris / Nessie / Lakekeeper / Tabular / S3 Tables / Snowflake-managed) + Glue + Hive + Hadoop + SQL. | Iceberg catalog credentials + S3/ADLS/GCS storage. |
+| **[Delta generic](delta_pipeline.md)** | `delta_ingestion` → transform → `dataframe_to_delta_table`. Storage: S3 / ADLS / GCS / Unity Catalog / local. Append / overwrite / merge. | Delta table location + storage credentials. |
+| **[Snowflake → Dagster (cross-engine Iceberg)](snowflake_to_dagster_iceberg.md)** | Snowflake writes Iceberg via its managed catalog → Dagster reads via PyIceberg REST. Zero Snowflake compute per read. | Snowflake PAT + external volume IAM role + S3 read access. |
+| **[Databricks Delta → Dagster](databricks_delta_to_dagster.md)** | Databricks writes Delta (UC-managed or HMS) → Dagster reads via delta-rs. Either `uc://` scheme (UC token) or raw `s3://` / `az://` path. | Databricks PAT or OAuth M2M creds. |
 
 ---
 
