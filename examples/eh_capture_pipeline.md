@@ -90,14 +90,27 @@ az storage container create --account-name "$SA" -n curated
 ```bash
 EHN=my-eh-ns$(openssl rand -hex 4)
 az eventhubs namespace create -g "$RG" -n "$EHN" -l eastus --sku Standard
+
+# Assign system-managed identity (REQUIRED — without this, Capture silently fails to write).
+az eventhubs namespace identity assign --namespace-name "$EHN" -g "$RG" --system-assigned
+EH_PID=$(az eventhubs namespace show -g "$RG" --name "$EHN" --query identity.principalId -o tsv)
+SA_ID=$(az storage account show -g "$RG" -n "$SA" --query id -o tsv)
+
+# Grant the namespace's MI permission to write to the storage account.
+az role assignment create --assignee-object-id "$EH_PID" --assignee-principal-type ServicePrincipal \
+  --role "Storage Blob Data Contributor" --scope "$SA_ID"
+
+# Now create the event hub with Capture pointed at the storage account.
 az eventhubs eventhub create -g "$RG" --namespace-name "$EHN" -n my-event-hub \
   --partition-count 4 \
   --enable-capture true \
   --capture-interval 300 --capture-size-limit 314572800 \
   --destination-name EventHubArchive.AzureBlockBlob \
-  --storage-account "$SA" --blob-container eh-capture \
-  --archive-name-format "namespace/eventhub/{Year}/{Month}/{Day}/{Hour}/{Minute}/{Second}.parquet"
+  --storage-account "$SA_ID" --blob-container eh-capture \
+  --archive-name-format "{Namespace}/{EventHub}/{PartitionId}/{Year}/{Month}/{Day}/{Hour}/{Minute}/{Second}"
 ```
+
+> **Critical:** the `az eventhubs namespace identity assign` + `role assignment create` steps **must run before** `eventhub create --enable-capture`. Without them, the EH service can't write to the storage account and Capture stays silent — `eventhub show` reports `captureDescription.enabled: true` but the container remains empty. The CLI surfaces zero errors for this; the real error only appears in the namespace's Azure Activity Log. See the **Validation gaps** section below.
 
 Notes:
 - `--capture-interval 300` = flush every 5 minutes regardless of size.
@@ -138,6 +151,26 @@ ORDER BY total_events DESC;
 ```
 
 Build a Synapse external table on the same path for a stable BI surface.
+
+## Validation gaps (observed 2026-05-13)
+
+We attempted end-to-end validation in a session with a Pay-As-You-Go Azure subscription. The Dagster wiring loads cleanly (`dg check` passes), but Capture itself hit friction we couldn't resolve in-session:
+
+1. **EH Capture requires explicit RBAC config to write to a Storage Account.** The CLI command
+   ```bash
+   az eventhubs eventhub create ... --enable-capture true --destination-name EventHubArchive.AzureBlockBlob --storage-account $SA_ID --blob-container eh-capture --archive-name-format '...'
+   ```
+   succeeds without errors and `az eventhubs eventhub show` reports `captureDescription.enabled: true` — but **nothing writes to the container** until you also:
+   ```bash
+   az eventhubs namespace identity assign --namespace-name $EHN -g $RG --system-assigned
+   EH_PID=$(az eventhubs namespace show -g $RG --name $EHN --query identity.principalId -o tsv)
+   az role assignment create --assignee-object-id $EH_PID --assignee-principal-type ServicePrincipal --role "Storage Blob Data Contributor" --scope $(az storage account show -g $RG -n $SA --query id -o tsv)
+   ```
+2. **Even after RBAC is set up, ADLS Gen2 (`--hns true`) storage accounts may need additional config.** In our test, with all of the above in place plus 750+ events queued, the Capture container stayed empty for 5+ minutes. Likely an ADLS Gen2 interop edge case — the Azure activity log on the namespace will show the actual error, which the CLI doesn't surface.
+   - **Workaround:** start with **flat-namespace** storage (`--hns false`) for the first validation pass, switch to ADLS Gen2 only when you've confirmed the Capture+MI+role wiring works.
+3. **Capture's "skipEmptyArchives" defaults vary.** Some SDK / CLI versions default to writing empty Avro files on every interval (helpful for proving Capture is working at all); others skip them. If you don't see ANY files after 2 intervals, suspect RBAC / hns first, then check the activity log.
+
+These aren't blueprint bugs — they're real Azure operational hurdles that the `az eventhubs eventhub create --enable-capture` CLI silently glosses over. The walkthrough above includes the correct provisioning order; this section is the failure-mode reference if you hit the empty-container symptom.
 
 ## Trade-offs & gotchas
 

@@ -156,6 +156,17 @@ ORDER BY total_events DESC;
 
 For better performance, materialize a non-external BigQuery table from the external one on a schedule.
 
+## Validation gaps (observed alongside the Azure mirror, 2026-05-13)
+
+We attempted end-to-end validation in the same session as the [Azure EH Capture demo](eh_capture_pipeline.md). The Dagster wiring loads cleanly (`dg check` passes); for the GCP side, the expected operational hurdles are:
+
+1. **Pub/Sub Cloud Storage Subscription with Parquet output requires a topic schema.** The CLI flag `--cloud-storage-output-format parquet` fails until you've attached a Pub/Sub Schema (AVRO or Protocol Buffers) to the topic via `gcloud pubsub schemas create` + `topics update --schema`. Without it, the subscription falls back to text mode.
+   - **Workaround:** if you don't need Parquet-level schema enforcement, use `--cloud-storage-output-format text` (default) and set `file_ingestion`'s `format: jsonl` — works without any schema configuration on the topic side.
+2. **The Pub/Sub service account needs write access to the bucket.** The Pub/Sub Subscription writes via Google's managed service account `service-<projectNumber>@gcp-sa-pubsub.iam.gserviceaccount.com`. Grant it `roles/storage.objectAdmin` (or finer) on the bucket before creating the subscription. The Console wizard nudges you toward this; the `gcloud` CLI doesn't.
+3. **Subscription buffering can produce zero files for tens of minutes** on quiet topics. Set `--cloud-storage-max-duration 60s` aggressively for demo purposes.
+
+The walkthrough above includes the correct gcloud commands; this section is the reference if your bucket stays empty.
+
 ## Trade-offs & gotchas
 
 - **Subscription latency = your minimum batch size.** With `--cloud-storage-max-duration 60s`, files land every minute minimum. Add ~30s–1min for Dagster's sensor + asset.
