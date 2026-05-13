@@ -56,12 +56,12 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | Demo | Components | Highlights |
 |---|---|---|
 | [Kitchen Sink](kitchen_sink.md) | `synthetic_data_generator`, `unique_dedup`, `type_coercer`, `outlier_clipper`, `data_cleansing`, `dataframe_join`, `filter`, `select_columns`, `sort`, `summarize`, `rank`, `rfm_segmentation`, `dataframe_to_csv`, `cron_schedule` | The breadth showcase — ingest × 3 → quality × 4 → join → transform × 3 → analytics × 4 → sink × 5 → schedule |
-| [Pivot ↔ Unpivot](pivot_unpivot.md) | `csv_file_ingestion`, `pivot`, `unpivot`, `dataframe_to_csv` | Long↔wide round-trip on monthly sales |
-| [Router](router.md) | `csv_file_ingestion`, `router`, `dataframe_to_csv` | Multi-output conditional split (high/medium/low value orders) |
-| [Detect Changes](detect_changes.md) | `csv_file_ingestion`, `detect_changes`, `dataframe_to_csv` | CDC: classify rows insert/update/delete/unchanged |
-| [SCD Type 2](scd_type_2.md) | `csv_file_ingestion`, `scd_type_2`, `dataframe_to_csv` | History-tracking dimension load |
-| [Window Calculation](window_calculation.md) | `csv_file_ingestion`, `window_calculation`, `dataframe_to_csv` | Every supported window function on stock prices |
-| [Regional Orders Union](regional_orders.md) | `csv_file_ingestion`, `dataframe_union`, `dataframe_to_csv` | Merge multi-region order extracts with mismatched columns |
+| [Pivot ↔ Unpivot](pivot_unpivot.md) | `file_ingestion`, `pivot`, `unpivot`, `dataframe_to_csv` | Long↔wide round-trip on monthly sales |
+| [Router](router.md) | `file_ingestion`, `router`, `dataframe_to_csv` | Multi-output conditional split (high/medium/low value orders) |
+| [Detect Changes](detect_changes.md) | `file_ingestion`, `detect_changes`, `dataframe_to_csv` | CDC: classify rows insert/update/delete/unchanged |
+| [SCD Type 2](scd_type_2.md) | `file_ingestion`, `scd_type_2`, `dataframe_to_csv` | History-tracking dimension load |
+| [Window Calculation](window_calculation.md) | `file_ingestion`, `window_calculation`, `dataframe_to_csv` | Every supported window function on stock prices |
+| [Regional Orders Union](regional_orders.md) | `file_ingestion`, `dataframe_union`, `dataframe_to_csv` | Merge multi-region order extracts with mismatched columns |
 | [Data Hygiene](data_hygiene.md) | `synthetic_data_generator`, `audit_columns`, `schema_validator`, `field_mapper`, `map_values`, `data_masking`, `hash`, `surrogate_key`, `record_id`, `count_records` | Toolbox demo: audit / validate / rename / canonicalize / mask / hash / surrogate-key / number / aggregate |
 | [DataFrame Basics](dataframe_basics.md) | `filter`, `sort`, `unique_dedup`, `select_columns`, `data_cleansing`, `summarize`, `rank`, `running_total`, `transpose` | 9 fundamental shape-preserving transforms |
 | [Data Combination](data_combination.md) | `dataframe_join`, `dataframe_union`, `formula`, `type_coercer`, `datetime_parser`, `array_exploder`, `ts_filler` | Joins / unions / reshape / coerce — the toolbox for stitching shapes |
@@ -73,9 +73,9 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 
 | Demo | Components | Highlights |
 |---|---|---|
-| [Airline Passengers Forecast](passengers_forecast.md) | `csv_file_ingestion`, `datetime_parser`, `ets_forecast`, `dataframe_to_csv` | ETS / Holt-Winters time-series forecasting |
+| [Airline Passengers Forecast](passengers_forecast.md) | `file_ingestion`, `datetime_parser`, `ets_forecast`, `dataframe_to_csv` | ETS / Holt-Winters time-series forecasting |
 | [Forecast Comparison](forecast_comparison.md) | `time_series_generator`, `ts_filler`, `arima_forecast`, `ets_forecast`, `ts_compare`, `dataframe_to_csv`, `cron_schedule` | Head-to-head ARIMA vs ETS on the same series |
-| [Stocks — Anomaly Detection](stocks_anomaly.md) | `csv_file_ingestion`, `anomaly_detection`, `dataframe_to_csv` | Per-ticker z-score outlier flagging |
+| [Stocks — Anomaly Detection](stocks_anomaly.md) | `file_ingestion`, `anomaly_detection`, `dataframe_to_csv` | Per-ticker z-score outlier flagging |
 | [Sensor Gap-Fill](sensor_gapfill.md) | `synthetic_data_generator`, `ts_filler`, `running_total`, `dataframe_to_csv` | Fill missing hourly readings + cumulative metrics |
 | [Synthetic Metrics + Anomalies](synthetic_metrics.md) | `time_series_generator`, `anomaly_detection`, `dataframe_to_csv` | No-upstream synthetic generator |
 | [Forecasting (ARIMA + ETS)](forecasting.md) | `arima_forecast`, `ets_forecast`, `create_samples` | Side-by-side ARIMA + ETS with train/val/test splitting |
@@ -85,12 +85,12 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 
 | Demo | Components | Highlights |
 |---|---|---|
-| [Palmer Penguins](penguins.md) | `csv_file_ingestion`, `imputation`, `one_hot_encoding`, `feature_scaler`, `dataframe_to_parquet` | Canonical ML preprocessing |
-| [Iris Unsupervised](iris_unsupervised.md) | `csv_file_ingestion`, `feature_scaler`, `pca`, `k_means_clustering`, `dataframe_to_csv` | PCA + K-Means on the classic dataset |
-| [Wine ML Pipeline](wine_ml_pipeline.md) | `csv_file_ingestion`, `feature_scaler`, `create_samples`, `decision_tree_model`, `cross_validation`, `dataframe_to_csv`, `cron_schedule` | Feature scaling → train/test split → decision tree + cross-validation |
-| [Titanic Complete](titanic_complete.md) | `csv_file_ingestion`, `unique_dedup`, `data_cleansing`, `outlier_clipper`, `imputation`, `type_coercer`, `tile_binning`, `one_hot_encoding`, `logistic_regression_model`, `summarize`, `filter`, `dataframe_to_csv`, `cron_schedule` | Full DS workflow: ingest → quality → ETL → model → 3 outputs |
+| [Palmer Penguins](penguins.md) | `file_ingestion`, `imputation`, `one_hot_encoding`, `feature_scaler`, `dataframe_to_parquet` | Canonical ML preprocessing |
+| [Iris Unsupervised](iris_unsupervised.md) | `file_ingestion`, `feature_scaler`, `pca`, `k_means_clustering`, `dataframe_to_csv` | PCA + K-Means on the classic dataset |
+| [Wine ML Pipeline](wine_ml_pipeline.md) | `file_ingestion`, `feature_scaler`, `create_samples`, `decision_tree_model`, `cross_validation`, `dataframe_to_csv`, `cron_schedule` | Feature scaling → train/test split → decision tree + cross-validation |
+| [Titanic Complete](titanic_complete.md) | `file_ingestion`, `unique_dedup`, `data_cleansing`, `outlier_clipper`, `imputation`, `type_coercer`, `tile_binning`, `one_hot_encoding`, `logistic_regression_model`, `summarize`, `filter`, `dataframe_to_csv`, `cron_schedule` | Full DS workflow: ingest → quality → ETL → model → 3 outputs |
 | [Churn Prediction](churn.md) | `synthetic_data_generator`, `churn_prediction`, `dataframe_to_csv` | Rule-based scoring with interpretable risk factors |
-| [Market Basket](market_basket.md) | `csv_file_ingestion`, `market_basket_rules`, `filter`, `summarize`, `dataframe_to_csv`, `cron_schedule` | Apriori association rules with lift filter |
+| [Market Basket](market_basket.md) | `file_ingestion`, `market_basket_rules`, `filter`, `summarize`, `dataframe_to_csv`, `cron_schedule` | Apriori association rules with lift filter |
 | [ML Feature Engineering](ml_features.md) | `imputation`, `outlier_clipper`, `label_encoder`, `one_hot_encoding`, `feature_scaler`, `tile_binning` | 6 pre-modeling transforms (drop-in for sklearn pipelines) |
 
 ### Customer + subscription analytics
@@ -98,8 +98,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | Demo | Components | Highlights |
 |---|---|---|
 | [SaaS Metrics (synthetic Stripe)](saas_metrics.md) | `synthetic_data_generator`, `subscription_metrics`, `dataframe_to_csv` | MRR / ARR / churn / LTV / ARPU |
-| [Revenue Attribution](revenue_attribution.md) | `csv_file_ingestion`, `synthetic_data_generator`, `revenue_attribution`, `dataframe_to_csv` | Linear attribution across marketing channels |
-| [Retail LTV (CDP)](retail_ltv.md) | `csv_file_ingestion`, `data_cleansing`, `formula`, `ltv_prediction`, `dataframe_to_csv` | LTV on 542k real transactions |
+| [Revenue Attribution](revenue_attribution.md) | `file_ingestion`, `synthetic_data_generator`, `revenue_attribution`, `dataframe_to_csv` | Linear attribution across marketing channels |
+| [Retail LTV (CDP)](retail_ltv.md) | `file_ingestion`, `data_cleansing`, `formula`, `ltv_prediction`, `dataframe_to_csv` | LTV on 542k real transactions |
 | [Subscription Survival](subscription_survival.md) | `synthetic_data_generator`, `survival_analysis`, `dataframe_to_csv`, `cron_schedule` | Kaplan-Meier survival on SaaS subscriptions |
 | [Retail Analytics](retail_analytics.md) | `synthetic_data_generator`, `datetime_parser`, `rfm_segmentation`, `cohort_analysis`, `running_total`, `dataframe_to_csv`, `cron_schedule` | RFM segmentation + cohort analysis + running spend |
 | [A/B Full Pipeline](ab_full_pipeline.md) | `synthetic_data_generator`, `ab_treatments`, `ab_test_analysis`, `ab_trend`, `ab_controls`, `dataframe_to_csv`, `cron_schedule` | Assignment + analysis + trend + sample-size |
@@ -110,11 +110,11 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 
 | Demo | Components | Highlights |
 |---|---|---|
-| [Airports Cluster](airports_cluster.md) | `csv_file_ingestion`, `spatial_cluster`, `dataframe_to_csv` | DBSCAN on lat/lng (haversine, real km) |
-| [US Cities Pairwise Distances](cities_distance.md) | `csv_file_ingestion`, `dataframe_join`, `distance_calculator`, `filter`, `sort`, `dataframe_to_csv` | Haversine distance matrix |
-| [Cities Nearest Neighbors](cities_nn.md) | `csv_file_ingestion`, `nearest_neighbors`, `dataframe_to_csv` | Top-3 closest cities (sklearn KD-tree) |
-| [West Coast Cities Filter](west_coast_cities.md) | `csv_file_ingestion`, `bounding_box_filter`, `dataframe_to_csv` | Geographic bounding-box filter |
-| [Store Coverage](store_coverage.md) | `csv_file_ingestion`, `create_points`, `buffer`, `smooth`, `make_grid`, `spatial_join`, `summarize`, `dataframe_to_csv`, `cron_schedule` | Buffer + spatial_join + summarize coverage |
+| [Airports Cluster](airports_cluster.md) | `file_ingestion`, `spatial_cluster`, `dataframe_to_csv` | DBSCAN on lat/lng (haversine, real km) |
+| [US Cities Pairwise Distances](cities_distance.md) | `file_ingestion`, `dataframe_join`, `distance_calculator`, `filter`, `sort`, `dataframe_to_csv` | Haversine distance matrix |
+| [Cities Nearest Neighbors](cities_nn.md) | `file_ingestion`, `nearest_neighbors`, `dataframe_to_csv` | Top-3 closest cities (sklearn KD-tree) |
+| [West Coast Cities Filter](west_coast_cities.md) | `file_ingestion`, `bounding_box_filter`, `dataframe_to_csv` | Geographic bounding-box filter |
+| [Store Coverage](store_coverage.md) | `file_ingestion`, `create_points`, `buffer`, `smooth`, `make_grid`, `spatial_join`, `summarize`, `dataframe_to_csv`, `cron_schedule` | Buffer + spatial_join + summarize coverage |
 
 ### Public APIs (no auth)
 
@@ -132,9 +132,9 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [HN XML Parser](hn_xml.md) | `rest_api_fetcher`, `xml_parser`, `array_exploder`, `dataframe_to_csv` | xpath all the way down |
 | [Wikipedia Multi-page Scraper](wiki_scraper.md) | `rest_api_fetcher`, `html_parser`, `array_exploder`, `dataframe_to_json` | Scrape multiple wiki pages |
 | [Books Scraper (partitioned)](books_scraper.md) | `rest_api_fetcher`, `html_parser`, `dataframe_to_json` | Multi-page HTML scrape, one partition per page |
-| [arXiv PDF Extraction](arxiv_pdf.md) | `csv_file_ingestion`, `pdf_text_extractor`, `formula`, `dataframe_to_csv` | Document → text → word counts |
+| [arXiv PDF Extraction](arxiv_pdf.md) | `file_ingestion`, `pdf_text_extractor`, `formula`, `dataframe_to_csv` | Document → text → word counts |
 | [Cars → SQL](cars_sql.md) | `rest_api_fetcher`, `datetime_parser`, `formula`, `dataframe_to_table` | Land DataFrame in SQLite |
-| [Movies → SQL](movies_sql.md) | `csv_file_ingestion`, `type_coercer`, `formula`, `dataframe_to_table` | Real MovieLens Top 250 → SQLite |
+| [Movies → SQL](movies_sql.md) | `file_ingestion`, `type_coercer`, `formula`, `dataframe_to_table` | Real MovieLens Top 250 → SQLite |
 | [NBA Scoreboard](nba_scoreboard.md) | `rest_api_fetcher`, `json_path_extractor`, `dataframe_to_csv`, `http_poll_sensor` | `http_poll_sensor` with targeted hashing |
 | [RSS Sensor](rss_sensor.md) | `rest_api_fetcher`, `xml_parser`, `dataframe_to_csv`, `rss_feed_sensor` | Sensor-driven HN frontpage ingestion |
 
@@ -142,7 +142,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 
 | Demo | Components | Highlights |
 |---|---|---|
-| [OCSF + Security Lake](ocsf_security_lake.md) | `csv_file_ingestion`, `ocsf_normalizer`, `ocsf_validator`, `dataframe_to_parquet` | Synthetic Dagster+ events through full OCSF pipeline (no AWS required) |
+| [OCSF + Security Lake](ocsf_security_lake.md) | `file_ingestion`, `ocsf_normalizer`, `ocsf_validator`, `dataframe_to_parquet` | Synthetic Dagster+ events through full OCSF pipeline (no AWS required) |
 
 ### Op jobs (no asset materialized)
 
@@ -156,8 +156,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 
 | Demo | Components | Highlights |
 |---|---|---|
-| [DuckDB Warehouse](duckdb_warehouse.md) | `csv_file_ingestion`, `duckdb_io_manager`, `cron_schedule` | IO manager round-trip + downstream asset + daily schedule |
-| [External Scheduler](external_scheduler.md) | `csv_file_ingestion`, `summarize`, `dataframe_to_csv`, `asset_job` | Pattern for keeping Control-M / Autosys / cron as master with Dagster as executor (GraphQL launchRun) |
+| [DuckDB Warehouse](duckdb_warehouse.md) | `file_ingestion`, `duckdb_io_manager`, `cron_schedule` | IO manager round-trip + downstream asset + daily schedule |
+| [External Scheduler](external_scheduler.md) | `file_ingestion`, `summarize`, `dataframe_to_csv`, `asset_job` | Pattern for keeping Control-M / Autosys / cron as master with Dagster as executor (GraphQL launchRun) |
 | [Data Quality](data_quality.md) | `pandas_dataframe_check`, `pandera_asset_check`, `enhanced_data_quality_checks`, `freshness_check`, `great_expectations_check` | 4 asset_check components on a synthetic orders asset |
 | [Data Quality Checks](data_quality_checks.md) | `synthetic_data_generator`, `dataframe_to_csv`, `enhanced_data_quality_checks`, `pandas_dataframe_check`, `pandera_asset_check`, `freshness_check` | End-to-end DQ pipeline |
 | [Email Round-Trip (SMTP + IMAP)](email_roundtrip.md) | `synthetic_data_generator`, `smtp_send_asset`, `imap_inbox_source` | Fan out via SMTP, pull replies via IMAP. Local aiosmtpd + pure-Python IMAP stub for offline testing |

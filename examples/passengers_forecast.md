@@ -7,12 +7,12 @@ months of forecast. The output CSV interleaves history and forecast.
 ## Pipeline
 
 ```
-csv_file_ingestion → datetime_parser → ets_forecast → dataframe_to_csv
+file_ingestion → datetime_parser → ets_forecast → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Pull the canonical Box-Jenkins airline-passengers CSV (144 rows, monthly) |
+| 1 | `file_ingestion` | ingestion | Pull the canonical Box-Jenkins airline-passengers CSV (144 rows, monthly) |
 | 2 | `datetime_parser` | transformation | Parse `1949-01` strings into first-of-month datetimes |
 | 3 | `ets_forecast` | transformation | Fit ETS with additive trend + multiplicative seasonality, forecast 24 periods |
 | 4 | `dataframe_to_csv` | sink | Write 144 historical + 24 forecasted rows |

@@ -13,8 +13,8 @@ csv (today)     ─┘
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Yesterday's snapshot (with effective_from) |
-| 2 | `csv_file_ingestion` | ingestion | Today's incoming snapshot |
+| 1 | `file_ingestion` | ingestion | Yesterday's snapshot (with effective_from) |
+| 2 | `file_ingestion` | ingestion | Today's incoming snapshot |
 | 3 | `scd_type_2` | transformation | Merge: expire+insert when changed, keep when missing |
 | 4 | `dataframe_to_csv` | sink | Write the resulting SCD2 history |
 

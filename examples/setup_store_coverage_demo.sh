@@ -6,9 +6,9 @@
 # and tiles the area into a 50km grid for heatmap-style aggregation.
 #
 # Pipeline (9 components, all autoloaded by `dg`):
-#   csv_file_ingestion (stores)    → create_points → buffer → smooth
+#   file_ingestion (stores)    → create_points → buffer → smooth
 #                                                              │
-#   csv_file_ingestion (customers) → create_points              ├─→ spatial_join → summarize → CSV
+#   file_ingestion (customers) → create_points              ├─→ spatial_join → summarize → CSV
 #                                                              │
 #                                          → make_grid (heatmap tiles)              → CSV
 
@@ -42,7 +42,7 @@ EOF
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 9 community components"
-$CLI add csv_file_ingestion        --auto-install
+$CLI add file_ingestion        --auto-install
 $CLI add parametric_data_generator --auto-install
 $CLI add create_points             --auto-install
 $CLI add buffer                    --auto-install
@@ -53,7 +53,7 @@ $CLI add summarize                 --auto-install
 $CLI add dataframe_to_csv          --auto-install
 
 # Dual ingest + dual create_points + dual sinks via target_dir
-mkdir -p "src/$PKG/defs/customers_ingest"  # only needs defs.yaml; component code is in components/csv_file_ingestion/
+mkdir -p "src/$PKG/defs/customers_ingest"  # only needs defs.yaml; component code is in components/file_ingestion/
 mkdir -p "src/$PKG/defs/customers_points"  # only needs defs.yaml; component code is in components/create_points/
 mkdir -p "src/$PKG/defs/dataframe_to_csv_grid"  # only needs defs.yaml; component code is in components/dataframe_to_csv/
 $CLI add cron_schedule         --auto-install
@@ -61,8 +61,8 @@ $CLI add cron_schedule         --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 # --- Stores branch ---
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: stores_raw
   file_path: /tmp/stores.csv

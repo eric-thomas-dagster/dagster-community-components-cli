@@ -10,7 +10,7 @@
 #
 # Pipeline (12 components, all autoloaded by `dg`):
 #                                                                      ┌─→ logistic_regression  → CSV
-#   csv_file_ingestion                                                  │
+#   file_ingestion                                                  │
 #     → unique_dedup → data_cleansing → outlier_clipper                 │
 #     → imputation → type_coercer → tile_binning → one_hot_encoding ─┬─┘
 #                                                                    │
@@ -34,7 +34,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 12 community components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion        --auto-install
+$CLI add file_ingestion        --auto-install
 $CLI add unique_dedup              --auto-install
 $CLI add data_cleansing            --auto-install
 $CLI add outlier_clipper           --auto-install
@@ -55,8 +55,8 @@ $CLI add cron_schedule         --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 # --- 1. Ingest ---
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: titanic_raw
   file_path: https://raw.githubusercontent.com/datasciencedojo/datasets/master/titanic.csv

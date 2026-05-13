@@ -57,7 +57,7 @@ target.
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read partitioned source CSV |
+| 1 | `file_ingestion` | ingestion | Read partitioned source CSV |
 | 2 | `summarize` | transformation | Per-partition group-by aggregate |
 | 3 | `dataframe_to_csv` | sink | Write `daily_revenue_{partition_key}.csv` |
 | 4 | **`asset_job`** | infrastructure | **Bundles the 3 assets above into the named job `daily_revenue_refresh` that the scheduler launches.** Without this, you'd target `__ASSET_JOB` (auto-generated, materializes *everything*), so the scheduler would silently start running newly-added assets it never authorized. The `asset_job` keeps the scheduler-side contract stable: *"run job=daily_revenue_refresh, partition=$ODATE"*. |

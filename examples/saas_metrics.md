@@ -8,12 +8,12 @@ churn rate, LTV, and ARPU.
 ## Pipeline
 
 ```
-csv_file_ingestion → subscription_metrics → dataframe_to_csv
+file_ingestion → subscription_metrics → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Load the synthetic subscriptions CSV |
+| 1 | `file_ingestion` | ingestion | Load the synthetic subscriptions CSV |
 | 2 | `subscription_metrics` | analytics | Compute MRR / ARR / churn / LTV / ARPU from Stripe-shaped data |
 | 3 | `dataframe_to_csv` | sink | One-row metrics snapshot |
 

@@ -7,12 +7,12 @@ counts, writes a per-paper summary CSV.
 ## Pipeline
 
 ```
-csv_file_ingestion → pdf_text_extractor → formula → dataframe_to_csv
+file_ingestion → pdf_text_extractor → formula → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Load a 2-row manifest of `paper, path` |
+| 1 | `file_ingestion` | ingestion | Load a 2-row manifest of `paper, path` |
 | 2 | `pdf_text_extractor` | transformation | Extract text from each PDF with pdfplumber |
 | 3 | `formula` | transformation | Compute `char_count` + `word_count`; drop the giant text column |
 | 4 | `dataframe_to_csv` | sink | Per-paper summary |

@@ -40,15 +40,15 @@ EOF
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing components"
-$CLI add csv_file_ingestion --auto-install
-mkdir -p "src/$PKG/defs/csv_today"  # only needs defs.yaml; component code is in components/csv_file_ingestion/
+$CLI add file_ingestion --auto-install
+mkdir -p "src/$PKG/defs/csv_today"  # only needs defs.yaml; component code is in components/file_ingestion/
 $CLI add detect_changes     --auto-install
 $CLI add dataframe_to_csv   --auto-install
 
 echo ">>> Writing demo defs.yaml"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: customers_yesterday
   file_path: /tmp/diff_demo/customers_yesterday.csv
@@ -57,7 +57,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/csv_today/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: customers_today
   file_path: /tmp/diff_demo/customers_today.csv

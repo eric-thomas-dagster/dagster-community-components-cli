@@ -10,7 +10,7 @@ Builds a more substantial ML pipeline than the existing wine_demo:
 Pipeline (8 components, all autoloaded by `dg`):
                          ┌─→ create_samples ─┐
                          │                    ├─→ decision_tree (predictions)        → CSV
-    csv_file_ingestion ─→ feature_scaler ──┐ │
+    file_ingestion ─→ feature_scaler ──┐ │
                          │                  ├┴→ decision_tree (feature_importance)   → CSV
                          └────────────────→ cross_validation                          → CSV
 
@@ -18,7 +18,7 @@ Pipeline (8 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 1 | `file_ingestion` | ingestion | Read source CSV |
 | 2 | `feature_scaler` | transformation | Standardize features |
 | 3 | `create_samples` | transformation | Train/test split |
 | 4 | `decision_tree_model` | analytics | Fit decision tree |

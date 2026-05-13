@@ -11,7 +11,7 @@
 # Pipeline (8 components, all autoloaded by `dg`):
 #                          ┌─→ create_samples ─┐
 #                          │                    ├─→ decision_tree (predictions)        → CSV
-#     csv_file_ingestion ─→ feature_scaler ──┐ │
+#     file_ingestion ─→ feature_scaler ──┐ │
 #                          │                  ├┴→ decision_tree (feature_importance)   → CSV
 #                          └────────────────→ cross_validation                          → CSV
 
@@ -31,7 +31,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 8 community components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion    --auto-install
+$CLI add file_ingestion    --auto-install
 $CLI add feature_scaler        --auto-install
 $CLI add create_samples        --auto-install
 $CLI add decision_tree_model   --auto-install
@@ -46,8 +46,8 @@ $CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: wine_raw
   file_path: https://archive.ics.uci.edu/ml/machine-learning-databases/wine-quality/winequality-red.csv

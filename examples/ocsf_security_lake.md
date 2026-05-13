@@ -21,7 +21,7 @@ csv (synthetic) → ocsf_normalizer → ocsf_validator (asset_check)
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | 25 synthetic Dagster+ audit events |
+| 1 | `file_ingestion` | ingestion | 25 synthetic Dagster+ audit events |
 | 2 | `ocsf_normalizer` | transformation | Map source events → OCSF v1.1 |
 | 3 | `ocsf_validator` | check | Asset check: OCSF v1.x conformance |
 | 4 | `dataframe_to_parquet` | sink | Write OCSF rows (snappy Parquet) |

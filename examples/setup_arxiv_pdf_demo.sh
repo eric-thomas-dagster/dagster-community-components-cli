@@ -7,7 +7,7 @@
 # the document → text-extract → summarize pattern.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
-#     csv_file_ingestion → pdf_text_extractor → formula → dataframe_to_csv
+#     file_ingestion → pdf_text_extractor → formula → dataframe_to_csv
 
 set -euo pipefail
 
@@ -37,15 +37,15 @@ EOF
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 4 community components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion    --auto-install
+$CLI add file_ingestion    --auto-install
 $CLI add pdf_text_extractor    --auto-install
 $CLI add formula               --auto-install
 $CLI add dataframe_to_csv      --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: papers_manifest
   file_path: /tmp/arxiv_papers/manifest.csv

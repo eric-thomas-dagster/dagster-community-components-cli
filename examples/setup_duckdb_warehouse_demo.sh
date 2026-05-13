@@ -7,7 +7,7 @@
 # cron_schedule that re-materializes the chain at 02:00 local time.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
-#   csv_file_ingestion → duckdb_io_manager (resource)
+#   file_ingestion → duckdb_io_manager (resource)
 #                     → iris_summary (Python asset, downstream)
 #                     → cron_schedule (job + 02:00 schedule)
 #
@@ -29,14 +29,14 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --refresh --from dagster-community-components-cli dagster-component --refresh"
 
 echo ">>> Installing 3 community components"
-$CLI add csv_file_ingestion --auto-install
+$CLI add file_ingestion --auto-install
 $CLI add duckdb_io_manager  --auto-install
 $CLI add cron_schedule      --auto-install
 
 echo ">>> Writing defs.yaml"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: iris_table
   file_path: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv

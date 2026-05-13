@@ -13,8 +13,8 @@ csv (today)     ─┘
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Yesterday: C001-C004 |
-| 2 | `csv_file_ingestion` | ingestion | Today: C001-C003, C005 (no C004); C003's plan_tier upgraded |
+| 1 | `file_ingestion` | ingestion | Yesterday: C001-C004 |
+| 2 | `file_ingestion` | ingestion | Today: C001-C003, C005 (no C004); C003's plan_tier upgraded |
 | 3 | `detect_changes` | transformation | Outer-merge + classify |
 | 4 | `dataframe_to_csv` | sink | Write changeset |
 

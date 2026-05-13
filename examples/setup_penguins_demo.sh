@@ -6,7 +6,7 @@
 # to /tmp/penguins_features.parquet.
 #
 # Pipeline (5 components, all autoloaded by `dg`):
-#     csv_file_ingestion → imputation → one_hot_encoding → feature_scaler → dataframe_to_parquet
+#     file_ingestion → imputation → one_hot_encoding → feature_scaler → dataframe_to_parquet
 
 set -euo pipefail
 
@@ -24,7 +24,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 5 community components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion    --auto-install
+$CLI add file_ingestion    --auto-install
 $CLI add imputation            --auto-install
 $CLI add one_hot_encoding      --auto-install
 $CLI add feature_scaler        --auto-install
@@ -32,8 +32,8 @@ $CLI add dataframe_to_parquet  --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: penguins_raw
   file_path: https://raw.githubusercontent.com/allisonhorst/palmerpenguins/main/inst/extdata/penguins.csv

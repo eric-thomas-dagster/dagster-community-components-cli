@@ -7,7 +7,7 @@
 # antecedent count, and writes the strong rules to CSV.
 #
 # Pipeline (7 components, all autoloaded by `dg`):
-#   csv_file_ingestion → market_basket_rules ─┬─→ filter (lift > 1.5)  → CSV (strong rules)
+#   file_ingestion → market_basket_rules ─┬─→ filter (lift > 1.5)  → CSV (strong rules)
 #                                              │
 #                                              └─→ summarize (top antecedents) → CSV
 
@@ -58,7 +58,7 @@ PY
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 5 community components"
-$CLI add csv_file_ingestion    --auto-install
+$CLI add file_ingestion    --auto-install
 $CLI add market_basket_rules   --auto-install
 $CLI add filter                --auto-install
 $CLI add summarize             --auto-install
@@ -68,8 +68,8 @@ $CLI add cron_schedule         --auto-install
 
 echo ">>> Writing demo defs.yaml"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: order_line_items
   file_path: /tmp/baskets.csv

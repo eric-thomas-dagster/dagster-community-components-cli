@@ -8,12 +8,12 @@ writes a flagged report.
 ## Pipeline
 
 ```
-csv_file_ingestion → anomaly_detection → dataframe_to_csv
+file_ingestion → anomaly_detection → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Pull vega's stocks.csv (560 rows: MSFT/AMZN/IBM/GOOG/AAPL × 112 months each) |
+| 1 | `file_ingestion` | ingestion | Pull vega's stocks.csv (560 rows: MSFT/AMZN/IBM/GOOG/AAPL × 112 months each) |
 | 2 | `anomaly_detection` | analytics | z-score within each `symbol` group; flag points beyond 2.5σ |
 | 3 | `dataframe_to_csv` | sink | Write the flagged report |
 

@@ -17,7 +17,7 @@ csv (long) → pivot (wide) → unpivot (long-again) → CSV
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | 9 rows: month × region × revenue |
+| 1 | `file_ingestion` | ingestion | 9 rows: month × region × revenue |
 | 2 | `pivot` | transformation | Long → wide (regions become column headers) |
 | 3 | `unpivot` | transformation | Wide → long (back to original shape) |
 | 4 | `dataframe_to_csv` | sink | Wide report |

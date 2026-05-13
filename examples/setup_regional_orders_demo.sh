@@ -8,7 +8,7 @@
 # dataframe_to_csv writes the unified extract.
 #
 # Pipeline (5 components, all autoloaded by `dg`):
-#     csv_file_ingestion x 3 → dataframe_union → dataframe_to_csv
+#     file_ingestion x 3 → dataframe_union → dataframe_to_csv
 
 set -euo pipefail
 
@@ -50,20 +50,20 @@ EOF
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing components — csv_file_ingestion x3 + union + sink"
-$CLI add csv_file_ingestion --auto-install --target-dir "src/$PKG/components/csv_file_ingestion"
+echo ">>> Installing components — file_ingestion x3 + union + sink"
+$CLI add file_ingestion --auto-install --target-dir "src/$PKG/components/file_ingestion"
 $CLI add dataframe_union    --auto-install
 $CLI add dataframe_to_csv   --auto-install
 
 # Three separate defs/ directories so each gets its own defs.yaml — the
-# class file is shared (one components/csv_file_ingestion/), the instance
+# class file is shared (one components/file_ingestion/), the instance
 # config differs.
 mkdir -p "src/$PKG/defs/orders_na" "src/$PKG/defs/orders_eu" "src/$PKG/defs/orders_apac"
 
 echo ">>> Writing demo defs.yaml for each component"
 
 cat > "src/$PKG/defs/orders_na/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: orders_na
   file_path: /tmp/orders_na.csv
@@ -72,7 +72,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/orders_eu/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: orders_eu
   file_path: /tmp/orders_eu.csv
@@ -81,7 +81,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/orders_apac/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: orders_apac
   file_path: /tmp/orders_apac.csv

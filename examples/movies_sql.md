@@ -6,14 +6,14 @@ by GroupLens), parses year out of the title, and lands the result in SQLite via
 the same pipeline lands data there instead — that's the point.
 
 ```
-csv_file_ingestion → type_coercer → formula → dataframe_to_table
+file_ingestion → type_coercer → formula → dataframe_to_table
 ```
 
 ## Components used
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read MovieLens-derived CSV |
+| 1 | `file_ingestion` | ingestion | Read MovieLens-derived CSV |
 | 2 | `type_coercer` | transformation | Coerce `year` → int, `rating` → float |
 | 3 | `formula` | transformation | Compute `decade` from `year` |
 | 4 | `dataframe_to_table` | sink | Write to SQLite via SQLAlchemy |

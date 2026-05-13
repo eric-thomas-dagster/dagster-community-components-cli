@@ -11,7 +11,7 @@ csv → window_calculation → CSV
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | 30 rows of synthetic close prices |
+| 1 | `file_ingestion` | ingestion | 30 rows of synthetic close prices |
 | 2 | `window_calculation` | transformation | row_number, rank, dense_rank, lag, lead, cumsum, moving_avg(3), moving_sum(5) |
 | 3 | `dataframe_to_csv` | sink | Write the augmented DataFrame |
 

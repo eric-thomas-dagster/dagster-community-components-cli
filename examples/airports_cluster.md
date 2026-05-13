@@ -8,12 +8,12 @@ isolated airports as noise (-1).
 ## Pipeline
 
 ```
-csv_file_ingestion → spatial_cluster → dataframe_to_csv
+file_ingestion → spatial_cluster → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Pull vega's airports.csv (~3.4k US airports + lat/lng) |
+| 1 | `file_ingestion` | ingestion | Pull vega's airports.csv (~3.4k US airports + lat/lng) |
 | 2 | `spatial_cluster` | analytics | DBSCAN with `eps_km=50` and `min_samples=5`; uses haversine distance |
 | 3 | `dataframe_to_csv` | sink | Write `iata`, `city`, `state`, `cluster_id` |
 

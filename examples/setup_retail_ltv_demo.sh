@@ -6,7 +6,7 @@
 # per-line revenue, predicts each customer's 12-month lifetime value.
 #
 # Pipeline (5 components, all autoloaded by `dg`):
-#     csv_file_ingestion → data_cleansing → formula
+#     file_ingestion → data_cleansing → formula
 #                        → ltv_prediction → dataframe_to_csv
 
 set -euo pipefail
@@ -25,7 +25,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 5 community components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion    --auto-install
+$CLI add file_ingestion    --auto-install
 $CLI add data_cleansing        --auto-install
 $CLI add formula               --auto-install
 $CLI add ltv_prediction        --auto-install
@@ -34,8 +34,8 @@ $CLI add dataframe_to_csv      --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest — UCI Online Retail (UK e-commerce 2010-2011, ~540k transactions)
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: retail_raw
   file_path: https://raw.githubusercontent.com/databricks/Spark-The-Definitive-Guide/master/data/retail-data/all/online-retail-dataset.csv

@@ -7,16 +7,16 @@ self-pairs, sorts shortest-first, writes a CSV.
 ## Pipeline
 
 ```
-csv_file_ingestion ─┐
+file_ingestion ─┐
                      ├─→ dataframe_join (cross)
-csv_file_ingestion ─┘   → distance_calculator → filter
+file_ingestion ─┘   → distance_calculator → filter
                                               → sort
                                               → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1a / 1b | `csv_file_ingestion` × 2 | ingestion | Same CSV, two distinct assets so the cross join has two inputs |
+| 1a / 1b | `file_ingestion` × 2 | ingestion | Same CSV, two distinct assets so the cross join has two inputs |
 | 2 | `dataframe_join` | transformation | `how: cross` — Cartesian product (10 × 10 = 100 pairs); `suffixes: [_origin, _dest]` |
 | 3 | `distance_calculator` | analytics | Haversine distance from `lat_origin/lng_origin` → `lat_dest/lng_dest` in km |
 | 4 | `filter` | transformation | Drop rows where origin == dest |

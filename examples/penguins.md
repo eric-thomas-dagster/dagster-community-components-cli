@@ -7,12 +7,12 @@ writes the ML-ready feature matrix to Parquet.
 ## Pipeline
 
 ```
-csv_file_ingestion → imputation → one_hot_encoding → feature_scaler → dataframe_to_parquet
+file_ingestion → imputation → one_hot_encoding → feature_scaler → dataframe_to_parquet
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Pull penguins CSV |
+| 1 | `file_ingestion` | ingestion | Pull penguins CSV |
 | 2 | `imputation` | transformation | Fill missing numeric values (mean), categorical (mode) |
 | 3 | `one_hot_encoding` | transformation | Expand `island`, `sex`, `species` into binary columns |
 | 4 | `feature_scaler` | transformation | StandardScaler on the four numeric measurements |

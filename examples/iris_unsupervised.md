@@ -12,7 +12,7 @@ pipeline that runs both algorithms in sequence:
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 1 | `file_ingestion` | ingestion | Read source CSV |
 | 2 | `feature_scaler` | transformation | Standardize features |
 | 3 | `pca` | analytics | PCA dimensionality reduction |
 | 4 | `k_means_clustering` | analytics | K-Means clustering |

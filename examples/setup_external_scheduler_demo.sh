@@ -43,14 +43,14 @@ EOF
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 3 community components"
-$CLI add csv_file_ingestion --auto-install
+$CLI add file_ingestion --auto-install
 $CLI add summarize          --auto-install
 $CLI add dataframe_to_csv   --auto-install
 
 echo ">>> Writing demo defs.yaml (daily-partitioned)"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: orders_raw
   file_path: /tmp/extsched_demo/orders.csv

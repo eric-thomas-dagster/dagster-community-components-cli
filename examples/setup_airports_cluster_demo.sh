@@ -7,7 +7,7 @@
 # and labels everything else as noise (-1).
 #
 # Pipeline (3 components, all autoloaded by `dg`):
-#     csv_file_ingestion → spatial_cluster → dataframe_to_csv
+#     file_ingestion → spatial_cluster → dataframe_to_csv
 
 set -euo pipefail
 
@@ -25,14 +25,14 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 3 community components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion    --auto-install
+$CLI add file_ingestion    --auto-install
 $CLI add spatial_cluster       --auto-install
 $CLI add dataframe_to_csv      --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: airports_raw
   file_path: https://raw.githubusercontent.com/vega/vega-datasets/main/data/airports.csv

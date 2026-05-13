@@ -6,7 +6,7 @@ runs apriori to find frequent itemsets + derive association rules
 antecedent count, and writes the strong rules to CSV.
 
 Pipeline (7 components, all autoloaded by `dg`):
-  csv_file_ingestion → market_basket_rules ─┬─→ filter (lift > 1.5)  → CSV (strong rules)
+  file_ingestion → market_basket_rules ─┬─→ filter (lift > 1.5)  → CSV (strong rules)
                                              │
                                              └─→ summarize (top antecedents) → CSV
 
@@ -14,7 +14,7 @@ Pipeline (7 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 1 | `file_ingestion` | ingestion | Read source CSV |
 | 2 | `market_basket_rules` | analytics | Apriori association rules |
 | 3 | `filter` | transformation | Row filter by predicate |
 | 4 | `summarize` | transformation | Group-by aggregate |

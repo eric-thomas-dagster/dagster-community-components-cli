@@ -5,7 +5,7 @@ A **real Dagster project** — assets persisted to a local DuckDB file via the
 DataFrame back through the IO manager, and a daily cron schedule.
 
 ```
-csv_file_ingestion → duckdb_io_manager (resource, persists every asset)
+file_ingestion → duckdb_io_manager (resource, persists every asset)
                   → iris_summary (Python asset, loads via IO manager)
                   → cron_schedule (job + 02:00 daily)
 ```
@@ -14,7 +14,7 @@ csv_file_ingestion → duckdb_io_manager (resource, persists every asset)
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Pull the iris dataset |
+| 1 | `file_ingestion` | ingestion | Pull the iris dataset |
 | 2 | `duckdb_io_manager` | io_manager | Persists each asset materialization to a DuckDB table |
 | 3 | (Python asset) | n/a | Downstream summary that loads via the IO manager |
 | 4 | `cron_schedule` | infrastructure | Daily 02:00 re-materialization |

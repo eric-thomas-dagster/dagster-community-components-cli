@@ -5,9 +5,9 @@ customers fall inside each zone, computes per-store coverage stats,
 and tiles the area into a 50km grid for heatmap-style aggregation.
 
 Pipeline (9 components, all autoloaded by `dg`):
-  csv_file_ingestion (stores)    → create_points → buffer → smooth
+  file_ingestion (stores)    → create_points → buffer → smooth
                                                              │
-  csv_file_ingestion (customers) → create_points              ├─→ spatial_join → summarize → CSV
+  file_ingestion (customers) → create_points              ├─→ spatial_join → summarize → CSV
                                                              │
                                          → make_grid (heatmap tiles)              → CSV
 
@@ -15,7 +15,7 @@ Pipeline (9 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 1 | `file_ingestion` | ingestion | Read source CSV |
 | 2 | `create_points` | analytics | lat/lng → shapely Points |
 | 3 | `buffer` | analytics | Polygon buffer (radius) |
 | 4 | `smooth` | analytics | Simplify geometry |

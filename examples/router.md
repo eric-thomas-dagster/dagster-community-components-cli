@@ -15,7 +15,7 @@ csv → router ─────┼─→ medium_value_orders → CSV
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | 30 synthetic orders with mixed totals |
+| 1 | `file_ingestion` | ingestion | 30 synthetic orders with mixed totals |
 | 2 | `router` | transformation | Split into high/medium/low by `total` |
 | 3-5 | `dataframe_to_csv` × 3 | sink | One CSV per bucket |
 

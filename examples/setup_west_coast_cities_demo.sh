@@ -7,7 +7,7 @@
 # is a CSV of just those cities.
 #
 # Pipeline (3 components, all autoloaded by `dg`):
-#     csv_file_ingestion → bounding_box_filter → dataframe_to_csv
+#     file_ingestion → bounding_box_filter → dataframe_to_csv
 
 set -euo pipefail
 
@@ -40,14 +40,14 @@ EOF
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 3 community components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion   --auto-install
+$CLI add file_ingestion   --auto-install
 $CLI add bounding_box_filter  --auto-install
 $CLI add dataframe_to_csv     --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: us_cities
   file_path: /tmp/us_cities.csv

@@ -9,12 +9,12 @@ recommended action.
 ## Pipeline
 
 ```
-csv_file_ingestion → churn_prediction → dataframe_to_csv
+file_ingestion → churn_prediction → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Load 200 synthetic per-customer aggregates |
+| 1 | `file_ingestion` | ingestion | Load 200 synthetic per-customer aggregates |
 | 2 | `churn_prediction` | analytics | Score each customer (inactivity threshold = 60d, lookback = 365d) and assign a risk level + recommendation |
 | 3 | `dataframe_to_csv` | sink | Write per-customer report |
 

@@ -9,7 +9,7 @@ whole journey in a single pipeline:
 
 Pipeline (12 components, all autoloaded by `dg`):
                                                                      ┌─→ logistic_regression  → CSV
-  csv_file_ingestion                                                  │
+  file_ingestion                                                  │
     → unique_dedup → data_cleansing → outlier_clipper                 │
     → imputation → type_coercer → tile_binning → one_hot_encoding ─┬─┘
                                                                    │
@@ -21,7 +21,7 @@ Pipeline (12 components, all autoloaded by `dg`):
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 1 | `file_ingestion` | ingestion | Read source CSV |
 | 2 | `unique_dedup` | transformation | Drop duplicates |
 | 3 | `data_cleansing` | transformation | Clean text fields |
 | 4 | `outlier_clipper` | transformation | Clip IQR outliers |

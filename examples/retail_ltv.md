@@ -9,12 +9,12 @@ Bronze/Silver/Gold/Platinum.
 ## Pipeline
 
 ```
-csv_file_ingestion → data_cleansing → formula → ltv_prediction → dataframe_to_csv
+file_ingestion → data_cleansing → formula → ltv_prediction → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Pull the UCI dataset (Databricks-mirrored CSV, ~45MB, 542k rows) |
+| 1 | `file_ingestion` | ingestion | Pull the UCI dataset (Databricks-mirrored CSV, ~45MB, 542k rows) |
 | 2 | `data_cleansing` | transformation | Drop rows where `CustomerID` is null (~25% of raw — anonymous walk-ins) |
 | 3 | `formula` | transformation | Compute `amount = Quantity * UnitPrice` per line |
 | 4 | `ltv_prediction` | analytics | Predict 12-month LTV per customer; bucket into value segments |

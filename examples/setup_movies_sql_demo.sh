@@ -9,9 +9,9 @@
 #
 #   archive_fetcher (ml-latest-small.zip)
 #       │
-#       ├──> csv_file_ingestion (movies.csv)  ──────────────────────┐
+#       ├──> file_ingestion (movies.csv)  ──────────────────────┐
 #       │                                                            │
-#       └──> csv_file_ingestion (ratings.csv)                        │
+#       └──> file_ingestion (ratings.csv)                        │
 #                   │                                                │
 #                   ├──> summarize  (avg_rating + num_ratings per movie)
 #                   │       │
@@ -46,7 +46,7 @@ CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 8 community components into src/$PKG/components/ + defs/"
 $CLI add archive_fetcher       --auto-install
-$CLI add csv_file_ingestion    --auto-install
+$CLI add file_ingestion    --auto-install
 $CLI add summarize             --auto-install
 $CLI add formula               --auto-install
 $CLI add filter                --auto-install
@@ -56,7 +56,7 @@ $CLI add regex_parser          --auto-install
 $CLI add dataframe_to_table    --auto-install
 
 # Suppress the auto-installed example defs that would conflict with the demo
-rm -rf "src/$PKG/defs/archive_fetcher" "src/$PKG/defs/csv_file_ingestion" \
+rm -rf "src/$PKG/defs/archive_fetcher" "src/$PKG/defs/file_ingestion" \
        "src/$PKG/defs/summarize" "src/$PKG/defs/formula" \
        "src/$PKG/defs/filter" "src/$PKG/defs/dataframe_join" \
        "src/$PKG/defs/sort" "src/$PKG/defs/regex_parser" \
@@ -86,7 +86,7 @@ EOF
 
 # --- 2. movies_raw: read movies.csv via the upstream archive's dict (no hardcoded path)
 cat > "src/$PKG/defs/movies_raw/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: movies_raw
   from_upstream:
@@ -98,7 +98,7 @@ EOF
 
 # --- 3. ratings_raw: same shape — resolve the path from ml_archive's dict
 cat > "src/$PKG/defs/ratings_raw/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: ratings_raw
   from_upstream:

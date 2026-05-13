@@ -7,13 +7,13 @@ them with `join: outer` so the missing columns become NaN, then
 dataframe_to_csv writes the unified extract.
 
 Pipeline (5 components, all autoloaded by `dg`):
-    csv_file_ingestion x 3 → dataframe_union → dataframe_to_csv
+    file_ingestion x 3 → dataframe_union → dataframe_to_csv
 
 ## Components used
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `csv_file_ingestion` | ingestion | Read source CSV |
+| 1 | `file_ingestion` | ingestion | Read source CSV |
 | 2 | `dataframe_union` | transformation |  |
 | 3 | `dataframe_to_csv` | sink | Write CSV |
 

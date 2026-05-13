@@ -24,14 +24,14 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 5 community components"
-$CLI add csv_file_ingestion    --auto-install
+$CLI add file_ingestion    --auto-install
 $CLI add feature_scaler        --auto-install
 $CLI add pca                   --auto-install
 $CLI add k_means_clustering    --auto-install
 $CLI add dataframe_to_csv      --auto-install
 
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: iris_raw
   file_path: https://raw.githubusercontent.com/mwaskom/seaborn-data/master/iris.csv

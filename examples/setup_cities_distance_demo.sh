@@ -7,9 +7,9 @@
 # pairwise distance matrix from a 6-component pipeline.
 #
 # Pipeline (6 components, all autoloaded by `dg`):
-#     csv_file_ingestion ─┐
+#     file_ingestion ─┐
 #                          ├─→ dataframe_join (cross)
-#     csv_file_ingestion ─┘   → distance_calculator → filter
+#     file_ingestion ─┘   → distance_calculator → filter
 #                                                   → sort
 #                                                   → dataframe_to_csv
 
@@ -44,20 +44,20 @@ EOF
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing components into src/$PKG/components/ + defs/"
-$CLI add csv_file_ingestion       --auto-install
+$CLI add file_ingestion       --auto-install
 $CLI add dataframe_join           --auto-install
 $CLI add distance_calculator      --auto-install
 $CLI add filter                   --auto-install
 $CLI add sort                     --auto-install
 $CLI add dataframe_to_csv         --auto-install
 # Second ingest for the right-side of the cross join
-mkdir -p "src/$PKG/defs/csv_destinations"  # only needs defs.yaml; component code is in components/csv_file_ingestion/
+mkdir -p "src/$PKG/defs/csv_destinations"  # only needs defs.yaml; component code is in components/file_ingestion/
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1a + 1b. Both ingests read the same file but produce two distinct assets
 # so the cross join has two inputs to fan into.
-cat > "src/$PKG/defs/csv_file_ingestion/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: cities_origin
   file_path: /tmp/cities.csv
@@ -66,7 +66,7 @@ attributes:
 EOF
 
 cat > "src/$PKG/defs/csv_destinations/defs.yaml" <<EOF
-type: $PKG.components.csv_file_ingestion.component.CSVFileIngestionComponent
+type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: cities_dest
   file_path: /tmp/cities.csv
