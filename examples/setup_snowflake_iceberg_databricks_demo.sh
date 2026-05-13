@@ -134,6 +134,20 @@ attributes:
 
   group_name: snowflake_silver
   description: SILVER-layer Snowflake — Dynamic Iceberg Table refreshed on TARGET_LAG
+
+  # CUSTOMIZE: per-entity AssetSpec overrides — rename the asset key,
+  # set group, etc. Filters above still apply; this only customizes the
+  # entities you specifically name. Optional — remove this whole block to
+  # use auto-inferred keys (e.g. dynamic_table_customer_metrics).
+  assets_by_name:
+    CUSTOMER_METRICS:
+      key: snowflake_silver/customer_metrics_iceberg
+      group_name: snowflake_silver
+      description: |
+        Snowflake-managed Iceberg table. Writes Parquet + metadata.json to
+        s3://<your-bucket>/.../customer_metrics/ via the EXTERNAL_VOLUME.
+      metadata:
+        catalog_mode: snowflake_managed
 EOF
 
 # --- 2. Databricks side: OFFICIAL DatabricksWorkspaceComponent from
@@ -187,7 +201,7 @@ attributes:
           Lakeflow Declarative Pipeline output. CUSTOMIZE this description
           for your actual pipeline.
         deps:
-          - snowflake_silver/CUSTOMER_METRICS                # ← CUSTOMIZE: match Snowflake table
+          - snowflake_silver/customer_metrics_iceberg                # ← CUSTOMIZE: match Snowflake table
         metadata:
           databricks_job_id: "{{ env('DATABRICKS_LAKEFLOW_JOB_ID') }}"
 EOF
@@ -205,7 +219,7 @@ attributes:
   # changed the Snowflake table name or the Databricks asset key, mirror
   # the change here.
   asset_keys:
-    - snowflake_silver/CUSTOMER_METRICS
+    - snowflake_silver/customer_metrics_iceberg
     - databricks/lakeflow/customer_metrics_enriched
   default_status: STOPPED
   tags:
@@ -248,7 +262,7 @@ Every line that must change is marked with `# CUSTOMIZE:` in the YAML.
 
 - `assets_by_task_key.customer_metrics_enrichment` — the task_key on the left **must match the actual task_key inside your Databricks Job** (visible in the Workflows UI → Job details → Tasks tab). If your Job has a task named "etl_main", change this line to `etl_main:`.
 - `key: databricks/lakeflow/customer_metrics_enriched` — the Dagster asset key you want for the Lakeflow output. Pick anything.
-- `deps: [snowflake_silver/CUSTOMER_METRICS]` — must match the asset key the Snowflake side exposes (which derives from your Dynamic Table name).
+- `deps: [snowflake_silver/customer_metrics_iceberg]` — must match the asset key the Snowflake side exposes (which derives from your Dynamic Table name).
 
 ### `src/<pkg>/defs/refresh_schedule/defs.yaml`
 
