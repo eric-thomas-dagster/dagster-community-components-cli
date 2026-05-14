@@ -51,7 +51,7 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
 uv add --dev -q dagster-dg-cli dagster-webserver
-uv add -q requests sqlalchemy pandas
+uv add -q requests sqlalchemy
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 

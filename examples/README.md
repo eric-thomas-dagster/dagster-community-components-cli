@@ -154,6 +154,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Shell Command Job](shell_command_job.md) | `shell_command_job` | Scheduled shell command, no asset |
 | [Dynamic Fanout Job](dynamic_fanout_job.md) | `dynamic_fanout_job` | DynamicOut: discover N items, parallel process, optional collect |
 | [Per-File Processor](per_file_processor.md) | `per_file_processor_job` | Inbox-style fan-out: list local CSVs, parse each, archive on success |
+| [Composition Primitives](composition_primitives.md) | `python_callable_job`, `http_webhook_job`, `observability_heartbeat_job`, `warehouse_maintenance_job`, `sql_command_job` | 5 small op-job wrappers in one project — SQLite + httpbin.org, no auth |
 
 ### Patterns
 
@@ -164,12 +165,16 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Data Quality](data_quality.md) | `pandas_dataframe_check`, `pandera_asset_check`, `enhanced_data_quality_checks`, `freshness_check`, `great_expectations_check` | 4 asset_check components on a synthetic orders asset |
 | [Data Quality Checks](data_quality_checks.md) | `synthetic_data_generator`, `dataframe_to_csv`, `enhanced_data_quality_checks`, `pandas_dataframe_check`, `pandera_asset_check`, `freshness_check` | End-to-end DQ pipeline |
 | [Email Round-Trip (SMTP + IMAP)](email_roundtrip.md) | `synthetic_data_generator`, `smtp_send_asset`, `imap_inbox_source` | Fan out via SMTP, pull replies via IMAP. Local aiosmtpd + pure-Python IMAP stub for offline testing |
-| [External Assets](external_assets.md) | 21 external-system integrations as declared assets | Declare external systems without owning their execution (Sigma / Hex / Tableau / Looker / etc.) |
+| [External Assets](external_assets.md) | 23 external-system integrations as declared assets | Declare external systems without owning their execution (Snowflake / BigQuery / Iceberg / Delta / Kafka / SharePoint / etc.) |
+| [Lakehouse Local Roundtrip](lakehouse_local.md) | `synthetic_data_generator`, `iceberg_catalog_resource`, `iceberg_ingestion`, `dataframe_to_iceberg_table`, `delta_ingestion`, `dataframe_to_delta_table`, `external_iceberg_table`, `external_delta_table` | Full Iceberg + Delta read/write cycle on the local filesystem — no cloud, no JVM, SQLite-backed Iceberg catalog |
+| [Local Transforms + Sinks](local_transforms.md) | `synthetic_data_generator`, `local_parquet_io_manager`, `filter`, `summarize`, `dataframe_to_avro` | Parquet IO manager + filter → summarize → Avro sink, all on /tmp |
+| [Papermill Notebooks](notebooks.md) | `synthetic_data_generator`, `jupyter_notebook_asset` | Execute a `.ipynb` as a Dagster asset via papermill, with injected parameters + executed-notebook artifact |
 | [HTTP External Asset](http_external_asset.md) | `http_external_asset` | Wraps any HTTP-driven external job runner as a Dagster asset |
 | [Local IO Managers](local_io.md) | 9 IO managers + 3 source/sink components — duckdb / sqlite / lance / polars / parquet / csv / json | Round-trip a DataFrame through every local format |
 | [Local Sinks](local_sinks.md) | `dataframe_to_csv`, `dataframe_to_parquet`, `dataframe_to_json`, `dataframe_to_excel`, `dataframe_to_table` | 5 file/table format sinks side by side |
 | [Document Extractors](document_extractors.md) | 13 document-source components — PDF / Word / HTML / RST / Markdown / etc. | Mega-demo: every shipped document-extraction component |
 | [S3 Dynamic-Partition Pipeline](s3_pipeline.md) | `s3_monitor` (dynamic_partition mode), `file_ingestion` (partitioned), `summarize`, `dataframe_to_parquet` | Sensor-driven round-trip on **local Minio S3** (Docker). Each detected file becomes a tracked dynamic partition → processed → parquet back to S3. Real S3 / GCS / ADLS by swapping the URI scheme. |
+| [Kafka End-to-End](kafka.md) | `external_kafka_asset`, `kafka_resource`, `kafka_to_database_asset`, `kafka_monitor`, `kafka_observation_sensor` | Full Kafka family against a **local KRaft broker** (Docker, no Zookeeper). Topic → SQLite via SQLAlchemy + sensor + observation. Retargets at MSK / Confluent Cloud / self-hosted by swapping `bootstrap_servers`. |
 
 ---
 
