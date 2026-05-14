@@ -26,6 +26,15 @@ Pull data from Microsoft Graph (Outlook / Calendar / Teams / OneDrive / SharePoi
    └──────────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `oauth_token_resource` | community | Azure AD OAuth2 client_credentials grant (or workload identity) |
+| `odata_ingestion` | community | OData v4 GET against `graph.microsoft.com` → pandas DataFrame |
+| `odata_check` | community | Optional — smoke-test Graph endpoint reachability |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Permissions: delegated vs application
 
 Microsoft Graph has two permission models:

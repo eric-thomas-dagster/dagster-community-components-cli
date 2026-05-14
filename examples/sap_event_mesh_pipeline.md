@@ -29,6 +29,14 @@ Real-time-ish: subscribe to **SAP Event Mesh** queues and trigger Dagster runs p
    └──────────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `oauth_token_resource` | community | XSUAA OAuth2 client_credentials for Event Mesh access |
+| `sap_event_mesh_sensor` | community | Polls Event Mesh queue, registers dynamic partitions per message |
+| `file_ingestion` / custom asset | community | Processes the event payload per partition (downstream) |
+
 ## Why REST polling instead of AMQP-WebSocket?
 
 Event Mesh supports both. AMQP-WebSocket gives sub-second latency but needs a persistent connection — a poor fit for Dagster Daemon which is short-lived/poll-driven. REST polling gives bounded latency (interval-bounded) with vastly simpler operational shape:

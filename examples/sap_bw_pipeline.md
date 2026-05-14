@@ -27,6 +27,16 @@ SAP BW is a planning + reporting data warehouse sitting on top of HANA (BW/4HANA
    └──────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `sap_hana_resource` | community | Register HANA connection (Approach A) |
+| `sap_hana_ingestion` | community | Read Open Hub destination table via HANA SQL (Approach A) |
+| `file_ingestion` | community | Read Open Hub file output — CSV / fixed-width (Approach B) |
+| `odata_ingestion` | community | BW/4HANA OData services for direct query (Approach C) |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Approach A — Open Hub → DB table → `sap_hana_ingestion`
 
 The cleanest pattern for BW-on-HANA. The Open Hub Destination writes to a HANA table (typically named `/BIC/OH<dest_id>`). Read it as a regular SQL table:

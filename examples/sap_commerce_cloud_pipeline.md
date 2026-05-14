@@ -20,6 +20,14 @@ Pull e-commerce data from **SAP Commerce Cloud** (formerly Hybris) into Dagster 
 
 OCC speaks JSON REST, not pure OData — pagination is via `currentPage` / `pageSize` / `totalPages`. Use `oauth_rest_ingestion` with `pagination: page`.
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `oauth_token_resource` | community | OAuth2 client_credentials grant for OCC |
+| `oauth_rest_ingestion` | community | Paginated REST GET (page-based) → pandas DataFrame |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Setup
 
 ### 1. Create an OAuth client in Commerce Cloud

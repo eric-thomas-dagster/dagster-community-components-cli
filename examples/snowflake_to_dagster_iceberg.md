@@ -36,6 +36,16 @@ This is a more specific version of the [`iceberg_pipeline.md`](iceberg_pipeline.
    └─────────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `iceberg_catalog_resource` | community | Register Snowflake-managed Iceberg catalog config (PAT auth) |
+| `iceberg_ingestion` | community | Read Snowflake-written Iceberg table → pandas DataFrame |
+| `external_iceberg_table` | community | Declare Snowflake-owned table for lineage |
+| `dataframe_to_iceberg_table` | community | Optional — write back to a different Iceberg table |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Why Snowflake → Iceberg → Dagster
 
 Snowflake's managed Iceberg catalog has been the breakout cross-vendor feature of 2024-25:

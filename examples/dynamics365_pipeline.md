@@ -26,6 +26,16 @@ Pull data from Microsoft Dynamics 365 (Sales / Customer Service / Field Service 
    └──────────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `oauth_token_resource` | community | Azure AD OAuth2 client_credentials grant |
+| `odata_ingestion` | community | OData v4 GET against Dataverse (`/api/data/v9.2/...`) → pandas DataFrame |
+| `odata_check` | community | Optional — smoke-test tenant + entity-set |
+| `dataframe_to_odata` | community | Optional — write back to Dataverse (POST / PATCH / DELETE) |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Auth: Azure AD app registration
 
 Dataverse uses Azure AD. The cleanest M2M path:

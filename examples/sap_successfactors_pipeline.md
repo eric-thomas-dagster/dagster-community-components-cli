@@ -28,6 +28,14 @@ Pull HRIS data (employees, departments, jobs, performance reviews, comp plans) f
    └──────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `odata_ingestion` | community | OData v2 GET against SuccessFactors entity sets → pandas DataFrame |
+| `odata_check` | community | Optional — smoke-test SF tenant + entity-set reachability |
+| `summarize`, `dataframe_join`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Auth: User@CompanyID
 
 SuccessFactors uses a non-standard basic-auth format: the username is `<APIUser>@<CompanyID>`. Example: `dagster_api@ACME01`.

@@ -19,6 +19,15 @@ Same `odata_ingestion` component as the rest of the SAP family.
    └──────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `odata_ingestion` | community | OData v2 GET against CUAN_* services → pandas DataFrame |
+| `oauth_rest_ingestion` | community | For Emarsys (REST + WSSE auth) |
+| `dataframe_to_odata` | community | Optional — push enriched attributes back to Marketing Cloud |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## defs.yaml — pull a contact list
 
 ```yaml

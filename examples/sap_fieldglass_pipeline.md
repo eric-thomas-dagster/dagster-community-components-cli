@@ -19,6 +19,14 @@ Fieldglass manages contractors, statements of work, and contingent labor across 
    └──────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `oauth_token_resource` | community | OAuth2 refresh-token grant + rotation writeback |
+| `oauth_rest_ingestion` | community | Paginated REST GET (page-based) → pandas DataFrame |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Setup
 
 ### 1. OAuth setup in Fieldglass

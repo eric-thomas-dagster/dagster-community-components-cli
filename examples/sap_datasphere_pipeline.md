@@ -32,6 +32,15 @@ Datasphere sits between operational SAP systems (S/4HANA, BW/4HANA) and downstre
    └─────────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `oauth_token_resource` | community | XSUAA OAuth2 client_credentials grant |
+| `odata_ingestion` | community | OData v4 GET against Datasphere consumption endpoint → pandas DataFrame |
+| `odata_check` | community | Optional — health-check the analytic model |
+| `dataframe_to_*` | community | Downstream sinks |
+
 ## Auth — XSUAA client_credentials
 
 Datasphere uses **SAP BTP's XSUAA** (eXtended Services for User Account and Authentication) for OAuth. Each Datasphere space can have its own OAuth client.

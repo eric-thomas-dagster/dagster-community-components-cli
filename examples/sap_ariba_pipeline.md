@@ -32,6 +32,14 @@ Pull purchase requisitions, suppliers, contracts, and sourcing events from SAP A
    └─────────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `oauth_token_resource` | community | OAuth2 client_credentials grant — pure M2M, no rotation |
+| `oauth_rest_ingestion` | community | Paginated REST GET (cursor-based) → pandas DataFrame |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Headless OAuth — client_credentials (the easy case)
 
 Ariba uses **pure machine-to-machine OAuth**: client_id + client_secret → access_token. No user identity, no refresh tokens, no rotation.

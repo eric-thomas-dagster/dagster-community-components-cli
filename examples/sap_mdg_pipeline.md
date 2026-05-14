@@ -31,6 +31,14 @@ MDG runs **on** S/4HANA / ECC as the governance layer for master data — it's w
    └──────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `odata_ingestion` | community | OData v2 GET against MDG_* services → pandas DataFrame |
+| `dataframe_to_odata` | community | Optional — open change requests by writing CR records |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## defs.yaml — pull active customer records
 
 ```yaml

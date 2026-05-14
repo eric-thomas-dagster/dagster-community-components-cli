@@ -34,6 +34,14 @@ Pull expense reports, travel itineraries, and invoice approvals from SAP Concur 
    └─────────────────────────────────────────────────────┘
 ```
 
+## Components used
+
+| Component | Source | Role |
+|---|---|---|
+| `oauth_token_resource` | community | OAuth2 refresh-token grant + rotation writeback for headless ops |
+| `oauth_rest_ingestion` | community | Paginated REST GET (Concur `NextPage` style) → pandas DataFrame |
+| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+
 ## Headless OAuth refresh-token rotation (the actual hard part)
 
 Concur **rotates refresh tokens on every refresh**. If you don't persist the new one back to your secret store, your next run fails. This pipeline configures the writeback so it survives unattended.
