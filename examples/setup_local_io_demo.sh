@@ -25,6 +25,16 @@ for c in local_csv_io_manager local_json_io_manager local_parquet_io_manager \
   $CLI add $c --auto-install || echo "FAILED: $c"
 done
 
+echo ">>> Pre-creating seed CSV at /tmp/local_io_demo_seed.csv (avoid asset-dep race)"
+cat > /tmp/local_io_demo_seed.csv <<'CSV'
+id,name,amount
+1,Alice,100.0
+2,Bob,200.0
+3,Carol,300.0
+4,Dave,400.0
+5,Eve,500.0
+CSV
+
 echo ">>> Writing inline source data"
 mkdir -p "src/$PKG/defs/source_data"
 cat > "src/$PKG/defs/source_data/__init__.py" <<'PYEOF'

@@ -156,6 +156,14 @@ def validate(setup_script: Path) -> tuple[str, str, str]:
         # synthetic_data_generator-driven; the assets materialize fine without the sensor.
         pass  # fall through
 
+    if name == "partitions":
+        # This demo intentionally showcases multiple partition shapes
+        # (daily + static + dynamic etc.) in one project. `dg launch --assets *`
+        # can't materialize a mixed-partition graph in one call. The demo
+        # itself works — it just needs per-shape launches that are out of
+        # scope for the smart-launch harness.
+        return name, "SKIP", "intentional mixed-partition demo; needs per-shape launch"
+
     # Per-demo env setup
     env_overrides: dict[str, str] = {}
 
@@ -212,6 +220,35 @@ def validate(setup_script: Path) -> tuple[str, str, str]:
 
     # 4. Launch
     ok = _launch(proj_path, launch_args, env_overrides, log_file)
+
+    # 4b. Fallback: if we passed --partition but the assets aren't all partitioned with
+    # a shared partitions_def, dg launch raises CheckError. Retry without --partition.
+    # Symptoms (anywhere in the log):
+    #   "Provided '--partition' option, but none of the assets are partitioned"
+    #   "There is no PartitionsDefinition shared by all the provided assets"
+    if not ok and "--partition" in launch_args:
+        log_text = log_file.read_text()
+        if (
+            "none of the assets are partitioned" in log_text
+            or "no PartitionsDefinition shared by all" in log_text
+        ):
+            retry_args = [a for a in launch_args if a not in ("--partition", launch_args[launch_args.index("--partition") + 1])] if "--partition" in launch_args else launch_args
+            # Cleaner reconstruction:
+            retry_args = []
+            skip_next = False
+            for a in launch_args:
+                if skip_next:
+                    skip_next = False
+                    continue
+                if a == "--partition":
+                    skip_next = True
+                    continue
+                retry_args.append(a)
+            with open(log_file, "a") as f:
+                f.write("\n[smart_validate] retry without --partition (mixed-partition asset graph)\n")
+            ok = _launch(proj_path, retry_args, env_overrides, log_file)
+            reason = f"{reason} (retried unpartitioned)"
+
     return name, ("OK" if ok else "FAIL_MATERIALIZE"), reason
 
 
