@@ -40,19 +40,11 @@ DB_PATH="/tmp/${PROJECT_DIR}.db"
 echo ">>> 1/6  Starting Kafka in Docker ($KAFKA_NAME:$KAFKA_PORT, KRaft mode)"
 docker rm -f "$KAFKA_NAME" >/dev/null 2>&1 || true
 docker run -d --name "$KAFKA_NAME" -p $KAFKA_PORT:9092 \
-  -e KAFKA_CFG_NODE_ID=0 \
-  -e KAFKA_CFG_PROCESS_ROLES=controller,broker \
-  -e KAFKA_CFG_LISTENERS=PLAINTEXT://:9092,CONTROLLER://:9093 \
-  -e KAFKA_CFG_ADVERTISED_LISTENERS=PLAINTEXT://localhost:9092 \
-  -e KAFKA_CFG_CONTROLLER_LISTENER_NAMES=CONTROLLER \
-  -e KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP=CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT \
-  -e KAFKA_CFG_CONTROLLER_QUORUM_VOTERS=0@localhost:9093 \
-  -e KAFKA_CFG_INTER_BROKER_LISTENER_NAME=PLAINTEXT \
-  bitnami/kafka:latest >/dev/null
+  apache/kafka:latest >/dev/null
 
 echo "    Waiting for Kafka to become ready..."
 for i in 1 2 3 4 5 6 7 8 9 10; do
-  if docker exec "$KAFKA_NAME" kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then
+  if docker exec "$KAFKA_NAME" /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 --list >/dev/null 2>&1; then
     echo "    Kafka up."
     break
   fi
@@ -60,14 +52,14 @@ for i in 1 2 3 4 5 6 7 8 9 10; do
 done
 
 echo ">>> 2/6  Creating topic '$TOPIC' + seeding 50 JSON events"
-docker exec "$KAFKA_NAME" kafka-topics.sh --bootstrap-server localhost:9092 \
+docker exec "$KAFKA_NAME" /opt/kafka/bin/kafka-topics.sh --bootstrap-server localhost:9092 \
   --create --if-not-exists --topic "$TOPIC" --partitions 1 --replication-factor 1 >/dev/null
 
 # Produce 50 synthetic JSON messages
 docker exec -i "$KAFKA_NAME" sh -c "
   for i in \$(seq 1 50); do
     echo \"{\\\"event_id\\\":\$i,\\\"user_id\\\":\\\"user_\$((i % 7))\\\",\\\"event_type\\\":\\\"click\\\",\\\"ts\\\":\\\"2026-05-14T12:00:0\$((i % 10))\\\"}\"
-  done | kafka-console-producer.sh --broker-list localhost:9092 --topic $TOPIC
+  done | /opt/kafka/bin/kafka-console-producer.sh --bootstrap-server localhost:9092 --topic $TOPIC
 "
 echo "    Seeded 50 messages on topic '$TOPIC'."
 
