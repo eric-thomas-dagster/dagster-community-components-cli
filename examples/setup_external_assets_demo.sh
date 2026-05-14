@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# External assets demo — declare 21 external (observable) assets in one
+# External assets demo — declare 23 external (observable) assets in one
 # code location and verify they all show up in the Dagster catalog with
 # their kinds + metadata.
 #
@@ -15,11 +15,13 @@
 #   needs no real backend, runs in seconds, and validates that all 21
 #   components load + appear in the asset graph.
 #
-# Asset graph (21 declare-only assets, one per integration):
+# Asset graph (23 declare-only assets, one per integration):
 #   snowflake/raw/orders    → ExternalSnowflakeTableAsset
 #   bigquery/analytics/page_views → ExternalBigQueryTableAsset
 #   databricks/silver/sessions → ExternalDatabricksTableAsset
 #   clickhouse/events/clicks → ExternalClickHouseTableComponent
+#   iceberg/sales/orders    → ExternalIcebergTableAsset
+#   delta/lakehouse/events  → ExternalDeltaTableAsset
 #   s3://demo-bucket/orders → ExternalS3Asset
 #   gs://demo-bucket/orders → ExternalGcsAsset
 #   az://demo-container/orders → ExternalAdlsAsset
@@ -56,18 +58,19 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 21 external_* components"
+echo ">>> Installing 23 external_* components"
 for c in external_adls_asset external_bigquery_table external_clickhouse_table \
-         external_databricks_table external_eventhubs_asset external_gcs_asset \
-         external_kafka_asset external_kinesis_asset external_mqtt_asset \
-         external_nats_asset external_pubsub_asset external_pulsar_asset \
-         external_rabbitmq_asset external_redis_stream_asset external_s3_asset \
-         external_servicebus_asset external_sftp_path external_sharepoint_library \
-         external_snowflake_table external_sql_asset external_sqs_asset; do
+         external_databricks_table external_delta_table external_eventhubs_asset \
+         external_gcs_asset external_iceberg_table external_kafka_asset \
+         external_kinesis_asset external_mqtt_asset external_nats_asset \
+         external_pubsub_asset external_pulsar_asset external_rabbitmq_asset \
+         external_redis_stream_asset external_s3_asset external_servicebus_asset \
+         external_sftp_path external_sharepoint_library external_snowflake_table \
+         external_sql_asset external_sqs_asset; do
   $CLI add $c --auto-install
 done
 
-echo ">>> Writing 21 declare-only defs.yaml"
+echo ">>> Writing 23 declare-only defs.yaml"
 
 write_yaml() {
   local name="$1"; shift
@@ -110,6 +113,24 @@ attributes:
   table: clicks
   host_env_var: CLICKHOUSE_HOST
   group_name: warehouses"
+
+write_yaml "external_iceberg_table" "type: $PKG.components.external_iceberg_table.component.ExternalIcebergTableAsset
+attributes:
+  asset_key: iceberg/sales/orders
+  catalog_name: demo_catalog
+  namespace: sales
+  table_name: orders
+  warehouse: s3://demo-bucket/warehouse
+  catalog_type: rest
+  owner_engine: snowflake
+  group_name: lakehouse"
+
+write_yaml "external_delta_table" "type: $PKG.components.external_delta_table.component.ExternalDeltaTableAsset
+attributes:
+  asset_key: delta/lakehouse/events
+  table_uri: s3://demo-bucket/lakehouse/events
+  owner_engine: spark
+  group_name: lakehouse"
 
 write_yaml "external_s3_asset" "type: $PKG.components.external_s3_asset.component.ExternalS3Asset
 attributes:
