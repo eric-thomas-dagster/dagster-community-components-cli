@@ -181,6 +181,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [RabbitMQ End-to-End](rabbitmq.md) | `rabbitmq_to_database_asset`, `rabbitmq_monitor`, `rabbitmq_observation_sensor`, `python_callable_job` | AMQP queue → SQLite via SQLAlchemy + sensors against a **local rabbitmq:4-management container**. Uses v4 `rabbitmqadmin` (different CLI from v3). Retargets at Amazon MQ / CloudAMQP unchanged. |
 | [NATS End-to-End](nats.md) | `nats_to_database_asset`, `nats_monitor`, `nats_observation_sensor`, `python_callable_job` | JetStream pull-consumer → SQLite against **local nats:latest + natsio/nats-box sidecar** for CLI ops. Pre-creates durable consumer with `--deliver=all` so backfill works. Retargets at Synadia Cloud unchanged. |
 | [MQTT End-to-End](mqtt.md) | `mqtt_to_database_asset`, `mqtt_monitor`, `mqtt_observation_sensor`, `python_callable_job` | Topic subscribe → SQLite against a **local eclipse-mosquitto:2 container**. Fire-and-forget broker — demo runs a concurrent publisher during the asset's collect window. Retargets at AWS IoT Core / HiveMQ Cloud unchanged. |
+| [Neo4j End-to-End](neo4j.md) | `neo4j_resource`, `neo4j_reader`, `neo4j_writer`, `synthetic_data_generator` | Cypher read + DataFrame → labeled nodes (MERGE upsert) against a **local neo4j:5-community container**. Retargets at AuraDB unchanged. |
+| [Elasticsearch End-to-End](elasticsearch.md) | `elasticsearch_resource`, `elasticsearch_reader` | Index search → DataFrame against a **local elasticsearch:8.15 container** (security disabled). Retargets at Elastic Cloud unchanged. |
 
 ---
 
