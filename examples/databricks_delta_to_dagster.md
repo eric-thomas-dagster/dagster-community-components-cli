@@ -6,7 +6,7 @@ This is a Databricks-flavored take on [`delta_pipeline.md`](delta_pipeline.md). 
 
 ## When to use each path
 
-| | This walkthrough (`delta_ingestion`) | [`dataframe_to_databricks`](https://dagster-community-components-cli.vercel.app/c/dataframe_to_databricks) for writes | Official [`DatabricksWorkspaceComponent`](https://docs.dagster.io/integrations/databricks) for jobs |
+| | This walkthrough (`delta_ingestion`) | `dataframe_to_databricks` for writes | Official [`DatabricksWorkspaceComponent`](https://docs.dagster.io/integrations/databricks) for jobs |
 |---|---|---|---|
 | Direction | Read from Delta | Write to Databricks SQL warehouse | Trigger Databricks Jobs (Notebooks / pipelines) |
 | Engine | delta-rs (no Spark) | Databricks SQL connector | Databricks Jobs API |
@@ -44,7 +44,7 @@ This is a Databricks-flavored take on [`delta_pipeline.md`](delta_pipeline.md). 
 
 The user needs `USE CATALOG / USE SCHEMA / SELECT` on the target table — typically via a Service Principal.
 
-For production, prefer **OAuth M2M tokens via Service Principals**: more granular, rotatable, audit-friendly. Set up at `Account Console → Identity → Service Principals → OAuth secrets`. Then use [`oauth_token_resource`](https://dagster-component-ui.vercel.app/c/oauth_token_resource) with `grant_type: client_credentials`.
+For production, prefer **OAuth M2M tokens via Service Principals**: more granular, rotatable, audit-friendly. Set up at `Account Console → Identity → Service Principals → OAuth secrets`. Then use `oauth_token_resource` with `grant_type: client_credentials`.
 
 ## Step 2 — read from Dagster (UC scheme)
 
@@ -106,7 +106,7 @@ attributes:
 
 Then in `orders_delta`'s defs, add `deps: [databricks/orders]`.
 
-> **Already have `external_databricks_table`?** Yes — that component is Databricks-specific (workspace URL + catalog + schema fields). [`external_delta_table`](https://dagster-community-components-cli.vercel.app/c/external_delta_table) is engine-agnostic with `owner_engine: databricks`. Use whichever fits your conventions; they don't conflict.
+> **Already have `external_databricks_table`?** Yes — that component is Databricks-specific (workspace URL + catalog + schema fields). `external_delta_table` is engine-agnostic with `owner_engine: databricks`. Use whichever fits your conventions; they don't conflict.
 
 ## Time travel — re-runnable backfills
 

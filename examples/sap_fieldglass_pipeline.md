@@ -105,5 +105,5 @@ attributes:
 
 - [`sap_concur_pipeline.md`](sap_concur_pipeline.md) — sister: Concur expense management (same OAuth-refresh pattern)
 - [`sap_ariba_pipeline.md`](sap_ariba_pipeline.md) — sister: Ariba procurement (OAuth client_credentials)
-- [`oauth_token_resource`](https://dagster-component-ui.vercel.app/c/oauth_token_resource)
+- `oauth_token_resource`
 - [SAP Fieldglass docs](https://help.sap.com/docs/SAP_FIELDGLASS_VMS)

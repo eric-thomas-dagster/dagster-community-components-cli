@@ -33,9 +33,9 @@ When you want **raw table-level access** (versus the OData layer of S/4HANA), HA
 
 | Component | Source | Role |
 |---|---|---|
-| [`sap_hana_resource`](https://dagster-component-ui.vercel.app/c/sap_hana_resource) | community | Register HANA connection once (URL builder + helpers) |
-| [`sap_hana_ingestion`](https://dagster-component-ui.vercel.app/c/sap_hana_ingestion) | community | SQL → DataFrame asset |
-| [`dataframe_to_table`](https://dagster-community-components-cli.vercel.app/c/dataframe_to_table) | community | Write DataFrame BACK to a HANA table (or any SQLAlchemy DB) |
+| `sap_hana_resource` | community | Register HANA connection once (URL builder + helpers) |
+| `sap_hana_ingestion` | community | SQL → DataFrame asset |
+| `dataframe_to_table` | community | Write DataFrame BACK to a HANA table (or any SQLAlchemy DB) |
 
 ## defs.yaml — HANA Cloud (basic auth, TLS)
 

@@ -6,7 +6,7 @@ Read from and write back to **existing Delta Lake tables** owned by other engine
 
 The official [`dagster_deltalake`](https://pypi.org/project/dagster-deltalake/) package only ships IO managers and a resource — they make Dagster the **owner** of the table. Cross-engine scenarios where another engine owns the table need different components.
 
-This walkthrough uses [`delta_ingestion`](https://dagster-component-ui.vercel.app/c/delta_ingestion) and [`dataframe_to_delta_table`](https://dagster-component-ui.vercel.app/c/dataframe_to_delta_table) — both backed by `delta-rs` (the Rust implementation of the Delta protocol).
+This walkthrough uses `delta_ingestion` and `dataframe_to_delta_table` — both backed by `delta-rs` (the Rust implementation of the Delta protocol).
 
 ## Architecture
 
@@ -47,9 +47,9 @@ This walkthrough uses [`delta_ingestion`](https://dagster-component-ui.vercel.ap
 
 | Component | Source | Role |
 |---|---|---|
-| [`delta_ingestion`](https://dagster-component-ui.vercel.app/c/delta_ingestion) | community | Read existing Delta table → DataFrame |
-| [`dataframe_to_delta_table`](https://dagster-component-ui.vercel.app/c/dataframe_to_delta_table) | community | Append / overwrite / merge |
-| [`external_delta_table`](https://dagster-component-ui.vercel.app/c/external_delta_table) | community | Declare externally-owned table for lineage |
+| `delta_ingestion` | community | Read existing Delta table → DataFrame |
+| `dataframe_to_delta_table` | community | Append / overwrite / merge |
+| `external_delta_table` | community | Declare externally-owned table for lineage |
 
 ## Storage matrix
 
@@ -190,7 +190,7 @@ For Dagster's batch pipeline pattern (read N→transform→write 1), delta-rs is
 
 ## Comparison to siblings in the registry
 
-| | This pair (`delta_ingestion` / `dataframe_to_delta_table`) | [`dataframe_to_databricks`](https://dagster-community-components-cli.vercel.app/c/dataframe_to_databricks) | [`delta_lake_io_manager`](https://dagster-community-components-cli.vercel.app/c/delta_lake_io_manager) |
+| | This pair (`delta_ingestion` / `dataframe_to_delta_table`) | `dataframe_to_databricks` | `delta_lake_io_manager` |
 |---|---|---|---|
 | Where it lives | Anywhere Delta lives | Specifically Databricks SQL warehouse | Local / S3 / ADLS, Dagster-owned |
 | Engine | delta-rs | Databricks SQL connector | delta-rs via official IO manager |

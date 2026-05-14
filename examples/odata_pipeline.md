@@ -2,7 +2,7 @@
 
 Generic OData v2/v4 ingestion → transform → write-back, demonstrated end-to-end against the **public Northwind sample** at services.odata.org. No credentials required.
 
-> **Validation status:** validated end-to-end 2026-05-13. Fresh `uvx create-dagster project`, installed [`odata_ingestion`](https://dagster-component-ui.vercel.app/c/odata_ingestion), pointed it at `services.odata.org/V4/Northwind/Northwind.svc/Customers` with `$top=10` and `$select=CustomerID,CompanyName,ContactName,Country,City`. Result: **10 rows × 5 cols read, `RUN_SUCCESS`** — no auth, no setup, ~3 seconds.
+> **Validation status:** validated end-to-end 2026-05-13. Fresh `uvx create-dagster project`, installed `odata_ingestion`, pointed it at `services.odata.org/V4/Northwind/Northwind.svc/Customers` with `$top=10` and `$select=CustomerID,CompanyName,ContactName,Country,City`. Result: **10 rows × 5 cols read, `RUN_SUCCESS`** — no auth, no setup, ~3 seconds.
 
 This pipeline is the **canonical "does the component work?"** demo. Once you've got it running, swap the `service_url` + `entity_set` + `auth_type` to point at S/4HANA, SuccessFactors, Dynamics 365, MS Graph, Oracle Fusion, Epicor, IFS Cloud, or anything else that speaks OData.
 
@@ -63,18 +63,18 @@ Open the UI to inspect: `uv run dg dev`, then http://localhost:3000.
 
 | Component | Source | Role |
 |---|---|---|
-| [`odata_ingestion`](https://dagster-component-ui.vercel.app/c/odata_ingestion) | community | OData v2/v4 GET → pandas DataFrame. Handles pagination, `$filter`, `$select`, etc. |
-| [`summarize`](https://dagster-community-components-cli.vercel.app/c/summarize) | community | Per-group aggregations on the DataFrame. |
-| [`dataframe_to_parquet`](https://dagster-community-components-cli.vercel.app/c/dataframe_to_parquet) | community | Write curated DataFrame to Parquet locally or to S3/GCS/ADLS via fsspec. |
+| `odata_ingestion` | community | OData v2/v4 GET → pandas DataFrame. Handles pagination, `$filter`, `$select`, etc. |
+| `summarize` | community | Per-group aggregations on the DataFrame. |
+| `dataframe_to_parquet` | community | Write curated DataFrame to Parquet locally or to S3/GCS/ADLS via fsspec. |
 
 Plus optional companions if you need them:
 
 | Component | When |
 |---|---|
-| [`odata_resource`](https://dagster-component-ui.vercel.app/c/odata_resource) | Multiple components reading from the SAME OData tenant — register the connection once |
-| [`dataframe_to_odata`](https://dagster-component-ui.vercel.app/c/dataframe_to_odata) | Reverse direction: push DataFrame rows BACK to an OData entity set (POST / PATCH / DELETE). For SAP write APIs, set `csrf_fetch_path: $metadata` |
-| [`odata_check`](https://dagster-component-ui.vercel.app/c/odata_check) | Asset check: validate the entity set is reachable + has expected columns / row count |
-| [`oauth_token_resource`](https://dagster-component-ui.vercel.app/c/oauth_token_resource) | When the OData backend needs OAuth (Datasphere, Dynamics 365 via Azure AD, etc.) |
+| `odata_resource` | Multiple components reading from the SAME OData tenant — register the connection once |
+| `dataframe_to_odata` | Reverse direction: push DataFrame rows BACK to an OData entity set (POST / PATCH / DELETE). For SAP write APIs, set `csrf_fetch_path: $metadata` |
+| `odata_check` | Asset check: validate the entity set is reachable + has expected columns / row count |
+| `oauth_token_resource` | When the OData backend needs OAuth (Datasphere, Dynamics 365 via Azure AD, etc.) |
 
 ## defs.yaml — the validated config
 

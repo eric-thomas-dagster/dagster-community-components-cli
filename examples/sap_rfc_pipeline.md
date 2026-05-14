@@ -7,8 +7,8 @@ Pull data from on-prem **SAP R/3 / ECC / S/4HANA** systems via RFC (Remote Funct
 | Path | Customer profile |
 |---|---|
 | **`sap_rfc_*`** (this walkthrough) | On-prem R/3 / ECC / S/4HANA. No OData exposed. ABAP integration shop |
-| [`odata_ingestion`](https://dagster-community-components-cli.vercel.app/c/odata_ingestion) | S/4HANA Cloud or modern on-prem with Gateway OData |
-| [`sap_hana_ingestion`](https://dagster-community-components-cli.vercel.app/c/sap_hana_ingestion) | Direct HANA SQL (when customer allows DB access) |
+| `odata_ingestion` | S/4HANA Cloud or modern on-prem with Gateway OData |
+| `sap_hana_ingestion` | Direct HANA SQL (when customer allows DB access) |
 
 Most ECC customers — and that's a huge chunk of enterprise SAP — only have RFC.
 
@@ -82,8 +82,8 @@ RUN pip install pyrfc dagster dagster-community-components
 
 | Component | Source | Role |
 |---|---|---|
-| [`sap_rfc_resource`](https://dagster-component-ui.vercel.app/c/sap_rfc_resource) | community | Holds connection params; opens pyrfc Connection per call |
-| [`sap_rfc_ingestion`](https://dagster-component-ui.vercel.app/c/sap_rfc_ingestion) | community | Executes RFC_READ_TABLE or BAPI → DataFrame |
+| `sap_rfc_resource` | community | Holds connection params; opens pyrfc Connection per call |
+| `sap_rfc_ingestion` | community | Executes RFC_READ_TABLE or BAPI → DataFrame |
 
 ## defs.yaml — resource
 
@@ -202,7 +202,7 @@ def sap_ecc_reachable(context, sap_ecc):
 
 ## See also
 
-- [`sap_rfc_resource`](https://dagster-component-ui.vercel.app/c/sap_rfc_resource) / [`sap_rfc_ingestion`](https://dagster-component-ui.vercel.app/c/sap_rfc_ingestion)
+- `sap_rfc_resource` / `sap_rfc_ingestion`
 - [`sap_s4hana_pipeline.md`](sap_s4hana_pipeline.md) — OData alternative for S/4HANA Cloud
 - [`sap_hana_pipeline.md`](sap_hana_pipeline.md) — HANA SQL alternative
 - [`sap_bw_pipeline.md`](sap_bw_pipeline.md) — BW Open Hub for high-volume extraction

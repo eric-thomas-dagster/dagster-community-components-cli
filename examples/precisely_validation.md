@@ -2,9 +2,9 @@
 
 The registry has two Precisely components:
 
-- [`precisely_run_asset`](https://dagster-component-ui.vercel.app/c/precisely_run_asset)
+- `precisely_run_asset`
   — triggers a Precisely Connect ETL job and waits for it to complete.
-- [`precisely_job_sensor`](https://dagster-component-ui.vercel.app/c/precisely_job_sensor)
+- `precisely_job_sensor`
   — fires a Dagster RunRequest when a Precisely job reaches a terminal SUCCESS state.
 
 Without a Precisely account we can't run them end-to-end, but we can

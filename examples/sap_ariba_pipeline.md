@@ -180,7 +180,7 @@ Schedule this every 15 minutes — if it fails, your Ariba auth or API access is
 
 ## Why not OData?
 
-Some newer Ariba APIs DO speak OData (especially Network APIs). If you have access to those, swap to [`odata_ingestion`](https://dagster-component-ui.vercel.app/c/odata_ingestion) with `auth_type: bearer` + a token minted via the same `oauth_token_resource`. Same auth pipe, different read mechanism.
+Some newer Ariba APIs DO speak OData (especially Network APIs). If you have access to those, swap to `odata_ingestion` with `auth_type: bearer` + a token minted via the same `oauth_token_resource`. Same auth pipe, different read mechanism.
 
 ## See also
 

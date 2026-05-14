@@ -55,10 +55,10 @@ Walkthrough config below works against this endpoint with no other setup.
 
 | Component | Source | Role |
 |---|---|---|
-| [`odata_ingestion`](https://dagster-component-ui.vercel.app/c/odata_ingestion) | community | Read from any S/4HANA OData service |
-| [`odata_resource`](https://dagster-component-ui.vercel.app/c/odata_resource) | community | Optional — register the connection once if you read from multiple entity sets |
-| [`odata_check`](https://dagster-component-ui.vercel.app/c/odata_check) | community | Asset check — tenant reachability + row count + expected columns |
-| [`dataframe_to_odata`](https://dagster-component-ui.vercel.app/c/dataframe_to_odata) | community | Reverse direction: write back to S/4HANA (with CSRF handling) |
+| `odata_ingestion` | community | Read from any S/4HANA OData service |
+| `odata_resource` | community | Optional — register the connection once if you read from multiple entity sets |
+| `odata_check` | community | Asset check — tenant reachability + row count + expected columns |
+| `dataframe_to_odata` | community | Reverse direction: write back to S/4HANA (with CSRF handling) |
 | `summarize`, `dataframe_to_*` | community | Standard transform + sink |
 
 ## defs.yaml — three connection modes

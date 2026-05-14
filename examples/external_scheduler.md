@@ -183,7 +183,7 @@ It's `~80 lines of vendor SDK glue` per scheduler — small enough to be tractab
 **If you need scheduler observability today**, the practical options:
 
 1. **Build a custom component** following the shape above. The vendor's REST API doc is the only required reading; we ship a [`_template_observation_sensor`](../../dagster-component-templates/observations/) shape pattern that you can copy.
-2. **Use [`http_external_asset`](https://dagster-community-components-cli.vercel.app/c/http_external_asset)** as a quick wrapper: declare the scheduled job as an external asset with an HTTP URL pointing at the scheduler's status endpoint. Less rich than a dedicated sensor (no per-run metadata mapping) but works as a stopgap.
+2. **Use `http_external_asset`** as a quick wrapper: declare the scheduled job as an external asset with an HTTP URL pointing at the scheduler's status endpoint. Less rich than a dedicated sensor (no per-run metadata mapping) but works as a stopgap.
 3. **Open an issue** in the registry repo — we'll prioritize building one for whichever scheduler family you're on.
 
 A custom component per scheduler is the right shape. The kick-off direction is trivial precisely because it's just `curl` to Dagster's GraphQL; the observation direction is per-scheduler precisely because every scheduler models "what's scheduled" differently.

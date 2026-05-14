@@ -18,7 +18,7 @@ Pull e-commerce data from **SAP Commerce Cloud** (formerly Hybris) into Dagster 
    └──────────────────────────────────────────────────┘
 ```
 
-OCC speaks JSON REST, not pure OData — pagination is via `currentPage` / `pageSize` / `totalPages`. Use [`oauth_rest_ingestion`](https://dagster-community-components-cli.vercel.app/c/oauth_rest_ingestion) with `pagination: page`.
+OCC speaks JSON REST, not pure OData — pagination is via `currentPage` / `pageSize` / `totalPages`. Use `oauth_rest_ingestion` with `pagination: page`.
 
 ## Setup
 
@@ -120,5 +120,5 @@ query_params:
 ## See also
 
 - [`odata_pipeline.md`](odata_pipeline.md) — generic OData walkthrough
-- [`oauth_token_resource`](https://dagster-component-ui.vercel.app/c/oauth_token_resource)
+- `oauth_token_resource`
 - [SAP Commerce Cloud OCC docs](https://help.sap.com/docs/SAP_COMMERCE)

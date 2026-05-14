@@ -155,7 +155,7 @@ The substitution context is built from the event body's top-level fields. Nested
 
 ## See also
 
-- [`oauth_token_resource`](https://dagster-component-ui.vercel.app/c/oauth_token_resource) — paired token manager
+- `oauth_token_resource` — paired token manager
 - [`sap_cpi_pipeline.md`](sap_cpi_pipeline.md) — companion sensor for CPI iFlow runs
 - [`eh_capture_pipeline.md`](eh_capture_pipeline.md) — Azure cousin (Event Hubs Capture → Dagster)
 - [`pubsub_gcs_pipeline.md`](pubsub_gcs_pipeline.md) — GCP cousin

@@ -25,9 +25,9 @@ SAP Integration Suite (formerly CPI / HCI / Cloud Integration) is the BTP-based 
 
 | Component | Source | Role |
 |---|---|---|
-| [`oauth_token_resource`](https://dagster-component-ui.vercel.app/c/oauth_token_resource) | community | OAuth client_credentials for Integration Suite |
-| [`sap_cpi_observation_sensor`](https://dagster-component-ui.vercel.app/c/sap_cpi_observation_sensor) | community | Poll MPL → AssetObservations |
-| [`oauth_rest_ingestion`](https://dagster-community-components-cli.vercel.app/c/oauth_rest_ingestion) (optional) | community | POST trigger to an iFlow's HTTPS endpoint |
+| `oauth_token_resource` | community | OAuth client_credentials for Integration Suite |
+| `sap_cpi_observation_sensor` | community | Poll MPL → AssetObservations |
+| `oauth_rest_ingestion` (optional) | community | POST trigger to an iFlow's HTTPS endpoint |
 
 ## Setup
 
@@ -171,7 +171,7 @@ Pair the components: trigger sets a `correlation_id` (run tag), sensor filters b
 
 ## See also
 
-- [`oauth_token_resource`](https://dagster-component-ui.vercel.app/c/oauth_token_resource)
+- `oauth_token_resource`
 - [`sap_event_mesh_pipeline.md`](sap_event_mesh_pipeline.md) — companion for event-driven SAP integration
 - [`airflow_dag_observation_sensor` walkthrough](https://dagster-community-components-cli.vercel.app/) — same pattern, Airflow side
 - [SAP Integration Suite docs](https://help.sap.com/docs/integration-suite)

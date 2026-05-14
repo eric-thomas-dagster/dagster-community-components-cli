@@ -38,7 +38,7 @@ auth_username_env_var: SF_USERNAME    # set to 'dagster_api@ACME01'
 auth_password_env_var: SF_PASSWORD
 ```
 
-For OAuth (newer setup with SAML assertion grant), set up OAuth Client in **SuccessFactors Provisioning → Manage OAuth2 Client Applications**, then use [`oauth_token_resource`](https://dagster-component-ui.vercel.app/c/oauth_token_resource) with a JWT assertion.
+For OAuth (newer setup with SAML assertion grant), set up OAuth Client in **SuccessFactors Provisioning → Manage OAuth2 Client Applications**, then use `oauth_token_resource` with a JWT assertion.
 
 ## defs.yaml — Employee data
 

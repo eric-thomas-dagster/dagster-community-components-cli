@@ -46,7 +46,7 @@ Without this component, you edit every asset's `defs.yaml` to set its automation
 
 ## Component used
 
-[`automation_condition_applicator`](https://dagster-component-ui.vercel.app/c/automation_condition_applicator) — applies rules to a `Definitions` at project load time.
+`automation_condition_applicator` — applies rules to a `Definitions` at project load time.
 
 ## Full surface — every rule shape
 
@@ -385,7 +385,7 @@ Teams own their tags; SLAs translate to cron without code changes per asset.
 
 ## See also
 
-- [`asset_job`](https://dagster-community-components-cli.vercel.app/c/asset_job) — bundle assets into a stable job
-- [`cron_schedule`](https://dagster-community-components-cli.vercel.app/c/cron_schedule) — fixed-cadence schedule (alternative to AutomationCondition)
+- `asset_job` — bundle assets into a stable job
+- `cron_schedule` — fixed-cadence schedule (alternative to AutomationCondition)
 - [Dagster AutomationCondition docs](https://docs.dagster.io/concepts/automation/declarative-automation)
 - [Component README](https://dagster-component-ui.vercel.app/c/automation_condition_applicator)

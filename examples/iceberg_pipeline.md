@@ -6,7 +6,7 @@ Read from and write back to **existing Iceberg tables** owned by other engines �
 
 The official [`dagster_iceberg`](https://pypi.org/project/dagster-iceberg/) package only ships an IO manager — it makes Dagster the **owner** of the table. Most real lakehouse scenarios are different: **another engine owns the table**, and Dagster is one of several readers/writers in a cross-engine flow.
 
-This walkthrough uses [`iceberg_ingestion`](https://dagster-component-ui.vercel.app/c/iceberg_ingestion) (read) and [`dataframe_to_iceberg_table`](https://dagster-component-ui.vercel.app/c/dataframe_to_iceberg_table) (write) to fill that gap.
+This walkthrough uses `iceberg_ingestion` (read) and `dataframe_to_iceberg_table` (write) to fill that gap.
 
 ## Architecture — typical lakehouse flow
 
@@ -48,10 +48,10 @@ This walkthrough uses [`iceberg_ingestion`](https://dagster-component-ui.vercel.
 
 | Component | Source | Role |
 |---|---|---|
-| [`iceberg_catalog_resource`](https://dagster-component-ui.vercel.app/c/iceberg_catalog_resource) | community | Register catalog config once (REST / Glue / Hive / Hadoop / SQL) |
-| [`iceberg_ingestion`](https://dagster-component-ui.vercel.app/c/iceberg_ingestion) | community | Read existing table → DataFrame |
-| [`dataframe_to_iceberg_table`](https://dagster-component-ui.vercel.app/c/dataframe_to_iceberg_table) | community | Append / overwrite an existing table |
-| [`external_iceberg_table`](https://dagster-component-ui.vercel.app/c/external_iceberg_table) | community | Declare externally-owned table for lineage |
+| `iceberg_catalog_resource` | community | Register catalog config once (REST / Glue / Hive / Hadoop / SQL) |
+| `iceberg_ingestion` | community | Read existing table → DataFrame |
+| `dataframe_to_iceberg_table` | community | Append / overwrite an existing table |
+| `external_iceberg_table` | community | Declare externally-owned table for lineage |
 | `summarize`, `dataframe_join`, `sort`, `dataframe_to_*` | community | Standard transforms + alternate sinks |
 
 ## Catalog config matrix
