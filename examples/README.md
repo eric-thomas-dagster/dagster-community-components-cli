@@ -175,6 +175,7 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Document Extractors](document_extractors.md) | 13 document-source components — PDF / Word / HTML / RST / Markdown / etc. | Mega-demo: every shipped document-extraction component |
 | [S3 Dynamic-Partition Pipeline](s3_pipeline.md) | `s3_monitor` (dynamic_partition mode), `file_ingestion` (partitioned), `summarize`, `dataframe_to_parquet` | Sensor-driven round-trip on **local Minio S3** (Docker). Each detected file becomes a tracked dynamic partition → processed → parquet back to S3. Real S3 / GCS / ADLS by swapping the URI scheme. |
 | [Kafka End-to-End](kafka.md) | `external_kafka_asset`, `kafka_resource`, `kafka_to_database_asset`, `kafka_monitor`, `kafka_observation_sensor` | Full Kafka family against a **local KRaft broker** (Docker, no Zookeeper). Topic → SQLite via SQLAlchemy + sensor + observation. Retargets at MSK / Confluent Cloud / self-hosted by swapping `bootstrap_servers`. |
+| [Docker Container Asset](docker_container.md) | `docker_container_asset` | Run any container image as a Dagster asset via `dagster-docker`. Image / command / env / network all declarative; logs stream into the Dagster run log. Demo runs `alpine` + `python:3.11-slim` end-to-end. |
 
 ---
 
