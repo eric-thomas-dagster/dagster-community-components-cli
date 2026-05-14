@@ -7,33 +7,46 @@ Read, write, and resource the MongoDB community-component family against a singl
 | Component | Source | Role |
 |---|---|---|
 | `mongodb_resource` | community | Shared connection — centralizes URI + database + TLS for downstream components |
+| `mongodb_io_manager` | community | Project default IO manager — every DataFrame-returning asset auto-serialized as a MongoDB collection |
 | `mongodb_reader` | community | Read a collection → DataFrame asset (with query + projection + sort + limit) |
-| `mongodb_writer` | community | Write a DataFrame to a collection (`append` / `replace` / upsert by key) |
+| `mongodb_writer` | community | Write a DataFrame to a named collection (`append` / `replace` / upsert by key) |
+| `mongodb_ingestion` | community | dlt-based multi-collection extract → in-memory DuckDB → DataFrame |
 | `synthetic_data_generator` | community | Upstream of the writer — generates synthetic orders |
 
 ## Architecture
 
 ```
-   ┌─────────────────────────────────────┐
-   │ MongoDB (local Docker, port 27017)  │
-   │   database: dagster_demo            │
-   │   pre-seeded: users (5), products(3)│
-   └───────┬────────────────────────┬────┘
-           │                        ▲
-           │ read                   │ write
-           ▼                        │
-   ┌──────────────────┐    ┌──────────────────┐
-   │ users_from_mongo │    │ orders_in_mongo  │
-   │ (mongodb_reader) │    │ (mongodb_writer) │
-   └──────────────────┘    └────────┬─────────┘
-                                    │
-                                    │ upstream
-                                    ▼
                           ┌────────────────────┐
                           │ synthetic_orders   │
                           │ (generator)        │
-                          └────────────────────┘
+                          └─────────┬──────────┘
+                                    │ DataFrame (20 rows)
+                                    ▼
+                          ┌────────────────────┐
+                          │ orders_in_mongo    │
+                          │ (mongodb_writer)   │
+                          └─────────┬──────────┘
+                                    │ INSERT
+                                    ▼
+   ┌─────────────────────────────────────────────┐
+   │ MongoDB (local Docker, port 27017)          │
+   │   database: dagster_demo                    │
+   │   pre-seeded: users (5 docs), products (3)  │
+   │   written by demo: orders (20 docs)         │
+   └─────────┬───────────────────────────────────┘
+             │ find({active: true}) sorted by created_at desc
+             ▼
+   ┌──────────────────┐
+   │ users_from_mongo │
+   │ (mongodb_reader) │
+   └──────────────────┘
 ```
+
+Three flows share the same database:
+- **Explicit write:** `synthetic_orders → orders_in_mongo` (writes the synthetic DataFrame into the `orders` collection via mongodb_writer)
+- **Explicit read:** `MongoDB.users → users_from_mongo` (queries the pre-seeded `users` collection back as a DataFrame via mongodb_reader)
+- **Multi-collection ingest:** `mongodb_ingestion` extracts both `users` and `products` via dlt → in-memory DuckDB → unified DataFrame (`all_collections_extract`, with `_resource_type` column to distinguish source collections)
+- **Auto-serialize via IO manager:** every DataFrame asset (`synthetic_orders`, `users_from_mongo`, `all_collections_extract`) is also auto-written to its own collection by `mongodb_io_manager` (set as the project default `io_manager`). Sinks that return `Output(value=None)` (like `mongodb_writer`) are no-ops through this path.
 
 ## Prereqs
 
@@ -108,13 +121,10 @@ attributes:
 
 ## Trade-offs
 
-- **Single env var, multiple components.** All three downstream components read `MONGODB_URI` from the same env var. To target a different cluster per component, set a different `connection_string_env_var:`.
+- **Single env var, multiple components.** All downstream components read `MONGODB_URI` from the same env var. To target a different cluster per component, set a different `connection_string_env_var:`.
 - **No data passed via mongodb_resource.** The resource carries config only — readers and writers each construct their own pymongo client (with the same URI). Skipping the resource and pointing readers/writers at `MONGODB_URI` directly is also fine; the resource is right when many downstream components share a connection.
-- **`mongodb_io_manager` not in this demo.** It binds at the project IO-manager level and would conflict with mongodb_writer's explicit-sink pattern. Build a separate single-component demo when you want every asset's output auto-serialized to MongoDB.
-
-## Known gap
-
-- **`mongodb_ingestion`** is NOT exercised by this demo. It uses dlt's verified MongoDB source (`from dlt.sources.mongodb import mongodb`), which is code-generated via `dlt init mongodb <destination>` rather than pip-installed — so the component as-shipped can't be loaded purely from YAML + `pip install dlt[mongodb]`. Tracking as a real component issue; see `dlt-init` workflow if you need multi-collection extraction today.
+- **IO manager coexists with explicit writer.** `mongodb_io_manager` is the project default, so every DataFrame asset gets auto-serialized to a collection named after the asset key. `mongodb_writer` runs alongside it for the cases when you want a custom collection name + `if_exists`/upsert semantics. The IO manager skips `Output(value=None)` outputs so the writer's no-op return doesn't trip it.
+- **dlt destination on `mongodb_ingestion`.** Default is in-memory DuckDB → DataFrame. To persist to a real warehouse instead, set `destination: snowflake | bigquery | postgres | redshift | databricks | ...` and add the matching `dlt[<dest>]` extra to requirements.
 
 ## Production retargeting
 

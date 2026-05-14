@@ -3,17 +3,14 @@
 # instance running in Docker. No SaaS, no auth, no managed cluster.
 #
 # WHAT THIS DEMONSTRATES
-#   The MongoDB community-component family in one project:
+#   The full MongoDB community-component family in one project:
 #     - mongodb_resource      (shared connection)
+#     - mongodb_io_manager    (project IO manager — every DataFrame asset
+#                              auto-serialized to a MongoDB collection)
 #     - mongodb_reader        (read a collection → DataFrame asset)
-#     - mongodb_writer        (DataFrame → collection sink)
+#     - mongodb_writer        (DataFrame → collection sink — named explicitly)
+#     - mongodb_ingestion     (dlt-based multi-collection extract → DataFrame)
 #     - synthetic_data_generator (upstream, already validated — supplies orders)
-#
-# Note: `mongodb_ingestion` (dlt-based multi-collection extract) is NOT
-# exercised here. It imports `dlt.sources.mongodb` which is a dlt
-# "verified source" that has to be code-generated via `dlt init mongodb`,
-# not pip-installed — so it can't currently be exercised purely from YAML.
-# See setup_mongodb_ingestion_demo.sh (TBD) for the dlt-init workflow.
 #
 # Asset graph:
 #   users_from_mongo                ← mongodb_reader (read seeded `users` collection)
@@ -76,12 +73,13 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
 uv add --dev -q dagster-dg-cli dagster-webserver
-uv add -q 'pymongo>=4.0.0' pandas
+uv add -q 'pymongo>=4.0.0' pandas 'dlt>=0.4.0' 'dlt[duckdb]' duckdb
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> 4/5  Installing 4 components"
-for c in synthetic_data_generator mongodb_resource mongodb_reader mongodb_writer; do
+echo ">>> 4/5  Installing 6 components"
+for c in synthetic_data_generator mongodb_resource mongodb_io_manager \
+         mongodb_reader mongodb_writer mongodb_ingestion; do
   $CLI add $c --auto-install
 done
 
@@ -101,6 +99,16 @@ attributes:
   connection_string_env_var: MONGODB_URI
   database: $MONGO_DB
   tls: false"
+
+# Project IO manager — every DataFrame asset's output gets auto-serialized
+# to a MongoDB collection (collection name = asset key). Sinks that return
+# Output(value=None) (like mongodb_writer) are no-ops through this IO manager.
+write_yaml "mongodb_io_manager" "type: $PKG.components.mongodb_io_manager.component.MongoDBIOManagerComponent
+attributes:
+  resource_key: io_manager
+  connection_uri_env_var: MONGODB_URI
+  database: $MONGO_DB
+  if_exists: replace"
 
 # Read seeded users collection
 write_yaml "mongodb_reader" "type: $PKG.components.mongodb_reader.component.MongodbReaderComponent
@@ -135,6 +143,16 @@ attributes:
   collection: orders
   if_exists: replace
   group_name: mongodb_demo"
+
+# dlt-based multi-collection extract → in-memory DuckDB → DataFrame
+write_yaml "mongodb_ingestion" "type: $PKG.components.mongodb_ingestion.component.MongoDBIngestionComponent
+attributes:
+  asset_name: all_collections_extract
+  connection_url: $MONGO_URI
+  database: $MONGO_DB
+  collection_names: [users, products]
+  group_name: mongodb_demo
+  deps: [orders_in_mongo]"
 
 echo "export MONGODB_URI='$MONGO_URI'" > .env.demo
 

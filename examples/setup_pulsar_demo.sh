@@ -31,15 +31,23 @@ for i in $(seq 1 30); do
   sleep 3
 done
 
-echo ">>> 2/5  Seeding 25 messages"
-# pulsar-client splits -m on commas by default — and our JSON contains commas!
-# Override with --separator='|'. The Pulsar consumer side is unaffected — it
-# only sees individual messages.
-docker exec "$PULSAR_NAME" sh -c "
-  for i in \$(seq 1 25); do
-    /pulsar/bin/pulsar-client produce $TOPIC --separator='|' -m \"{\\\"event_id\\\":\$i,\\\"type\\\":\\\"click\\\"}\" >/dev/null 2>&1
-  done
-  echo 'Produced 25 messages.'
+echo ">>> 2/5  Seeding 25 messages (via Python producer — pulsar-client CLI's"
+echo "        --separator flag is broken; -m splits JSON char-by-char regardless)"
+# The pulsar-client CLI's `-m` flag has a longstanding bug where it splits
+# input messages on every byte when --separator doesn't match. JSON payloads
+# come out as 1-char messages. Use pulsar-py from a sidecar python image instead.
+docker run --rm --network host -e PULSAR_URL="pulsar://localhost:$PULSAR_PORT" -e TOPIC="$TOPIC" \
+  python:3.11-slim sh -c "
+    pip install -q pulsar-client >/dev/null 2>&1
+    python -c '
+import os, json, pulsar
+c = pulsar.Client(os.environ[\"PULSAR_URL\"])
+p = c.create_producer(os.environ[\"TOPIC\"])
+for i in range(1, 26):
+    p.send(json.dumps({\"event_id\": i, \"type\": \"click\"}).encode(\"utf-8\"))
+p.close(); c.close()
+print(\"Produced 25 messages.\")
+'
 "
 
 echo ">>> 3/5  Scaffolding Dagster project at $PROJECT_DIR"
