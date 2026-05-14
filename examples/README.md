@@ -183,6 +183,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [MQTT End-to-End](mqtt.md) | `mqtt_to_database_asset`, `mqtt_monitor`, `mqtt_observation_sensor`, `python_callable_job` | Topic subscribe → SQLite against a **local eclipse-mosquitto:2 container**. Fire-and-forget broker — demo runs a concurrent publisher during the asset's collect window. Retargets at AWS IoT Core / HiveMQ Cloud unchanged. |
 | [Neo4j End-to-End](neo4j.md) | `neo4j_resource`, `neo4j_reader`, `neo4j_writer`, `synthetic_data_generator` | Cypher read + DataFrame → labeled nodes (MERGE upsert) against a **local neo4j:5-community container**. Retargets at AuraDB unchanged. |
 | [Elasticsearch End-to-End](elasticsearch.md) | `elasticsearch_resource`, `elasticsearch_reader` | Index search → DataFrame against a **local elasticsearch:8.15 container** (security disabled). Retargets at Elastic Cloud unchanged. |
+| [Cassandra End-to-End](cassandra.md) | `cassandra_resource`, `cassandra_reader` (writer not yet validated) | CQL read → DataFrame against a **local cassandra:5 container**. Reader validated end-to-end (10 rows). Writer has a known placeholder bug. |
+| [Trino](trino.md) | `trino_resource`, `trino_io_manager` | Trino coordinator (memory catalog) in **local trinodb/trino container**. `dg check defs` passes + connectivity verified; full materialization requires a DELETE-supporting catalog (Iceberg / Delta / Postgres). |
 
 ---
 
