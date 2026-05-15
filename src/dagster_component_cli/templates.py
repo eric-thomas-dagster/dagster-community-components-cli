@@ -159,6 +159,101 @@ language server (VSCode YAML extension, Cursor, Neovim's yamlls) reads this and
 gives **autocomplete + hover docs + schema validation** in the user's editor —
 no plugin config, no local server.
 
+## How to help users build pipelines — ask first, generate second
+
+When the user describes a pipeline in prose ("I want to ingest from SQL
+Server, transform, and write to CSV"), **don't dump a defs.yaml straight
+away**. The right shape is:
+
+1. **Acknowledge the shape**, name the components you'd reach for, and
+   confirm the user wants this approach.
+2. **Ask the targeted questions** you need to fill the YAML — connection
+   string env var, source tables / queries, columns, transform details,
+   output path, schedule. Ask in one batched message, not one at a time.
+3. **Generate the `defs.yaml` files** once you have the answers.
+4. **Tell them how to run it** (`dg check defs`, `dg launch --assets '*'`,
+   `dg dev`) and what env vars to set.
+
+This is a more accurate match for how people actually think about
+pipelines (in terms of intent, not in terms of field-by-field YAML) and it
+keeps the YAML you generate from being mostly placeholders.
+
+### Canonical questions by pipeline stage
+
+When the user describes a pipeline, ask about the relevant stages. Skip
+stages they've already specified.
+
+**Source side (one of these):**
+- DB / warehouse: which table or query? Env var for the SQLAlchemy URL?
+  Filter to a date range or partition? Schema/catalog name?
+- API / REST: what endpoint? Auth via API key / OAuth / none? Pagination
+  shape (page / cursor / Link header)?
+- Object store (S3 / GCS / ADLS): bucket / prefix? File format
+  (CSV / JSON / Parquet / Avro)? Partitioned ingest?
+- Messaging (Kafka / RabbitMQ / NATS / MQTT / Pulsar): topic / queue?
+  Subscription name? Consumer group? Max messages per run?
+- File (local / SFTP): path? Format? Recursive?
+
+**Transform side:**
+- What kind of transform? (filter, summarize, join, dedup, pivot/unpivot,
+  top-N per group, period-over-period change, type-coercion, etc.)
+- For each: which columns? Group-by keys? Aggregations? Filter predicate?
+- Any data-quality checks (schema validator, freshness, null thresholds)?
+
+**Sink side:**
+- File: path, format (csv / json / parquet / avro / excel), partitioned?
+- Table: which DB? Connection env var? Table name? `if_exists` =
+  replace / append / upsert?
+- Object store: bucket / prefix / partition layout?
+
+**Orchestration:**
+- One-shot or scheduled? Cron expression?
+- Partitioned (daily / hourly / static / dynamic)?
+- Retry policy on failure?
+
+### Example dialog
+
+> **User:** "I want to ingest from SQL Server, transform it some way, and
+> store it as a CSV."
+
+> **Good response:**
+>
+> "Got it — here's the component shape I'd reach for:
+>
+> 1. `mssql_resource` — shared SQL Server connection
+> 2. `dataframe_to_table` upstream OR `sql_transform` (with
+>    `return_dataframe: true`) — read from SQL Server
+> 3. One of `filter` / `summarize` / `top_n_per_group` / `pct_change` /
+>    `dataframe_join` for the transform
+> 4. `dataframe_to_csv` — write to disk
+>
+> A few questions before I generate the YAML:
+>
+> 1. **Connection:** what env var holds the SQL Server connection
+>    string? (e.g. `MSSQL_URL`). Or do you want to use a
+>    `mssql_resource` with explicit host/port/user/database fields?
+> 2. **Source:** which table(s) or query? Filter to a date range?
+> 3. **Transform:** what kind? Filter rows? Group + aggregate?
+>    Top N per group? Join with another asset?
+> 4. **Output:** what filename / path for the CSV? Should it be
+>    partitioned (one file per day, etc.)?
+> 5. **Schedule:** one-shot, or do you want a cron schedule?"
+
+That's it — once the user answers, generate the 3-5 `defs.yaml` files,
+list the env vars they need to export, and show the `dg launch` command.
+
+### When to stop asking and just generate
+
+The user has given you enough when:
+- All source-side connection details are concrete (URL/path/topic + auth)
+- The transform is named or "no transform" was specified
+- The output destination is concrete (filename or table or bucket)
+
+If you have those, generate the YAML. Don't ask about every optional
+field (`group_name`, `retry_policy`, partition shape) unless the user
+brings them up — pick reasonable defaults and call them out in a one-line
+comment so the user can override.
+
 ## Common gotchas to avoid
 
 1. **YAML 1.1 `on:` is a boolean.** If a component has an `on:` field, quote it:
@@ -308,6 +403,23 @@ Each component carries `validation.level`:
 
 About 480 of 750 components are `live`. Use this to set user expectations.
 
+## How to help users build pipelines — ask first, generate second
+
+When the user describes a pipeline in prose ("ingest from SQL Server,
+transform, write CSV"), don't dump a `defs.yaml` straight away:
+
+1. Name the components you'd reach for (one per stage: source / transform / sink).
+2. Ask the targeted questions you need to fill the YAML — connection env var,
+   source tables / query, transform details, output path, schedule. Batch the
+   questions in one message; don't drip them one by one.
+3. Generate the `defs.yaml` files once the user answers.
+4. Tell them how to run it (`dg check defs`, `dg launch --assets '*'`, `dg dev`).
+
+Stop asking and start generating when you have: source connection +
+table/topic/path, transform named (or "none"), and concrete output
+destination. Don't grill the user about optional fields (group_name, retry,
+partitions) — pick defaults and call them out in a one-line comment.
+
 ## Common gotchas
 
 - YAML 1.1: `on:` is a boolean — quote `"on":` if used as a key.
@@ -358,6 +470,14 @@ When writing YAML for a component, fetch the schema first:
 Validation level (in each manifest entry):
 - `live` — validated end-to-end against a real system
 - `code` — schema + load passes, no live run
+
+## Building pipelines — ask first, generate second
+
+When the user describes a multi-step pipeline ("ingest from X, transform, write
+to Y"), don't dump YAML straight away. Name the components you'd use, then ask
+the user (in one batched message) for the missing concrete details:
+connection env var, source table/topic/path, transform specifics, output
+destination. Generate the `defs.yaml` files once they answer.
 
 ## Common gotchas
 

@@ -32,6 +32,14 @@ Validation level (in each manifest entry):
 - `live` — validated end-to-end against a real system
 - `code` — schema + load passes, no live run
 
+## Building pipelines — ask first, generate second
+
+When the user describes a multi-step pipeline ("ingest from X, transform, write
+to Y"), don't dump YAML straight away. Name the components you'd use, then ask
+the user (in one batched message) for the missing concrete details:
+connection env var, source table/topic/path, transform specifics, output
+destination. Generate the `defs.yaml` files once they answer.
+
 ## Common gotchas
 
 - YAML `on:` is a boolean — quote `"on":` if used as a key.

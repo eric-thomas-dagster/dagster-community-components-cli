@@ -65,6 +65,23 @@ Each component carries `validation.level`:
 
 About 480 of 750 components are `live`. Use this to set user expectations.
 
+## How to help users build pipelines — ask first, generate second
+
+When the user describes a pipeline in prose ("ingest from SQL Server,
+transform, write CSV"), don't dump a `defs.yaml` straight away:
+
+1. Name the components you'd reach for (one per stage: source / transform / sink).
+2. Ask the targeted questions you need to fill the YAML — connection env var,
+   source tables / query, transform details, output path, schedule. Batch the
+   questions in one message; don't drip them one by one.
+3. Generate the `defs.yaml` files once the user answers.
+4. Tell them how to run it (`dg check defs`, `dg launch --assets '*'`, `dg dev`).
+
+Stop asking and start generating when you have: source connection +
+table/topic/path, transform named (or "none"), and concrete output
+destination. Don't grill the user about optional fields (group_name, retry,
+partitions) — pick defaults and call them out in a one-line comment.
+
 ## Common gotchas
 
 - YAML 1.1: `on:` is a boolean — quote `"on":` if used as a key.
