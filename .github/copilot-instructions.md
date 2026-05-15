@@ -40,6 +40,10 @@ the user (in one batched message) for the missing concrete details:
 connection env var, source table/topic/path, transform specifics, output
 destination. Generate the `defs.yaml` files once they answer.
 
+Recommend `dg dev` (UI at http://localhost:3000) as the way to run it — that's
+the natural Dagster experience. Mention `dg launch --assets '*'` only as a CI
+or quick-smoke alternative.
+
 ## Common gotchas
 
 - YAML `on:` is a boolean — quote `"on":` if used as a key.

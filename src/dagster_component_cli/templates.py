@@ -135,11 +135,17 @@ remove only its own installs.
 ## After installing — running with `dg`
 
 ```bash
-dg launch --assets '*'                         # materialize headlessly (one-shot)
-dg dev                                         # interactive UI at http://localhost:3000
-dg list defs                                   # show what's discovered
 dg check defs                                  # validate every defs.yaml against its schema
+dg dev                                         # interactive UI at http://localhost:3000 — the primary user experience
+dg launch --assets '*'                         # headless one-shot (for CI / quick smoke tests)
+dg list defs                                   # show what's discovered
 ```
+
+**Default user path is `dg dev`.** It starts the Dagster UI where the user
+can browse the asset graph, see lineage, inspect schemas, click to
+materialize, monitor runs, and toggle sensors / schedules. That's the
+natural Dagster experience — `dg launch` is for CI or quick verification,
+not the day-to-day flow.
 
 In a plain project, the user wires components into their own `definitions.py`.
 
@@ -171,8 +177,11 @@ away**. The right shape is:
    string env var, source tables / queries, columns, transform details,
    output path, schedule. Ask in one batched message, not one at a time.
 3. **Generate the `defs.yaml` files** once you have the answers.
-4. **Tell them how to run it** (`dg check defs`, `dg launch --assets '*'`,
-   `dg dev`) and what env vars to set.
+4. **Tell them how to run it.** The default recommendation is `dg dev`
+   (UI at http://localhost:3000 where they can browse the graph, click to
+   materialize, inspect lineage, etc.) — *not* `dg launch --assets '*'`.
+   Mention `dg launch` only as a CI / smoke-test alternative. Also tell
+   them which env vars to `export` first.
 
 This is a more accurate match for how people actually think about
 pipelines (in terms of intent, not in terms of field-by-field YAML) and it
@@ -240,7 +249,9 @@ stages they've already specified.
 > 5. **Schedule:** one-shot, or do you want a cron schedule?"
 
 That's it — once the user answers, generate the 3-5 `defs.yaml` files,
-list the env vars they need to export, and show the `dg launch` command.
+list the env vars to export, and tell them to run `dg dev` (the UI is
+the natural Dagster experience). Mention `dg launch --assets '*'` only
+as a headless / CI alternative.
 
 ### When to stop asking and just generate
 
@@ -413,7 +424,10 @@ transform, write CSV"), don't dump a `defs.yaml` straight away:
    source tables / query, transform details, output path, schedule. Batch the
    questions in one message; don't drip them one by one.
 3. Generate the `defs.yaml` files once the user answers.
-4. Tell them how to run it (`dg check defs`, `dg launch --assets '*'`, `dg dev`).
+4. Tell them to `dg check defs` then `dg dev` (UI at http://localhost:3000)
+   — that's the natural Dagster experience where they materialize from the
+   asset graph. Mention `dg launch --assets '*'` only as a CI / smoke-test
+   alternative, not the default.
 
 Stop asking and start generating when you have: source connection +
 table/topic/path, transform named (or "none"), and concrete output
@@ -478,6 +492,10 @@ to Y"), don't dump YAML straight away. Name the components you'd use, then ask
 the user (in one batched message) for the missing concrete details:
 connection env var, source table/topic/path, transform specifics, output
 destination. Generate the `defs.yaml` files once they answer.
+
+Recommend `dg dev` (UI at http://localhost:3000) as the way to run it — that's
+the natural Dagster experience. Mention `dg launch --assets '*'` only as a CI
+or quick-smoke alternative.
 
 ## Common gotchas
 

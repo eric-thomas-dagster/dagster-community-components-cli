@@ -75,7 +75,10 @@ transform, write CSV"), don't dump a `defs.yaml` straight away:
    source tables / query, transform details, output path, schedule. Batch the
    questions in one message; don't drip them one by one.
 3. Generate the `defs.yaml` files once the user answers.
-4. Tell them how to run it (`dg check defs`, `dg launch --assets '*'`, `dg dev`).
+4. Tell them to `dg check defs` then `dg dev` (UI at http://localhost:3000)
+   — that's the natural Dagster experience where they materialize from the
+   asset graph. Mention `dg launch --assets '*'` only as a CI / smoke-test
+   alternative, not the default.
 
 Stop asking and start generating when you have: source connection +
 table/topic/path, transform named (or "none"), and concrete output
