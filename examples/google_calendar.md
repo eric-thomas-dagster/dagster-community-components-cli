@@ -8,7 +8,6 @@ local dev and on Dagster+ Cloud.
 ```
 upcoming_events     ← google_calendar_ingestion (Calendar API)
        │
-       ├── events_by_day        ← pandas (count + sample titles per day)
        ├── upcoming_events_csv  ← dataframe_to_csv (/tmp/calendar_events.csv — local dev)
        └── upcoming_events_bq   ← dataframe_to_bigquery (cloud-friendly: a real BQ table)
 ```

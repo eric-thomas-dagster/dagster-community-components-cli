@@ -185,6 +185,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Elasticsearch End-to-End](elasticsearch.md) | `elasticsearch_resource`, `elasticsearch_reader` | Index search → DataFrame against a **local elasticsearch:8.15 container** (security disabled). Retargets at Elastic Cloud unchanged. |
 | [Cassandra End-to-End](cassandra.md) | `cassandra_resource`, `cassandra_reader`, `cassandra_writer` | CQL read + DataFrame → table write against a **local cassandra:5 container**. Seeds 10 events, reader returns all 10, writer copies to a sibling table. |
 | [Trino](trino.md) | `trino_resource`, `trino_io_manager` | Trino coordinator (memory catalog) in **local trinodb/trino container**. `dg check defs` passes + connectivity verified; full materialization requires a DELETE-supporting catalog (Iceberg / Delta / Postgres). |
+| [Oracle Database](oracle.md) | `oracle_resource`, `dataframe_to_table`, `synthetic_data_generator`, `local_parquet_io_manager` | Oracle Database Free in **local Docker container** — no license, no Instant Client. Retargets at Oracle Autonomous DB / Enterprise / OCI by changing host + service_name only. |
+| [IBM Db2](db2.md) | `db2_resource`, `dataframe_to_table`, `synthetic_data_generator`, `local_parquet_io_manager` | Db2 Community Edition in **local Docker container** (free, non-production). Retargets at Db2 on Cloud / Db2 Warehouse by changing host + port + ssl. |
 
 ---
 

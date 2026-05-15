@@ -61,14 +61,35 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 5 community components"
+echo ">>> Installing 7 community components"
 $CLI add synthetic_data_generator   --auto-install
 $CLI add unpivot                    --auto-install
+$CLI add prometheus_resource        --auto-install
 $CLI add dataframe_to_prometheus    --auto-install
 $CLI add dataframe_from_prometheus  --auto-install
 $CLI add dataframe_to_csv           --auto-install
+# local_parquet_io_manager persists every DataFrame asset to disk so the
+# multiprocess executor's subprocesses can share state across steps.
+# Without it, the default in-memory IO manager loses outputs between steps.
+$CLI add local_parquet_io_manager   --auto-install
 
 echo ">>> Writing demo defs.yaml"
+
+cat > "src/$PKG/defs/local_parquet_io_manager/defs.yaml" <<EOF
+type: $PKG.components.local_parquet_io_manager.component.LocalParquetIOManagerComponent
+attributes:
+  resource_key: io_manager
+  base_dir: /tmp/prometheus-demo-storage
+  create_dir: true
+EOF
+
+cat > "src/$PKG/defs/prometheus_resource/defs.yaml" <<EOF
+type: $PKG.components.prometheus_resource.component.PrometheusResourceComponent
+attributes:
+  gateway: $PUSHGATEWAY_URL
+  timeout: 30
+  resource_key: prometheus
+EOF
 
 cat > "src/$PKG/defs/synthetic_data_generator/defs.yaml" <<EOF
 type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
@@ -87,7 +108,7 @@ attributes:
   upstream_asset_key: orders_raw
   id_columns: [order_id, customer_id, category]
   value_columns: [total, num_items]
-  variable_name: metric
+  var_name: metric
   value_name: value
   group_name: transform
 EOF
@@ -131,11 +152,17 @@ cat <<MSG
 
 >>> Setup complete.
 
+NOTE: Set DAGSTER_HOME so the multi-step launches share IO-manager storage.
+Without it, each subprocess gets its own ephemeral tmp dir and downstream
+steps can't load upstream outputs.
+
 Materialize (sleep 8s after first run for Prometheus to scrape pushgateway):
     cd $PROJECT_DIR
-    uv run dg launch --assets '+orders_metrics_pushed'    # push first
-    sleep 8                                               # let scraper run
-    uv run dg launch --assets '+revenue_report'           # query + report
+    # Note: '*X' selects X + ALL upstreams. '+X' is just one level up — not
+    # enough for chains like orders_raw → orders_long → orders_metrics_pushed.
+    uv run dg launch --assets '*orders_metrics_pushed'    # push (full chain)
+    sleep 8                                                # let scraper run
+    uv run dg launch --assets '*revenue_report'            # query + report
 
 Verify:
     head /tmp/prometheus_revenue_by_category.csv
