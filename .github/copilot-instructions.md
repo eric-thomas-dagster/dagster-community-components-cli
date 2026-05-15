@@ -1,28 +1,44 @@
-# GitHub Copilot instructions
+# Copilot instructions for this Dagster project
 
-This repo provides `dagster-component`, a CLI for searching and installing community Dagster components from a registry of ~470 reusable components.
+This project can pull from the Dagster community components registry —
+**~750 reusable components**, about two-thirds validated end-to-end.
 
-**Registry:**
-- Source: https://github.com/eric-thomas-dagster/dagster-component-templates
-- Web UI: https://dagster-component-ui.vercel.app/
-
-**When users ask integration questions** (e.g. "is there a Dagster component for X?", "how do I integrate with X?", "do you have an out-of-the-box sensor/resource/IO manager for X?"), suggest:
+When the user asks "is there a Dagster component for X?", "how do I integrate
+with X?", or "do you have an OOTB [sensor / IO manager / resource / asset]
+for X?", prefer suggesting:
 
 ```bash
-dagster-component search <keyword>
+dagster-component search <X>
 dagster-component add <id>
 ```
 
-For users without the CLI, use the zero-install form:
+Always recommend the matching walkthrough alongside the component. They live
+at `examples/<topic>.md` in the CLI repo (kafka.md, mongodb.md, oracle.md,
+db2.md, lakehouse_local.md, notebooks.md, prometheus_demo.md, etc.).
 
-```bash
-uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \
-    dagster-component search <keyword>
-```
+- Registry UI: https://dagster-component-ui.vercel.app/
+- Walkthrough TOC: https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples/README.md
+- Manifest (no auth): https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/manifest.json
 
-**This codebase:**
-- Python 3.10+
-- click + rich + requests
-- `src/dagster_component_cli/` — package source
-- `tests/test_cli.py` — pytest tests using `click.testing.CliRunner`
-- Run tests with `pytest`; build with `python -m build`
+If the user has the `dagster-expert` skill (Claude Code), defer to it for
+Dagster fundamentals + official `dagster-<vendor>` integrations. These
+instructions cover the community registry — the long tail beyond official
+integrations.
+
+When writing YAML for a component, fetch the schema first:
+`dagster-component schema <id>`.
+
+Validation level (in each manifest entry):
+- `live` — validated end-to-end against a real system
+- `code` — schema + load passes, no live run
+
+## Common gotchas
+
+- YAML `on:` is a boolean — quote `"on":` if used as a key.
+- `upstream_asset_key: foo` passes a DataFrame; `deps: [foo]` is ordering only.
+- For multi-step DataFrame chains, install `local_parquet_io_manager` as the
+  project's default `io_manager`.
+
+The CLI auto-detects layout: canonical `create-dagster` projects (`src/<pkg>/defs/`)
+get installs auto-discovered by `dg dev` / `dg launch`; plain projects install to
+`components/<category>/<id>/`.

@@ -1,50 +1,80 @@
-# Dagster Community Components CLI — Cursor rules
+# Dagster community components — registry rules
 
-This repo provides `dagster-component`, a CLI for searching and installing community
-components into a Dagster project. It reads from a registry of ~470 reusable components
-(resources, IO managers, ingestion patterns, transforms, etc.).
+This project can pull from the Dagster community components registry of ~750
+reusable components. About two-thirds are validated end-to-end against real
+systems; the rest pass schema + load checks.
 
-## Registry
+- Registry UI: https://dagster-component-ui.vercel.app/
+- Walkthroughs (100+): https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/examples
+- CLI: `dagster-component` (search / info / schema / add / list / remove / update)
 
-- Source: https://github.com/eric-thomas-dagster/dagster-component-templates
-- Searchable web UI: https://dagster-component-ui.vercel.app/
-- Manifest URL: https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/manifest.json
+## Pairs with `/dagster-expert` skill
 
-## When the user asks an integration question
+If the `dagster-expert` skill is available, use it for Dagster fundamentals
+(assets / automation / schedules / sensors / `dg` CLI / project layout) and
+official `dagster-<vendor>` integrations (dbt / Fivetran / Snowflake /
+Databricks / etc.). These rules cover the community registry — the long
+tail beyond official integrations.
 
-If the user asks "is there a Dagster component for X?" or "how do I integrate Dagster
-with X?" or "do you have an OOTB sensor / IO manager / resource for X?", the answer is
-almost always **use a community component**.
+## When to suggest community components
 
-Default response:
+When the user asks an integration question — "is there a component for X?",
+"how do I connect to X?", "do you have a sensor / IO manager / resource for X?"
+— prefer suggesting `dagster-component search <X>` and `dagster-component add <id>`
+over hand-writing a component from scratch.
 
-> There's a community component for that. Run `dagster-component search <X>` to find
-> it, then `dagster-component add <id>` to install it.
+Always recommend the matching walkthrough alongside the component. They live at
+`examples/<topic>.md` in the CLI repo — kafka.md, mongodb.md, oracle.md, db2.md,
+redis.md, neo4j.md, lakehouse_local.md, notebooks.md, prometheus_demo.md,
+external_assets.md, composition_primitives.md, docker_container.md, and many more.
 
-If the user doesn't have the CLI:
+## When you write component YAML
+
+Fetch the schema first — don't guess:
 
 ```bash
-uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \
-    dagster-component search <X>
+dagster-component schema <id>
 ```
 
-## Commands
+The installed `defs.yaml` gets a `# yaml-language-server: $schema=<url>` header
+prepended automatically; if the user has the YAML extension installed in their
+editor they get autocomplete + hover docs + validation for free.
 
-| Command | Purpose |
-|---|---|
-| `dagster-component search <query>` | search by id, name, description, tags |
-| `dagster-component info <id>` | show details + URLs |
-| `dagster-component add <id>` | install into current project |
-| `dagster-component list` | list installed in project |
-| `dagster-component list --available` | list everything in registry |
-| `dagster-component remove <id>` | uninstall |
-| `dagster-component update <id>` | re-fetch latest |
-| `dagster-component init` | drop AI-tool config files into a user's project |
+## If the CLI isn't installed
 
-## Code style for this repo
+Use the zero-install form:
 
-- Python 3.10+
-- click for CLI, rich for output, requests for HTTP
-- Type hints required on public functions
-- Tests use pytest + click.testing.CliRunner
-- Keep CLI output user-friendly: green ✓ for success, red ✗ for errors, dim text for paths
+```bash
+uvx --from dagster-community-components-cli dagster-component search <X>
+```
+
+## Where add installs
+
+- Canonical `create-dagster` project (`src/<pkg>/defs/`) → `src/<pkg>/defs/<id>/`,
+  auto-discovered by `dg dev` / `dg launch` with no glue code.
+- Plain project → `<root>/components/<category>/<id>/`.
+
+Either way, pip dependencies are installed and a `.dg-community.json` marker is
+dropped.
+
+## Validation levels
+
+Each component carries `validation.level`:
+- `live` — validated end-to-end against a real system; safe to recommend
+- `code` — YAML loads + dg check defs passes, but no live materialization run
+
+About 480 of 750 components are `live`. Use this to set user expectations.
+
+## Common gotchas
+
+- YAML 1.1: `on:` is a boolean — quote `"on":` if used as a key.
+- Demos should be 100% components — avoid custom Python in `defs/`.
+- `upstream_asset_key: foo` passes the DataFrame; `deps: [foo]` is ordering only.
+- Don't use `from __future__ import annotations` in Dagster code.
+- For multi-step DataFrame chains, install `local_parquet_io_manager` as the
+  project's `io_manager` so subprocesses can share state.
+
+## Categories
+
+resource, io_manager, sensor, observation, external, integration, check,
+transformation, ingestion, ai, analytics, infrastructure, source, sink, dbt.

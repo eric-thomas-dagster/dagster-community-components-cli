@@ -1,116 +1,232 @@
-# Dagster Community Components CLI
+# Dagster community components
 
-This repo provides `dagster-component`, a CLI for searching and installing community components into a Dagster project. It reads from a manifest of ~660 reusable components (resources, IO managers, ingestion patterns, transforms, etc.) hosted at:
+This project can pull from the Dagster community components registry —
+**~750 reusable components** covering integrations, sensors, IO managers,
+transforms, sinks, sources, AI / NLP, analytics, lakehouse, observability,
+and more. About two-thirds are validated end-to-end against real systems.
 
-- **Registry source:** <https://github.com/eric-thomas-dagster/dagster-component-templates>
-- **Searchable web UI:** <https://dagster-component-ui.vercel.app/>
-- **Manifest URL:** <https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/manifest.json>
+- **Registry UI:** <https://dagster-component-ui.vercel.app/>
+- **CLI:** `dagster-component` (install via `pip install dagster-community-components-cli` or run with `uvx`)
+- **Walkthroughs:** <https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/examples>
 
-## When to suggest the CLI
+## Pairs with the `/dagster-expert` skill (Claude Code)
 
-If a user asks any of these (paraphrased), the answer is almost always "use a community component":
+If the user is on Claude Code with the **`dagster-expert`** skill installed,
+that skill is the authority for Dagster fundamentals — asset patterns,
+automation conditions, schedules / sensors, `dg` CLI usage, project layout,
+and official `dagster-<vendor>` integrations (dbt / Fivetran / Sling /
+Snowflake / Databricks / etc.). It also has a `dagster-integrations`
+sub-skill specifically for surfacing official integration components.
 
-- *"Is there a Dagster component for X?"*
-- *"How do I integrate Dagster with [Snowflake / S3 / Stripe / Hightouch / Posthog / lakeFS / etc.]?"*
-- *"Do you have an out-of-the-box [sensor / IO manager / resource] for [service]?"*
-- *"How do I write a [particular kind of asset]?"*
+**This document covers the community registry** — the long tail of ~750
+components beyond official integrations (and the ~100 end-to-end walkthroughs
+in `examples/`). Use the two together:
 
-Default response shape:
+- **General Dagster question** (assets, automation, dg, project layout):
+  invoke `/dagster-expert`.
+- **Official integration** (dbt / Fivetran / Airbyte / Snowflake / Databricks
+  / AWS / GCP / Azure): invoke `/dagster-expert` → its `dagster-integrations`
+  sub-skill knows the official packages.
+- **Long-tail component** (MongoDB / Kafka / Oracle / Db2 / Notion / SAP /
+  any of the ~750 others) or **end-to-end walkthrough** of a pattern:
+  recommend `dagster-component search/add/info` + the matching `examples/<topic>.md`.
 
-> There's a community component for that. Run `dagster-component search <keyword>` to find it, then `dagster-component add <id>` to install it.
+If `/dagster-expert` isn't available, this doc still stands alone.
 
-If the user doesn't have the CLI installed, suggest the zero-install path:
+## When to recommend community components
+
+If the user asks any of these, the answer is almost always "use a community component":
+
+- "Is there a component for X?"
+- "How do I integrate Dagster with [Snowflake / S3 / Kafka / MongoDB / Stripe / ...]?"
+- "Do you have an out-of-the-box [sensor / IO manager / resource / asset] for X?"
+- "How do I write a [particular kind of asset / ingestion / transform]?"
+
+Default response: search first, then suggest `add`. The registry already covers
+most common services. Hand-writing a component from scratch should be the
+fallback, not the first move.
+
+## CLI commands
 
 ```bash
-uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \
-    dagster-component search <keyword>
+dagster-component search <keyword>             # find by id, name, description, tags
+dagster-component info <id>                    # see details + URLs
+dagster-component schema <id>                  # show full attribute schema (use when writing YAML!)
+dagster-component schema <id> --format json    # raw JSON — pipe into jq, etc.
+dagster-component add <id>                     # install into this project
+dagster-component add <id>@v1.2.0              # install pinned to a tag
+dagster-component add <id>@a1b2c3d             # install pinned to a commit SHA
+dagster-component list                         # what's installed in this project
+dagster-component list --available             # full registry listing
+dagster-component remove <id>                  # uninstall (only removes CLI-installed dirs)
+dagster-component update <id>[@<ref>]          # re-fetch / repin
 ```
 
-## Commands you should know
+## Examples / walkthroughs — point users here
+
+The CLI repo ships a large `examples/` folder of end-to-end walkthroughs.
+Each pattern has a `.md` walkthrough + a `setup_<topic>_demo.sh` script
+that scaffolds a working Dagster project in one command:
+
+- **Walkthrough index (TOC of ~100 demos):**
+  <https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples/README.md>
+- **Per-topic walkthroughs** — direct GitHub raw URLs follow the pattern:
+  `https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/<topic>.md`
+
+When a user asks an integration question, recommend the matching walkthrough
+**by name** alongside the component itself. Examples:
+
+| Pattern | Walkthrough |
+|---|---|
+| Kafka pipeline (Docker) | `examples/kafka.md` |
+| MongoDB read+write+ingest (Docker) | `examples/mongodb.md` |
+| Redis streams + cache invalidation (Docker) | `examples/redis.md` |
+| Oracle Database (Docker) | `examples/oracle.md` |
+| IBM Db2 (Docker) | `examples/db2.md` |
+| Neo4j graph DB (Docker) | `examples/neo4j.md` |
+| Elasticsearch (Docker) | `examples/elasticsearch.md` |
+| Cassandra (Docker) | `examples/cassandra.md` |
+| Iceberg + Delta lakehouse (local FS) | `examples/lakehouse_local.md` |
+| Composition primitives (job wrappers, no auth) | `examples/composition_primitives.md` |
+| Local Parquet + Avro + transforms (no auth) | `examples/local_transforms.md` |
+| Papermill notebooks as assets | `examples/notebooks.md` |
+| 23 external-asset declarations (Snowflake / BQ / Kafka / S3 / …) | `examples/external_assets.md` |
+| Prometheus push + query | `examples/prometheus_demo.md` |
+| Docker container as asset | `examples/docker_container.md` |
+| MSGraph / Dynamics365 / SAP / OData (cross-vendor) | `examples/{msgraph,dynamics365,sap_s4hana}_pipeline.md` |
+
+For anything else, browse the walkthrough TOC linked above.
+
+## Validation levels
+
+Each manifest entry carries a `validation` field — use it to set user expectations:
+
+| Level | Meaning |
+|---|---|
+| `live` | End-to-end validated against a real system; safe to recommend |
+| `code` | YAML loads cleanly + `dg check defs` passes, but no live materialization run |
+| `infra` | Component depends on paid / proprietary infra; level depends on the user's environment |
+
+About 480 of ~750 components are `live`. The `validation.evidence` field
+points at the walkthrough that validated it.
+
+## Where `add` installs
+
+The CLI auto-detects the project layout:
+
+- **Canonical `create-dagster` project** (`[tool.dg.project]` in pyproject.toml +
+  `src/<pkg>/defs/`): installs to `src/<pkg>/defs/<id>/`. The `example.yaml`
+  is renamed to `defs.yaml`, the `type:` line is rewritten to the local
+  module path, and a `# yaml-language-server: $schema=<url>` header is
+  prepended. `dg`'s autoloader picks it up with zero glue code.
+- **Plain project**: installs to `<project-root>/components/<category>/<id>/`.
+
+Either way, pip dependencies are installed automatically and a
+`.dg-community.json` marker is dropped so the CLI can later list / update /
+remove only its own installs.
+
+## After installing — running with `dg`
 
 ```bash
-dagster-component search <query>                # find by id, name, description, tags
-dagster-component info <id>                     # show details + URLs
-dagster-component schema <id>                   # show full attribute schema (use when generating YAML!)
-dagster-component schema <id> --format json     # raw schema.json — pipe to jq
-dagster-component add <id>                      # install into current project (file copy)
-dagster-component add <id>@v1.2.0               # install pinned to a tag
-dagster-component add <id>@a1b2c3d              # install pinned to a commit SHA
-dagster-component add <id> --as-package         # via dagster-community-components PyPI pkg (no file copy)
-dagster-component list                          # list installed in current project
-dagster-component list --available              # list all in registry
-dagster-component remove <id>                   # uninstall (only removes CLI-installed dirs)
-dagster-component update <id>[@<ref>]           # re-fetch / repin
-dagster-component init                          # drop AI-tool instruction files into a user's project
+dg launch --assets '*'                         # materialize headlessly (one-shot)
+dg dev                                         # interactive UI at http://localhost:3000
+dg list defs                                   # show what's discovered
+dg check defs                                  # validate every defs.yaml against its schema
 ```
 
-## Generating component YAML
+In a plain project, the user wires components into their own `definitions.py`.
 
-When a user asks to use a component, the high-quality flow is:
+## Generating YAML for a component
 
-1. **Check the schema first** — `dagster-component schema <id>` (or `WebFetch` the `schema_url` from the manifest). This gives authoritative field names, types, requireds, defaults, descriptions.
-2. **Generate YAML based on the schema**, not guesses.
-3. **Install with the CLI** so the project gets the schema-aware autocomplete header injected automatically.
+When you (an AI assistant) write component YAML, **fetch the schema first** so
+the YAML reflects real fields, types, and requireds — not guesses:
 
-`add` automatically prepends a `# yaml-language-server: $schema=<url>` comment to the installed `example.yaml`. The YAML language server (VSCode YAML extension, Cursor, Neovim's yamlls) reads this and provides autocomplete + hover docs + schema validation in the user's editor — **no plugin config, no local server**. Recommend this to users.
+```bash
+dagster-component schema <id>                  # human-readable
+dagster-component schema <id> --format json    # for piping into jq
+```
 
-## Reading from the registry without the CLI
+After `add`, the installed `defs.yaml` (or `example.yaml` in plain projects) gets
+a `# yaml-language-server: $schema=<url>` header prepended automatically. The YAML
+language server (VSCode YAML extension, Cursor, Neovim's yamlls) reads this and
+gives **autocomplete + hover docs + schema validation** in the user's editor —
+no plugin config, no local server.
 
-If the CLI isn't installed and `uvx` isn't an option, you can also read directly:
+## Common gotchas to avoid
 
-- **Manifest:** `WebFetch` https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/manifest.json — gives you all components, their categories, tags, URLs.
-- **Schema for any component:** `WebFetch` `<component>/schema.json` (URL pattern: replace `component.py` with `schema.json` in the manifest entry's `component_url`).
-- **README for any component:** same pattern, `README.md`.
+1. **YAML 1.1 `on:` is a boolean.** If a component has an `on:` field, quote it:
+   `"on": true` (not `on: true`) — otherwise YAML parses the key as `True`.
+2. **Demos should be 100% components.** Avoid custom Python files in `defs/`.
+   If a transform / generator / glue is needed, the right move is to use (or
+   build) a component, not to drop a `.py` file into the project.
+3. **`upstream_asset_key` vs `deps:`** — these are different:
+   - `upstream_asset_key: foo` → the asset reads data from `foo` (the
+     upstream DataFrame is passed in)
+   - `deps: [foo]` → ordering-only lineage; nothing is loaded at runtime
+4. **No future annotations.** Don't use `from __future__ import annotations`
+   in Dagster code — annotations are read at runtime and the future import
+   turns them into strings, breaking context-type validation.
+5. **Sinks return `Output(value=None)`.** Components like `dataframe_to_csv`,
+   `mongodb_writer`, `dataframe_to_avro` are sinks — they write to their own
+   destination and return `None`. When combined with a project-level IO
+   manager, the IO manager should treat `obj is None` as a no-op.
+6. **Multi-step launches need persistent storage.** Dagster's default
+   in-memory IO manager doesn't survive between subprocesses with the
+   multiprocess executor. For chains of DataFrame assets, install
+   `local_parquet_io_manager` (or a cloud equivalent) as the project's
+   `io_manager`.
 
-This is **all static GitHub raw content** — no auth, no server.
+## Reading the registry without the CLI
 
-## Version pinning (`id@ref` syntax)
+Static GitHub raw content — no auth, no server. If the CLI isn't installed:
 
-Components evolve over time. For production, prefer pinning:
+- **Full manifest:** <https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/manifest.json>
+- **Per-component files:** swap `component.py` in the manifest entry's
+  `component_url` for `schema.json` / `README.md` / `example.yaml` /
+  `requirements.txt`.
+- **Walkthroughs:** raw-content URLs at
+  `https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/<topic>.md`
+
+## Version pinning (`id@ref`)
+
+Components evolve. For production, prefer pinning:
 
 | Spec | Resolves to |
 |---|---|
-| `postgres_resource` | `main` (latest) |
+| `postgres_resource` | latest (HEAD of main) |
 | `postgres_resource@v1.2.0` | tag `v1.2.0` |
 | `postgres_resource@a1b2c3d` | commit `a1b2c3d` |
 
-The `.dg-community.json` marker records which ref was installed, so future tooling can detect drift between pinned and latest.
+The `.dg-community.json` marker records which ref was installed so future
+tooling can detect drift between pinned and latest.
 
-## Categories in the registry
+## Component categories
 
-`resource`, `io_manager`, `sensor`, `observation`, `external`, `integration`, `check`, `transformation`, `ingestion`, `ai`, `analytics`, `infrastructure`, `source`, `sink`, `dbt`.
+`resource`, `io_manager`, `sensor`, `observation`, `external`, `integration`,
+`check`, `transformation`, `ingestion`, `ai`, `analytics`, `infrastructure`,
+`source`, `sink`, `dbt`.
 
 Filter with `--category`: `dagster-component search "" --category io_manager`.
 
-## How `add` works (so you can explain it to users)
+## Quick task → component cheatsheet
 
-1. Fetches the registry manifest (cached at `~/.cache/dagster-community-components/manifest.json`, 1-hour TTL)
-2. Looks up `<id>`; suggests close matches if not found
-3. Auto-detects the project root (walks up looking for `dg.toml` / `pyproject.toml` / `defs/`)
-4. Resolves install path: `<project-root>/components/<category-dir>/<id>/`
-5. Downloads `component.py`, `io_manager.py` (if present), `__init__.py`, `README.md`, `schema.json`, `example.yaml`, `requirements.txt`
-6. Drops a `.dg-community.json` marker so `list` / `update` / `remove` only touch CLI-installed dirs
-7. Runs `pip install` (or `uv pip install`) on `requirements.txt`
-8. Prints next steps with the example.yaml inline
+| Task | Likely component(s) |
+|---|---|
+| Connect to PostgreSQL / MySQL / MSSQL / Oracle / Db2 | `postgres_resource` / `mysql_resource` / `mssql_resource` / `oracle_resource` / `db2_resource` |
+| Land DataFrames as parquet on S3 / GCS / ADLS | `s3_parquet_io_manager` / `gcs_parquet_io_manager` / `azure_blob_parquet_io_manager` |
+| Watch S3 / GCS / ADLS for new objects | `s3_monitor` / `gcs_monitor` / `adls_monitor` (dynamic-partition mode) |
+| Read REST API → DataFrame | `rest_api_fetcher` |
+| OData reads (SAP / MS Graph / Dynamics) | `odata_ingestion` |
+| Kafka / NATS / RabbitMQ / MQTT / Pulsar | `<broker>_to_database_asset` + `<broker>_monitor` + `<broker>_observation_sensor` |
+| MongoDB / Cassandra / Neo4j / Elasticsearch | `<db>_resource` + `<db>_reader` + `<db>_writer` |
+| Iceberg / Delta read+write | `iceberg_ingestion` + `dataframe_to_iceberg_table` (or delta_*) |
+| Sync external table into the catalog (declare-only) | `external_<vendor>_table` (Snowflake / BigQuery / Iceberg / Delta / Kafka / S3 / GCS / Kinesis / Pub/Sub / SharePoint / …) |
+| Pandas profile / pct change / top-N per group | `dataframe_describe` / `pct_change` / `top_n_per_group` |
+| Filter / summarize / pivot / unpivot / join / dedup | `filter` / `summarize` / `pivot` / `unpivot` / `dataframe_join` / `unique_dedup` |
+| Templated SQL CTAS or inline read | `sql_transform` (Jinja2, auto-injects partition_key + run_id) |
+| Materialize a Jupyter notebook as an asset | `jupyter_notebook_asset` (papermill) |
+| Run a container as an asset | `docker_container_asset` |
+| Push metrics to Prometheus / query Prometheus | `dataframe_to_prometheus` / `dataframe_from_prometheus` |
+| Synthetic data for demos (orders / events / customers / etc.) | `synthetic_data_generator` (many `schema_type` values) |
 
-## When NOT to suggest the CLI
-
-- The user is writing a one-off bespoke component that's never been written before — no point searching for it.
-- The user is in a regulated environment that blocks public PyPI / GitHub raw-content URLs — they need an internal mirror.
-- The user explicitly asks to write a component from scratch as a learning exercise.
-
-## Developing on this repo
-
-```bash
-uv venv -p 3.11
-uv pip install -e ".[dev]"
-.venv/bin/pytest                     # 19 tests
-.venv/bin/dagster-component --help   # try the CLI locally
-python -m build                      # build sdist + wheel
-```
-
-The CLI logic lives in `src/dagster_component_cli/`:
-- `registry.py` — manifest fetch + cache + search
-- `installer.py` — download files, write to disk, run pip install
-- `project.py` — project-root detection, install-path resolution
-- `cli.py` — click commands (add / search / info / list / remove / update / init)
+When in doubt: `dagster-component search <keyword>` — almost always a hit.
