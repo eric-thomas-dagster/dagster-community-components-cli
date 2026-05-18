@@ -515,33 +515,35 @@ for i in "${!SELECTED_IDS[@]}"; do
 done
 
 # ── 5b. Fetch tasks for each selected job ──────────────────────────────
-# DatabricksWorkspaceComponent produces one asset per (job, task), with key
-# [snake_case(job_name), snake_case(task_key)]. We need each task_key to
-# (a) wire deps + automation_condition via assets_by_job_task_key, and
-# (b) populate the cron schedule's asset_keys for root jobs.
+# DatabricksWorkspaceComponent makes one Dagster asset per (job, task).
+# Most Databricks jobs in practice are single-task — for those, you'll see
+# exactly one asset per job in Dagster. For multi-task jobs (rare), each
+# task becomes a separate asset.
 
-# Parallel array: TASK_KEYS_FOR_JOB[i] = comma-separated task_keys for SELECTED_IDS[i]
 TASK_KEYS_FOR_JOB=()
 echo
-echo ">>> Fetching task details for selected jobs ..."
+echo ">>> Looking up tasks for each selected job ..."
 for i in "${!SELECTED_IDS[@]}"; do
   JID="${SELECTED_IDS[$i]}"
   JNAME="${SELECTED_NAMES[$i]}"
   JOB_DETAIL=$(curl -sf -H "Authorization: Bearer $DATABRICKS_TOKEN" \
     "$DATABRICKS_HOST/api/2.1/jobs/get?job_id=$JID" 2>/dev/null || echo "")
   if [ -z "$JOB_DETAIL" ]; then
-    echo "  ⚠ Could not fetch job $JID detail — assuming single 'main' task."
+    echo "  ⚠ Could not fetch job $JID detail — defaulting to a single task named 'main'."
     TASK_KEYS_FOR_JOB+=("main")
     continue
   fi
   TKS=$(echo "$JOB_DETAIL" | jq -r '.settings.tasks[]?.task_key' 2>/dev/null | paste -sd, -)
   if [ -z "$TKS" ]; then
-    # Legacy single-task job (no tasks[] array); use 'main' as a stand-in
     TKS="main"
   fi
   TASK_COUNT=$(echo "$TKS" | tr ',' '\n' | grep -c .)
   TASK_KEYS_FOR_JOB+=("$TKS")
-  printf "  job_id=%-10s  %s  →  %d task(s): %s\n" "$JID" "$JNAME" "$TASK_COUNT" "$TKS"
+  if [ "$TASK_COUNT" -eq 1 ]; then
+    printf "  job_id=%-10s  %s\n" "$JID" "$JNAME"
+  else
+    printf "  job_id=%-10s  %s  (%d tasks: %s)\n" "$JID" "$JNAME" "$TASK_COUNT" "$TKS"
+  fi
 done
 
 # ── 6. Cross-job dependencies ──────────────────────────────────────────

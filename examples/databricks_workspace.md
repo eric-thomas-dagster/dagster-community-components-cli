@@ -96,7 +96,7 @@ Choice [1/2/3/4/5]: 1
 
 Pattern matching is fnmatch-style globs (`*`, `?`), case-insensitive. If a pattern returns > 200 jobs, you're asked to narrow.
 
-## Orchestration: hybrid by design
+## Orchestration: schedule + automation cascade
 
 After the dependency prompt, the script asks how the **root jobs** (those with no upstream deps in your selection) should trigger. **Downstream jobs always cascade automatically** via Dagster `AutomationCondition.eager` — no prompts needed for those.
 
@@ -106,20 +106,25 @@ For ROOT jobs (those with no upstream deps), what triggers them?
   2. Manual only    — you trigger the roots; downstream cascades
 ```
 
-### How asset keys look on disk
+### How Databricks Jobs map to Dagster assets
 
-`DatabricksWorkspaceComponent` produces one Dagster asset per **task** in a Databricks job. Asset keys are `[snake_case(job_name), snake_case(task_key)]`:
+For the common case — **a Databricks Job with a single task** — you get one Dagster asset per Job. Mental model: 1 Job = 1 asset. The asset key is `<job>/<task>` because that's how the official `DatabricksWorkspaceComponent` names things, but in practice it acts as one unit.
 
-| Databricks job | Tasks | Asset keys |
-|---|---|---|
-| `bronze_customers_ingestion` | `main` | `bronze_customers_ingestion/main` |
-| `silver_orders_enriched` | `extract`, `transform` | `silver_orders_enriched/extract`, `silver_orders_enriched/transform` |
+| Databricks Job | Tasks | Dagster assets | Effective unit |
+|---|---|---|---|
+| `bronze_customers_ingestion` | `main` (1 task) | `bronze_customers_ingestion/main` | 1 asset = 1 job |
+| `silver_customer_360` | `main` (1 task) | `silver_customer_360/main` | 1 asset = 1 job |
+| `silver_orders_enriched` | `extract`, `transform` (2 tasks) | `silver_orders_enriched/extract`, `silver_orders_enriched/transform` | 2 assets, but both are part of the same Job |
 
-When you say "silver_orders_enriched depends on bronze_orders_ingestion" in the prompt, the script wires every task in `silver_*` to depend on every task in `bronze_*`.
+**You almost certainly have single-task jobs.** Most production Databricks jobs are one notebook / one Spark job / one DLT pipeline → one task. The script handles multi-task jobs transparently if you have them (every task in a downstream job depends on every task in its upstream), but you don't need to think about it.
+
+When you say *"silver_orders_enriched depends on bronze_orders_ingestion"* in the prompt, the script wires the dep correctly regardless of how many tasks each side has.
 
 ### What the script generates
 
-**The DatabricksWorkspaceComponent's `defs.yaml`** — workspace creds via templated env vars + the job filter + per-task overrides for downstream jobs:
+Assuming each of your 5 Databricks jobs has a single task (the common case), the script writes:
+
+**The DatabricksWorkspaceComponent's `defs.yaml`** — workspace creds via templated env vars + the job filter + per-job overrides for downstream jobs:
 
 ```yaml
 type: dagster_databricks.DatabricksWorkspaceComponent
@@ -143,14 +148,8 @@ attributes:
             - "bronze_customers_ingestion/main"
           automation_condition: eager     # ← fires when bronze_customers completes
     "silver_orders_enriched":
-      "extract":
-        - key: "silver_orders_enriched/extract"
-          deps:
-            - "bronze_customers_ingestion/main"
-            - "bronze_orders_ingestion/main"
-          automation_condition: eager
-      "transform":
-        - key: "silver_orders_enriched/transform"
+      "main":
+        - key: "silver_orders_enriched/main"
           deps:
             - "bronze_customers_ingestion/main"
             - "bronze_orders_ingestion/main"
@@ -160,12 +159,13 @@ attributes:
         - key: "gold_customer_ltv/main"
           deps:
             - "silver_customer_360/main"
-            - "silver_orders_enriched/extract"
-            - "silver_orders_enriched/transform"
+            - "silver_orders_enriched/main"
           automation_condition: eager
 ```
 
-**If you picked Cron schedule, a second `defs.yaml`** under `defs/schedule/` — the `cron_schedule` community component targeting **only the root job tasks**:
+If you have any **multi-task** jobs, the script generates one entry per task under each job key (same shape, just more lines) — without you having to do extra work.
+
+**If you picked Cron schedule, a second `defs.yaml`** under `defs/schedule/` — the `cron_schedule` community component targeting **only the root job assets**:
 
 ```yaml
 type: dagster_community_components.CronScheduleComponent
@@ -181,14 +181,14 @@ attributes:
 
 The cron fires the roots. The roots complete (Databricks job materializes). Dagster sees the materialization, the `automation_condition: eager` on downstream tasks fires, downstream runs. Cascade.
 
-### Why hybrid?
+### Why split it (cron on roots, eager on downstream)?
 
-Bundling everything into one cron schedule would force the whole graph through a single scheduled job — coupling that doesn't reflect how the jobs actually depend. Auto-cascading from a scheduled root, in contrast:
+Bundling every job into one cron schedule would force the whole graph through a single scheduled run — coupling that doesn't reflect how the jobs actually depend. Splitting the trigger from the cascade:
 
 - **Each layer's runtime is independent.** If bronze takes 20 mins and silver takes 5, gold doesn't wait the full bronze window.
-- **Failure isolation is real.** If silver's transform fails, the cron schedule still completed; gold just doesn't fire. The next cron tick re-runs the roots.
+- **Failure isolation is real.** If silver fails, the cron still completed; gold just doesn't fire. The next cron tick re-runs the roots.
 - **Backfills are surgical.** Re-materializing `bronze_customers_ingestion/main` cascades downstream from there — no need to re-run the whole schedule.
-- **Backpressure is visible.** Asset-graph-level lineage in the Dagster UI shows exactly what's waiting on what.
+- **Backpressure is visible.** Asset-graph lineage in the Dagster UI shows exactly what's waiting on what.
 
 If you pick "Manual only", same downstream cascade — just trigger the root by hand (click in UI / `dg launch`) and watch downstream propagate.
 
