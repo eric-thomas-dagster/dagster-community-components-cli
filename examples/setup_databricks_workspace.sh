@@ -281,54 +281,222 @@ while true; do
 done
 
 JOB_LIST=$(echo "$ALL_JOBS_JSON" | jq -r '.jobs[]? | "\(.job_id)\t\(.settings.name // "(no name)")"' | sort -t$'\t' -k2)
-JOB_COUNT=$(echo "$JOB_LIST" | grep -c "" || true)
+# Count non-empty lines (echo "" | grep -c "" returns 1 — we want 0)
+if [ -z "$JOB_LIST" ]; then
+  JOB_COUNT=0
+else
+  JOB_COUNT=$(printf "%s\n" "$JOB_LIST" | grep -c .)
+fi
 if [ -z "$JOB_LIST" ] || [ "$JOB_COUNT" -eq 0 ]; then
   echo "ERROR: No jobs found in workspace (or token lacks Jobs:Read permission)."
   exit 1
 fi
 
-echo
-echo "Available jobs in workspace ($JOB_COUNT total):"
-echo "$JOB_LIST" | awk -F'\t' '{printf "  [%3d] job_id=%-10s  %s\n", NR, $1, $2}'
-echo
+# ── 5. Select jobs (scale-aware) ───────────────────────────────────────
+# Below threshold: show all + pick by number.
+# Above threshold: prompt for IDs / glob / paginated 'list'.
 
-# ── 5. Select jobs ─────────────────────────────────────────────────────
+SELECTION_THRESHOLD=30
 SELECTED_IDS=()
 SELECTED_NAMES=()
 
-while [ "${#SELECTED_IDS[@]}" -eq 0 ]; do
-  read -r -p "Select job numbers (comma-separated, 'all', or 'q' to quit): " SELECTION
-  case "$SELECTION" in
-    q|Q) echo "Aborted."; exit 0 ;;
-    all|ALL|All)
-      while IFS=$'\t' read -r jid jname; do
-        SELECTED_IDS+=("$jid")
-        SELECTED_NAMES+=("$jname")
-      done <<< "$JOB_LIST"
-      ;;
-    "")
-      echo "  Nothing selected."
-      ;;
-    *)
-      OLD_IFS="$IFS"; IFS=','
-      for idx in $SELECTION; do
-        IFS="$OLD_IFS"
-        idx="${idx// /}"
-        [ -z "$idx" ] && continue
-        if ! echo "$idx" | grep -qE '^[0-9]+$'; then
-          echo "  Ignoring non-numeric token: '$idx'"; continue
+# Build a display table from a tab-separated subset of JOB_LIST.
+# Usage: render_jobs "<subset>" → numbered list to stdout
+render_jobs() {
+  echo "$1" | awk -F'\t' '{printf "  [%3d] job_id=%-10s  %s\n", NR, $1, $2}'
+}
+
+# Take "selection" (comma-list of numbers) against a passed-in tab-separated
+# list and append matches to SELECTED_IDS / SELECTED_NAMES.
+select_from_list() {
+  local pool="$1"
+  local selection="$2"
+  local pool_count
+  if [ -z "$pool" ]; then pool_count=0; else pool_count=$(printf "%s\n" "$pool" | grep -c .); fi
+  if [ "$selection" = "all" ] || [ "$selection" = "ALL" ] || [ "$selection" = "All" ]; then
+    while IFS=$'\t' read -r jid jname; do
+      SELECTED_IDS+=("$jid")
+      SELECTED_NAMES+=("$jname")
+    done <<< "$pool"
+    return 0
+  fi
+  local OLD_IFS="$IFS"; IFS=','
+  for idx in $selection; do
+    IFS="$OLD_IFS"
+    idx="${idx// /}"
+    [ -z "$idx" ] && continue
+    if ! echo "$idx" | grep -qE '^[0-9]+$'; then
+      echo "  Ignoring non-numeric token: '$idx'"; continue
+    fi
+    if [ "$idx" -lt 1 ] || [ "$idx" -gt "$pool_count" ]; then
+      echo "  Out of range: $idx (have 1..$pool_count)"; continue
+    fi
+    local line
+    line=$(echo "$pool" | sed -n "${idx}p")
+    SELECTED_IDS+=("$(echo "$line" | cut -f1)")
+    SELECTED_NAMES+=("$(echo "$line" | cut -f2)")
+  done
+  IFS="$OLD_IFS"
+}
+
+# Look up job names by ID. Skips IDs not in the workspace.
+select_by_ids() {
+  local id_csv="$1"
+  local OLD_IFS="$IFS"; IFS=','
+  for jid in $id_csv; do
+    IFS="$OLD_IFS"
+    jid="${jid// /}"
+    [ -z "$jid" ] && continue
+    if ! echo "$jid" | grep -qE '^[0-9]+$'; then
+      echo "  Ignoring non-numeric job_id: '$jid'"; continue
+    fi
+    local name
+    name=$(echo "$JOB_LIST" | awk -F'\t' -v id="$jid" '$1==id {print $2; exit}')
+    if [ -z "$name" ]; then
+      echo "  job_id $jid not in workspace; skipping"; continue
+    fi
+    SELECTED_IDS+=("$jid")
+    SELECTED_NAMES+=("$name")
+  done
+  IFS="$OLD_IFS"
+}
+
+# Filter JOB_LIST by glob pattern (case-insensitive) against job name.
+filter_by_glob() {
+  local pattern="$1"
+  local pattern_lower
+  pattern_lower=$(echo "$pattern" | tr '[:upper:]' '[:lower:]')
+  local out=""
+  while IFS=$'\t' read -r jid jname; do
+    local name_lower
+    name_lower=$(echo "$jname" | tr '[:upper:]' '[:lower:]')
+    # shellcheck disable=SC2053
+    if [[ "$name_lower" == $pattern_lower ]]; then
+      out="${out}${jid}	${jname}
+"
+    fi
+  done <<< "$JOB_LIST"
+  printf "%s" "${out%$'\n'}"
+}
+
+# Paginated display of JOB_LIST: 30 at a time, 'q' to stop browsing.
+paginated_browse() {
+  local page=1
+  local per_page=30
+  while true; do
+    local start=$((1 + (page - 1) * per_page))
+    local end=$((page * per_page))
+    [ "$end" -gt "$JOB_COUNT" ] && end=$JOB_COUNT
+    [ "$start" -gt "$JOB_COUNT" ] && break
+    echo
+    echo "Jobs $start..$end of $JOB_COUNT:"
+    echo "$JOB_LIST" | sed -n "${start},${end}p" | awk -F'\t' -v s="$start" '{printf "  [%3d] job_id=%-10s  %s\n", s + NR - 1, $1, $2}'
+    if [ "$end" -ge "$JOB_COUNT" ]; then break; fi
+    read -r -p "  Next $per_page? [Y/n/q to stop browsing]: " NEXT
+    case "$NEXT" in
+      n|N|q|Q) break ;;
+      *) page=$((page + 1)) ;;
+    esac
+  done
+}
+
+echo
+echo "Workspace has $JOB_COUNT job(s)."
+
+if [ "$JOB_COUNT" -le "$SELECTION_THRESHOLD" ]; then
+  echo
+  render_jobs "$JOB_LIST"
+  echo
+  while [ "${#SELECTED_IDS[@]}" -eq 0 ]; do
+    read -r -p "Select job numbers (comma-separated, 'all', or 'q' to quit): " SELECTION
+    case "$SELECTION" in
+      q|Q) echo "Aborted."; exit 0 ;;
+      "")  echo "  Nothing selected." ;;
+      *)   select_from_list "$JOB_LIST" "$SELECTION" ;;
+    esac
+  done
+else
+  # Large-workspace path: filter / paste IDs / paginated browse
+  cat <<MSG
+
+That's too many to list at once. Pick one:
+
+  1. Filter by name pattern  (e.g. 'bronze_*', 'silver_customer*', 'gold_*_v2')
+  2. Paste job IDs directly  (comma-separated, e.g. '482631,482632,482638')
+  3. Browse paginated        (30 at a time)
+  4. Show all                (forces full list — use only if you really want it)
+  5. Quit
+
+MSG
+  while [ "${#SELECTED_IDS[@]}" -eq 0 ]; do
+    read -r -p "Choice [1/2/3/4/5]: " MODE
+    case "$MODE" in
+      5|q|Q) echo "Aborted."; exit 0 ;;
+
+      1)
+        while true; do
+          read -r -p "  Filter pattern (glob, e.g. 'bronze_*'; 'r' to pick a different mode): " PATTERN
+          if [ "$PATTERN" = "r" ] || [ "$PATTERN" = "R" ]; then break; fi
+          if [ -z "$PATTERN" ]; then continue; fi
+          FILTERED=$(filter_by_glob "$PATTERN")
+          if [ -z "$FILTERED" ]; then FCOUNT=0; else FCOUNT=$(printf "%s\n" "$FILTERED" | grep -c .); fi
+          if [ -z "$FILTERED" ] || [ "$FCOUNT" -eq 0 ]; then
+            echo "  No jobs match '$PATTERN'. Try a broader pattern."
+            continue
+          fi
+          if [ "$FCOUNT" -gt 200 ]; then
+            echo "  Pattern matched $FCOUNT jobs — please narrow ('${PATTERN}' is too broad)."
+            continue
+          fi
+          echo
+          echo "  Matched $FCOUNT job(s):"
+          render_jobs "$FILTERED"
+          echo
+          read -r -p "  Select numbers (comma-separated), 'all', or 'r' to re-search: " SUBSEL
+          case "$SUBSEL" in
+            r|R) continue ;;
+            "")  echo "  Nothing selected."; continue ;;
+            *)   select_from_list "$FILTERED" "$SUBSEL"; break ;;
+          esac
+        done
+        ;;
+
+      2)
+        read -r -p "  Job IDs (comma-separated): " ID_CSV
+        if [ -n "$ID_CSV" ]; then
+          select_by_ids "$ID_CSV"
         fi
-        if [ "$idx" -lt 1 ] || [ "$idx" -gt "$JOB_COUNT" ]; then
-          echo "  Out of range: $idx (have 1..$JOB_COUNT)"; continue
-        fi
-        LINE=$(echo "$JOB_LIST" | sed -n "${idx}p")
-        SELECTED_IDS+=("$(echo "$LINE" | cut -f1)")
-        SELECTED_NAMES+=("$(echo "$LINE" | cut -f2)")
-      done
-      IFS="$OLD_IFS"
-      ;;
-  esac
-done
+        ;;
+
+      3)
+        paginated_browse
+        echo
+        read -r -p "  Now select by number (comma-separated, 'all', or 'q'): " SELECTION
+        case "$SELECTION" in
+          q|Q) echo "Aborted."; exit 0 ;;
+          "")  echo "  Nothing selected." ;;
+          *)   select_from_list "$JOB_LIST" "$SELECTION" ;;
+        esac
+        ;;
+
+      4)
+        echo
+        render_jobs "$JOB_LIST"
+        echo
+        read -r -p "  Select job numbers (comma-separated, 'all', or 'q'): " SELECTION
+        case "$SELECTION" in
+          q|Q) echo "Aborted."; exit 0 ;;
+          "")  echo "  Nothing selected." ;;
+          *)   select_from_list "$JOB_LIST" "$SELECTION" ;;
+        esac
+        ;;
+
+      *)
+        echo "  Pick 1, 2, 3, 4, or 5."
+        ;;
+    esac
+  done
+fi
 
 N_SELECTED=${#SELECTED_IDS[@]}
 echo
@@ -380,7 +548,59 @@ for i in "${!SELECTED_NAMES[@]}"; do
   done
 done
 
-# ── 7. Confirm before scaffolding ──────────────────────────────────────
+# ── 7. Orchestration mode ──────────────────────────────────────────────
+# How should the assets be triggered? Three options:
+#   1. Cron schedule          — runs all selected jobs on a cron (using the
+#                               community cron_schedule component)
+#   2. Auto-trigger on upstream completion — each downstream job materializes
+#                               as soon as its upstream completes (Dagster
+#                               AutomationCondition.eager). For job chains
+#                               where you want lakeflow-style cascading.
+#   3. Manual only            — just lineage; click to materialize / dg launch
+
+echo
+echo "─────────────────────────────────────────────────────────────────────"
+echo "  Orchestration mode"
+echo "─────────────────────────────────────────────────────────────────────"
+echo "How should these jobs run?"
+echo "  1. Cron schedule        — runs at fixed times (e.g. nightly)"
+echo "  2. Auto-cascade         — downstream jobs auto-trigger when upstream"
+echo "                            completes (Dagster AutomationCondition.eager)"
+echo "  3. Manual only          — just lineage; no automation"
+echo
+
+ORCH_MODE=""
+CRON_EXPR=""
+CRON_TZ=""
+SCHEDULE_NAME=""
+
+while [ -z "$ORCH_MODE" ]; do
+  read -r -p "Choice [1/2/3]: " M
+  case "$M" in
+    1)
+      ORCH_MODE="cron"
+      read -r -p "  Cron expression [0 2 * * *]: " CRON_EXPR
+      CRON_EXPR="${CRON_EXPR:-0 2 * * *}"
+      read -r -p "  Timezone [UTC]: " CRON_TZ
+      CRON_TZ="${CRON_TZ:-UTC}"
+      DEFAULT_SCHED_NAME=$(echo "${PROJECT}_schedule" | tr -c 'a-zA-Z0-9_' '_')
+      read -r -p "  Schedule name [$DEFAULT_SCHED_NAME]: " SCHEDULE_NAME
+      SCHEDULE_NAME="${SCHEDULE_NAME:-$DEFAULT_SCHED_NAME}"
+      ;;
+    2)
+      ORCH_MODE="auto"
+      # No further input — we'll add automation_condition: eager to downstream assets
+      ;;
+    3)
+      ORCH_MODE="manual"
+      ;;
+    *)
+      echo "  Pick 1, 2, or 3."
+      ;;
+  esac
+done
+
+# ── 8. Confirm before scaffolding ──────────────────────────────────────
 echo
 echo "─────────────────────────────────────────────────────────────────────"
 echo "  Ready to scaffold."
@@ -398,6 +618,11 @@ for i in "${!SELECTED_NAMES[@]}"; do
     printf "    • %s\n" "$NAME"
   fi
 done
+case "$ORCH_MODE" in
+  cron)   echo "  Trigger: cron — '$CRON_EXPR' (TZ $CRON_TZ), schedule name '$SCHEDULE_NAME'" ;;
+  auto)   echo "  Trigger: auto-cascade — downstream jobs auto-run on upstream completion" ;;
+  manual) echo "  Trigger: manual only (click in UI / dg launch)" ;;
+esac
 echo
 if ! confirm "Proceed?"; then
   echo "Aborted."
@@ -439,24 +664,60 @@ DEFS_YAML="src/$PKG/defs/databricks_workspace/defs.yaml"
     if [ -n "$d" ]; then HAS_DEPS=true; break; fi
   done
 
-  if [ "$HAS_DEPS" = "true" ]; then
-    echo "  asset_overrides:"
+  # For auto-cascade mode, every DOWNSTREAM (job with deps) gets
+  # automation_condition: eager so it materializes when its upstream completes.
+  # We always emit asset_overrides for any job that has either deps OR
+  # automation_condition to set.
+  if [ "$HAS_DEPS" = "true" ] || [ "$ORCH_MODE" = "auto" ]; then
+    EMIT_OVERRIDES=false
     for i in "${!SELECTED_NAMES[@]}"; do
-      NAME="${SELECTED_NAMES[$i]}"
       DEPS="${DEPS_FOR_JOB[$i]}"
-      if [ -n "$DEPS" ]; then
-        echo "    \"$NAME\":"
-        echo "      depends_on:"
-        OLD_IFS="$IFS"; IFS='|'
-        for dn in $DEPS; do
-          IFS="$OLD_IFS"
-          echo "        - \"$dn\""
-        done
-        IFS="$OLD_IFS"
-      fi
+      if [ -n "$DEPS" ]; then EMIT_OVERRIDES=true; break; fi
     done
+    if [ "$EMIT_OVERRIDES" = "true" ]; then
+      echo "  asset_overrides:"
+      for i in "${!SELECTED_NAMES[@]}"; do
+        NAME="${SELECTED_NAMES[$i]}"
+        DEPS="${DEPS_FOR_JOB[$i]}"
+        if [ -n "$DEPS" ]; then
+          echo "    \"$NAME\":"
+          echo "      depends_on:"
+          OLD_IFS="$IFS"; IFS='|'
+          for dn in $DEPS; do
+            IFS="$OLD_IFS"
+            echo "        - \"$dn\""
+          done
+          IFS="$OLD_IFS"
+          if [ "$ORCH_MODE" = "auto" ]; then
+            echo "      automation_condition: eager"
+          fi
+        fi
+      done
+    fi
   fi
 } > "$DEFS_YAML"
+
+# Cron schedule defs.yaml — only when orchestration mode is 'cron'
+if [ "$ORCH_MODE" = "cron" ]; then
+  mkdir -p "src/$PKG/defs/schedule"
+  SCHED_YAML="src/$PKG/defs/schedule/defs.yaml"
+  {
+    echo "type: dagster_community_components.CronScheduleComponent"
+    echo "attributes:"
+    echo "  schedule_name: \"$SCHEDULE_NAME\""
+    echo "  cron_expression: \"$CRON_EXPR\""
+    echo "  execution_timezone: \"$CRON_TZ\""
+    echo "  default_status: RUNNING"
+    echo "  asset_keys:"
+    for nm in "${SELECTED_NAMES[@]}"; do
+      echo "    - \"$nm\""
+    done
+  } > "$SCHED_YAML"
+
+  # Install the community-components package so the cron_schedule component resolves
+  echo ">>> Installing dagster-community-components for the cron_schedule component ..."
+  uv add -q dagster-community-components
+fi
 
 # ── 10. .env.demo (mode 600, gitignored) ───────────────────────────────
 cat > .env.demo <<EOF
@@ -491,10 +752,13 @@ Next:
 
 Generated:
   $DEFS_YAML
-  .env.demo  (mode 600 — contains your token; gitignored)
-
-Bringing in $N_SELECTED Databricks job(s) as Dagster assets:
 MSG
+if [ "$ORCH_MODE" = "cron" ]; then
+  echo "  src/$PKG/defs/schedule/defs.yaml  (cron: '$CRON_EXPR' $CRON_TZ)"
+fi
+echo "  .env.demo  (mode 600 — contains your token; gitignored)"
+echo
+echo "Bringing in $N_SELECTED Databricks job(s) as Dagster assets:"
 
 for i in "${!SELECTED_NAMES[@]}"; do
   NAME="${SELECTED_NAMES[$i]}"
@@ -507,6 +771,33 @@ for i in "${!SELECTED_NAMES[@]}"; do
   fi
 done
 
+echo
+case "$ORCH_MODE" in
+  cron)
+    cat <<MSG
+Orchestration: cron schedule '$SCHEDULE_NAME' runs '$CRON_EXPR' ($CRON_TZ),
+status RUNNING. To pause: set default_status: STOPPED in the schedule defs.yaml.
+MSG
+    ;;
+  auto)
+    cat <<MSG
+Orchestration: auto-cascade — every downstream job has
+'automation_condition: eager'. As soon as upstream completes (job finishes
+or asset is observed updated), Dagster will trigger the downstream
+automatically. To pause: comment out the automation_condition lines, or
+delete the Dagster instance's automation sensor in the UI.
+MSG
+    ;;
+  manual)
+    cat <<MSG
+Orchestration: manual only. To run: open dg dev → click any asset → 'Materialize'.
+Or from CLI: 'uv run dg launch --assets "<job_name>"'.
+To add a schedule later: copy examples/databricks_workspace.md's snippet for
+cron_schedule into src/$PKG/defs/schedule/defs.yaml.
+MSG
+    ;;
+esac
+
 cat <<MSG
 
 Each Databricks Job materializes as a Dagster asset. The lineage graph in
@@ -516,4 +807,6 @@ Dagster timeline.
 
 To add more jobs later:    edit databricks_filter.include_jobs.job_ids in $DEFS_YAML
 To change dependencies:    edit the asset_overrides block in the same file
+To change orchestration:   edit the asset_overrides automation_condition,
+                           or the cron schedule's defs.yaml
 MSG

@@ -23,47 +23,31 @@ chmod +x setup_databricks_workspace.sh
 
 Auto-installs `uv` + `jq` if they're missing (with consent prompt). Needs `curl` (pre-installed on macOS/Linux). Bash 3.2 compatible (works on macOS default bash).
 
-## The interactive flow
+## The interactive flow (small workspace ≤ 30 jobs)
 
 ```text
-════════════════════════════════════════════════════════════════════
-  Databricks workspace → Dagster project setup
-════════════════════════════════════════════════════════════════════
-
 Project name [databricks-dagster]: warehouse-orchestration
 Databricks host: https://dbc-abc12345.cloud.databricks.com
 Databricks personal access token (input hidden): ********
-  Verifying token against https://dbc-abc12345.cloud.databricks.com ...
   ✓ Token authenticates.
 
 >>> Fetching jobs from https://dbc-abc12345.cloud.databricks.com ...
 
-Available jobs in workspace (12 total):
+Workspace has 12 job(s).
+
   [  1] job_id=482631     bronze_customers_ingestion
   [  2] job_id=482632     bronze_orders_ingestion
-  [  3] job_id=482633     bronze_products_ingestion
-  [  4] job_id=482634     silver_customer_360
-  [  5] job_id=482635     silver_orders_enriched
-  [  6] job_id=482636     gold_customer_ltv
-  [  7] job_id=482637     gold_revenue_by_segment
+  [  3] job_id=482634     silver_customer_360
+  [  4] job_id=482635     silver_orders_enriched
+  [  5] job_id=482636     gold_customer_ltv
+  [  6] job_id=482637     gold_revenue_by_segment
   …
 
-Select job numbers (comma-separated, 'all', or 'q' to quit): 1,2,4,5,6,7
-
->>> Selected 6 job(s):
-  [1] job_id=482631     bronze_customers_ingestion
-  [2] job_id=482632     bronze_orders_ingestion
-  [3] job_id=482634     silver_customer_360
-  [4] job_id=482635     silver_orders_enriched
-  [5] job_id=482636     gold_customer_ltv
-  [6] job_id=482637     gold_revenue_by_segment
+Select job numbers (comma-separated, 'all', or 'q'): 1,2,3,4,5,6
 
 ─────────────────────────────────────────────────────────────────────
   Cross-job dependencies
 ─────────────────────────────────────────────────────────────────────
-For each selected job, list which OTHER selected jobs it depends on
-(by their number above, comma-separated). Press Enter for none.
-
   [1] 'bronze_customers_ingestion' depends on:
   [2] 'bronze_orders_ingestion' depends on:
   [3] 'silver_customer_360' depends on: 1
@@ -72,34 +56,98 @@ For each selected job, list which OTHER selected jobs it depends on
   [6] 'gold_revenue_by_segment' depends on: 4
 
 ─────────────────────────────────────────────────────────────────────
-  Ready to scaffold.
+  Orchestration mode
 ─────────────────────────────────────────────────────────────────────
-  Project:  warehouse-orchestration
-  Host:     https://dbc-abc12345.cloud.databricks.com
-  Jobs:     6 selected
-    • bronze_customers_ingestion
-    • bronze_orders_ingestion
-    • silver_customer_360         (deps: bronze_customers_ingestion)
-    • silver_orders_enriched      (deps: bronze_customers_ingestion, bronze_orders_ingestion)
-    • gold_customer_ltv           (deps: silver_customer_360, silver_orders_enriched)
-    • gold_revenue_by_segment     (deps: silver_orders_enriched)
+How should these jobs run?
+  1. Cron schedule        — runs at fixed times (e.g. nightly)
+  2. Auto-cascade         — downstream jobs auto-trigger when upstream
+                            completes (Dagster AutomationCondition.eager)
+  3. Manual only          — just lineage; no automation
 
-Proceed? [Y/n]: y
-
->>> Scaffolding Dagster project at warehouse-orchestration ...
->>> Installing dagster-databricks ...
->>> Validating generated defs.yaml ...
-
-════════════════════════════════════════════════════════════════════════
-  Setup complete.
-════════════════════════════════════════════════════════════════════════
-
-Next:
-    cd warehouse-orchestration
-    source .env.demo
-    uv run dg check defs
-    uv run dg dev           # opens Dagster UI at http://localhost:3000
+Choice [1/2/3]: 2
 ```
+
+## The interactive flow (large workspace > 30 jobs)
+
+The script switches to a filter-first mode so you don't get drowned by 1000+ jobs:
+
+```text
+Workspace has 1247 job(s).
+
+That's too many to list at once. Pick one:
+
+  1. Filter by name pattern  (e.g. 'bronze_*', 'silver_customer*', 'gold_*_v2')
+  2. Paste job IDs directly  (comma-separated, e.g. '482631,482632,482638')
+  3. Browse paginated        (30 at a time)
+  4. Show all                (forces full list — use only if you really want it)
+  5. Quit
+
+Choice [1/2/3/4/5]: 1
+  Filter pattern: bronze_*
+
+  Matched 12 job(s):
+  [  1] job_id=482631     bronze_customers_ingestion
+  [  2] job_id=482632     bronze_orders_ingestion
+  …
+
+  Select numbers (comma-separated), 'all', or 'r' to re-search: all
+```
+
+Pattern matching is fnmatch-style globs (`*`, `?`), case-insensitive. If a pattern returns > 200 jobs, you're asked to narrow.
+
+## Orchestration modes
+
+After dependency setup, the script asks how the assets should be triggered:
+
+### 1. Cron schedule
+
+Generates a second `defs.yaml` using the community [`cron_schedule`](https://dagster-component-ui.vercel.app/c/cron_schedule) component. All selected assets are bundled into one scheduled job:
+
+```yaml
+type: dagster_community_components.CronScheduleComponent
+attributes:
+  schedule_name: "warehouse_orchestration_schedule"
+  cron_expression: "0 2 * * *"      # 2am daily
+  execution_timezone: "UTC"
+  default_status: RUNNING
+  asset_keys:
+    - "bronze_customers_ingestion"
+    - "bronze_orders_ingestion"
+    - "silver_customer_360"
+    - …
+```
+
+When the schedule fires, Dagster materializes the entire set in dependency order (respecting the `asset_overrides.depends_on` you configured).
+
+### 2. Auto-cascade (Dagster AutomationCondition)
+
+Adds `automation_condition: eager` to every **downstream** asset (any job with `depends_on`). When an upstream Databricks job completes and Dagster observes the asset materialization, downstream assets fire automatically:
+
+```yaml
+asset_overrides:
+  "silver_customer_360":
+    depends_on:
+      - "bronze_customers_ingestion"
+    automation_condition: eager       # ← auto-fires when bronze_customers_ingestion completes
+
+  "silver_orders_enriched":
+    depends_on:
+      - "bronze_customers_ingestion"
+      - "bronze_orders_ingestion"
+    automation_condition: eager
+
+  "gold_customer_ltv":
+    depends_on:
+      - "silver_customer_360"
+      - "silver_orders_enriched"
+    automation_condition: eager
+```
+
+Run any upstream once — manually, on a Databricks schedule, or via Dagster — and the cascade propagates without further action. Closest thing to "lakeflow-style event-driven orchestration" inside Dagster.
+
+### 3. Manual only
+
+Just lineage in the UI; no automation. Click-to-materialize or `dg launch --assets X` triggers the underlying Databricks Job. Use this when you want Dagster as an observability layer rather than the orchestrator.
 
 ## What gets generated
 
