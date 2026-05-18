@@ -13,6 +13,7 @@ The demos are grouped by what they need to run.
 
 - [No auth required (synthetic or public data)](#no-auth-required-synthetic-or-public-data)
   - [Core ETL patterns](#core-etl-patterns)
+  - [Database replication + migration](#database-replication--migration)
   - [Time series + forecasting](#time-series--forecasting)
   - [ML pipelines](#ml-pipelines)
   - [Customer + subscription analytics](#customer--subscription-analytics)
@@ -71,8 +72,17 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Text Extraction](text_extraction.md) | `xml_parser`, `html_parser`, `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `regex_parser` | Pull structured fields from semi-structured columns (XML, HTML, nested JSON) |
 | [Transformations Mega-Demo](transformations.md) | 34 transforms — every shape-preserving + shape-changing transform in one chain | Comprehensive toolbox showcase |
 | [Partitions](partitions.md) | `dataframe_to_csv`, `per_partition_backfill_job` | The four canonical partition shapes (daily/weekly/monthly + static dimensions) end-to-end |
-| [SQL→SQL Replication](replication.md) | `database_replication` | Postgres → DuckDB end-to-end. Full refresh, incremental + upsert, column subset + WHERE filter — recurring data-sync pattern. Same YAML retargets to Oracle / Db2 / Snowflake / BigQuery / Redshift / Databricks unchanged. |
-| [Warehouse Migration](warehouse_migration.md) | `database_migration_assessment`, `database_schema_inventory`, `database_tables_migration`, `database_constraints_migration`, `database_views_migration`, `database_replication`, `dataframe_to_csv` | The one-time lift+shift story. **Pre-flight assessment** (dry-run, returns "what would happen if you ran it tomorrow"), then automated DDL + data + view migration with CHECK + UNIQUE + FK + NOT NULL preserved. Status reports per step pipe to CSV. AWS SCT / SSMA shape, inside Dagster. |
+
+### Database replication + migration
+
+End-to-end SQL → SQL data movement, plus the one-shot lift+shift workflow. Postgres → DuckDB in the demos, but the same YAML retargets to Oracle / Db2 / MSSQL sources and Snowflake / BigQuery / Redshift / Databricks targets unchanged.
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [Recurring SQL→SQL Replication](replication.md) | `database_replication` | The **recurring data sync** pattern. 3 instances: full refresh, incremental + upsert with watermark, column subset + WHERE filter. Wraps the official `dagster-sling` `@sling_assets` under the hood — no Sling YAML to write. |
+| [Warehouse Migration](warehouse_migration.md) | `database_migration_assessment` + `database_schema_inventory` + `database_tables_migration` + `database_constraints_migration` + `database_view_migration` + `database_views_migration` + `database_replication` + `dataframe_to_csv` | The **one-time lift+shift** story. (1) Inventory every source object. (2) Pre-flight assessment dry-runs every CREATE inside a transaction that rolls back — returns per-object status (`auto_convertible` / `needs_review` / `will_fail`), complexity heuristic, and estimated manual effort. (3) DDL-first or data-first migration with all 6 constraint types preserved (PK + FK + NOT NULL + DEFAULT + CHECK + UNIQUE). (4) Bulk view recreation with table-ref + function-name substitutions. (5) Per-step status DataFrames → CSV migration completion report. AWS SCT / SSMA pattern, inside Dagster. |
+
+The component family — `database_schema_inventory`, `database_migration_assessment`, `database_tables_migration`, `database_constraints_migration`, `database_view_migration`, `database_views_migration`, `database_replication`, plus the power-user `sling_replication_asset` — all share a consistent design: per-component status DataFrame, `dry_run: true` flag for transaction+rollback validation before commit, `include_patterns` / `exclude_patterns` for fnmatch-style filtering, `*_ddl_overrides` escape hatches for the dialect-quirky 20%, and pre-flight warnings when the target accepts but doesn't enforce constraints (Snowflake / Redshift) or rejects them entirely (BigQuery CHECK).
 
 ### Time series + forecasting
 
