@@ -514,13 +514,18 @@ for i in "${!SELECTED_IDS[@]}"; do
   printf "  [%d] job_id=%-10s  %s\n" "$((i+1))" "${SELECTED_IDS[$i]}" "${SELECTED_NAMES[$i]}"
 done
 
-# ── 5b. Fetch tasks for each selected job ──────────────────────────────
+# ── 5b. Fetch tasks AND leaf tasks for each selected job ──────────────
 # DatabricksWorkspaceComponent makes one Dagster asset per (job, task).
-# Most Databricks jobs in practice are single-task — for those, you'll see
-# exactly one asset per job in Dagster. For multi-task jobs (rare), each
-# task becomes a separate asset.
+# We need two pieces of information per job:
+#   1. ALL task_keys — for assets_by_job_task_key (one entry per task) and
+#      for the cron schedule's asset_keys list on root jobs (so the
+#      schedule fires the WHOLE upstream job, not just a partial slice).
+#   2. LEAF task_keys (the ones nothing else depends on within the job)
+#      — for cross-job dep wiring. Downstream depends on the leaf of
+#      upstream because the leaf finishing means the whole job finished.
 
 TASK_KEYS_FOR_JOB=()
+LEAVES_FOR_JOB=()
 echo
 echo ">>> Looking up tasks for each selected job ..."
 for i in "${!SELECTED_IDS[@]}"; do
@@ -531,18 +536,33 @@ for i in "${!SELECTED_IDS[@]}"; do
   if [ -z "$JOB_DETAIL" ]; then
     echo "  ⚠ Could not fetch job $JID detail — defaulting to a single task named 'main'."
     TASK_KEYS_FOR_JOB+=("main")
+    LEAVES_FOR_JOB+=("main")
     continue
   fi
   TKS=$(echo "$JOB_DETAIL" | jq -r '.settings.tasks[]?.task_key' 2>/dev/null | paste -sd, -)
   if [ -z "$TKS" ]; then
     TKS="main"
+    LEAVES="main"
+  else
+    # A leaf = a task_key not present in any other task's depends_on[].task_key.
+    LEAVES=$(echo "$JOB_DETAIL" | jq -r '
+      .settings.tasks as $tasks |
+      ($tasks | map(.depends_on // [] | .[].task_key) | unique) as $up |
+      $tasks | map(.task_key) | map(select(. as $tk | $up | index($tk) | not)) | .[]
+    ' 2>/dev/null | paste -sd, -)
+    if [ -z "$LEAVES" ]; then
+      # Defensive — circular DAG or some weird shape. Fall back to all tasks.
+      LEAVES="$TKS"
+    fi
   fi
-  TASK_COUNT=$(echo "$TKS" | tr ',' '\n' | grep -c .)
   TASK_KEYS_FOR_JOB+=("$TKS")
+  LEAVES_FOR_JOB+=("$LEAVES")
+  TASK_COUNT=$(echo "$TKS" | tr ',' '\n' | grep -c .)
+  LEAF_COUNT=$(echo "$LEAVES" | tr ',' '\n' | grep -c .)
   if [ "$TASK_COUNT" -eq 1 ]; then
     printf "  job_id=%-10s  %s\n" "$JID" "$JNAME"
   else
-    printf "  job_id=%-10s  %s  (%d tasks: %s)\n" "$JID" "$JNAME" "$TASK_COUNT" "$TKS"
+    printf "  job_id=%-10s  %s  (%d tasks, leaf: %s)\n" "$JID" "$JNAME" "$TASK_COUNT" "$LEAVES"
   fi
 done
 
@@ -700,7 +720,8 @@ uv add -q dagster-databricks
 mkdir -p "src/$PKG/defs/databricks_workspace"
 DEFS_YAML="src/$PKG/defs/databricks_workspace/defs.yaml"
 
-# Helper: render an upstream-job's task asset keys for use in `deps:`
+# Helper: render ALL of a job's task asset keys (used for cron schedule's
+# asset_keys list so the whole upstream job fires when scheduled).
 # Returns each as "<clean_job>/<clean_task>", one per line.
 asset_keys_for_job_index() {
   local idx="$1"
@@ -710,6 +731,25 @@ asset_keys_for_job_index() {
   local tks="${TASK_KEYS_FOR_JOB[$idx]}"
   local OLD_IFS="$IFS"; IFS=','
   for tk in $tks; do
+    IFS="$OLD_IFS"
+    local clean_task
+    clean_task=$(snake_case "$tk")
+    echo "${clean_job}/${clean_task}"
+  done
+  IFS="$OLD_IFS"
+}
+
+# Helper: render a job's LEAF task asset keys (used for cross-job `deps:`).
+# Leaf-only because the leaf finishing means the whole upstream Databricks
+# Job finished — the right granularity for "Job 2 depends on Job 1."
+leaf_asset_keys_for_job_index() {
+  local idx="$1"
+  local jname="${SELECTED_NAMES[$idx]}"
+  local clean_job
+  clean_job=$(snake_case "$jname")
+  local leaves="${LEAVES_FOR_JOB[$idx]}"
+  local OLD_IFS="$IFS"; IFS=','
+  for tk in $leaves; do
     IFS="$OLD_IFS"
     local clean_task
     clean_task=$(snake_case "$tk")
@@ -760,7 +800,9 @@ index_for_name() {
       [ -z "$DEPS" ] && continue
       CLEAN_JOB=$(snake_case "$NAME")
 
-      # Collect upstream asset keys (across every task of every upstream job)
+      # Collect upstream LEAF asset keys for each upstream job. Depending on
+      # the leaf (vs every task) is the right granularity: the leaf
+      # materializing means the whole upstream Databricks Job succeeded.
       UPSTREAM_KEYS=()
       OLD_IFS="$IFS"; IFS='|'
       for dn in $DEPS; do
@@ -769,7 +811,7 @@ index_for_name() {
         [ -z "$UPSTREAM_IDX" ] && continue
         while IFS= read -r ak; do
           UPSTREAM_KEYS+=("$ak")
-        done < <(asset_keys_for_job_index "$UPSTREAM_IDX")
+        done < <(leaf_asset_keys_for_job_index "$UPSTREAM_IDX")
       done
       IFS="$OLD_IFS"
 

@@ -118,7 +118,13 @@ Per [the official docs](https://docs.dagster.io/integrations/libraries/databrick
 
 For single-task jobs (common in production), you'll see one Dagster asset per Databricks Job — they correspond 1:1. For multi-task jobs, you'll see one asset per task, mirroring how Databricks itself displays them in the Workflows UI.
 
-When you say *"silver_orders_enriched depends on bronze_orders_ingestion"* in the prompt, the script handles the task-level wiring correctly regardless of how many tasks are on each side: every task in `silver_orders_enriched` is wired to depend on every task in `bronze_orders_ingestion`. You don't have to think about it.
+When you say *"silver_orders_enriched depends on bronze_orders_ingestion"* in the prompt, the script handles the task-level wiring correctly regardless of how many tasks are on each side. Specifically, it depends on the **leaf task(s)** of the upstream job — the tasks nothing else within that job depends on. Reasoning:
+
+- The leaf finishing means the whole upstream Databricks Job finished (Databricks runs tasks in dependency order; the leaf is the last to materialize).
+- The component's multi_asset raises if the Databricks Job fails, so the leaf-fresh signal implies the whole job succeeded.
+- Cleaner YAML — one dep per upstream job, not N.
+
+The script auto-detects leaves by inspecting each task's `depends_on` field from the Jobs API. Single-task jobs are trivially their own leaf. Linear chains (`A → B → C`) get a single leaf (`C`). Diamonds (`A → {B,C} → D`) get a single leaf (`D`). Fan-outs without merge (`A → {B,C}`) get multiple leaves (`B` and `C`).
 
 ### What the script generates
 
@@ -145,25 +151,25 @@ attributes:
       "main":
         - key: "silver_customer_360/main"
           deps:
-            - "bronze_customers_ingestion/main"
-          automation_condition: eager     # ← fires when bronze_customers completes
+            - "bronze_customers_ingestion/main"      # ← leaf of bronze_customers_ingestion
+          automation_condition: eager
     "silver_orders_enriched":
       "main":
         - key: "silver_orders_enriched/main"
           deps:
-            - "bronze_customers_ingestion/main"
-            - "bronze_orders_ingestion/main"
+            - "bronze_customers_ingestion/main"      # ← leaf of bronze_customers_ingestion
+            - "bronze_orders_ingestion/main"          # ← leaf of bronze_orders_ingestion
           automation_condition: eager
     "gold_customer_ltv":
       "main":
         - key: "gold_customer_ltv/main"
           deps:
-            - "silver_customer_360/main"
-            - "silver_orders_enriched/main"
+            - "silver_customer_360/main"             # ← leaf of silver_customer_360
+            - "silver_orders_enriched/main"           # ← leaf of silver_orders_enriched
           automation_condition: eager
 ```
 
-If you have any **multi-task** jobs, the script generates one entry per task under each job key (same shape, just more lines) — without you having to do extra work.
+Deps point at each upstream job's **leaf task** (auto-detected). For single-task jobs (shown above), the leaf is the only task — so `bronze_customers_ingestion/main` happens to be both. If `silver_orders_enriched` had multiple tasks (say `extract → transform → load`), the dep would point only to `silver_orders_enriched/load` (the leaf). The script generates one entry per downstream task; the cascade still fires job-by-job, not task-by-task.
 
 **If you picked Cron schedule, a second `defs.yaml`** under `defs/schedule/` — the `cron_schedule` community component targeting **only the root job assets**:
 
@@ -244,12 +250,13 @@ Following the cascade from cron tick to Job 2 completion:
 └────────────────────────────────────────────────────────────────────────┘
 ```
 
-**Key thing to notice:** the cascade does NOT happen at the task level (Job 1's tasks don't trigger Job 2 one at a time). It happens at the **Databricks-job level** — Job 1 runs in full, then once Dagster sees all three tasks materialized, Job 2 fires once. Exactly the right granularity.
+**Key thing to notice:** the cascade does NOT happen at the task level (Job 1's tasks don't trigger Job 2 one at a time). It happens at the **Databricks-job level** — Job 1 runs in full, then once Dagster sees Job 1's leaf task materialized (`load` in this example), Job 2 fires once. Exactly the right granularity.
 
 This works because:
 
-- Job 1 has no `assets_by_job_task_key` override (it's a root) → its multi_asset runs with `only=None` → entire Databricks Job runs → all 3 tasks materialize
-- Job 2's eager condition requires "all deps updated since last materialization" → won't fire until all 3 of Job 1's tasks have materialized
+- Job 1 has no `assets_by_job_task_key` override (it's a root) → its multi_asset runs with `only=None` → entire Databricks Job runs → all 3 tasks materialize together
+- Job 2's deps reference Job 1's **leaf** (`job_1/load`) — auto-detected from the Jobs API's `depends_on` graph
+- Job 2's eager fires when `job_1/load` is fresh — which only happens when the whole Job 1 succeeded
 - Job 2's multi_asset has `assets_by_job_task_key` override → runs with `only=["main"]` → just Job 2's one task
 
 ### Worked variant: Job 1 itself downstream
@@ -264,22 +271,20 @@ If Job 1 is *also* downstream (Job 0 → Job 1 → Job 2), the cascade still wor
 
 The batching is what keeps you from getting 3 separate Databricks runs per cascade event. (Dagster's automation engine batches per-`AssetsDefinition`, and each Databricks Job is one `AssetsDefinition`.)
 
-### What if a downstream depends on JUST ONE task of an upstream job?
+### What if a downstream depends on a NON-leaf task of an upstream job?
 
-Edge case: you really want `job_2/main` to depend only on `job_1/extract` (not the whole Job 1). The script's prompt is job-level, so it'll wire deps to *all* of Job 1's tasks. To get just one:
+Edge case: you really want `job_2/main` to fire as soon as `job_1/extract` finishes — without waiting for `transform` or `load`. The script's prompt is job-level, so it auto-wires deps to the upstream's **leaf** (`job_1/load`). To override:
 
 1. Run the script as normal
 2. Open the generated `defs.yaml`
-3. Edit `assets_by_job_task_key["job_2"]["main"]` — remove the unwanted deps from the list:
+3. Edit `assets_by_job_task_key["job_2"]["main"].deps` — swap the leaf for the task you actually want:
    ```yaml
    deps:
-     - "job_1/extract"     # keep
-     # - "job_1/transform" # removed
-     # - "job_1/load"      # removed
+     - "job_1/extract"     # ← was "job_1/load" before edit
    ```
 4. `uv run dg check defs` to validate
 
-The script optimizes for the common case (job-level deps). Fine-grained task deps are a one-line YAML edit.
+But before you do this — note that "fire when intermediate task X completes" usually means you actually want X to live in its own Databricks Job (a true upstream), not buried as an intermediate step of a bigger job. The leaf-only default reflects normal Databricks Job semantics.
 
 ## Under the hood — code-verified flow
 
