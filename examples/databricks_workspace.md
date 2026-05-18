@@ -8,7 +8,7 @@ Uses the **official `dagster-databricks` integration's `DatabricksWorkspaceCompo
 
 | Component | Source | Role |
 |---|---|---|
-| `DatabricksWorkspaceComponent` | **official** (`dagster-databricks`) | Connects to a Databricks workspace via PAT, materializes each Job as a Dagster asset (one asset per task in the job), surfaces run status + logs in the Dagster UI. Cross-job deps + AutomationCondition.eager wired via `assets_by_job_task_key`. |
+| `DatabricksWorkspaceComponent` | **official** (`dagster-databricks`) | Connects to a Databricks workspace via PAT, materializes each task in each Job as a Dagster asset ([per docs](https://docs.dagster.io/integrations/libraries/databricks/databricks-workspace-component#how-it-works)), surfaces run status + logs in the Dagster UI. Cross-job deps + AutomationCondition.eager wired via `assets_by_job_task_key`. |
 | `cron_schedule` | community | Triggers root jobs on a cron expression. Only used when you pick "Cron schedule" in the orchestration prompt — for "Manual only", this is skipped. |
 
 The setup script ([`setup_databricks_workspace.sh`](setup_databricks_workspace.sh)) is a one-off generator — it asks you everything the component needs, calls the Jobs API to enumerate what's in your workspace, fetches each selected job's task list, and writes the `defs.yaml` files for you.
@@ -108,17 +108,17 @@ For ROOT jobs (those with no upstream deps), what triggers them?
 
 ### How Databricks Jobs map to Dagster assets
 
-For the common case — **a Databricks Job with a single task** — you get one Dagster asset per Job. Mental model: 1 Job = 1 asset. The asset key is `<job>/<task>` because that's how the official `DatabricksWorkspaceComponent` names things, but in practice it acts as one unit.
+Per [the official docs](https://docs.dagster.io/integrations/libraries/databricks/databricks-workspace-component#how-it-works): **each task within a Databricks Job becomes a separate Dagster asset.** Asset keys are `<snake_case_job_name>/<snake_case_task_key>`.
 
-| Databricks Job | Tasks | Dagster assets | Effective unit |
-|---|---|---|---|
-| `bronze_customers_ingestion` | `main` (1 task) | `bronze_customers_ingestion/main` | 1 asset = 1 job |
-| `silver_customer_360` | `main` (1 task) | `silver_customer_360/main` | 1 asset = 1 job |
-| `silver_orders_enriched` | `extract`, `transform` (2 tasks) | `silver_orders_enriched/extract`, `silver_orders_enriched/transform` | 2 assets, but both are part of the same Job |
+| Databricks Job | Tasks | Dagster assets |
+|---|---|---|
+| `bronze_customers_ingestion` | 1 task: `main` | 1 asset: `bronze_customers_ingestion/main` |
+| `silver_customer_360` | 1 task: `main` | 1 asset: `silver_customer_360/main` |
+| `silver_orders_enriched` | 2 tasks: `extract`, `transform` | 2 assets: `silver_orders_enriched/extract`, `silver_orders_enriched/transform` |
 
-**You almost certainly have single-task jobs.** Most production Databricks jobs are one notebook / one Spark job / one DLT pipeline → one task. The script handles multi-task jobs transparently if you have them (every task in a downstream job depends on every task in its upstream), but you don't need to think about it.
+For single-task jobs (common in production), you'll see one Dagster asset per Databricks Job — they correspond 1:1. For multi-task jobs, you'll see one asset per task, mirroring how Databricks itself displays them in the Workflows UI.
 
-When you say *"silver_orders_enriched depends on bronze_orders_ingestion"* in the prompt, the script wires the dep correctly regardless of how many tasks each side has.
+When you say *"silver_orders_enriched depends on bronze_orders_ingestion"* in the prompt, the script handles the task-level wiring correctly regardless of how many tasks are on each side: every task in `silver_orders_enriched` is wired to depend on every task in `bronze_orders_ingestion`. You don't have to think about it.
 
 ### What the script generates
 
