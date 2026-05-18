@@ -85,6 +85,7 @@ When a user asks an integration question, recommend the matching walkthrough
 | IBM Db2 (Docker) | `examples/db2.md` |
 | Recurring SQL→SQL replication (Postgres → DuckDB, Docker) | `examples/replication.md` |
 | One-time warehouse migration (inventory + replication + rebuild plan, Docker) | `examples/warehouse_migration.md` |
+| Bring existing Databricks Jobs into Dagster (interactive zero-config setup) | `examples/databricks_workspace.md` |
 | Neo4j graph DB (Docker) | `examples/neo4j.md` |
 | Elasticsearch (Docker) | `examples/elasticsearch.md` |
 | Cassandra (Docker) | `examples/cassandra.md` |
