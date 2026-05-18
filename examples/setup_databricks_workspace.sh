@@ -157,6 +157,15 @@ ensure_jq() {
   echo "✓ jq installed."
 }
 
+# snake_case helper — matches dagster_databricks.utils.snake_case exactly.
+snake_case() {
+  local s="$1"
+  s=$(echo "$s" | sed -E 's/([a-z0-9])([A-Z])/\1_\2/g')
+  s=$(echo "$s" | sed -E 's/[^a-zA-Z0-9]+/_/g')
+  s=$(echo "$s" | tr '[:upper:]' '[:lower:]' | sed -E 's/^_+|_+$//g')
+  echo "$s"
+}
+
 ensure_curl() {
   if command -v curl >/dev/null 2>&1; then return 0; fi
   echo "ERROR: curl is required but not installed. (Should come pre-installed on macOS/Linux.)"
@@ -505,6 +514,36 @@ for i in "${!SELECTED_IDS[@]}"; do
   printf "  [%d] job_id=%-10s  %s\n" "$((i+1))" "${SELECTED_IDS[$i]}" "${SELECTED_NAMES[$i]}"
 done
 
+# ── 5b. Fetch tasks for each selected job ──────────────────────────────
+# DatabricksWorkspaceComponent produces one asset per (job, task), with key
+# [snake_case(job_name), snake_case(task_key)]. We need each task_key to
+# (a) wire deps + automation_condition via assets_by_job_task_key, and
+# (b) populate the cron schedule's asset_keys for root jobs.
+
+# Parallel array: TASK_KEYS_FOR_JOB[i] = comma-separated task_keys for SELECTED_IDS[i]
+TASK_KEYS_FOR_JOB=()
+echo
+echo ">>> Fetching task details for selected jobs ..."
+for i in "${!SELECTED_IDS[@]}"; do
+  JID="${SELECTED_IDS[$i]}"
+  JNAME="${SELECTED_NAMES[$i]}"
+  JOB_DETAIL=$(curl -sf -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+    "$DATABRICKS_HOST/api/2.1/jobs/get?job_id=$JID" 2>/dev/null || echo "")
+  if [ -z "$JOB_DETAIL" ]; then
+    echo "  ⚠ Could not fetch job $JID detail — assuming single 'main' task."
+    TASK_KEYS_FOR_JOB+=("main")
+    continue
+  fi
+  TKS=$(echo "$JOB_DETAIL" | jq -r '.settings.tasks[]?.task_key' 2>/dev/null | paste -sd, -)
+  if [ -z "$TKS" ]; then
+    # Legacy single-task job (no tasks[] array); use 'main' as a stand-in
+    TKS="main"
+  fi
+  TASK_COUNT=$(echo "$TKS" | tr ',' '\n' | grep -c .)
+  TASK_KEYS_FOR_JOB+=("$TKS")
+  printf "  job_id=%-10s  %s  →  %d task(s): %s\n" "$JID" "$JNAME" "$TASK_COUNT" "$TKS"
+done
+
 # ── 6. Cross-job dependencies ──────────────────────────────────────────
 echo
 echo "─────────────────────────────────────────────────────────────────────"
@@ -560,45 +599,55 @@ done
 
 echo
 echo "─────────────────────────────────────────────────────────────────────"
-echo "  Orchestration mode"
+echo "  Orchestration"
 echo "─────────────────────────────────────────────────────────────────────"
-echo "How should these jobs run?"
-echo "  1. Cron schedule        — runs at fixed times (e.g. nightly)"
-echo "  2. Auto-cascade         — downstream jobs auto-trigger when upstream"
-echo "                            completes (Dagster AutomationCondition.eager)"
-echo "  3. Manual only          — just lineage; no automation"
+echo "Downstream jobs (those with upstream deps) will automatically cascade"
+echo "via Dagster AutomationCondition.eager — when their upstream completes,"
+echo "they fire. No prompts needed for those."
+echo
+echo "For ROOT jobs (jobs you selected that have no upstream in this project),"
+echo "what triggers them?"
+echo "  1. Cron schedule  — runs the roots at fixed times → cascades downstream"
+echo "  2. Manual only    — you trigger the roots; downstream cascades"
 echo
 
-ORCH_MODE=""
+# Identify root jobs (those without any user-specified deps)
+ROOT_INDICES=()
+for i in "${!SELECTED_NAMES[@]}"; do
+  if [ -z "${DEPS_FOR_JOB[$i]}" ]; then
+    ROOT_INDICES+=("$i")
+  fi
+done
+N_ROOTS=${#ROOT_INDICES[@]}
+
+if [ "$N_ROOTS" -eq 0 ]; then
+  echo "  ⚠ No root jobs detected — every selected job has a dep. Falling back to"
+  echo "    manual mode (nothing to schedule)."
+  ORCH_MODE="manual"
+fi
+
 CRON_EXPR=""
 CRON_TZ=""
 SCHEDULE_NAME=""
-
-while [ -z "$ORCH_MODE" ]; do
-  read -r -p "Choice [1/2/3]: " M
-  case "$M" in
-    1)
-      ORCH_MODE="cron"
-      read -r -p "  Cron expression [0 2 * * *]: " CRON_EXPR
-      CRON_EXPR="${CRON_EXPR:-0 2 * * *}"
-      read -r -p "  Timezone [UTC]: " CRON_TZ
-      CRON_TZ="${CRON_TZ:-UTC}"
-      DEFAULT_SCHED_NAME=$(echo "${PROJECT}_schedule" | tr -c 'a-zA-Z0-9_' '_')
-      read -r -p "  Schedule name [$DEFAULT_SCHED_NAME]: " SCHEDULE_NAME
-      SCHEDULE_NAME="${SCHEDULE_NAME:-$DEFAULT_SCHED_NAME}"
-      ;;
-    2)
-      ORCH_MODE="auto"
-      # No further input — we'll add automation_condition: eager to downstream assets
-      ;;
-    3)
-      ORCH_MODE="manual"
-      ;;
-    *)
-      echo "  Pick 1, 2, or 3."
-      ;;
-  esac
-done
+if [ "$N_ROOTS" -gt 0 ]; then
+  while [ -z "${ORCH_MODE:-}" ]; do
+    read -r -p "Choice [1/2]: " M
+    case "$M" in
+      1)
+        ORCH_MODE="cron"
+        read -r -p "  Cron expression [0 2 * * *]: " CRON_EXPR
+        CRON_EXPR="${CRON_EXPR:-0 2 * * *}"
+        read -r -p "  Timezone [UTC]: " CRON_TZ
+        CRON_TZ="${CRON_TZ:-UTC}"
+        DEFAULT_SCHED_NAME=$(echo "${PROJECT}_schedule" | tr -c 'a-zA-Z0-9_' '_')
+        read -r -p "  Schedule name [$DEFAULT_SCHED_NAME]: " SCHEDULE_NAME
+        SCHEDULE_NAME="${SCHEDULE_NAME:-$DEFAULT_SCHED_NAME}"
+        ;;
+      2) ORCH_MODE="manual" ;;
+      *) echo "  Pick 1 or 2." ;;
+    esac
+  done
+fi
 
 # ── 8. Confirm before scaffolding ──────────────────────────────────────
 echo
@@ -618,10 +667,10 @@ for i in "${!SELECTED_NAMES[@]}"; do
     printf "    • %s\n" "$NAME"
   fi
 done
+echo "  Roots:    $N_ROOTS job(s) with no upstream deps"
 case "$ORCH_MODE" in
-  cron)   echo "  Trigger: cron — '$CRON_EXPR' (TZ $CRON_TZ), schedule name '$SCHEDULE_NAME'" ;;
-  auto)   echo "  Trigger: auto-cascade — downstream jobs auto-run on upstream completion" ;;
-  manual) echo "  Trigger: manual only (click in UI / dg launch)" ;;
+  cron)   echo "  Trigger:  cron '$CRON_EXPR' (TZ $CRON_TZ) on roots, downstream auto-cascades" ;;
+  manual) echo "  Trigger:  manual on roots, downstream auto-cascades when roots complete" ;;
 esac
 echo
 if ! confirm "Proceed?"; then
@@ -649,9 +698,42 @@ uv add -q dagster-databricks
 mkdir -p "src/$PKG/defs/databricks_workspace"
 DEFS_YAML="src/$PKG/defs/databricks_workspace/defs.yaml"
 
+# Helper: render an upstream-job's task asset keys for use in `deps:`
+# Returns each as "<clean_job>/<clean_task>", one per line.
+asset_keys_for_job_index() {
+  local idx="$1"
+  local jname="${SELECTED_NAMES[$idx]}"
+  local clean_job
+  clean_job=$(snake_case "$jname")
+  local tks="${TASK_KEYS_FOR_JOB[$idx]}"
+  local OLD_IFS="$IFS"; IFS=','
+  for tk in $tks; do
+    IFS="$OLD_IFS"
+    local clean_task
+    clean_task=$(snake_case "$tk")
+    echo "${clean_job}/${clean_task}"
+  done
+  IFS="$OLD_IFS"
+}
+
+# Helper: lookup a job's index in SELECTED_NAMES by name
+index_for_name() {
+  local target="$1"
+  for j in "${!SELECTED_NAMES[@]}"; do
+    if [ "${SELECTED_NAMES[$j]}" = "$target" ]; then
+      echo "$j"
+      return 0
+    fi
+  done
+  return 1
+}
+
 {
   echo "type: dagster_databricks.DatabricksWorkspaceComponent"
   echo "attributes:"
+  echo "  workspace:"
+  echo "    host: \"{{ env('DATABRICKS_HOST') }}\""
+  echo "    token: \"{{ env('DATABRICKS_TOKEN') }}\""
   echo "  databricks_filter:"
   echo "    include_jobs:"
   echo "      job_ids:"
@@ -659,45 +741,56 @@ DEFS_YAML="src/$PKG/defs/databricks_workspace/defs.yaml"
     echo "        - $jid"
   done
 
+  # Emit assets_by_job_task_key for every DOWNSTREAM job (has deps).
+  # Each task in the downstream job gets:
+  #   - deps: every task asset key of every upstream job
+  #   - automation_condition: eager
   HAS_DEPS=false
   for d in "${DEPS_FOR_JOB[@]}"; do
     if [ -n "$d" ]; then HAS_DEPS=true; break; fi
   done
 
-  # For auto-cascade mode, every DOWNSTREAM (job with deps) gets
-  # automation_condition: eager so it materializes when its upstream completes.
-  # We always emit asset_overrides for any job that has either deps OR
-  # automation_condition to set.
-  if [ "$HAS_DEPS" = "true" ] || [ "$ORCH_MODE" = "auto" ]; then
-    EMIT_OVERRIDES=false
+  if [ "$HAS_DEPS" = "true" ]; then
+    echo "  assets_by_job_task_key:"
     for i in "${!SELECTED_NAMES[@]}"; do
+      NAME="${SELECTED_NAMES[$i]}"
       DEPS="${DEPS_FOR_JOB[$i]}"
-      if [ -n "$DEPS" ]; then EMIT_OVERRIDES=true; break; fi
-    done
-    if [ "$EMIT_OVERRIDES" = "true" ]; then
-      echo "  asset_overrides:"
-      for i in "${!SELECTED_NAMES[@]}"; do
-        NAME="${SELECTED_NAMES[$i]}"
-        DEPS="${DEPS_FOR_JOB[$i]}"
-        if [ -n "$DEPS" ]; then
-          echo "    \"$NAME\":"
-          echo "      depends_on:"
-          OLD_IFS="$IFS"; IFS='|'
-          for dn in $DEPS; do
-            IFS="$OLD_IFS"
-            echo "        - \"$dn\""
-          done
-          IFS="$OLD_IFS"
-          if [ "$ORCH_MODE" = "auto" ]; then
-            echo "      automation_condition: eager"
-          fi
-        fi
+      [ -z "$DEPS" ] && continue
+      CLEAN_JOB=$(snake_case "$NAME")
+
+      # Collect upstream asset keys (across every task of every upstream job)
+      UPSTREAM_KEYS=()
+      OLD_IFS="$IFS"; IFS='|'
+      for dn in $DEPS; do
+        IFS="$OLD_IFS"
+        UPSTREAM_IDX=$(index_for_name "$dn" || true)
+        [ -z "$UPSTREAM_IDX" ] && continue
+        while IFS= read -r ak; do
+          UPSTREAM_KEYS+=("$ak")
+        done < <(asset_keys_for_job_index "$UPSTREAM_IDX")
       done
-    fi
+      IFS="$OLD_IFS"
+
+      echo "    \"$NAME\":"
+      TKS="${TASK_KEYS_FOR_JOB[$i]}"
+      OLD_IFS="$IFS"; IFS=','
+      for tk in $TKS; do
+        IFS="$OLD_IFS"
+        CLEAN_TASK=$(snake_case "$tk")
+        echo "      \"$tk\":"
+        echo "        - key: \"${CLEAN_JOB}/${CLEAN_TASK}\""
+        echo "          deps:"
+        for uk in "${UPSTREAM_KEYS[@]}"; do
+          echo "            - \"$uk\""
+        done
+        echo "          automation_condition: eager"
+      done
+      IFS="$OLD_IFS"
+    done
   fi
 } > "$DEFS_YAML"
 
-# Cron schedule defs.yaml — only when orchestration mode is 'cron'
+# Cron schedule for ROOT jobs only — downstream cascades via automation_condition.
 if [ "$ORCH_MODE" = "cron" ]; then
   mkdir -p "src/$PKG/defs/schedule"
   SCHED_YAML="src/$PKG/defs/schedule/defs.yaml"
@@ -709,12 +802,13 @@ if [ "$ORCH_MODE" = "cron" ]; then
     echo "  execution_timezone: \"$CRON_TZ\""
     echo "  default_status: RUNNING"
     echo "  asset_keys:"
-    for nm in "${SELECTED_NAMES[@]}"; do
-      echo "    - \"$nm\""
+    for idx in "${ROOT_INDICES[@]}"; do
+      while IFS= read -r ak; do
+        echo "      - \"$ak\""
+      done < <(asset_keys_for_job_index "$idx")
     done
   } > "$SCHED_YAML"
 
-  # Install the community-components package so the cron_schedule component resolves
   echo ">>> Installing dagster-community-components for the cron_schedule component ..."
   uv add -q dagster-community-components
 fi
@@ -775,25 +869,27 @@ echo
 case "$ORCH_MODE" in
   cron)
     cat <<MSG
-Orchestration: cron schedule '$SCHEDULE_NAME' runs '$CRON_EXPR' ($CRON_TZ),
-status RUNNING. To pause: set default_status: STOPPED in the schedule defs.yaml.
-MSG
-    ;;
-  auto)
-    cat <<MSG
-Orchestration: auto-cascade — every downstream job has
-'automation_condition: eager'. As soon as upstream completes (job finishes
-or asset is observed updated), Dagster will trigger the downstream
-automatically. To pause: comment out the automation_condition lines, or
-delete the Dagster instance's automation sensor in the UI.
+Orchestration:
+  • Cron schedule '$SCHEDULE_NAME' runs '$CRON_EXPR' ($CRON_TZ) — kicks the
+    $N_ROOTS root job(s).
+  • Downstream jobs auto-cascade via AutomationCondition.eager when their
+    upstream completes. No further config needed.
+
+To pause the cron: set default_status: STOPPED in src/$PKG/defs/schedule/defs.yaml.
+To pause the cascade: remove 'automation_condition: eager' lines from
+$DEFS_YAML (downstream becomes manual-only).
 MSG
     ;;
   manual)
     cat <<MSG
-Orchestration: manual only. To run: open dg dev → click any asset → 'Materialize'.
-Or from CLI: 'uv run dg launch --assets "<job_name>"'.
-To add a schedule later: copy examples/databricks_workspace.md's snippet for
-cron_schedule into src/$PKG/defs/schedule/defs.yaml.
+Orchestration:
+  • Roots run manually — open dg dev → click a root asset → 'Materialize'
+    (or 'uv run dg launch --assets "<root_job_name>"').
+  • Downstream auto-cascades via AutomationCondition.eager once a root
+    finishes.
+
+To add a cron later: copy a CronScheduleComponent defs.yaml into
+src/$PKG/defs/schedule/ targeting the root asset keys.
 MSG
     ;;
 esac

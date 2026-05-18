@@ -8,9 +8,10 @@ Uses the **official `dagster-databricks` integration's `DatabricksWorkspaceCompo
 
 | Component | Source | Role |
 |---|---|---|
-| `DatabricksWorkspaceComponent` | **official** (`dagster-databricks`) | Connects to a Databricks workspace via PAT, materializes each Job as a Dagster asset, surfaces run status + logs in the Dagster UI, supports inter-job dependencies via `asset_overrides.<job>.depends_on` |
+| `DatabricksWorkspaceComponent` | **official** (`dagster-databricks`) | Connects to a Databricks workspace via PAT, materializes each Job as a Dagster asset (one asset per task in the job), surfaces run status + logs in the Dagster UI. Cross-job deps + AutomationCondition.eager wired via `assets_by_job_task_key`. |
+| `cron_schedule` | community | Triggers root jobs on a cron expression. Only used when you pick "Cron schedule" in the orchestration prompt — for "Manual only", this is skipped. |
 
-The setup script ([`setup_databricks_workspace.sh`](setup_databricks_workspace.sh)) is a one-off generator — it asks you everything the component needs, calls the Jobs API to enumerate what's in your workspace, and writes the `defs.yaml` for you.
+The setup script ([`setup_databricks_workspace.sh`](setup_databricks_workspace.sh)) is a one-off generator — it asks you everything the component needs, calls the Jobs API to enumerate what's in your workspace, fetches each selected job's task list, and writes the `defs.yaml` files for you.
 
 ## Run it
 
@@ -95,59 +96,101 @@ Choice [1/2/3/4/5]: 1
 
 Pattern matching is fnmatch-style globs (`*`, `?`), case-insensitive. If a pattern returns > 200 jobs, you're asked to narrow.
 
-## Orchestration modes
+## Orchestration: hybrid by design
 
-After dependency setup, the script asks how the assets should be triggered:
+After the dependency prompt, the script asks how the **root jobs** (those with no upstream deps in your selection) should trigger. **Downstream jobs always cascade automatically** via Dagster `AutomationCondition.eager` — no prompts needed for those.
 
-### 1. Cron schedule
+```text
+For ROOT jobs (those with no upstream deps), what triggers them?
+  1. Cron schedule  — runs the roots at fixed times → cascades downstream
+  2. Manual only    — you trigger the roots; downstream cascades
+```
 
-Generates a second `defs.yaml` using the community [`cron_schedule`](https://dagster-component-ui.vercel.app/c/cron_schedule) component. All selected assets are bundled into one scheduled job:
+### How asset keys look on disk
+
+`DatabricksWorkspaceComponent` produces one Dagster asset per **task** in a Databricks job. Asset keys are `[snake_case(job_name), snake_case(task_key)]`:
+
+| Databricks job | Tasks | Asset keys |
+|---|---|---|
+| `bronze_customers_ingestion` | `main` | `bronze_customers_ingestion/main` |
+| `silver_orders_enriched` | `extract`, `transform` | `silver_orders_enriched/extract`, `silver_orders_enriched/transform` |
+
+When you say "silver_orders_enriched depends on bronze_orders_ingestion" in the prompt, the script wires every task in `silver_*` to depend on every task in `bronze_*`.
+
+### What the script generates
+
+**The DatabricksWorkspaceComponent's `defs.yaml`** — workspace creds via templated env vars + the job filter + per-task overrides for downstream jobs:
+
+```yaml
+type: dagster_databricks.DatabricksWorkspaceComponent
+attributes:
+  workspace:
+    host: "{{ env('DATABRICKS_HOST') }}"
+    token: "{{ env('DATABRICKS_TOKEN') }}"
+  databricks_filter:
+    include_jobs:
+      job_ids:
+        - 482631
+        - 482632
+        - 482634
+        - 482635
+        - 482636
+  assets_by_job_task_key:
+    "silver_customer_360":
+      "main":
+        - key: "silver_customer_360/main"
+          deps:
+            - "bronze_customers_ingestion/main"
+          automation_condition: eager     # ← fires when bronze_customers completes
+    "silver_orders_enriched":
+      "extract":
+        - key: "silver_orders_enriched/extract"
+          deps:
+            - "bronze_customers_ingestion/main"
+            - "bronze_orders_ingestion/main"
+          automation_condition: eager
+      "transform":
+        - key: "silver_orders_enriched/transform"
+          deps:
+            - "bronze_customers_ingestion/main"
+            - "bronze_orders_ingestion/main"
+          automation_condition: eager
+    "gold_customer_ltv":
+      "main":
+        - key: "gold_customer_ltv/main"
+          deps:
+            - "silver_customer_360/main"
+            - "silver_orders_enriched/extract"
+            - "silver_orders_enriched/transform"
+          automation_condition: eager
+```
+
+**If you picked Cron schedule, a second `defs.yaml`** under `defs/schedule/` — the `cron_schedule` community component targeting **only the root job tasks**:
 
 ```yaml
 type: dagster_community_components.CronScheduleComponent
 attributes:
   schedule_name: "warehouse_orchestration_schedule"
-  cron_expression: "0 2 * * *"      # 2am daily
+  cron_expression: "0 2 * * *"
   execution_timezone: "UTC"
   default_status: RUNNING
   asset_keys:
-    - "bronze_customers_ingestion"
-    - "bronze_orders_ingestion"
-    - "silver_customer_360"
-    - …
+    - "bronze_customers_ingestion/main"     # ← only root jobs
+    - "bronze_orders_ingestion/main"
 ```
 
-When the schedule fires, Dagster materializes the entire set in dependency order (respecting the `asset_overrides.depends_on` you configured).
+The cron fires the roots. The roots complete (Databricks job materializes). Dagster sees the materialization, the `automation_condition: eager` on downstream tasks fires, downstream runs. Cascade.
 
-### 2. Auto-cascade (Dagster AutomationCondition)
+### Why hybrid?
 
-Adds `automation_condition: eager` to every **downstream** asset (any job with `depends_on`). When an upstream Databricks job completes and Dagster observes the asset materialization, downstream assets fire automatically:
+Bundling everything into one cron schedule would force the whole graph through a single scheduled job — coupling that doesn't reflect how the jobs actually depend. Auto-cascading from a scheduled root, in contrast:
 
-```yaml
-asset_overrides:
-  "silver_customer_360":
-    depends_on:
-      - "bronze_customers_ingestion"
-    automation_condition: eager       # ← auto-fires when bronze_customers_ingestion completes
+- **Each layer's runtime is independent.** If bronze takes 20 mins and silver takes 5, gold doesn't wait the full bronze window.
+- **Failure isolation is real.** If silver's transform fails, the cron schedule still completed; gold just doesn't fire. The next cron tick re-runs the roots.
+- **Backfills are surgical.** Re-materializing `bronze_customers_ingestion/main` cascades downstream from there — no need to re-run the whole schedule.
+- **Backpressure is visible.** Asset-graph-level lineage in the Dagster UI shows exactly what's waiting on what.
 
-  "silver_orders_enriched":
-    depends_on:
-      - "bronze_customers_ingestion"
-      - "bronze_orders_ingestion"
-    automation_condition: eager
-
-  "gold_customer_ltv":
-    depends_on:
-      - "silver_customer_360"
-      - "silver_orders_enriched"
-    automation_condition: eager
-```
-
-Run any upstream once — manually, on a Databricks schedule, or via Dagster — and the cascade propagates without further action. Closest thing to "lakeflow-style event-driven orchestration" inside Dagster.
-
-### 3. Manual only
-
-Just lineage in the UI; no automation. Click-to-materialize or `dg launch --assets X` triggers the underlying Databricks Job. Use this when you want Dagster as an observability layer rather than the orchestrator.
+If you pick "Manual only", same downstream cascade — just trigger the root by hand (click in UI / `dg launch`) and watch downstream propagate.
 
 ## What gets generated
 
