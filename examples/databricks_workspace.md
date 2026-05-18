@@ -293,6 +293,42 @@ asset_overrides:
 **The Dagster UI shows my jobs but the dependency arrows are wrong**
 - Edit `asset_overrides.<job>.depends_on` directly. Re-run `dg check defs` to verify, then refresh the UI.
 
+## Deploying to production
+
+Running `dg dev` locally is the development loop. To put the project somewhere durable, pick one:
+
+### Dagster+ Serverless — push from your laptop (fastest path)
+
+```bash
+uv add --dev dagster-cloud-cli
+uv run dg plus deploy
+```
+
+Builds + pushes your code location to Dagster+ Serverless. First run prompts for org + deployment. Docs: <https://docs.dagster.io/dagster-plus/deployment/serverless>
+
+### Dagster+ Hybrid — CI/CD via GitHub Actions
+
+```bash
+uv add --dev dagster-cloud-cli
+uv run dagster-cloud ci init
+# → scaffolds .github/workflows/dagster-plus-deploy.yml
+
+git add .github/ && git commit -m "ci: dagster+ deploy" && git push
+```
+
+Then in your GitHub repo: **Settings → Secrets and variables → Actions** → add `DAGSTER_CLOUD_API_TOKEN` (generate it in **Dagster+ → Settings → Tokens**). Every push to `main` redeploys. Docs: <https://docs.dagster.io/dagster-plus/deployment/code-locations>
+
+### Self-hosted Dagster OSS
+
+Build your own container image, deploy as a gRPC code location to your existing Dagster instance (k8s / ECS / Docker Compose). Docs: <https://docs.dagster.io/deployment>
+
+### Important — production credentials
+
+The `.env.demo` file is gitignored so it won't leak. Don't commit it. In production:
+
+- **Dagster+:** set `DATABRICKS_HOST` and `DATABRICKS_TOKEN` in the Dagster+ UI under **Deployment → Environment variables**. These get injected at runtime; no token in git.
+- **Use a service principal token, not your PAT.** A personal access token expires with your account; a workspace service principal token can be long-lived and scoped. Create one in **Databricks → Settings → Identity and access → Service principals** and grant it `Jobs:Read` + `Jobs:Run`.
+
 ## What this script doesn't do
 
 - **No data flow between assets** — these are Databricks Jobs (orchestrated workloads), not Delta tables. The `depends_on` is ordering-only. If you want Dagster to ALSO see your Delta tables as upstream assets, that's a different setup (the `DatabricksWorkspaceComponent` can auto-detect Delta paths inside jobs — see the official docs).

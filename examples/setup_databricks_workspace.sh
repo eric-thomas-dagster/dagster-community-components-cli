@@ -902,7 +902,40 @@ materialize triggers the Databricks Job and streams run status into the
 Dagster timeline.
 
 To add more jobs later:    edit databricks_filter.include_jobs.job_ids in $DEFS_YAML
-To change dependencies:    edit the asset_overrides block in the same file
-To change orchestration:   edit the asset_overrides automation_condition,
+To change dependencies:    edit assets_by_job_task_key in the same file
+To change orchestration:   edit assets_by_job_task_key (automation_condition)
                            or the cron schedule's defs.yaml
+
+═══════════════════════════════════════════════════════════════════════
+  Deploy to production (Dagster+)
+═══════════════════════════════════════════════════════════════════════
+
+Running locally with 'dg dev' is the dev loop. To deploy:
+
+  ▸ Dagster+ Serverless (push from your laptop, fastest):
+      uv add --dev dagster-cloud-cli
+      uv run dg plus deploy
+    Docs:  https://docs.dagster.io/dagster-plus/deployment/serverless
+
+  ▸ Dagster+ Hybrid (CI/CD via GitHub Actions):
+      uv add --dev dagster-cloud-cli
+      uv run dagster-cloud ci init
+      # → scaffolds .github/workflows/dagster-plus-deploy.yml in your repo
+      git add .github/ && git commit -m "ci: dagster+ deploy" && git push
+      # Then in GitHub repo Settings → Secrets, add:
+      #   DAGSTER_CLOUD_API_TOKEN     (from Dagster+ Settings → Tokens)
+    Docs:  https://docs.dagster.io/dagster-plus/deployment/code-locations
+
+  ▸ Self-hosted Dagster OSS (k8s / ECS / Docker):
+      Build your own image; deploy as a code location to your gRPC server.
+    Docs:  https://docs.dagster.io/deployment
+
+IMPORTANT — Databricks credentials in production:
+  Do NOT commit .env.demo (already in .gitignore — verify before pushing).
+  Dagster+ UI → Deployment → Environment variables → add:
+    DATABRICKS_HOST  =  $DATABRICKS_HOST
+    DATABRICKS_TOKEN =  <new long-lived service-principal token>
+  Don't reuse your personal-access-token in prod — generate a workspace
+  service principal token instead.
+
 MSG
