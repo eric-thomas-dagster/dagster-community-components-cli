@@ -71,6 +71,8 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Text Extraction](text_extraction.md) | `xml_parser`, `html_parser`, `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `regex_parser` | Pull structured fields from semi-structured columns (XML, HTML, nested JSON) |
 | [Transformations Mega-Demo](transformations.md) | 34 transforms — every shape-preserving + shape-changing transform in one chain | Comprehensive toolbox showcase |
 | [Partitions](partitions.md) | `dataframe_to_csv`, `per_partition_backfill_job` | The four canonical partition shapes (daily/weekly/monthly + static dimensions) end-to-end |
+| [SQL→SQL Replication](replication.md) | `database_replication` | Postgres → DuckDB end-to-end. Full refresh, incremental + upsert, column subset + WHERE filter — recurring data-sync pattern. Same YAML retargets to Oracle / Db2 / Snowflake / BigQuery / Redshift / Databricks unchanged. |
+| [Warehouse Migration](warehouse_migration.md) | `database_migration_assessment`, `database_schema_inventory`, `database_tables_migration`, `database_constraints_migration`, `database_views_migration`, `database_replication`, `dataframe_to_csv` | The one-time lift+shift story. **Pre-flight assessment** (dry-run, returns "what would happen if you ran it tomorrow"), then automated DDL + data + view migration with CHECK + UNIQUE + FK + NOT NULL preserved. Status reports per step pipe to CSV. AWS SCT / SSMA shape, inside Dagster. |
 
 ### Time series + forecasting
 
