@@ -192,6 +192,117 @@ Bundling every job into one cron schedule would force the whole graph through a 
 
 If you pick "Manual only", same downstream cascade — just trigger the root by hand (click in UI / `dg launch`) and watch downstream propagate.
 
+## How the cascade actually works — worked example
+
+Concrete walkthrough using **two Databricks Jobs**:
+
+- **Job 1** has 3 tasks: `extract`, `transform`, `load` — the multi-task case
+- **Job 2** has 1 task: `main` — the single-task case
+- User answered "Job 2 depends on Job 1" in the script
+- User picked **cron schedule** for the root
+
+Following the cascade from cron tick to Job 2 completion:
+
+```
+┌────────────────────────────────────────────────────────────────────────┐
+│  Step 1.  Cron fires (e.g. "0 2 * * *")                                │
+│  ─────────────────────────────────────────                             │
+│  Dagster's schedule materializes:                                      │
+│    job_1/extract, job_1/transform, job_1/load                          │
+│  → routes to the single multi_asset for Job 1 (can_subset=True)        │
+└────────────────────────────────┬───────────────────────────────────────┘
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  Step 2.  Databricks Job 1 runs                                        │
+│  ───────────────────────────────                                       │
+│  multi_asset op calls:                                                 │
+│    client.jobs.run_now(job_id=<job_1_id>, only=None)                   │
+│  → entire Job 1 runs in Databricks (all 3 tasks, in their own order)   │
+│  → when job completes, op yields 3 MaterializeResults:                 │
+│       job_1/extract  ✓                                                 │
+│       job_1/transform  ✓                                               │
+│       job_1/load  ✓                                                    │
+└────────────────────────────────┬───────────────────────────────────────┘
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  Step 3.  Automation sensor ticks (every ~30s)                         │
+│  ──────────────────────────────────────────────                        │
+│  Reads job_2/main's automation_condition: eager                        │
+│  Sees all 3 deps materialized after job_2/main's last materialization  │
+│  → "all upstreams updated" → condition fires → request materialization │
+└────────────────────────────────┬───────────────────────────────────────┘
+                                 ▼
+┌────────────────────────────────────────────────────────────────────────┐
+│  Step 4.  Databricks Job 2 runs                                        │
+│  ───────────────────────────────                                       │
+│  multi_asset op for Job 2 calls:                                       │
+│    client.jobs.run_now(job_id=<job_2_id>, only=["main"])               │
+│  → Job 2 runs in Databricks                                            │
+│  → yields MaterializeResult for job_2/main  ✓                          │
+│                                                                        │
+│  Done. Cascade completed in 1 cron tick + ~30s automation latency.     │
+└────────────────────────────────────────────────────────────────────────┘
+```
+
+**Key thing to notice:** the cascade does NOT happen at the task level (Job 1's tasks don't trigger Job 2 one at a time). It happens at the **Databricks-job level** — Job 1 runs in full, then once Dagster sees all three tasks materialized, Job 2 fires once. Exactly the right granularity.
+
+This works because:
+
+- Job 1 has no `assets_by_job_task_key` override (it's a root) → its multi_asset runs with `only=None` → entire Databricks Job runs → all 3 tasks materialize
+- Job 2's eager condition requires "all deps updated since last materialization" → won't fire until all 3 of Job 1's tasks have materialized
+- Job 2's multi_asset has `assets_by_job_task_key` override → runs with `only=["main"]` → just Job 2's one task
+
+### Worked variant: Job 1 itself downstream
+
+If Job 1 is *also* downstream (Job 0 → Job 1 → Job 2), the cascade still works:
+
+- Each of Job 1's task assets gets `automation_condition: eager` + `deps: [job_0/main]`
+- When Job 0 materializes, the automation sensor sees Job 1's 3 task assets all have eager + the same dep
+- Dagster batches the materialization requests for the same `multi_asset` into one execution: `selected_keys = {extract, transform, load}`
+- Multi_asset for Job 1 looks up `assets_by_job_task_key["job_1"]` → `tasks_to_run = ["extract", "transform", "load"]` → `run_now(only=["extract", "transform", "load"])`
+- All 3 materialize in one Databricks job run, then Job 2's eager fires as above
+
+The batching is what keeps you from getting 3 separate Databricks runs per cascade event. (Dagster's automation engine batches per-`AssetsDefinition`, and each Databricks Job is one `AssetsDefinition`.)
+
+### What if a downstream depends on JUST ONE task of an upstream job?
+
+Edge case: you really want `job_2/main` to depend only on `job_1/extract` (not the whole Job 1). The script's prompt is job-level, so it'll wire deps to *all* of Job 1's tasks. To get just one:
+
+1. Run the script as normal
+2. Open the generated `defs.yaml`
+3. Edit `assets_by_job_task_key["job_2"]["main"]` — remove the unwanted deps from the list:
+   ```yaml
+   deps:
+     - "job_1/extract"     # keep
+     # - "job_1/transform" # removed
+     # - "job_1/load"      # removed
+   ```
+4. `uv run dg check defs` to validate
+
+The script optimizes for the common case (job-level deps). Fine-grained task deps are a one-line YAML edit.
+
+## Under the hood — code-verified flow
+
+The above is verified against the [DatabricksWorkspaceComponent source](https://github.com/dagster-io/dagster/blob/master/python_modules/libraries/dagster-databricks/dagster_databricks/components/databricks_workspace/component.py). Key facts from the source:
+
+| Source fact | Implication |
+|---|---|
+| One `@multi_asset(can_subset=True)` per Databricks Job | All tasks of one Job are part of the same `AssetsDefinition` — Dagster batches their requests automatically. |
+| `tasks_to_run` computed from `selected_keys ∩ assets_by_job_task_key[job_name]` | When you override a job, the op respects your task subset. When you don't (root jobs), `tasks_to_run = []`, which becomes `only=None`, which runs everything. |
+| `client.jobs.run_now(only=tasks_to_run)` | Databricks API respects task-level subsetting (only-runs the listed tasks, including their within-job upstream deps). |
+| `yield MaterializeResult` only for `spec.key in selected_keys` | Dagster only marks the requested assets as materialized. Tasks that ran in Databricks but weren't requested don't become "fresh" in Dagster's view. |
+
+The user-visible promise of `automation_condition: eager` ("downstream runs when upstream is fresh") holds as long as the multi_asset materializes the entire job when requested with all task keys selected. Which is exactly what happens because:
+
+- Cron schedule for a root: lists *all* root task keys in `asset_keys` → schedule selects all → multi_asset runs full job
+- Automation cascade to a downstream: sensor batches all of the downstream's task-asset requests (same `AssetsDefinition`) → multi_asset runs with `assets_by_job_task_key` populated → `tasks_to_run = [all task keys]` → `run_now(only=[all task keys])` → entire Databricks job runs
+
+### One thing I can't 100% verify without a live workspace
+
+The Dagster automation sensor *should* batch multiple task-asset requests on the same `AssetsDefinition` within a single tick. If it didn't, you'd see N separate Databricks job runs per cascade event (one per task), each running just one task. Functionally correct, just wasteful.
+
+The component being a `@multi_asset` (one `AssetsDefinition` per Databricks Job) is what enables the batching, and Dagster's automation engine treats `AssetsDefinition` boundaries as natural batching units. So this should hold. If you observe N runs in Databricks per cascade, file an issue and we'll add a different glue layer (likely a wrapper asset or a `define_asset_job` shim).
+
 ## What gets generated
 
 ```
