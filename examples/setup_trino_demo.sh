@@ -1,6 +1,12 @@
 #!/usr/bin/env bash
 # Trino demo — single-container Trino coordinator with the built-in `memory`
 # catalog. No SaaS, no auth.
+#
+# VALIDATE_MODE: check_defs_only
+# (memory catalog supports CREATE+INSERT only; trino_io_manager's
+# partition-aware DELETE+INSERT path needs a catalog with DELETE support,
+# so full materialization can't pass against this image. The setup +
+# `dg check defs` validate end-to-end loadability.)
 
 set -euo pipefail
 if ! docker info >/dev/null 2>&1; then echo "ERROR: Docker daemon not running."; exit 1; fi

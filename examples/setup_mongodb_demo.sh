@@ -97,7 +97,7 @@ write_yaml() {
 write_yaml "mongodb_resource" "type: $PKG.components.mongodb_resource.component.MongoDBResourceComponent
 attributes:
   resource_key: mongodb_resource
-  connection_string_env_var: MONGODB_URI
+  connection_string: $MONGO_URI
   database: $MONGO_DB
   tls: false"
 
@@ -107,7 +107,7 @@ attributes:
 write_yaml "mongodb_io_manager" "type: $PKG.components.mongodb_io_manager.component.MongoDBIOManagerComponent
 attributes:
   resource_key: io_manager
-  connection_uri_env_var: MONGODB_URI
+  connection_uri: $MONGO_URI
   database: $MONGO_DB
   if_exists: replace"
 
@@ -115,7 +115,7 @@ attributes:
 write_yaml "mongodb_reader" "type: $PKG.components.mongodb_reader.component.MongodbReaderComponent
 attributes:
   asset_name: users_from_mongo
-  connection_string_env_var: MONGODB_URI
+  connection_string: $MONGO_URI
   database: $MONGO_DB
   collection: users
   query:
@@ -139,7 +139,7 @@ write_yaml "mongodb_writer" "type: $PKG.components.mongodb_writer.component.Mong
 attributes:
   asset_name: orders_in_mongo
   upstream_asset_key: synthetic_orders
-  connection_string_env_var: MONGODB_URI
+  connection_string: $MONGO_URI
   database: $MONGO_DB
   collection: orders
   if_exists: replace
@@ -155,15 +155,12 @@ attributes:
   group_name: mongodb_demo
   deps: [orders_in_mongo]"
 
-echo "export MONGODB_URI='$MONGO_URI'" > .env.demo
-
 cat <<MSG
 
 >>> Setup complete.
 
-Source the env var + validate everything loaded:
+Validate everything loaded:
     cd $PROJECT_DIR
-    source .env.demo
     uv run dg check defs
     uv run dg list defs   # 4 assets, 1 resource
 

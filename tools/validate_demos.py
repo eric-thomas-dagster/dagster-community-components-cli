@@ -48,6 +48,28 @@ def _get_project_dir(setup_script: Path) -> str:
     return m.group(1) if m else f"{setup_script.stem.replace('setup_', '').replace('_demo', '')}-demo"
 
 
+_DG_NAME_VAR = re.compile(r"^([A-Z_][A-Z0-9_]*_NAME)\s*=\s*['\"]?(dg-[a-zA-Z0-9._-]+)['\"]?\s*(?:#.*)?$")
+
+
+def _docker_cleanup(setup_script: Path) -> None:
+    """Force-remove any `dg-*` containers this demo's setup will reuse.
+
+    Setup scripts declare container names as bash vars at the top, e.g.
+        OTEL_NAME=dg-otel-demo
+        PG_NAME="dg-replication-postgres"
+    Stale containers from prior validator runs hold ports + names and
+    cause docker run to fail with conflicts. Tear them down preemptively
+    (and again on the way out) so successive demos don't collide.
+    """
+    names: set[str] = set()
+    for line in setup_script.read_text().splitlines():
+        m = _DG_NAME_VAR.match(line.strip())
+        if m:
+            names.add(m.group(2))
+    for name in names:
+        subprocess.run(["docker", "rm", "-f", name], capture_output=True, timeout=20)
+
+
 def _scaffold(setup_script: Path, project_dir: str, log_file: Path, env_overrides: dict) -> bool:
     proj = Path("/tmp") / project_dir
     if proj.exists():
@@ -55,6 +77,8 @@ def _scaffold(setup_script: Path, project_dir: str, log_file: Path, env_override
     private = Path("/private/tmp") / project_dir
     if private.exists():
         shutil.rmtree(private, ignore_errors=True)
+
+    _docker_cleanup(setup_script)
 
     env = {**os.environ, **env_overrides}
     with open(log_file, "w") as f:
@@ -215,6 +239,13 @@ def validate(setup_script: Path) -> tuple[str, str, str]:
     if defs is None:
         return name, "FAIL_INSPECT", "dg list defs failed (check log)"
 
+    # Some demos are intentionally not end-to-end materializable in the harness
+    # (e.g. trino's memory catalog supports CREATE+INSERT but not the
+    # partition-aware DELETE that trino_io_manager issues). Honour an explicit
+    # sentinel in the setup script so we stop at dg-check rather than fail.
+    if "VALIDATE_MODE: check_defs_only" in setup_script.read_text():
+        return name, "OK", "check_defs_only (intentional)"
+
     asset_count = len(defs.get("assets", []))
     job_count = len(defs.get("jobs", []))
     sensor_count = len(defs.get("sensors", []))
@@ -244,6 +275,9 @@ def validate(setup_script: Path) -> tuple[str, str, str]:
 
     # 4. Launch
     ok = _launch(proj_path, launch_args, env_overrides, log_file)
+    # Tear down this demo's containers so the NEXT demo doesn't collide on
+    # the same ports (e.g. replication + warehouse_migration both want 5432).
+    _docker_cleanup(setup_script)
 
     # 4b. Fallback: if we passed --partition but the assets aren't all partitioned with
     # a shared partitions_def, dg launch raises CheckError. Retry without --partition.
@@ -283,7 +317,9 @@ _AUTH_PATTERNS = re.compile(
     r"DAGSTER_PLUS|DAGSTER_CLOUD|"
     r"read -p|read -r|"
     r"snowflake|SNOWFLAKE|bigquery|BIGQUERY|databricks|DATABRICKS|"
-    r"aws s3|s3://|gs://|GOOGLE_APPLICATION_CREDENTIALS|azure|AZURE)"
+    r"aws s3|s3://|gs://|GOOGLE_APPLICATION_CREDENTIALS|azure|AZURE|"
+    # Demos that need a non-Docker local service the harness can't bootstrap:
+    r"localhost:11434|OLLAMA_HOST)"
 )
 
 
