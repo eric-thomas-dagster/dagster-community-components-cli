@@ -132,10 +132,10 @@ write_yaml() {
 write_yaml "customers_replication" "type: $PKG.components.database_replication.component.DatabaseReplicationComponent
 attributes:
   asset_name: customers_warehouse
-  source_connection_env_var: SOURCE_DB_URL
+  source_connection: postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable
   source_type: postgres
   source_table: app.customers
-  target_connection_env_var: TARGET_DB_URL
+  target_connection: duckdb://$DUCKDB_PATH
   target_type: duckdb
   target_table: raw.customers
   mode: full_refresh
@@ -146,10 +146,10 @@ attributes:
 write_yaml "orders_incremental_replication" "type: $PKG.components.database_replication.component.DatabaseReplicationComponent
 attributes:
   asset_name: orders_warehouse
-  source_connection_env_var: SOURCE_DB_URL
+  source_connection: postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable
   source_type: postgres
   source_table: app.orders
-  target_connection_env_var: TARGET_DB_URL
+  target_connection: duckdb://$DUCKDB_PATH
   target_type: duckdb
   target_table: raw.orders
   mode: incremental
@@ -163,10 +163,10 @@ attributes:
 write_yaml "orders_eu_replication" "type: $PKG.components.database_replication.component.DatabaseReplicationComponent
 attributes:
   asset_name: orders_eu_warehouse
-  source_connection_env_var: SOURCE_DB_URL
+  source_connection: postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable
   source_type: postgres
   source_table: app.orders
-  target_connection_env_var: TARGET_DB_URL
+  target_connection: duckdb://$DUCKDB_PATH
   target_type: duckdb
   target_table: raw.orders_eu
   mode: full_refresh
@@ -175,20 +175,11 @@ attributes:
   deps: [orders_warehouse]
   group_name: warehouse_migration"
 
-cat > .env.demo <<EOF
-# Source: legacy operational DB (Postgres)
-export SOURCE_DB_URL='postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable'
-
-# Target: warehouse (DuckDB local file — stands in for Snowflake/BigQuery/Redshift/Databricks)
-export TARGET_DB_URL='duckdb://$DUCKDB_PATH'
-EOF
-
 cat <<MSG
 
 >>> Setup complete.
 
     cd $PROJECT_DIR
-    source .env.demo
     uv run dg check defs
     uv run dg launch --assets '*'
 

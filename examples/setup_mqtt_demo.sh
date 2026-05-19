@@ -85,9 +85,9 @@ PY
 write_yaml "mqtt_to_database_asset" "type: $PKG.components.mqtt_to_database_asset.component.MQTTToDatabaseAssetComponent
 attributes:
   asset_name: mqtt_sensors_ingest
-  broker_host_env_var: MQTT_BROKER_HOST
+  broker_host: localhost
   topic: $TOPIC
-  database_url_env_var: DATABASE_URL
+  database_url: sqlite:///$DB_PATH
   table_name: raw_sensor_readings
   collect_seconds: 15
   max_messages: 100
@@ -121,17 +121,12 @@ attributes:
   topic: $TOPIC
   check_interval_seconds: 60"
 
-cat > .env.demo <<EOF
-export MQTT_BROKER_HOST='localhost'
-export DATABASE_URL='sqlite:///$DB_PATH'
-EOF
-
 cat <<MSG
 
 >>> Setup complete.
 
 Validate + materialize:
-    cd $PROJECT_DIR && source .env.demo
+    cd $PROJECT_DIR
     uv run dg check defs
     # MQTT is fire-and-forget. Pre-published messages are gone if not QoS retained.
     # Run a publisher in one shell, the asset in another (collect_seconds=15):

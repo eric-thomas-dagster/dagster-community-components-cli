@@ -79,10 +79,10 @@ write_yaml() {
 write_yaml "pulsar_to_database_asset" "type: $PKG.components.pulsar_to_database_asset.component.PulsarToDatabaseAssetComponent
 attributes:
   asset_name: pulsar_events_ingest
-  service_url_env_var: PULSAR_SERVICE_URL
+  service_url: pulsar://localhost:$PULSAR_PORT
   topic: $TOPIC
   subscription_name: dagster-ingest
-  database_url_env_var: DATABASE_URL
+  database_url: sqlite:///$DB_PATH
   table_name: raw_events
   max_messages: 100
   group_name: pulsar_demo"
@@ -114,15 +114,10 @@ attributes:
   topic: $TOPIC
   check_interval_seconds: 60"
 
-cat > .env.demo <<EOF
-export PULSAR_SERVICE_URL='pulsar://localhost:$PULSAR_PORT'
-export DATABASE_URL='sqlite:///$DB_PATH'
-EOF
-
 cat <<MSG
 
 >>> Setup complete.
-    cd $PROJECT_DIR && source .env.demo
+    cd $PROJECT_DIR
     uv run dg check defs
     uv run dg launch --assets pulsar_events_ingest
     sqlite3 $DB_PATH 'SELECT COUNT(*) FROM raw_events;'    # 25

@@ -85,7 +85,7 @@ attributes:
   port: $ORACLE_PORT
   service_name: $SERVICE_NAME
   username: system
-  password_env_var: ORACLE_PASSWORD"
+  password: $ORACLE_PWD"
 
 write_yaml "synthetic_data_generator" "type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
 attributes:
@@ -99,23 +99,16 @@ write_yaml "dataframe_to_table" "type: $PKG.components.dataframe_to_table.compon
 attributes:
   asset_name: orders_in_oracle
   upstream_asset_key: synthetic_orders
-  database_url_env_var: ORACLE_URL
+  database_url: oracle+oracledb://system:$ORACLE_PWD@localhost:$ORACLE_PORT/?service_name=$SERVICE_NAME
   table_name: orders
   if_exists: replace
   group_name: oracle_demo"
-
-cat > .env.demo <<EOF
-export ORACLE_PASSWORD='$ORACLE_PWD'
-# SQLAlchemy URL for oracle_resource + dataframe_to_table
-export ORACLE_URL='oracle+oracledb://system:$ORACLE_PWD@localhost:$ORACLE_PORT/?service_name=$SERVICE_NAME'
-EOF
 
 cat <<MSG
 
 >>> Setup complete.
 
     cd $PROJECT_DIR
-    source .env.demo
     uv run dg check defs
     uv run dg launch --assets '*'
 

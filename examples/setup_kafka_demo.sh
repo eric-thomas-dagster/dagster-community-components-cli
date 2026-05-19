@@ -109,8 +109,8 @@ attributes:
 write_yaml "kafka_to_database_asset" "type: $PKG.components.kafka_to_database_asset.component.KafkaToDatabaseAssetComponent
 attributes:
   asset_name: kafka_events_ingest
-  bootstrap_servers_env_var: KAFKA_BOOTSTRAP_SERVERS
-  database_url_env_var: DATABASE_URL
+  bootstrap_servers: localhost:$KAFKA_PORT
+  database_url: sqlite:///$DB_PATH
   topic: $TOPIC
   consumer_group: dagster-demo-ingestion
   table_name: raw_events
@@ -151,19 +151,12 @@ attributes:
   topic: $TOPIC
   check_interval_seconds: 60"
 
-echo ">>> 6/6  Writing .env.demo with KAFKA_BOOTSTRAP_SERVERS + DATABASE_URL"
-cat > .env.demo <<EOF
-export KAFKA_BOOTSTRAP_SERVERS='localhost:$KAFKA_PORT'
-export DATABASE_URL='sqlite:///$DB_PATH'
-EOF
-
 cat <<MSG
 
 >>> Setup complete.
 
-Source the env vars and validate everything loaded:
+Validate everything loaded:
     cd $PROJECT_DIR
-    source .env.demo
     uv run dg check defs
     uv run dg list defs   # 2 assets, 1 job, 2 sensors
 

@@ -21,6 +21,11 @@
 set -euo pipefail
 PROJECT_DIR="${1:-ai-no-llm-demo}"
 
+# Pin to Python 3.13 — spaCy (transitive dep of presidio-analyzer) has no
+# Python 3.14 wheels yet. uv will auto-install 3.13 if it isn't present.
+export UV_PYTHON=3.13
+uv python install 3.13 >/dev/null 2>&1 || true
+
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"

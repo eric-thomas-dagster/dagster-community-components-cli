@@ -151,7 +151,7 @@ write_yaml() {
 write_yaml "migration_inventory" "type: $PKG.components.database_schema_inventory.component.DatabaseSchemaInventoryComponent
 attributes:
   asset_name: legacy_db_inventory
-  connection_env_var: SOURCE_DB_URL
+  connection: postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable
   database_type: postgres
   schemas: [app]
   group_name: migration_planning"
@@ -168,8 +168,8 @@ attributes:
 write_yaml "tables_ddl" "type: $PKG.components.database_tables_migration.component.DatabaseTablesMigrationComponent
 attributes:
   asset_name: warehouse_ddl_ready
-  source_connection_env_var: SOURCE_DB_URL
-  target_connection_env_var: TARGET_DB_URL
+  source_connection: postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable
+  target_connection: duckdb:///$DUCKDB_PATH
   source_type: postgres
   target_type: duckdb
   schemas: [app]
@@ -185,8 +185,8 @@ attributes:
 write_yaml "replicate_customers" "type: $PKG.components.database_replication.component.DatabaseReplicationComponent
 attributes:
   asset_name: customers_in_warehouse
-  source_connection_env_var: SOURCE_DB_URL
-  target_connection_env_var: TARGET_DB_URL
+  source_connection: postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable
+  target_connection: duckdb:///$DUCKDB_PATH
   source_type: postgres
   source_table: app.customers
   target_type: duckdb
@@ -198,8 +198,8 @@ attributes:
 write_yaml "replicate_orders" "type: $PKG.components.database_replication.component.DatabaseReplicationComponent
 attributes:
   asset_name: orders_in_warehouse
-  source_connection_env_var: SOURCE_DB_URL
-  target_connection_env_var: TARGET_DB_URL
+  source_connection: postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable
+  target_connection: duckdb:///$DUCKDB_PATH
   source_type: postgres
   source_table: app.orders
   target_type: duckdb
@@ -212,8 +212,8 @@ attributes:
 write_yaml "views_migration" "type: $PKG.components.database_views_migration.component.DatabaseViewsMigrationComponent
 attributes:
   asset_name: views_migrated
-  source_connection_env_var: SOURCE_DB_URL
-  target_connection_env_var: TARGET_DB_URL
+  source_connection: postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable
+  target_connection: duckdb:///$DUCKDB_PATH
   source_type: postgres
   target_type: duckdb
   schemas: [app]
@@ -224,20 +224,11 @@ attributes:
   deps: [orders_in_warehouse]
   group_name: migration_views"
 
-cat > .env.demo <<EOF
-# Source: legacy operational DB
-export SOURCE_DB_URL='postgres://postgres:$PG_PWD@localhost:$PG_PORT/$PG_SRC_DB?sslmode=disable'
-
-# Target: warehouse (DuckDB stand-in — note the FOUR slashes for absolute path)
-export TARGET_DB_URL='duckdb:///$DUCKDB_PATH'
-EOF
-
 cat <<MSG
 
 >>> Setup complete.
 
     cd $PROJECT_DIR
-    source .env.demo
     uv run dg check defs
     uv run dg launch --assets '*'
 

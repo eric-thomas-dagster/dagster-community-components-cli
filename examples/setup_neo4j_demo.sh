@@ -72,15 +72,15 @@ attributes:
   resource_key: neo4j_resource
   uri: bolt://localhost:$NEO4J_BOLT_PORT
   username: neo4j
-  password_env_var: NEO4J_PASSWORD
+  password: $NEO4J_PASS
   database: neo4j"
 
 write_yaml "neo4j_reader" "type: $PKG.components.neo4j_reader.component.Neo4jReaderComponent
 attributes:
   asset_name: knows_graph
-  uri_env_var: NEO4J_URI
-  username_env_var: NEO4J_USERNAME
-  password_env_var: NEO4J_PASSWORD
+  uri: bolt://localhost:$NEO4J_BOLT_PORT
+  username: neo4j
+  password: $NEO4J_PASS
   query: 'MATCH (n:Person)-[:KNOWS]->(m:Person) RETURN n.name AS person, m.name AS knows ORDER BY person, knows'
   database: neo4j
   group_name: neo4j_demo"
@@ -97,25 +97,19 @@ write_yaml "neo4j_writer" "type: $PKG.components.neo4j_writer.component.Neo4jWri
 attributes:
   asset_name: write_new_people
   upstream_asset_key: new_people
-  uri_env_var: NEO4J_URI
-  username_env_var: NEO4J_USERNAME
-  password_env_var: NEO4J_PASSWORD
+  uri: bolt://localhost:$NEO4J_BOLT_PORT
+  username: neo4j
+  password: $NEO4J_PASS
   node_label: Customer
   id_column: customer_id
   merge: true
   database: neo4j
   group_name: neo4j_demo"
 
-cat > .env.demo <<EOF
-export NEO4J_URI='bolt://localhost:$NEO4J_BOLT_PORT'
-export NEO4J_USERNAME='neo4j'
-export NEO4J_PASSWORD='$NEO4J_PASS'
-EOF
-
 cat <<MSG
 
 >>> Setup complete.
-    cd $PROJECT_DIR && source .env.demo
+    cd $PROJECT_DIR
     uv run dg check defs
     uv run dg launch --assets '*'
 

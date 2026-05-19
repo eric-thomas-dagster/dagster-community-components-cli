@@ -91,7 +91,7 @@ attributes:
   port: $DB2_PORT
   database: $DB2_DB
   username: $DB2_USER
-  password_env_var: DB2_PASSWORD"
+  password: $DB2_PASS"
 
 write_yaml "synthetic_data_generator" "type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
 attributes:
@@ -105,22 +105,16 @@ write_yaml "dataframe_to_table" "type: $PKG.components.dataframe_to_table.compon
 attributes:
   asset_name: orders_in_db2
   upstream_asset_key: synthetic_orders
-  database_url_env_var: DB2_URL
+  database_url: db2+ibm_db://$DB2_USER:$DB2_PASS@localhost:$DB2_PORT/$DB2_DB
   table_name: ORDERS
   if_exists: replace
   group_name: db2_demo"
-
-cat > .env.demo <<EOF
-export DB2_PASSWORD='$DB2_PASS'
-export DB2_URL='db2+ibm_db://$DB2_USER:$DB2_PASS@localhost:$DB2_PORT/$DB2_DB'
-EOF
 
 cat <<MSG
 
 >>> Setup complete.
 
     cd $PROJECT_DIR
-    source .env.demo
     uv run dg check defs
     uv run dg launch --assets '*'
 

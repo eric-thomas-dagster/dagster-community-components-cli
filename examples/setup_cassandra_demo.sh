@@ -81,10 +81,6 @@ attributes:
   query: 'SELECT event_id, user, event_type, amount FROM $TABLE'
   group_name: cassandra_demo"
 
-cat > .env.demo <<EOF
-# No env vars required for this no-auth demo.
-EOF
-
 cat <<MSG
 
 >>> Setup complete.

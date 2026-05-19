@@ -72,18 +72,14 @@ write_yaml "elasticsearch_reader" "type: $PKG.components.elasticsearch_reader.co
 attributes:
   asset_name: product_index_dump
   index_name: $INDEX
-  host_env_var: ELASTICSEARCH_URL
+  host: http://localhost:$ES_PORT
   n_results: 50
   group_name: elasticsearch_demo"
-
-cat > .env.demo <<EOF
-export ELASTICSEARCH_URL='http://localhost:$ES_PORT'
-EOF
 
 cat <<MSG
 
 >>> Setup complete.
-    cd $PROJECT_DIR && source .env.demo
+    cd $PROJECT_DIR
     uv run dg check defs
     uv run dg launch --assets product_index_dump
 

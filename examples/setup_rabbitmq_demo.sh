@@ -87,9 +87,9 @@ write_yaml() {
 write_yaml "rabbitmq_to_database_asset" "type: $PKG.components.rabbitmq_to_database_asset.component.RabbitMQToDatabaseAssetComponent
 attributes:
   asset_name: rabbitmq_orders_ingest
-  amqp_url_env_var: RABBITMQ_URL
+  amqp_url: amqp://guest:guest@localhost:$RMQ_PORT/
   queue_name: $QUEUE
-  database_url_env_var: DATABASE_URL
+  database_url: sqlite:///$DB_PATH
   table_name: raw_orders
   max_messages: 100
   group_name: rabbitmq_demo"
@@ -122,17 +122,11 @@ attributes:
   queue_name: $QUEUE
   check_interval_seconds: 60"
 
-cat > .env.demo <<EOF
-export RABBITMQ_URL='amqp://guest:guest@localhost:$RMQ_PORT/'
-export DATABASE_URL='sqlite:///$DB_PATH'
-EOF
-
 cat <<MSG
 
 >>> Setup complete.
 
     cd $PROJECT_DIR
-    source .env.demo
     uv run dg check defs
     uv run dg launch --assets rabbitmq_orders_ingest
 

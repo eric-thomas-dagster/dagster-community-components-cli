@@ -70,12 +70,12 @@ write_yaml() {
 write_yaml "nats_to_database_asset" "type: $PKG.components.nats_to_database_asset.component.NATSToDatabaseAssetComponent
 attributes:
   asset_name: nats_events_ingest
-  nats_url_env_var: NATS_URL
+  nats_url: nats://localhost:$NATS_PORT
   subject: $SUBJECT
   use_jetstream: true
   stream_name: $STREAM
   consumer_name: dagster-ingest
-  database_url_env_var: DATABASE_URL
+  database_url: sqlite:///$DB_PATH
   table_name: raw_events
   max_messages: 100
   group_name: nats_demo"
@@ -106,15 +106,10 @@ attributes:
   stream_name: $STREAM
   check_interval_seconds: 60"
 
-cat > .env.demo <<EOF
-export NATS_URL='nats://localhost:$NATS_PORT'
-export DATABASE_URL='sqlite:///$DB_PATH'
-EOF
-
 cat <<MSG
 
 >>> Setup complete.
-    cd $PROJECT_DIR && source .env.demo
+    cd $PROJECT_DIR
     uv run dg check defs
     uv run dg launch --assets nats_events_ingest
     sqlite3 $DB_PATH 'SELECT COUNT(*) FROM raw_events;'   # 25
