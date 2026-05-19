@@ -46,8 +46,13 @@ uv add -q 'cassandra-driver>=3.25.0' pandas
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> 4/5  Installing 4 components"
-for c in synthetic_data_generator cassandra_resource cassandra_reader cassandra_writer; do
+echo ">>> 4/5  Installing 2 components"
+# Demo seeds Cassandra via cqlsh (above), then reads back via the reader.
+# The writer + synthetic_data_generator are intentionally NOT installed here:
+# their auto-installed default defs.yaml reference a non-existent upstream
+# asset (processed_events) and break `dg check defs`. Add them back when
+# the demo grows a component-driven write/seed step.
+for c in cassandra_resource cassandra_reader; do
   $CLI add $c --auto-install
 done
 

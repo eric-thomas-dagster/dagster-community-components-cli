@@ -121,8 +121,32 @@ def _pick_partition_key(partition_type: str, project_dir: Path) -> str:
     return "2026-04-01"
 
 
+def _source_env_demo(project_dir: Path) -> dict[str, str]:
+    """Many demos generate a `.env.demo` with localhost connection URLs
+    (DB2_URL, ELASTICSEARCH_URL, MQTT_BROKER, etc.) and tell the user to
+    `source .env.demo` before launching. The validator never sources it,
+    causing KeyError failures. This reads the file and returns the exports
+    as a dict so they can be folded into the env for `dg launch`.
+    """
+    env_file = project_dir / ".env.demo"
+    if not env_file.exists():
+        return {}
+    extracted = {}
+    for line in env_file.read_text().splitlines():
+        line = line.strip()
+        # Match `export KEY=value` or `export KEY='value'` or `export KEY="value"`.
+        m = re.match(r"^export\s+([A-Z_][A-Z0-9_]*)=(.*)$", line)
+        if not m:
+            continue
+        key, val = m.group(1), m.group(2).strip()
+        if (val.startswith("'") and val.endswith("'")) or (val.startswith('"') and val.endswith('"')):
+            val = val[1:-1]
+        extracted[key] = val
+    return extracted
+
+
 def _launch(project_dir: Path, args: list[str], env_overrides: dict, log_file: Path) -> bool:
-    env = {**os.environ, **env_overrides}
+    env = {**os.environ, **_source_env_demo(project_dir), **env_overrides}
     cmd = ["uv", "run", "dg", "launch"] + args
     with open(log_file, "a") as f:
         f.write(f"\n[smart_validate] cmd: {' '.join(cmd)}\n")
@@ -253,8 +277,10 @@ def validate(setup_script: Path) -> tuple[str, str, str]:
 
 
 _AUTH_PATTERNS = re.compile(
-    r"(API_KEY|api_key|API_TOKEN|api_token|SECRET=|secret_key|access_key|"
-    r"ACCESS_KEY|SERVICE_ACCOUNT|client_id|CLIENT_ID|OAUTH|oauth|"
+    r"(API_KEY|api_key|API_TOKEN|api_token|_TOKEN[= ]|SECRET=|secret_key|"
+    r"access_key|ACCESS_KEY|SERVICE_ACCOUNT|client_id|CLIENT_ID|OAUTH|oauth|"
+    r"SMTP_USER|SMTP_PASS|SMTP_HOST|IMAP_|"
+    r"DAGSTER_PLUS|DAGSTER_CLOUD|"
     r"read -p|read -r|"
     r"snowflake|SNOWFLAKE|bigquery|BIGQUERY|databricks|DATABRICKS|"
     r"aws s3|s3://|gs://|GOOGLE_APPLICATION_CREDENTIALS|azure|AZURE)"
