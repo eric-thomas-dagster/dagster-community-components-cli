@@ -40,13 +40,14 @@ echo ">>> Clearing prior local Iceberg warehouse"
 rm -rf "$ICEBERG_WH"
 mkdir -p "$ICEBERG_WH"
 
-# SQLite + file:// URIs differ slightly between Unix (leading /) and Windows
-# (C: drive prefix). Build them so the same YAML works on both.
+# SQLite needs `sqlite:///<path>` with the leading-slash already baked into
+# the path on Unix (`/tmp/...`) or the drive letter on Windows (`C:/...`).
+# For pyiceberg's warehouse we pass a PLAIN PATH (no `file://` scheme) —
+# pyarrow's URI parser on Windows mangles `file:///C:/foo` into `/C:/foo`
+# (literally with a leading slash) which then fails `get_file_info`. The
+# plain path avoids the URI round-trip entirely and works on both OSes.
 SQLITE_URI="sqlite:///$ICEBERG_WH/catalog.db"
-case "$ICEBERG_WH" in
-  /*) WAREHOUSE_URI="file://$ICEBERG_WH" ;;
-  *)  WAREHOUSE_URI="file:///$ICEBERG_WH" ;;
-esac
+WAREHOUSE_URI="$ICEBERG_WH"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
