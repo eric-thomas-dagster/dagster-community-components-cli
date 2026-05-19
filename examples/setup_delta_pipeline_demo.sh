@@ -28,14 +28,13 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
 # Project-local warehouse — portable across macOS/Linux/Windows (no /tmp dependency).
-# On MSYS2/git-bash (Windows), `pwd -W` returns C:/Users/... so the YAML
-# embeds a real Windows path that native Python can open.
-case "${OSTYPE:-}${MSYSTEM:-}" in
-  *MINGW*|*msys*|*cygwin*) DELTA_WH="$(pwd -W 2>/dev/null || pwd)/delta-warehouse" ;;
-  *)                       DELTA_WH="$(pwd)/delta-warehouse" ;;
-esac
-DELTA_SRC="$DELTA_WH/orders"
-DELTA_SUM="$DELTA_WH/orders_summary"
+# Use RELATIVE paths in the YAML; delta-rs / object_store-rs URI parsers
+# can choke on Windows drive letters (`C:/foo` parses as scheme=`c`).
+# Relative paths have empty scheme and resolve against CWD (= the project
+# root when `dg launch` runs).
+DELTA_SRC="./delta-warehouse/orders"
+DELTA_SUM="./delta-warehouse/orders_summary"
+DELTA_WH="$(pwd)/delta-warehouse"   # absolute, for setup-time mkdir + shell output only
 
 echo ">>> Clearing prior local Delta warehouse"
 rm -rf "$DELTA_WH"

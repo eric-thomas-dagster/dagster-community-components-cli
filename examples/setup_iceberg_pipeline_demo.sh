@@ -29,25 +29,26 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
 # Project-local warehouse — portable across macOS/Linux/Windows (no /tmp dependency).
-# On MSYS2/git-bash (Windows), `pwd -W` returns C:/Users/... so the YAML
-# embeds a real Windows path that native Python can open.
-case "${OSTYPE:-}${MSYSTEM:-}" in
-  *MINGW*|*msys*|*cygwin*) ICEBERG_WH="$(pwd -W 2>/dev/null || pwd)/iceberg-warehouse" ;;
-  *)                       ICEBERG_WH="$(pwd)/iceberg-warehouse" ;;
-esac
+# We use a RELATIVE path in the YAML (`./iceberg-warehouse`) because:
+#   - `file:///C:/foo` → pyarrow on Windows strips the scheme and yields
+#                       `/C:/foo` (literal leading slash) → WinError 123
+#   - `C:/foo` (plain) → Python's URI parser sees `c` as the scheme →
+#                       pyiceberg raises "Unrecognized filesystem type"
+#   - `./iceberg-warehouse` → empty scheme everywhere; pyiceberg falls
+#                            through to its local FS resolver which uses
+#                            CWD (= the project root when `dg launch` runs).
+WH_REL="./iceberg-warehouse"
+ICEBERG_WH="$(pwd)/iceberg-warehouse"   # absolute, for setup-time mkdir + shell output only
 
 echo ">>> Clearing prior local Iceberg warehouse"
 rm -rf "$ICEBERG_WH"
 mkdir -p "$ICEBERG_WH"
 
-# SQLite needs `sqlite:///<path>` with the leading-slash already baked into
-# the path on Unix (`/tmp/...`) or the drive letter on Windows (`C:/...`).
-# For pyiceberg's warehouse we pass a PLAIN PATH (no `file://` scheme) —
-# pyarrow's URI parser on Windows mangles `file:///C:/foo` into `/C:/foo`
-# (literally with a leading slash) which then fails `get_file_info`. The
-# plain path avoids the URI round-trip entirely and works on both OSes.
-SQLITE_URI="sqlite:///$ICEBERG_WH/catalog.db"
-WAREHOUSE_URI="$ICEBERG_WH"
+# SQLite URI also needs to be relative on Windows for the same reason
+# (`sqlite:///C:/foo` works on Windows but the SQLite path itself stays
+# relative-from-CWD, which is the project root when Dagster runs).
+SQLITE_URI="sqlite:///$WH_REL/catalog.db"
+WAREHOUSE_URI="$WH_REL"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
