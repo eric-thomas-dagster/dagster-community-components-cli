@@ -9,27 +9,44 @@
 # by writing the source table once at setup, then treating it as
 # pre-existing input on subsequent runs.
 #
-# Components exercised (5):
+# Components exercised (4):
 #   - synthetic_data_generator        seeds the "external" source table
+#   - iceberg_catalog_resource        shared SQL catalog (no-op in this demo)
 #   - dataframe_to_iceberg_table  ×2  writes both source + downstream tables
 #   - iceberg_ingestion           ×2  reads source + downstream tables
 #   - summarize                       aggregation in the middle
-#   - external_iceberg_table          declare-only catalog entry for lineage
 #
 # COST: $0 — pure local filesystem.
+# Warehouse lives inside the project dir (./iceberg-warehouse) so the demo
+# works identically on macOS, Linux, and Windows (git-bash / MSYS2 / WSL).
 
 set -euo pipefail
 PROJECT_DIR="${1:-iceberg-pipeline-demo}"
-ICEBERG_WH="/tmp/iceberg-pipeline-warehouse"
-
-echo ">>> Clearing prior local Iceberg warehouse"
-rm -rf "$ICEBERG_WH"
-mkdir -p "$ICEBERG_WH"
 
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
+
+# Project-local warehouse — portable across macOS/Linux/Windows (no /tmp dependency).
+# On MSYS2/git-bash (Windows), `pwd -W` returns C:/Users/... so the YAML
+# embeds a real Windows path that native Python can open.
+case "${OSTYPE:-}${MSYSTEM:-}" in
+  *MINGW*|*msys*|*cygwin*) ICEBERG_WH="$(pwd -W 2>/dev/null || pwd)/iceberg-warehouse" ;;
+  *)                       ICEBERG_WH="$(pwd)/iceberg-warehouse" ;;
+esac
+
+echo ">>> Clearing prior local Iceberg warehouse"
+rm -rf "$ICEBERG_WH"
+mkdir -p "$ICEBERG_WH"
+
+# SQLite + file:// URIs differ slightly between Unix (leading /) and Windows
+# (C: drive prefix). Build them so the same YAML works on both.
+SQLITE_URI="sqlite:///$ICEBERG_WH/catalog.db"
+case "$ICEBERG_WH" in
+  /*) WAREHOUSE_URI="file://$ICEBERG_WH" ;;
+  *)  WAREHOUSE_URI="file:///$ICEBERG_WH" ;;
+esac
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
@@ -39,8 +56,7 @@ CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 5 components"
 for c in synthetic_data_generator iceberg_catalog_resource \
-         dataframe_to_iceberg_table iceberg_ingestion \
-         summarize external_iceberg_table; do
+         dataframe_to_iceberg_table iceberg_ingestion summarize; do
   $CLI add $c --auto-install
 done
 
@@ -81,8 +97,8 @@ attributes:
   resource_key: iceberg
   catalog_type: sql
   catalog_properties:
-    uri: sqlite:///$ICEBERG_WH/catalog.db
-    warehouse: file://$ICEBERG_WH"
+    uri: $SQLITE_URI
+    warehouse: $WAREHOUSE_URI"
 
 # 3. Write synthetic_orders → source Iceberg table
 write_yaml "dataframe_to_iceberg_table_source" "type: $PKG.components.dataframe_to_iceberg_table.component.DataframeToIcebergTableComponent
@@ -91,33 +107,24 @@ attributes:
   upstream_asset_key: synthetic_orders
   catalog_type: sql
   catalog_properties:
-    uri: sqlite:///$ICEBERG_WH/catalog.db
-    warehouse: file://$ICEBERG_WH
+    uri: $SQLITE_URI
+    warehouse: $WAREHOUSE_URI
   namespace: demo
   table_name: orders
   mode: overwrite
   group_name: iceberg_pipeline"
 
-# 4. Declare the source table for lineage (mirrors the 'external owner' scenario)
-write_yaml "external_iceberg_table" "type: $PKG.components.external_iceberg_table.component.ExternalIcebergTableAsset
-attributes:
-  asset_key: external/orders_source
-  catalog_name: demo
-  namespace: demo
-  table_name: orders
-  warehouse: file://$ICEBERG_WH
-  catalog_type: sql
-  owner_engine: external
-  group_name: iceberg_pipeline"
-
-# 5. Read source Iceberg table back into a DataFrame
+# 4. Read source Iceberg table back into a DataFrame
+#    (In production, when an upstream engine writes this table, you can drop
+#    component #3 and use `external_iceberg_table` here to declare it for
+#    lineage instead — see the blueprint URL at the end of this script.)
 write_yaml "iceberg_ingestion_orders" "type: $PKG.components.iceberg_ingestion.component.IcebergIngestionComponent
 attributes:
   asset_name: orders_from_iceberg
   catalog_type: sql
   catalog_properties:
-    uri: sqlite:///$ICEBERG_WH/catalog.db
-    warehouse: file://$ICEBERG_WH
+    uri: $SQLITE_URI
+    warehouse: $WAREHOUSE_URI
   namespace: demo
   table_name: orders
   deps: [orders_iceberg_source]
@@ -142,8 +149,8 @@ attributes:
   upstream_asset_key: orders_summary
   catalog_type: sql
   catalog_properties:
-    uri: sqlite:///$ICEBERG_WH/catalog.db
-    warehouse: file://$ICEBERG_WH
+    uri: $SQLITE_URI
+    warehouse: $WAREHOUSE_URI
   namespace: demo
   table_name: orders_summary
   mode: overwrite
@@ -155,8 +162,8 @@ attributes:
   asset_name: orders_summary_from_iceberg
   catalog_type: sql
   catalog_properties:
-    uri: sqlite:///$ICEBERG_WH/catalog.db
-    warehouse: file://$ICEBERG_WH
+    uri: $SQLITE_URI
+    warehouse: $WAREHOUSE_URI
   namespace: demo
   table_name: orders_summary
   deps: [orders_summary_iceberg]
@@ -180,7 +187,6 @@ Asset graph (open the UI):
 What you'll see (the blueprint flow, end-to-end):
   synthetic_orders                       → 500 rows in memory
   orders_iceberg_source                  → written to $ICEBERG_WH/demo.db/orders
-  external/orders_source                 → declare-only catalog entry (lineage)
   orders_from_iceberg                    → read back via iceberg_ingestion
   orders_summary                         → aggregated by status
   orders_summary_iceberg                 → written to $ICEBERG_WH/demo.db/orders_summary
@@ -191,6 +197,10 @@ Inspect the Iceberg warehouse directly:
     ls -la $ICEBERG_WH/demo.db/orders/metadata/    # Iceberg manifest list + snapshots
 
 To retarget at production:
+  - When another engine already writes orders_iceberg_source, drop the
+    dataframe_to_iceberg_table_source component and use external_iceberg_table
+    to declare the table for lineage — iceberg_ingestion_orders then reads
+    from that declared key. (Mutually exclusive: own-and-write OR declare-only.)
   - Replace catalog_type: sql with rest (Polaris / Nessie / S3 Tables /
     Snowflake-managed catalog) or glue. Same components, just different
     catalog_properties.

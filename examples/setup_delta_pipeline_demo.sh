@@ -14,24 +14,32 @@
 #   - dataframe_to_delta_table  ×2    writes source + downstream tables
 #   - delta_ingestion           ×2    reads source + downstream tables
 #   - summarize                       aggregation in the middle
-#   - external_delta_table            declare-only catalog entry for lineage
 #
 # COST: $0 — pure local filesystem.
+# Warehouse lives inside the project dir (./delta-warehouse) so the demo
+# works identically on macOS, Linux, and Windows (git-bash / MSYS2 / WSL).
 
 set -euo pipefail
 PROJECT_DIR="${1:-delta-pipeline-demo}"
-DELTA_WH="/tmp/delta-pipeline-warehouse"
+
+echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
+uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
+cd "$PROJECT_DIR"
+PKG="$(ls src/ | head -1)"
+
+# Project-local warehouse — portable across macOS/Linux/Windows (no /tmp dependency).
+# On MSYS2/git-bash (Windows), `pwd -W` returns C:/Users/... so the YAML
+# embeds a real Windows path that native Python can open.
+case "${OSTYPE:-}${MSYSTEM:-}" in
+  *MINGW*|*msys*|*cygwin*) DELTA_WH="$(pwd -W 2>/dev/null || pwd)/delta-warehouse" ;;
+  *)                       DELTA_WH="$(pwd)/delta-warehouse" ;;
+esac
 DELTA_SRC="$DELTA_WH/orders"
 DELTA_SUM="$DELTA_WH/orders_summary"
 
 echo ">>> Clearing prior local Delta warehouse"
 rm -rf "$DELTA_WH"
 mkdir -p "$DELTA_WH"
-
-echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
-uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
-cd "$PROJECT_DIR"
-PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
@@ -41,7 +49,7 @@ CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 4 components"
 for c in synthetic_data_generator dataframe_to_delta_table \
-         delta_ingestion summarize external_delta_table; do
+         delta_ingestion summarize; do
   $CLI add $c --auto-install
 done
 
@@ -84,15 +92,10 @@ attributes:
   mode: overwrite
   group_name: delta_pipeline"
 
-# 3. Declare the source table for lineage (mirrors 'external owner' scenario)
-write_yaml "external_delta_table" "type: $PKG.components.external_delta_table.component.ExternalDeltaTableAsset
-attributes:
-  asset_key: external/orders_source
-  table_uri: $DELTA_SRC
-  owner_engine: external
-  group_name: delta_pipeline"
-
-# 4. Read source Delta table back into a DataFrame
+# 3. Read source Delta table back into a DataFrame
+#    (In production, when an upstream engine writes orders_delta_source,
+#    drop the dataframe_to_delta_table_source component and use
+#    external_delta_table here to declare the table for lineage instead.)
 write_yaml "delta_ingestion_orders" "type: $PKG.components.delta_ingestion.component.DeltaIngestionComponent
 attributes:
   asset_name: orders_from_delta
@@ -147,7 +150,6 @@ Asset graph (open the UI):
 What you'll see:
   synthetic_orders                       → 500 rows in memory
   orders_delta_source                    → Parquet + _delta_log at $DELTA_SRC
-  external/orders_source                 → declare-only catalog entry (lineage)
   orders_from_delta                      → read back via delta_ingestion
   orders_summary                         → aggregated by status
   orders_summary_delta                   → written to $DELTA_SUM

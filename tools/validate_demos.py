@@ -252,10 +252,51 @@ def validate(setup_script: Path) -> tuple[str, str, str]:
     return name, ("OK" if ok else "FAIL_MATERIALIZE"), reason
 
 
+_AUTH_PATTERNS = re.compile(
+    r"(API_KEY|api_key|API_TOKEN|api_token|SECRET=|secret_key|access_key|"
+    r"ACCESS_KEY|SERVICE_ACCOUNT|client_id|CLIENT_ID|OAUTH|oauth|"
+    r"read -p|read -r|"
+    r"snowflake|SNOWFLAKE|bigquery|BIGQUERY|databricks|DATABRICKS|"
+    r"aws s3|s3://|gs://|GOOGLE_APPLICATION_CREDENTIALS|azure|AZURE)"
+)
+
+
+def _strip_docs(text: str) -> str:
+    """Strip bash comments and `cat <<MSG ... MSG` doc heredocs so auth-pattern
+    detection runs against actual logic, not the trailing retargeting prose."""
+    text = re.sub(r"cat\s*<<\s*['\"]?MSG['\"]?.*?^MSG\s*$", "", text, flags=re.DOTALL | re.MULTILINE)
+    text = re.sub(r"cat\s*<<\s*['\"]?EOF['\"]?.*?^EOF\s*$", "", text, flags=re.DOTALL | re.MULTILINE)
+    lines = []
+    for line in text.splitlines():
+        stripped = line.lstrip()
+        if stripped.startswith("#"):
+            continue
+        lines.append(line)
+    return "\n".join(lines)
+
+
+def _needs_auth(setup_script: Path) -> bool:
+    """Heuristic: does this setup script need real credentials?
+
+    Returns True if the script references SaaS API keys, cloud credentials,
+    or prompts the user for secrets. Returns False for fully-local demos
+    (incl. Docker-based ones — those need Docker but not auth).
+    """
+    return bool(_AUTH_PATTERNS.search(_strip_docs(setup_script.read_text())))
+
+
 def main():
     open(SUMMARY, "w").close()
     scripts = sorted(EXAMPLES_DIR.glob("setup_*_demo.sh"))
-    target_demos = sys.argv[1:] if len(sys.argv) > 1 else None
+    args = sys.argv[1:]
+    no_auth_only = False
+    if args and args[0] == "--no-auth":
+        no_auth_only = True
+        args = args[1:]
+    target_demos = args if args else None
+    if no_auth_only:
+        scripts = [s for s in scripts if not _needs_auth(s)]
+        print(f"[no-auth filter] {len(scripts)} demos selected\n", flush=True)
 
     passed = failed = skipped = 0
     for s in scripts:
