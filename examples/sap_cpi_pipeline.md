@@ -173,6 +173,6 @@ Pair the components: trigger sets a `correlation_id` (run tag), sensor filters b
 
 - `oauth_token_resource`
 - [`sap_event_mesh_pipeline.md`](sap_event_mesh_pipeline.md) — companion for event-driven SAP integration
-- [`airflow_dag_observation_sensor` walkthrough](https://dagster-community-components-cli.vercel.app/) — same pattern, Airflow side
+- [`airflow_dag_observation_sensor` walkthrough](https://dagster-component-ui.vercel.app/) — same pattern, Airflow side
 - [SAP Integration Suite docs](https://help.sap.com/docs/integration-suite)
 - [MPL OData API reference](https://api.sap.com/api/IntegrationContent/overview)

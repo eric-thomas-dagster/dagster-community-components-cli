@@ -283,6 +283,6 @@ No JVM. No Spark. Single Python wheel.
 
 - [`delta_pipeline.md`](delta_pipeline.md) — sister walkthrough for Delta Lake
 - [`snowflake_iceberg_databricks.md`](snowflake_iceberg_databricks.md) — full cross-vendor: Snowflake writes Iceberg → Databricks Lakeflow reads via Unity Catalog
-- [`iceberg_io_manager` walkthrough](https://dagster-community-components-cli.vercel.app/c/iceberg_io_manager) — when Dagster OWNS the table
+- [`iceberg_io_manager` walkthrough](https://dagster-component-ui.vercel.app/c/iceberg_io_manager) — when Dagster OWNS the table
 - [Apache Iceberg docs](https://iceberg.apache.org/)
 - [PyIceberg docs](https://py.iceberg.apache.org/)

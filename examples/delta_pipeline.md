@@ -207,6 +207,6 @@ For Dagster's batch pipeline pattern (read N→transform→write 1), delta-rs is
 
 - [`iceberg_pipeline.md`](iceberg_pipeline.md) — sister walkthrough for Apache Iceberg
 - [`databricks_delta_to_dagster.md`](databricks_delta_to_dagster.md) — focused walkthrough: Databricks-written Delta → Dagster downstream
-- [`dataframe_to_databricks` walkthrough](https://dagster-community-components-cli.vercel.app/c/dataframe_to_databricks) — alternate sink targeting Databricks SQL warehouse
+- [`dataframe_to_databricks` walkthrough](https://dagster-component-ui.vercel.app/c/dataframe_to_databricks) — alternate sink targeting Databricks SQL warehouse
 - [Delta Lake docs](https://docs.delta.io/)
 - [delta-rs (Python)](https://github.com/delta-io/delta-rs)
