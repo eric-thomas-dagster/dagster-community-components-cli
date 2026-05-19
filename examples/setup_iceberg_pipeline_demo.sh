@@ -44,6 +44,16 @@ for c in synthetic_data_generator iceberg_catalog_resource \
   $CLI add $c --auto-install
 done
 
+echo ">>> Removing auto-installed default defs (we'll write our own)"
+# `dagster-component add --auto-install` drops a sample defs.yaml under each
+# component's directory. Our setup writes its own under distinct directory
+# names (e.g. iceberg_ingestion_orders, summarize_orders), so the defaults
+# would otherwise stick around referencing non-existent upstream assets like
+# `sales_data` and break `dg check defs`.
+for c in synthetic_data_generator dataframe_to_iceberg_table iceberg_ingestion summarize; do
+  rm -rf "src/$PKG/defs/$c"
+done
+
 echo ">>> Writing defs.yaml for the Iceberg pipeline"
 
 write_yaml() {
@@ -120,9 +130,9 @@ attributes:
   upstream_asset_key: orders_from_iceberg
   group_by: [status]
   aggregations:
-    total_orders: {column: order_id, op: count}
-    total_revenue: {column: amount, op: sum}
-    avg_revenue: {column: amount, op: mean}
+    total_orders: {col: order_id, agg: count}
+    total_revenue: {col: total, agg: sum}
+    avg_revenue: {col: total, agg: mean}
   group_name: iceberg_pipeline"
 
 # 7. Write the summary back to Iceberg (closes the round-trip)
