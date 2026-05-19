@@ -58,6 +58,7 @@ uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
+uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 uv add -q 'sqlalchemy>=2.0.0' 'ibm_db>=3.2.0' 'ibm_db_sa>=0.4.0' pandas
 

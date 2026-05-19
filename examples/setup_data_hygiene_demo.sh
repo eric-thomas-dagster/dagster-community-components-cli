@@ -29,6 +29,7 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas numpy tabulate jsonschema
+uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli
 
 CLI="uvx --from dagster-community-components-cli dagster-component"

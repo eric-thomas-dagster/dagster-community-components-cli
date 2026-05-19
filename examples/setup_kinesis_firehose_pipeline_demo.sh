@@ -51,6 +51,7 @@ PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
 uv add -q pandas pyarrow fsspec s3fs boto3
+uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"

@@ -33,6 +33,7 @@ uv add -q pandas requests pyarrow tabulate
 if [ "$SINK_MODE" = "security_lake" ]; then
   uv add -q boto3
 fi
+uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"

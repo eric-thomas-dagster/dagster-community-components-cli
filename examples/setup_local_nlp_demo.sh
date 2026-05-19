@@ -38,6 +38,7 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas spacy scikit-learn wordcloud transformers torch litellm matplotlib
+uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 # Download spacy English model (~12MB)
 uv run python -m spacy download en_core_web_sm 2>/dev/null || true
