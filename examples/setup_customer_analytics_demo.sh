@@ -77,15 +77,21 @@ def customer_events() -> pd.DataFrame:
 
 @dg.asset(group_name="ingest")
 def orders() -> pd.DataFrame:
-    """Synthetic orders for RFM segmentation (recency / frequency / monetary)."""
+    """Synthetic orders for RFM segmentation (recency / frequency / monetary).
+
+    Dates are generated relative to today so the customer_segmentation
+    component's analysis_period_days (default 365) doesn't filter them all
+    out as 'too old'.
+    """
     rng = np.random.default_rng(7)
+    today = pd.Timestamp.now().normalize()
     rows = []
     for u in range(1, 101):
         n_orders = rng.integers(1, 12)
         for _ in range(n_orders):
             rows.append({
                 "customer_id": u,
-                "order_date": pd.Timestamp("2024-04-01") + pd.Timedelta(days=int(rng.integers(0, 365))),
+                "order_date": today - pd.Timedelta(days=int(rng.integers(0, 360))),
                 "amount": float(round(float(rng.gamma(2, 50)), 2)),
             })
     return pd.DataFrame(rows)
@@ -93,16 +99,24 @@ def orders() -> pd.DataFrame:
 
 @dg.asset(group_name="ingest")
 def marketing_touchpoints() -> pd.DataFrame:
-    """Synthetic per-conversion touchpoint trails for attribution."""
+    """Synthetic per-conversion touchpoint trails for attribution.
+
+    Each conversion is anchored to a customer (customer_id) — required by
+    the multi_touch_attribution component. Dates are recent so the
+    component's lookback_window_days filter retains them.
+    """
     rng = np.random.default_rng(11)
     rows = []
+    today = pd.Timestamp.now().normalize()
     for conv_id in range(1, 51):
+        customer_id = int(rng.integers(1, 101))   # link conversions to the same customer pool as orders
         n = rng.integers(1, 5)
-        ts = pd.Timestamp("2025-04-15")
+        ts = today - pd.Timedelta(days=int(rng.integers(1, 25)))
         for i in range(n):
             ts -= pd.Timedelta(days=int(rng.integers(1, 7)))
             rows.append({
                 "conversion_id": conv_id,
+                "customer_id": customer_id,
                 "touchpoint_index": i,
                 "timestamp": ts,
                 "channel": rng.choice(["organic", "paid_search", "email", "social", "display"]),
