@@ -105,6 +105,114 @@ OpenFlow (Snowflake's NiFi-based data integration service) is a different kind o
 - If you don't have OpenFlow set up yet and want to show the integration on stage, pre-build one flow in the UI ahead of time and have it live in the demo account. The seed script populates the *other* nine entity types so the discovery story still lands.
 - If you want to skip OpenFlow on stage, set `import_openflow_flows: false` (the demo's default) and the absence of flows in `dg dev` will be invisible.
 
+### Setting up an OpenFlow flow before your demo (~15 min)
+
+If you want the OpenFlow part of the story to land on stage, the only path today is to pre-build a flow in your demo account *before* the talk. Here's the shortest path:
+
+**1. Verify the runtime exists.** OpenFlow is **BYOC** (deployed in your own cloud) and gated per Snowflake account. Sign in to **Snowsight → Data → Integrations → OpenFlow**. If you see a "Deploy runtime" button instead of a list of runtimes, the BYOC deployment hasn't been run yet and you'll need to coordinate with whoever runs cloud infra (it provisions an EKS cluster in your AWS account — a several-hour task, not a 15-minute one). If you see at least one runtime listed, you're good to proceed.
+
+**2. Pick a pre-built connector instead of designing from scratch.** Snowflake ships ~12 connectors as one-click installs from a marketplace-like UI:
+   - **Database CDC** — Postgres, MySQL, MSSQL, MongoDB, SQL Server (CDC)
+   - **SaaS** — Salesforce, Box, Slack, SharePoint, Google Drive, Workday
+   - **Messaging** — Kafka, Kinesis
+
+   For a quick demo, **Postgres CDC** is the cleanest story (you can use a free-tier Supabase or RDS as the source) — it lands a stream of changes into Snowflake tables in real time. **Slack** is the second-easiest (no source DB needed, but requires a Slack workspace + bot token).
+
+**3. Install the connector.** In Snowsight: **Data → Integrations → OpenFlow → Connectors → Add Connector**. Click your chosen connector → "Install". Snowflake handles the runtime side; you fill in:
+   - Source credentials (Postgres connection string / Slack bot token / etc.)
+   - Snowflake target — database, schema, warehouse, role
+   - Sync mode — full refresh / incremental / CDC
+   - Schedule (some connectors are continuous, some scheduled)
+
+**4. Set up a Snowflake Service User for the connector.** OpenFlow connectors authenticate to Snowflake as a service user, not as your interactive user. From a worksheet:
+   ```sql
+   CREATE USER IF NOT EXISTS OPENFLOW_SERVICE_USER
+     TYPE = SERVICE
+     DEFAULT_ROLE = OPENFLOW_LOADER
+     DEFAULT_WAREHOUSE = COMPUTE_WH;
+
+   CREATE ROLE IF NOT EXISTS OPENFLOW_LOADER;
+   GRANT USAGE ON DATABASE DAGSTER_DEMO TO ROLE OPENFLOW_LOADER;
+   GRANT USAGE ON SCHEMA DAGSTER_DEMO.RAW TO ROLE OPENFLOW_LOADER;
+   GRANT CREATE TABLE, MODIFY ON SCHEMA DAGSTER_DEMO.RAW TO ROLE OPENFLOW_LOADER;
+   GRANT ROLE OPENFLOW_LOADER TO USER OPENFLOW_SERVICE_USER;
+
+   -- Register an RSA public key on the service user (run from a key you generated):
+   ALTER USER OPENFLOW_SERVICE_USER SET RSA_PUBLIC_KEY = '<pubkey contents>';
+   ```
+   Service users **must** use keypair auth — passwords aren't allowed. Paste the matching private key into the connector's credential field when you install it.
+
+**5. Run a sync.** The connector UI has a "Run" button — click it. After a minute, you should see new tables under `DAGSTER_DEMO.RAW` (or wherever you pointed it). If it errors, the UI shows the NiFi processor that failed with a stack trace; usually it's a missing grant on the target schema.
+
+**6. Re-run the Dagster workspace setup with OpenFlow on.** Edit the workspace `defs.yaml` (or re-run the script and `[r]euse`-overwrite):
+   ```yaml
+   attributes:
+     # ... existing fields ...
+     import_openflow_flows: true
+   ```
+   Then `uv run dg check defs` followed by `uv run dg dev`. Your OpenFlow flow shows up in Dagster's asset graph alongside tasks / dynamic tables / procs / etc. — Dagster materializes via `EXECUTE FLOW`, lineage flows through, run history streams in.
+
+**For a really compelling demo:** wire one of your imported `RAW.*` tables (the one OpenFlow lands into) as the upstream of the `warehouse_pipeline` add-on. Now the story is end-to-end: OpenFlow ingests CDC from Postgres → lands in `RAW.ORDERS` → Dagster sees the row-count change → triggers `warehouse_pipeline` via `AutomationCondition.eager()` → joins + commission + multi-sink, all in Snowflake compute. One asset graph, every Snowflake-native primitive doing its best job.
+
+**If you can't get OpenFlow set up in time**, drop it. The seed script's tasks + dynamic tables + procs + streams + pipes + alerts cover 90% of the "Dagster orchestrates everything Snowflake-native" story; OpenFlow is the cherry, not the cake.
+
+## Running this against a corporate Snowflake account (the SE reality)
+
+If you're a Dagster SE — or any data-engineer running this against a shared corporate Snowflake — your role is almost certainly some flavor of `SANDBOX_WRITER` / `DEVELOPER` / per-team writer, **not** `ACCOUNTADMIN` / `SECURITYADMIN` / `USERADMIN`. That makes the "default" auth choice surprising. Here's the quick triage:
+
+| Your permissions | Easiest auth | Why |
+|---|---|---|
+| **Can run `ALTER USER … SET RSA_PUBLIC_KEY=…` on yourself** (rare — needs OWNERSHIP on your user) | **Keypair** | Headless, works with the Dagster daemon, no browser. The script's default. |
+| **Can create a PAT *and* there's already a permissive network policy attached to your user** | **PAT** | Headless. But: PATs require an associated network policy, which usually only `SECURITYADMIN` can create/attach. If your account doesn't already have one, you'll hit `Programmatic access token failed authentication. No active network policy found …` and need to fall back. |
+| **None of the above** (the common case for SEs) | **SSO (externalbrowser)** | Works on any account that allows SSO. Browser tab pops once per session and the token is cached in your OS keychain via `keyring`. **Caveat:** sensors + scheduled runs (the Dagster daemon) can't open a browser, so the row-count observation sensor add-on won't fire its checks until you re-auth. For a stage demo / `dg dev` exploration this is fine. |
+| **No keypair, no PAT, no SSO** | **Password** | If your account still allows it. Most don't. |
+
+**The honest path for most SEs is SSO + sandbox mode** — read the next subsection.
+
+### What "sandbox mode" means
+
+The companion `setup_snowflake_environment.sh` seed script (the one that creates `DAGSTER_DEMO` with tasks / dynamic tables / procs / etc.) auto-detects when the target database **already exists and you don't own it** and **strips the DDL it can't run as your role**:
+
+- `CREATE DATABASE` → skipped (you don't have CREATE DATABASE)
+- `USE ROLE SYSADMIN` → skipped (you can't switch to roles you don't have)
+- `RAW` / `STAGING` / `ANALYTICS` / `AI` schemas → renamed to `DAGSTER_DEMO_RAW` / `_STAGING` / `_ANALYTICS` / `_AI` (so the seed doesn't collide if 14 other people are also running this against the shared `SANDBOX`)
+- `COMPUTE_WH` → string-substituted with whatever warehouse you actually have USAGE on
+
+The end state is identical (tasks, DTs, procs, streams, pipes, alerts) — just scoped to schemas your role *owns* in a database you already control. Run the seed, then point the workspace setup at `SANDBOX.DAGSTER_DEMO_STAGING` and you get the full discovery story without ever needing `ACCOUNTADMIN`.
+
+### A worked SE example
+
+Assume your role is `SANDBOX_WRITER`, you own the `SANDBOX` database, you've got `PURINA_WAREHOUSE_USER` (or some named warehouse), and your account only allows SSO + password (no keypair registration, no PAT).
+
+```bash
+# 1. Seed: SANDBOX exists → sandbox mode auto-engages, schemas renamed
+export SNOWFLAKE_TARGET_DATABASE=SANDBOX
+export SNOWFLAKE_WAREHOUSE=PURINA_WAREHOUSE_USER
+export SNOWFLAKE_ROLE=SANDBOX_WRITER
+./setup_snowflake_environment.sh             # answer SSO, browser pops once
+
+# 2. Workspace + every add-on (no per-prompt grinding)
+export WANT_EVERYTHING=true                  # auto-y every optional add-on
+./setup_snowflake_workspace_demo.sh
+#   Point database = SANDBOX
+#   Point schema   = DAGSTER_DEMO_STAGING
+#   Auth choice    = 2 (SSO)
+```
+
+What you get: a fully scaffolded Dagster project — workspace import + `warehouse_pipeline` + `snowpark_pipeline` + Cortex + observation sensor + AutomationCondition + partitioned heterogeneous chain + freshness check + external table + dbt + 7 define-as-code DDL components — running against your SANDBOX schemas in 90 seconds, no admin help needed.
+
+### What you **won't** be able to do as a sandboxed role
+
+Be honest with the customer about these — they're real limits of running stage demos against a shared corporate account, not Dagster limits:
+
+- **`ALTER TASK … RESUME`** needs `EXECUTE TASK` on the account. Most sandboxed roles don't have it, so tasks materialize as suspended. Tasks can still be run on demand from Dagster's UI (click-to-materialize calls `EXECUTE TASK <name>` which is permitted) — but they won't auto-fire on their cron schedule.
+- **Materialized views** require Snowflake Enterprise edition; Standard accounts will fail the 1 MV creation in the seed. Non-blocking — the seed continues and 49/50 statements still land.
+- **Snowpipe auto-ingest** needs a stage with a notification integration, which is usually `ACCOUNTADMIN`-only to create. The seed creates the pipe in `MANUAL` mode (PUT-then-COPY); auto-ingest from S3 / GCS / Azure needs your account admin to wire up the integration.
+
+For a customer demo on a customer-owned account, none of these apply — they'll run as a powerful enough role to use everything. The above is purely about doing dry-runs on your own employer's locked-down account.
+
+---
+
 ## Run it
 
 ```bash
@@ -115,6 +223,25 @@ chmod +x setup_snowflake_workspace_demo.sh
 
 Auto-installs `uv` if missing (with consent). Refuses piped invocation — it's interactive. Defaults read from `$SNOWFLAKE_ACCOUNT` / `$SNOWFLAKE_USER` / `$SNOWFLAKE_PASSWORD` / `$SNOWFLAKE_WAREHOUSE` / `$SNOWFLAKE_DATABASE` / `$SNOWFLAKE_ROLE` if you've already exported them.
 
+### "Give me everything" mode (skip the y/N grinding)
+
+Set `WANT_EVERYTHING=true` and every optional add-on auto-enables AND the cross-entity dep prompt is skipped (since that's the one most likely to stall on a typo). You still get the credential + auth-method + entity-type prompts — just none of the add-on selection prompts.
+
+```bash
+export WANT_EVERYTHING=true
+./setup_snowflake_workspace_demo.sh
+```
+
+Individual `WANT_*` env vars still take precedence — useful for "everything except dbt":
+
+```bash
+export WANT_EVERYTHING=true
+export WANT_DBT=n
+./setup_snowflake_workspace_demo.sh
+```
+
+The full list of env vars (each takes `y` or `n`, default `n` unless `WANT_EVERYTHING=true`): `WANT_DEPS` `WANT_PIPELINE` `WANT_AUTOCOND` `WANT_CORTEX` `WANT_OBSERVER` `WANT_HET` `WANT_FRESH` `WANT_SNOWPARK` `WANT_EXTERNAL` `WANT_DBT` `WANT_DDL_SHOWCASE`.
+
 ## What it asks
 
 1. **Project name.** Default `snowflake-dagster`. If the directory already exists, the script offers three fast paths so re-runs don't fail:
@@ -123,10 +250,11 @@ Auto-installs `uv` if missing (with consent). Refuses piped invocation — it's 
    - **[c]hange** — pick a different project name.
 2. **Credentials.** account / user / **auth method** / warehouse / database / schema / role. Verified by running `SELECT CURRENT_VERSION()` against your account before going further; offers a "continue anyway" if the verify fails (useful when you're testing scaffolding offline).
 
-   **Auth method prompt** — pick the one your Snowflake account allows:
-   - **[1] Keypair** (RSA private key file) — **the default**, and the right choice for production. Works headless (Dagster's daemon for sensors + schedules doesn't need a browser); generated `.env.demo` exports `SNOWFLAKE_PRIVATE_KEY_FILE` (+ `_PWD` if your key is encrypted); every emitted `defs.yaml` uses `authenticator: SNOWFLAKE_JWT` + `private_key_file: …`. Most enterprise accounts disable password auth — keypair is what you'll actually use.
-   - **[2] SSO** (externalbrowser) — fine for laptop `dg dev` only. A browser tab pops the first time per session. **Doesn't work for the Dagster daemon** (sensors + scheduled runs can't open a browser), so if you pick this, the row-count observation sensor add-on won't be able to fire its checks until you re-auth.
+   **Auth method prompt** — pick the one your Snowflake account allows (see the *"Running this against a corporate Snowflake account"* section above for the SE-specific triage):
+   - **[1] Keypair** (RSA private key file) — **the default**, and the right choice for production. Works headless (Dagster's daemon for sensors + schedules doesn't need a browser); generated `.env.demo` exports `SNOWFLAKE_PRIVATE_KEY_FILE` (+ `_PWD` if your key is encrypted); every emitted `defs.yaml` uses `authenticator: SNOWFLAKE_JWT` + `private_key_file: …`. Most enterprise accounts disable password auth — keypair is what you'll actually use **if you have OWNERSHIP on your user** (most SEs running stage demos against a corporate account don't, and need to fall back to SSO).
+   - **[2] SSO** (externalbrowser) — fine for laptop `dg dev` only. A browser tab pops the first time per session; the token is cached in your OS keychain via `keyring` so subsequent `uv run` invocations don't re-prompt. **Doesn't work for the Dagster daemon** (sensors + scheduled runs can't open a browser), so if you pick this, the row-count observation sensor add-on won't be able to fire its checks until you re-auth. This is the **easiest-to-set-up choice for an SE on a locked-down corporate Snowflake**.
    - **[3] Password** — preserved for accounts that still allow it. Same `.env.demo` shape as before.
+   - **[4] PAT** (Programmatic Access Token) — headless alternative to keypair when your user has OWNERSHIP isn't grantable but PATs are. **Caveat:** PATs require an attached network policy, which is `SECURITYADMIN`-only to create — if your account doesn't already have one for your user, you'll get `Programmatic access token failed authentication. No active network policy found …` and need to fall back.
 
    The same auth choice flows through into every generated artifact: `snowflake_workspace`, `snowflake_table_observation_sensor`, `snowpark_pipeline`, `snowflake_cortex_asset`, `dataframe_to_snowflake`, the SQLAlchemy URL for `warehouse_pipeline`, AND `dbt/profiles.yml` (when you pick the dbt add-on). One choice; consistent config everywhere.
 3. **Discovery.** Queries `INFORMATION_SCHEMA.*` + `SHOW <kind>` for every entity type and prints counts:

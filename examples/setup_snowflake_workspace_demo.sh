@@ -65,6 +65,30 @@ cleanup_on_interrupt() {
 }
 trap cleanup_on_interrupt INT TERM
 
+# ── 0. "Give me everything" mode ────────────────────────────────────────
+# Set WANT_EVERYTHING=true to auto-y every optional add-on AND skip the
+# cross-entity dep prompt (which is the easiest spot to mistype and stall).
+# Individual WANT_* env vars still override — useful for "everything EXCEPT
+# the dbt one" style runs.
+if [ "${WANT_EVERYTHING:-}" = "true" ] || [ "${WANT_EVERYTHING:-}" = "1" ] || [ "${WANT_EVERYTHING:-}" = "y" ]; then
+  echo "═════════════════════════════════════════════════════════════════════"
+  echo "  WANT_EVERYTHING=true — auto-enabling every optional add-on"
+  echo "═════════════════════════════════════════════════════════════════════"
+  : "${WANT_DEPS:=n}"            # skip the cross-entity dep prompt
+  : "${WANT_PIPELINE:=y}"        # multi-step warehouse_pipeline
+  : "${WANT_AUTOCOND:=y}"        # AutomationCondition.eager() on the pipeline
+  : "${WANT_CORTEX:=y}"          # snowflake_cortex_asset
+  : "${WANT_OBSERVER:=y}"        # snowflake_table_observation_sensor
+  : "${WANT_HET:=y}"             # partitioned Python -> Snowflake landing
+  : "${WANT_FRESH:=y}"           # freshness_check on imported entity
+  : "${WANT_SNOWPARK:=y}"        # snowpark_pipeline
+  : "${WANT_EXTERNAL:=y}"        # external_snowflake_table
+  : "${WANT_DBT:=y}"             # dbt project
+  : "${WANT_DDL_SHOWCASE:=y}"    # 7 define-as-code DDL components
+  export WANT_DEPS WANT_PIPELINE WANT_AUTOCOND WANT_CORTEX WANT_OBSERVER \
+         WANT_HET WANT_FRESH WANT_SNOWPARK WANT_EXTERNAL WANT_DBT WANT_DDL_SHOWCASE
+fi
+
 # ── 1. uv guard (auto-install if missing) ──────────────────────────────
 if ! command -v uv >/dev/null 2>&1; then
   echo "uv (Python package manager) is required and not installed."
@@ -386,7 +410,7 @@ declare -a DEP_TYPES=()
 declare -a DEP_UPSTREAMS=()  # parallel array: "|"-separated upstream names
 
 echo
-read -r -p "Declare cross-entity dependencies now? [y/N] " WANT_DEPS
+[ -n "${WANT_DEPS:-}" ] || read -r -p "Declare cross-entity dependencies now? [y/N] " WANT_DEPS
 if [ "${WANT_DEPS:-n}" = "y" ] || [ "${WANT_DEPS:-n}" = "Y" ]; then
   # Build the candidate list (names of imported entities, with type prefix
   # so the user can see what they're picking from). Only includes types
@@ -471,7 +495,7 @@ echo
 echo "─────────────────────────────────────────────────────────────────────"
 echo "  Optional add-ons"
 echo "─────────────────────────────────────────────────────────────────────"
-read -r -p "Add a multi-step warehouse_pipeline demo (joins + op:sql commission + multi-sink)? [y/N] " WANT_PIPELINE
+[ -n "${WANT_PIPELINE:-}" ] || read -r -p "Add a multi-step warehouse_pipeline demo (joins + op:sql commission + multi-sink)? [y/N] " WANT_PIPELINE
 WANT_PIPELINE="${WANT_PIPELINE:-n}"
 if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
   echo "  Pick two base tables from the discovered list, or paste your own."
@@ -484,7 +508,7 @@ if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
   fi
 fi
 
-read -r -p "Add a snowflake_cortex_asset (LLM completion / summarize / sentiment)? [y/N] " WANT_CORTEX
+[ -n "${WANT_CORTEX:-}" ] || read -r -p "Add a snowflake_cortex_asset (LLM completion / summarize / sentiment)? [y/N] " WANT_CORTEX
 WANT_CORTEX="${WANT_CORTEX:-n}"
 CORTEX_MODE=""
 CORTEX_INPUT=""
@@ -498,7 +522,7 @@ fi
 # Reactive trigger: snowflake_table_observation_sensor watches a table's
 # row count + ingests changes. Demonstrates "react to table mutation"
 # beyond what Snowpipe's cloud-storage trigger can express.
-read -r -p "Add a snowflake_table_observation_sensor watching a table for changes? [y/N] " WANT_OBSERVER
+[ -n "${WANT_OBSERVER:-}" ] || read -r -p "Add a snowflake_table_observation_sensor watching a table for changes? [y/N] " WANT_OBSERVER
 WANT_OBSERVER="${WANT_OBSERVER:-n}"
 OBSERVER_DATABASE=""
 OBSERVER_SCHEMA=""
@@ -512,9 +536,9 @@ fi
 # Reactive chaining: wire AutomationCondition.eager() on the pipeline
 # asset so it fires the moment any of its imported upstreams change.
 # Only meaningful if the user selected the pipeline add-on.
-WANT_AUTOCOND="n"
+WANT_AUTOCOND="${WANT_AUTOCOND:-}"
 if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
-  read -r -p "Wire AutomationCondition.eager() on the pipeline so it auto-reacts to upstream changes? [y/N] " WANT_AUTOCOND
+  [ -n "$WANT_AUTOCOND" ] || read -r -p "Wire AutomationCondition.eager() on the pipeline so it auto-reacts to upstream changes? [y/N] " WANT_AUTOCOND
   WANT_AUTOCOND="${WANT_AUTOCOND:-n}"
 fi
 
@@ -523,7 +547,7 @@ fi
 # scaffold proves TWO claims: cross-engine lineage (Python on the left,
 # Snowflake on the right) AND first-class partition replay (backfill 30
 # days, concurrency-capped, from the dg dev UI).
-read -r -p "Add a partitioned Python -> Snowflake landing chain (heterogeneous + backfillable)? [y/N] " WANT_HET
+[ -n "${WANT_HET:-}" ] || read -r -p "Add a partitioned Python -> Snowflake landing chain (heterogeneous + backfillable)? [y/N] " WANT_HET
 WANT_HET="${WANT_HET:-n}"
 HET_DATABASE=""
 HET_SCHEMA=""
@@ -538,7 +562,7 @@ if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then
 fi
 
 # Data quality: freshness_check on a chosen imported asset.
-read -r -p "Add a freshness_check asset check on one of the imported entities? [y/N] " WANT_FRESH
+[ -n "${WANT_FRESH:-}" ] || read -r -p "Add a freshness_check asset check on one of the imported entities? [y/N] " WANT_FRESH
 WANT_FRESH="${WANT_FRESH:-n}"
 FRESH_ASSET_KEY=""
 FRESH_FAIL_HOURS=""
@@ -554,7 +578,7 @@ fi
 # Snowpark's lazy DataFrame API instead of compiling to CTAS+CTEs. Shows
 # customers that Dagster works equally well with either Snowflake compute
 # paradigm — pure SQL OR DataFrame.
-read -r -p "Add a snowpark_pipeline (DataFrame-API parallel to warehouse_pipeline)? [y/N] " WANT_SNOWPARK
+[ -n "${WANT_SNOWPARK:-}" ] || read -r -p "Add a snowpark_pipeline (DataFrame-API parallel to warehouse_pipeline)? [y/N] " WANT_SNOWPARK
 WANT_SNOWPARK="${WANT_SNOWPARK:-n}"
 SP_ORDERS=""
 SP_CUSTOMERS=""
@@ -568,7 +592,7 @@ fi
 # external_snowflake_table — declare-only lineage. Useful for "this table
 # is owned by another team / managed outside Dagster, but we want to
 # depend on it." Common enterprise pattern.
-read -r -p "Declare an external_snowflake_table (lineage to a table you don't manage)? [y/N] " WANT_EXTERNAL
+[ -n "${WANT_EXTERNAL:-}" ] || read -r -p "Declare an external_snowflake_table (lineage to a table you don't manage)? [y/N] " WANT_EXTERNAL
 WANT_EXTERNAL="${WANT_EXTERNAL:-n}"
 EXT_DATABASE=""
 EXT_SCHEMA=""
@@ -587,7 +611,7 @@ fi
 # Dagster project. The DbtProjectComponent imports every model in the
 # project as a Dagster asset, with lineage from the source tables in
 # RAW.* through the dbt models to the final mart.
-read -r -p "Add a dbt project (Dagster's official dagster-dbt integration)? [y/N] " WANT_DBT
+[ -n "${WANT_DBT:-}" ] || read -r -p "Add a dbt project (Dagster's official dagster-dbt integration)? [y/N] " WANT_DBT
 WANT_DBT="${WANT_DBT:-n}"
 DBT_SOURCE_DB=""
 DBT_SOURCE_SCHEMA=""
@@ -605,7 +629,7 @@ fi
 # control plane" alongside the workspace component's "import existing" pattern.
 # Entities are name-prefixed DG_ to avoid colliding with the seed's objects and
 # to let the workspace component exclude them via exclude_name_pattern.
-read -r -p "Add a showcase of all 7 'define-Snowflake-as-code' DDL components? [y/N] " WANT_DDL_SHOWCASE
+[ -n "${WANT_DDL_SHOWCASE:-}" ] || read -r -p "Add a showcase of all 7 'define-Snowflake-as-code' DDL components? [y/N] " WANT_DDL_SHOWCASE
 WANT_DDL_SHOWCASE="${WANT_DDL_SHOWCASE:-n}"
 DDL_TARGET_SCHEMA=""
 if [ "$WANT_DDL_SHOWCASE" = "y" ] || [ "$WANT_DDL_SHOWCASE" = "Y" ]; then
