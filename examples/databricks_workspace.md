@@ -14,9 +14,9 @@ Uses the **official `dagster-databricks` integration's [`DatabricksWorkspaceComp
 ## Run it
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_databricks_workspace.sh -o setup_databricks_workspace.sh
-chmod +x setup_databricks_workspace.sh
-./setup_databricks_workspace.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_databricks_workspace_demo.sh -o setup_databricks_workspace_demo.sh
+chmod +x setup_databricks_workspace_demo.sh
+./setup_databricks_workspace_demo.sh
 ```
 
 Auto-installs `uv` + `jq` if missing (with consent). Needs `curl`. Bash 3.2 compatible. Refuses piped invocation — it's interactive.

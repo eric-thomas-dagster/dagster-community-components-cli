@@ -34,9 +34,9 @@ if [ ! -t 0 ]; then
   echo "ERROR: this script is interactive — it asks for project name, host, token, etc."
   echo "       Download it first, then run from a terminal:"
   echo
-  echo "  curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_databricks_workspace.sh -o setup_databricks_workspace.sh"
-  echo "  chmod +x setup_databricks_workspace.sh"
-  echo "  ./setup_databricks_workspace.sh"
+  echo "  curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_databricks_workspace_demo.sh -o setup_databricks_workspace_demo.sh"
+  echo "  chmod +x setup_databricks_workspace_demo.sh"
+  echo "  ./setup_databricks_workspace_demo.sh"
   exit 1
 fi
 
