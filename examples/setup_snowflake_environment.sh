@@ -427,9 +427,9 @@ if sandbox_mode:
                   out, flags=re.MULTILINE)
     out = re.sub(r'^CREATE DATABASE IF NOT EXISTS [A-Z_]+[^;]*;\s*\n', '',
                   out, flags=re.MULTILINE)
-    # Schema rename: RAW/STAGING/ANALYTICS/AI -> DAGSTER_DEMO_<name>
-    # Apply to BOTH `CREATE SCHEMA IF NOT EXISTS <X>` declarations AND
-    # to qualified references like '<DB>.<X>.', and bare 'USE SCHEMA <X>'.
+    # Schema rename: RAW/STAGING/ANALYTICS/AI -> DAGSTER_DEMO_X
+    # Apply to both CREATE SCHEMA IF NOT EXISTS X declarations AND
+    # to qualified references like DB.X. , and bare USE SCHEMA X.
     for s in ('RAW', 'STAGING', 'ANALYTICS', 'AI'):
         new_s = 'DAGSTER_DEMO_' + s
         # CREATE SCHEMA IF NOT EXISTS X
