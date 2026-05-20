@@ -385,20 +385,69 @@ case "$(echo "$PRECHECK_VERDICT" | head -1)" in
 esac
 rm -f "$PRECHECK_OUT"
 
+# Auto-detect "sandbox mode" — when the target database already exists,
+# the user usually can't CREATE DATABASE or USE ROLE SYSADMIN. Skip those
+# statements AND prefix the schema names so we don't collide with other
+# users' personal schemas in a shared sandbox.
+SANDBOX_MODE=false
+if [ "$(python3 -c "import json; r=json.load(open('${PRECHECK_OUT:-/dev/null}')); print('1' if r.get('db_exists') else '0')" 2>/dev/null)" = "1" ] || \
+   [ -n "${SNOWFLAKE_SANDBOX_MODE:-}" ]; then
+  SANDBOX_MODE=true
+fi
+# Also enable sandbox mode if the target db is the literal 'SANDBOX' — the
+# common shared-database name.
+case "$SNOW_TARGET_DB" in SANDBOX|sandbox) SANDBOX_MODE=true ;; esac
+
 # Read the SQL, substitute the database name, write to a temp file for execution.
 SUBST_SQL="$(mktemp -t sf_seed_subst.XXXXXX).sql"
 if [ "${DROP_FIRST:-false}" = "true" ]; then
   printf "USE ROLE %s;\nDROP DATABASE IF EXISTS %s;\n" "$SNOW_ROLE" "$SNOW_TARGET_DB" > "$SUBST_SQL"
 fi
-# Substitute every literal DAGSTER_DEMO occurrence with the chosen name.
-# Use python for safe string replace (sed would need escaping for special chars).
+# Substitute DAGSTER_DEMO with the chosen target DB, and in sandbox mode:
+#   • Strip `USE ROLE SYSADMIN;` (user usually doesn't have SYSADMIN)
+#   • Strip `CREATE DATABASE IF NOT EXISTS ...` (no CREATE DATABASE privilege)
+#   • Rename the 4 top-level schemas to DAGSTER_DEMO_* so they don't
+#     collide with other users' personal schemas in a shared sandbox.
 python3 -c "
-import sys
+import re, sys
 src = open(sys.argv[1]).read()
-out = src.replace('DAGSTER_DEMO', sys.argv[2])
-open(sys.argv[3], 'a').write(out)
-" "$SQL_FILE" "$SNOW_TARGET_DB" "$SUBST_SQL"
+target_db = sys.argv[2]
+sandbox_mode = sys.argv[3] == 'true'
+out = src.replace('DAGSTER_DEMO', target_db)
+
+if sandbox_mode:
+    # Remove admin-only statements (line-anchored so we don't kill content).
+    out = re.sub(r'^USE ROLE [A-Za-z0-9_]+;\s*\n', '', out, flags=re.MULTILINE)
+    out = re.sub(r'^CREATE DATABASE IF NOT EXISTS [A-Z_]+\s*\n\s*COMMENT[^;]+;\s*\n', '',
+                  out, flags=re.MULTILINE)
+    out = re.sub(r'^CREATE DATABASE IF NOT EXISTS [A-Z_]+[^;]*;\s*\n', '',
+                  out, flags=re.MULTILINE)
+    # Schema rename: RAW/STAGING/ANALYTICS/AI -> DAGSTER_DEMO_<name>
+    # Apply to BOTH `CREATE SCHEMA IF NOT EXISTS <X>` declarations AND
+    # to qualified references like '<DB>.<X>.', and bare 'USE SCHEMA <X>'.
+    for s in ('RAW', 'STAGING', 'ANALYTICS', 'AI'):
+        new_s = 'DAGSTER_DEMO_' + s
+        # CREATE SCHEMA IF NOT EXISTS X
+        out = re.sub(rf'\bCREATE SCHEMA IF NOT EXISTS {s}\b', f'CREATE SCHEMA IF NOT EXISTS {new_s}', out)
+        # USE SCHEMA X
+        out = re.sub(rf'\bUSE SCHEMA {s}\b', f'USE SCHEMA {new_s}', out)
+        # DB.X. — qualified table refs
+        out = re.sub(rf'\b{target_db}\.{s}\.', f'{target_db}.{new_s}.', out)
+        # Bare X.<name> in places like CREATE STREAM ... ON TABLE <DB>.RAW.ORDERS
+        # already covered above. But also raw `... <S>.` after USE DATABASE.
+        # Safe to also rename bare '<S>.' for the four reserved tokens — they
+        # don't appear as identifiers elsewhere in this script.
+        out = re.sub(rf'(?<![A-Z_]){s}\.([A-Z_]+)', rf'{new_s}.\1', out)
+
+open(sys.argv[4], 'a').write(out)
+" "$SQL_FILE" "$SNOW_TARGET_DB" "$SANDBOX_MODE" "$SUBST_SQL"
 SQL_FILE="$SUBST_SQL"
+
+if [ "$SANDBOX_MODE" = "true" ]; then
+  echo "  ℹ Sandbox mode ON — skipping CREATE DATABASE + USE ROLE SYSADMIN,"
+  echo "    schemas renamed to DAGSTER_DEMO_{RAW,STAGING,ANALYTICS,AI} to avoid"
+  echo "    colliding with other users' schemas in the shared sandbox."
+fi
 
 # ── Run the SQL ────────────────────────────────────────────────────────
 echo
