@@ -2,20 +2,25 @@
 # Warehouse-native pipeline demo — pure-SQL pushdown via CTAS chain.
 #
 # WHAT THIS DEMONSTRATES
-#   6 warehouse_* components composed into a single end-to-end pipeline.
-#   No data ever flows through Python — every step is `CREATE [OR REPLACE]
-#   TABLE ... AS SELECT ...` run by the warehouse engine. The "lineage"
-#   in Dagster matches the CTAS lineage in the warehouse.
+#   Every warehouse_* pushdown component composed into a single end-to-end
+#   pipeline. No data ever flows through Python — every step is a CTAS run
+#   by the warehouse engine.
 #
-#   Components exercised (8):
-#     - synthetic_data_generator     seed Python-side
-#     - dataframe_to_table           load to raw.orders in DuckDB (once)
-#     - warehouse_filter             CTAS WHERE — pending orders only
-#     - warehouse_top_n_per_group    ROW_NUMBER() OVER (PARTITION BY ...) <= N
-#     - warehouse_dedup              ROW_NUMBER() = 1 per customer_id (keep latest)
-#     - warehouse_union              UNION DISTINCT of two derived tables
-#     - warehouse_join               LEFT JOIN
-#     - warehouse_summarize          GROUP BY + aggregations
+#   Components exercised (12):
+#     - synthetic_data_generator       seed Python-side
+#     - dataframe_to_table             load to raw.orders in DuckDB (once)
+#     - warehouse_filter               CTAS WHERE
+#     - warehouse_top_n_per_group      ROW_NUMBER() OVER (PARTITION BY ...) <= N
+#     - warehouse_dedup                ROW_NUMBER() = 1 per customer_id (keep latest)
+#     - warehouse_union                UNION DISTINCT of two derived tables
+#     - warehouse_join                 LEFT JOIN
+#     - warehouse_formula              add columns via inline SQL (Alteryx Formula In-DB)
+#     - warehouse_multi_field_formula  ONE formula template applied to N columns
+#     - warehouse_multi_row_formula    running totals + LAG via window functions
+#     - warehouse_summarize            GROUP BY + aggregations
+#     - warehouse_pipeline             same logical chain compiled to ONE CTAS via CTE
+#                                      (single-asset alt-path, side-by-side with the
+#                                      per-step assets to show the trade-off)
 #
 #   Backend: local DuckDB file (./warehouse.duckdb). Same YAML retargets to
 #   Snowflake / BigQuery / Redshift / Databricks / Postgres / MSSQL by
@@ -43,17 +48,21 @@ uv add -q pandas sqlalchemy 'duckdb>=0.9.0' 'duckdb-engine>=0.10.0'
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 8 components"
+echo ">>> Installing 12 components"
 for c in synthetic_data_generator dataframe_to_table \
          warehouse_filter warehouse_top_n_per_group warehouse_dedup \
-         warehouse_join warehouse_union warehouse_summarize; do
+         warehouse_join warehouse_union warehouse_summarize \
+         warehouse_formula warehouse_multi_field_formula warehouse_multi_row_formula \
+         warehouse_pipeline; do
   $CLI add $c --auto-install
 done
 
 echo ">>> Removing auto-installed default defs (we'll write our own)"
 for c in synthetic_data_generator dataframe_to_table \
          warehouse_filter warehouse_top_n_per_group warehouse_dedup \
-         warehouse_join warehouse_union warehouse_summarize; do
+         warehouse_join warehouse_union warehouse_summarize \
+         warehouse_formula warehouse_multi_field_formula warehouse_multi_row_formula \
+         warehouse_pipeline; do
   rm -rf "src/$PKG/defs/$c"
 done
 
@@ -163,13 +172,62 @@ attributes:
   deps: [paid_or_top3]
   group_name: warehouse_native"
 
-# 6. warehouse_summarize — final aggregation on the join result
+# 6. warehouse_formula — add net_amount + is_high_value via Alteryx-style inline expressions
+write_yaml "orders_enriched" "type: $PKG.components.warehouse_formula.component.WarehouseFormulaComponent
+attributes:
+  asset_name: orders_enriched
+  database_url: duckdb:///$DB
+  dialect: duckdb
+  upstream_table: main.paid_with_first_order
+  output_table: main.orders_enriched
+  expressions:
+    net_amount: \"total - 5\"
+    is_high_value: \"CASE WHEN total > 500 THEN TRUE ELSE FALSE END\"
+  keep_existing: true
+  mode: replace
+  deps: [paid_with_first_order]
+  group_name: warehouse_native"
+
+# 7. warehouse_multi_field_formula — apply UPPER() to multiple columns in one go
+write_yaml "orders_uppercased" "type: $PKG.components.warehouse_multi_field_formula.component.WarehouseMultiFieldFormulaComponent
+attributes:
+  asset_name: orders_uppercased
+  database_url: duckdb:///$DB
+  dialect: duckdb
+  upstream_table: main.orders_enriched
+  output_table: main.orders_uppercased
+  expression: \"UPPER({col})\"
+  columns: [status]
+  output_mode: replace
+  mode: replace
+  deps: [orders_enriched]
+  group_name: warehouse_native"
+
+# 8. warehouse_multi_row_formula — running totals + LAG via window functions
+write_yaml "orders_running" "type: $PKG.components.warehouse_multi_row_formula.component.WarehouseMultiRowFormulaComponent
+attributes:
+  asset_name: orders_running
+  database_url: duckdb:///$DB
+  dialect: duckdb
+  upstream_table: main.orders_uppercased
+  output_table: main.orders_running
+  partition_by: [status]
+  order_by: [order_id]
+  expressions:
+    running_total: {kind: running_total, col: total}
+    prev_total:    {kind: lag, col: total, offset: 1, default: 0}
+    order_rank:    {kind: row_number}
+  mode: replace
+  deps: [orders_uppercased]
+  group_name: warehouse_native"
+
+# 9. warehouse_summarize — per-step summarize before the pipeline closeout
 write_yaml "revenue_by_status" "type: $PKG.components.warehouse_summarize.component.WarehouseSummarizeComponent
 attributes:
   asset_name: revenue_by_status
   database_url: duckdb:///$DB
   dialect: duckdb
-  upstream_table: main.paid_with_first_order
+  upstream_table: main.orders_running
   output_table: main.revenue_by_status
   group_by: [status]
   aggregations:
@@ -177,7 +235,33 @@ attributes:
     total_revenue: {col: total, agg: sum}
     avg_revenue: {col: total, agg: mean}
   mode: replace
-  deps: [paid_with_first_order]
+  deps: [orders_running]
+  group_name: warehouse_native"
+
+# 10. warehouse_pipeline — same logical work compiled to ONE CTAS via CTE chain
+#     (alternative path; shows the trade-off vs per-step lineage)
+write_yaml "top_5_categories_pipeline" "type: $PKG.components.warehouse_pipeline.component.WarehousePipelineComponent
+attributes:
+  asset_name: top_5_categories_pipeline
+  database_url: duckdb:///$DB
+  dialect: duckdb
+  source:
+    upstream_table: main.raw_orders
+  operations:
+    - op: filter
+      predicate: \"status = 'paid'\"
+    - op: group_by
+      group_by: [category]
+      aggregations:
+        revenue:     {col: total,    agg: sum}
+        order_count: {col: order_id, agg: count}
+    - op: top_n
+      sort_by: revenue
+      n: 5
+      ascending: false
+  output_table: main.top_5_categories_pipeline
+  mode: replace
+  deps: [revenue_by_status]
   group_name: warehouse_native"
 
 cat <<MSG
@@ -192,7 +276,8 @@ After the run, inspect the chain in DuckDB:
     duckdb $DB -c "
       .tables
       SELECT * FROM main.revenue_by_status;
-      SELECT COUNT(*) AS paid_with_first_order FROM main.paid_with_first_order;"
+      SELECT * FROM main.top_5_categories_pipeline;
+      SELECT COUNT(*) AS rows_in_orders_running FROM main.orders_running;"
 
 Production retargeting (no code changes):
   - Snowflake:  dialect: snowflake  + database_url: snowflake://user:pass@account/db/schema?warehouse=COMPUTE_WH

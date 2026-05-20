@@ -18,13 +18,19 @@ Smaller frames or chains that need Python steps → use the per-asset `backend: 
 | 1 | `synthetic_data_generator` | Python-side DataFrame (one-time seed) |
 | 2 | `dataframe_to_table` | `raw.orders` in DuckDB (one-time load) |
 | 3 | `warehouse_filter` | `paid_orders` — CTAS WHERE |
-| 4 | `warehouse_top_n_per_group` | `top_3_per_category` — ROW_NUMBER() OVER PARTITION BY ... ≤ 3 |
-| 5 | `warehouse_dedup` | `first_per_customer` — ROW_NUMBER() OVER PARTITION BY customer_id ORDER BY order_date DESC = 1 |
+| 4 | `warehouse_top_n_per_group` | `top_3_per_category` — ROW_NUMBER() OVER PARTITION BY … ≤ 3 |
+| 5 | `warehouse_dedup` | `first_per_customer` — ROW_NUMBER() = 1 per customer_id (keep latest) |
 | 6 | `warehouse_union` | `paid_or_top3` — UNION DISTINCT of two derived tables |
 | 7 | `warehouse_join` | `paid_with_first_order` — LEFT JOIN |
-| 8 | `warehouse_summarize` | `revenue_by_status` — GROUP BY + agg |
+| 8 | `warehouse_formula` | `orders_enriched` — `net_amount` + `is_high_value` via inline SQL (Alteryx Formula In-DB equivalent) |
+| 9 | `warehouse_multi_field_formula` | `orders_uppercased` — `UPPER({col})` applied to a set of columns |
+| 10 | `warehouse_multi_row_formula` | `orders_running` — running totals + LAG + ROW_NUMBER via window functions |
+| 11 | `warehouse_summarize` | `revenue_by_status` — GROUP BY + agg |
+| 12 | `warehouse_pipeline` | `top_5_categories_pipeline` — alternative single-asset path: same logical chain compiled to ONE CTAS via CTE-WITH clauses |
 
-All 6 of the `warehouse_*` components compose by chaining `output_table` → `upstream_table`. Each emits a `MaterializeResult` with the executed SQL in metadata.
+The first 11 demonstrate per-step lineage (one Dagster asset per CTAS). The 12th shows the alternative — the same shape of work compiled to a single CTAS by `warehouse_pipeline`. Pick per-step when you want lineage granularity; pick `warehouse_pipeline` when the steps are tightly coupled and you want the warehouse optimizer to plan the whole chain together.
+
+All `warehouse_*` components compose by chaining `output_table` → `upstream_table`. Each emits a `MaterializeResult` with the executed SQL in metadata.
 
 ## Run
 

@@ -13,6 +13,7 @@ The demos are grouped by what they need to run.
 
 - [No auth required (synthetic or public data)](#no-auth-required-synthetic-or-public-data)
   - [Core ETL patterns](#core-etl-patterns)
+  - [Pushdown compute (warehouse-native + lazy engines)](#pushdown-compute-warehouse-native--lazy-engines)
   - [Database replication + migration](#database-replication--migration)
   - [Time series + forecasting](#time-series--forecasting)
   - [ML pipelines](#ml-pipelines)
@@ -72,6 +73,17 @@ Useful for onboarding, CI smoke tests, and proving a component works.
 | [Text Extraction](text_extraction.md) | `xml_parser`, `html_parser`, `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `regex_parser` | Pull structured fields from semi-structured columns (XML, HTML, nested JSON) |
 | [Transformations Mega-Demo](transformations.md) | 34 transforms — every shape-preserving + shape-changing transform in one chain | Comprehensive toolbox showcase |
 | [Partitions](partitions.md) | `dataframe_to_csv`, `per_partition_backfill_job` | The four canonical partition shapes (daily/weekly/monthly + static dimensions) end-to-end |
+
+### Pushdown compute (warehouse-native + lazy engines)
+
+Components that push the compute to the engine instead of materializing through pandas — predicate pushdown to parquet, CTAS chains in the warehouse, lazy chains in polars / PySpark / Snowpark. Each demo exercises many components in one shot.
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [Warehouse-native pipeline](warehouse_native_pipeline.md) | 12 — `synthetic_data_generator`, `dataframe_to_table`, `warehouse_filter`, `warehouse_top_n_per_group`, `warehouse_dedup`, `warehouse_join`, `warehouse_union`, `warehouse_formula`, `warehouse_multi_field_formula`, `warehouse_multi_row_formula`, `warehouse_summarize`, `warehouse_pipeline` | Every `warehouse_*` CTAS-pushdown component composed end-to-end. Local DuckDB; same YAML retargets to Snowflake / BigQuery / Redshift / Databricks / Postgres / MSSQL. Formula family covers Alteryx "Formula In-DB" / "Multi-Field Formula" / "Multi-Row Formula" equivalents in pure SQL. |
+| [Polars-native pushdown](polars_pushdown.md) | `synthetic_data_generator`, `dataframe_to_parquet`, `polars_scan_parquet`, `polars_pipeline` | Predicate + column pushdown to parquet, then 5-op LazyFrame chain in one asset (filter → with_columns → group_by → sort → head). Demonstrates what the per-asset `backend: polars` field architecturally can't deliver. |
+| [Polars pipeline (standalone)](polars_pipeline.md) | `synthetic_data_generator`, `polars_pipeline` | Same single-asset multi-op chain pattern, taking pandas DataFrame input (no parquet step). Useful when upstream is already in-memory. |
+| [PySpark pipeline](pyspark_pipeline.md) | `synthetic_data_generator`, `dataframe_to_parquet`, `pyspark_pipeline` | Multi-step Spark DataFrame chain compiled to ONE Catalyst plan. `local[*]` Spark for the demo; same YAML retargets to Standalone / YARN / Kubernetes / Databricks Connect. Requires Java 17+. |
 
 ### Database replication + migration
 
