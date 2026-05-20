@@ -4,22 +4,72 @@ Run one script. Answer the prompts. Your Snowflake **tasks, dynamic tables, stor
 
 ## Why Dagster on top of Snowflake?
 
-Snowflake's native scheduling (tasks + dynamic tables + alerts) is powerful **inside Snowflake**. Dagster orchestrating Snowflake earns its keep when the work the team actually does *crosses* Snowflake — into ingestion sources, Python transforms, BI tools, reverse-ETL, ML, and data-quality. The pitch in one sentence: **Snowflake schedules what runs inside Snowflake; Dagster orchestrates everything that runs anywhere and shows it as one asset graph.**
+Two different conversations depending on the stack. Pick the one that fits.
 
-| Capability | Snowflake-only | Dagster + Snowflake |
+---
+
+### If you're a pure-Snowflake shop
+
+Your entire data stack — ingestion, transforms, BI feeds — runs inside one account. You're not currently shopping for an orchestrator because Tasks + Dynamic Tables + Alerts already work. The honest pitch for Dagster here is **not** cross-tool lineage (you don't have other tools). It's that **Snowflake schedules; Dagster *reacts*** — and the reactive patterns you actually want often don't fit Snowflake's narrow trigger surface.
+
+Snowflake's native trigger surface:
+- **Tasks** — cron schedules, or `AFTER` another task in a chain
+- **Snowpipe auto-ingest** — S3 / GCS / Azure object PUTs to a configured stage
+- **Alerts** — scheduled polling with one conditional action
+
+Common patterns this misses, even when nothing leaves Snowflake:
+
+| Reactive pattern | Native Snowflake answer | Dagster answer |
 |---|---|---|
-| **Lineage across tools** | Stops at the Snowflake boundary | One graph: Fivetran / Airbyte / Sling / Python ingest → Snowflake tables → tasks/DTs → dbt → BI (Tableau/Power BI/Looker) → reverse-ETL (Hightouch/Census). Click any node, see every upstream + downstream. |
-| **Heterogeneous compute** | Cross-tool work needs External Functions, custom polling, or third-party orchestrators | Snowflake + Databricks + BigQuery + Postgres + S3 + Kafka + Python tasks side-by-side in one project, with deps between them. |
-| **Trigger model** | Pure cron + AFTER chains for task graphs | Cron, sensors (file landing / table changes / external events), AND `AutomationCondition` — *"materialize when this upstream changes,"* even if the upstream lives outside Snowflake. |
-| **Backfills + partitions** | DIY — write a script that loops over date ranges, calls EXECUTE TASK with arguments | First-class daily/hourly/multi-dimensional partitions, parallel backfills with concurrency limits, partition mapping between assets, replay over arbitrary date ranges from the UI. |
-| **Data quality** | Tasks-as-tests pattern; DIY assertions | `@asset_check` runs inline with the asset, surfaces pass/fail in the same UI, can block downstream materialization on failure. |
-| **Per-asset metadata** | Task history is query-centric (duration, bytes) | Schemas auto-extracted, row counts, freshness, table preview, code-version pins, run history per-asset — all in one place. |
-| **Local development** | Can't run a task outside the account | `dg dev` runs the full asset graph locally, including the bits that target a dev Snowflake account or even a DuckDB stand-in. |
-| **Branching + preview deploys** | No native git-style branching for orchestration | Dagster+ branch deployments give every PR an isolated environment — preview a Snowflake change with its full downstream impact before merge. |
-| **Failure surfaces** | Task failures surface in `TASK_HISTORY` view; one tool at a time | One unified timeline across all tools; a failed Snowflake task fails in Dagster with full upstream context + downstream impact, plus retry policy + alerting per-asset. |
-| **Day-2 ops** | Suspend/resume per task; ALTER TASK for changes | Bulk suspend/resume, scheduled freeze windows, role-based access, audit log of who-materialized-what, alerting hooks into Slack/PagerDuty/email (in Dagster+). |
+| "When `RAW.ORDERS` gains > 1000 new rows, kick off downstream rollups." | Alert detects it, but firing the next task means INSERTing into a coordination table that ANOTHER scheduled task polls. | One-line `snowflake_table_observation_sensor` watching ORDERS' row count → materializes downstream assets directly. |
+| "When *both* `customer_360_dt` and `paid_orders_dt` finish their refreshes, fire the joined rollup." | No native multi-DT-completion trigger. Workaround: schedule the rollup on a long enough lag that *probably* both finished. | `AutomationCondition.eager()` on the downstream asset — fires the moment all upstreams have materialized, not a moment later. |
+| "When a webhook arrives from Stripe / HubSpot / a custom app, ingest payload → trigger downstream procs." | External Functions can be called *from* a task, but something outside Snowflake still has to receive the webhook and trigger the task with the payload. | Dagster webhook sensor receives, lands the payload, triggers downstream assets keyed by the event. |
+| "Backfill the last 30 days of `DAILY_ORDERS_ROLLUP` in parallel, 5 at a time, skipping already-materialized partitions." | Custom procedure that loops over a date range, calls `EXECUTE TASK ... WITH ARGUMENTS`. Skip-if-exists is DIY. | Partitioned asset + `dg launch --partition-range 2026-04-20...2026-05-19 --max-concurrent 5`. Done. |
+| "If the alert fires *and* it's business hours, page on-call. Otherwise, log and retry off-peak." | Alerts run one action. Branching = a second alert + careful conditions. | `AutomationCondition` composition: `eager() & on_cron(business_hours)`, with a separate path for off-hours. |
+| "Replay this one task for last Tuesday only." | `ALTER TASK ... EXECUTE` with arguments — but the task body has to be parameterized for the date. Hope you wrote it that way. | Click the partition in the UI. Or `dg launch --partition 2026-05-13`. The asset's body sees the partition key automatically. |
 
-**When Dagster is overkill:** if your *entire* pipeline lives inside Snowflake and you have no upstream ingest, no Python transforms, no downstream BI orchestration, and no cross-account/cross-region work — native Snowflake tasks are fine and add no extra moving parts. The break-even point comes fast though, because most teams hit *some* of those needs within a quarter or two.
+Plus the things that aren't trigger-shaped but still help even in a pure-Snowflake setup:
+
+| | Native Snowflake | Dagster + Snowflake |
+|---|---|---|
+| **Asset-level data quality** | Tasks-as-tests; coordinating "block downstream on failure" is DIY | `@asset_check` runs inline; pass/fail in the same UI; blocks downstream automatically |
+| **Per-asset metadata + history** | `TASK_HISTORY` view, query-centric (duration, bytes) | Per-asset: schema, row counts, freshness, preview, code-version, materialization history — the lens is the table, not the task that wrote it |
+| **Local development** | Can't run a task outside the account; iteration loop = edit → push → wait for the next scheduled run | `dg dev` runs the full graph locally, against either a dev account or a DuckDB stand-in |
+| **Branching + preview deploys** | No native git-style branching for orchestration | Dagster+ branch deployments — every PR gets an isolated environment |
+| **Day-2 ops** | Per-task suspend/resume; ALTER TASK for changes | Bulk suspend/resume, freeze windows, audit log of who-materialized-what, alerting hooks (Slack / PagerDuty / email) |
+
+**When to walk away from this conversation:** if the team's trigger needs really are just "nightly cron + AFTER chains + Snowpipe on file land" *and* there's no near-term partition-replay, webhook-trigger, or external-event story — native scheduling is fine. Save the migration energy.
+
+---
+
+### If you're a hybrid stack (most teams)
+
+Snowflake is one node in your data graph. You also have Fivetran / Airbyte / Sling for ingest, dbt for transforms, BI tools like Tableau / Power BI / Looker reading downstream, maybe a reverse-ETL step pushing data to Salesforce / HubSpot, ML models scoring upstream of all of it, and Python jobs gluing the edges. The pitch is straightforward: **one asset graph for the whole flow.**
+
+| | Snowflake-native scheduling | Dagster + Snowflake |
+|---|---|---|
+| **Lineage** | Stops at the Snowflake boundary | One graph end-to-end: SaaS ingest → Snowflake tables → tasks / DTs / procs → dbt → BI refreshes → reverse-ETL → ML. Click any node, see every upstream and downstream. |
+| **Cross-tool triggers** | External Functions can call out, but the trigger model is still cron-centric | Sensors on file landings, message-queue events, webhook arrivals, OTHER systems' completions; `AutomationCondition` reacts to any upstream asset, wherever it lives |
+| **Heterogeneous compute** | Cross-tool work means External Functions, custom polling, or a third-party orchestrator on the side | Snowflake + Databricks + BigQuery + Postgres + S3 + Kafka + Python tasks in one project, deps between them, retries + alerting per-asset |
+| **Failure surfaces** | Each tool has its own history view. Cross-tool root-causing means joining timelines by hand | Unified timeline. A failed Snowflake task fails *in Dagster* with full upstream and downstream context across every tool involved |
+| **Partition coordination** | Each tool has its own backfill story (or doesn't) | One partition scheme spans the graph — backfilling "yesterday" replays Fivetran sync → Snowflake task → dbt model → BI refresh as one coordinated set |
+| **Branch deploys** | DIY per tool | Dagster+ branch environments — a single PR brings up a sandbox that touches every system in the graph |
+| **All the pure-Snowflake stuff above** | — | Yes, you get this too |
+
+The reactive-pattern table from the pure-Snowflake section still applies here — and gets *more* valuable, because the upstream signal often lives outside Snowflake (a Kafka topic, an S3 drop, a SaaS webhook). Dagster collapses both the cross-tool and the in-Snowflake reactive cases into the same primitive: `AutomationCondition`.
+
+---
+
+### When Dagster is genuinely overkill
+
+For either audience, Dagster adds moving parts you don't need if:
+
+- Your trigger needs really are just nightly cron + AFTER chains + cloud-storage auto-ingest
+- You're never going to do non-trivial backfills (no "replay these 17 days, 5-at-a-time" requests)
+- You don't have external event sources or webhooks driving anything
+- You don't have downstream tools whose state you need to coordinate with Snowflake's
+
+Most teams find at least one of these breaks within a quarter or two. But if all four hold for you, native Snowflake scheduling is the right answer and a worth-it cost in saved complexity.
 
 ## Don't have a populated Snowflake account yet?
 
