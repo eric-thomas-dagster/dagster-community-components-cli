@@ -272,12 +272,13 @@ while true; do
 
   # Verify by hitting an endpoint that needs only basic auth scope.
   # NB: curl's %{http_code} format already prints "000" on connection
-  # failure, and exits non-zero — so DON'T also `|| echo "000"` (that
-  # would append, producing "000000"). Capture stdout cleanly.
+  # failure. Need `|| true` so the script's `set -e` doesn't kill us
+  # on the non-zero curl exit; need to NOT use `|| echo "000"` (that
+  # would append, producing "000000" alongside the %{http_code} output).
   echo "  Verifying token against $DATABRICKS_HOST ..."
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-    "$DATABRICKS_HOST/api/2.0/preview/scim/v2/Me" 2>/dev/null)
+    "$DATABRICKS_HOST/api/2.0/preview/scim/v2/Me" 2>/dev/null || true)
   [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
 
   # Successful verification — break out. For any failure, fall through to
