@@ -230,6 +230,15 @@ The discovery output should look like:
     stages                 2  internal_stage, landing_stage
     materialized_views     1  customer_lifetime_value_mv
     alerts                 1  high_revenue_day_alert
+    openflow_flows         0  — this seed script CAN'T create them (see note below)
+
+A note on OpenFlow:
+    Dagster CAN orchestrate OpenFlow flows (set import_openflow_flows: true on
+    the workspace component). This seed script CAN'T generate them — there's
+    no CREATE FLOW DDL, no terraform resource for flow definitions, and the
+    BYOC runtime itself is a non-trivial EKS deployment. If you want OpenFlow
+    in a live demo, pre-build one flow in the OpenFlow UI of a demo account
+    ahead of time and the workspace component picks it up automatically.
 
 If you also picked the multi-step warehouse_pipeline add-on in the
 workspace demo, point it at:

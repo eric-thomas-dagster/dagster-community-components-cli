@@ -29,9 +29,14 @@
 --   • 1 ALERT (high-revenue-day trigger)
 --
 -- NOT BUILT (Snowflake doesn't support via SQL DDL):
---   • OPENFLOW FLOWS — created via the Openflow UI / NiFi canvas. If you
---     already have flows in the account, the workspace component will
---     discover them via the `IMPORT_OPENFLOW_FLOWS` flag.
+--   • OPENFLOW FLOWS — Dagster CAN orchestrate them (via `import_openflow_flows:
+--     true` on the workspace component), but this seed script CANNOT generate
+--     them. There's no `CREATE FLOW` DDL, no Terraform `snowflake_openflow_flow`
+--     resource, and the BYOC runtime itself is a non-trivial EKS deployment.
+--     The IaC story today is: design in the OpenFlow UI → export as a JSON
+--     process-group bundle → commit to Git → re-import via the NiFi REST API.
+--     If you want OpenFlow in a live demo, pre-build one flow in the UI of a
+--     demo account ahead of time and the workspace component will pick it up.
 --   • EXTERNAL TABLES — require external cloud storage. Add manually if
 --     you have an S3 / GCS / Azure stage.
 --

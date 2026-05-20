@@ -81,7 +81,19 @@ chmod +x setup_snowflake_environment.sh
 ./setup_snowflake_environment.sh
 ```
 
-Teardown with [`teardown_snowflake_environment.sql`](teardown_snowflake_environment.sql) — drops the whole `DAGSTER_DEMO` database. (OpenFlow flows can't be created via SQL DDL — they're built in the Openflow UI / Apache NiFi canvas. If you already have flows in your account, the workspace component discovers them via the `import_openflow_flows: true` flag.)
+Teardown with [`teardown_snowflake_environment.sql`](teardown_snowflake_environment.sql) — drops the whole `DAGSTER_DEMO` database.
+
+### A note on OpenFlow
+
+**Dagster can orchestrate OpenFlow. We can't pre-build OpenFlow flows in this seed script.**
+
+OpenFlow (Snowflake's NiFi-based data integration service) is a different kind of object from Tasks / Dynamic Tables / Procedures: it isn't created with a SQL DDL statement, there's no `snowflake_openflow_flow` Terraform resource yet, and the BYOC runtime itself is a non-trivial EKS-cluster-in-your-cloud deployment. The IaC story for OpenFlow flows today is *"design in the UI → export as a JSON process-group bundle → commit to Git → import via the NiFi REST API."* That's real, but bootstrapping a runnable OpenFlow runtime + importing the JSON is heavier than a one-script demo can do.
+
+**What that means for live demos:**
+
+- If you're showing this against a Snowflake account that already has OpenFlow flows configured, set `import_openflow_flows: true` in the workspace `defs.yaml`. The workspace component discovers them via the existing OpenFlow telemetry surface and they show up as observable Dagster assets — same as tasks / dynamic tables / streams. **Dagster orchestrates them; lineage extends through them.**
+- If you don't have OpenFlow set up yet and want to show the integration on stage, pre-build one flow in the UI ahead of time and have it live in the demo account. The seed script populates the *other* nine entity types so the discovery story still lands.
+- If you want to skip OpenFlow on stage, set `import_openflow_flows: false` (the demo's default) and the absence of flows in `dg dev` will be invisible.
 
 ## Run it
 
