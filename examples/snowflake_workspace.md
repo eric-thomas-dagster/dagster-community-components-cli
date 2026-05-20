@@ -134,6 +134,8 @@ Auto-installs `uv` if missing (with consent). Refuses piped invocation — it's 
    - **`AutomationCondition.eager()` on the pipeline** — only offered if you selected the multi-step pipeline above. Wires the pipeline asset to auto-fire the moment any of its imported upstreams change. Demonstrates *"fire when upstreams finish"* declarative chaining (vs. cron + AFTER).
    - **Partitioned Python → Snowflake landing chain** — scaffolds a daily-partitioned `synthetic_data_generator` (Python) feeding `dataframe_to_snowflake`. Two claims in one: cross-engine lineage (Python on the left, Snowflake on the right) AND first-class partition replay — backfill 30 days from the `dg dev` UI with concurrency control.
    - **`freshness_check` asset check** — attaches a fail-if-not-updated-within-N-hours check to one of the imported entities. Demonstrates per-asset data quality with native pass/fail surfacing.
+   - **`snowpark_pipeline` (DataFrame parallel to `warehouse_pipeline`)** — same multi-step shape (`steps` / `ref` / `op: sql` / multi-sink), but compiles to a single Snowflake SQL statement *via Snowpark's lazy DataFrame API* instead of CTE-CTAS. Including both in the same demo shows Dagster works equally well with either Snowflake compute paradigm.
+   - **`external_snowflake_table`** — declare-only asset for a table managed by someone else (different team, replicated in via an external tool, etc.). Dagster's graph sees it as an upstream / sibling and reasons about lineage without taking ownership. Common enterprise pattern.
    - **Official `dagster-dbt` integration** — scaffolds a tiny dbt project under `./dbt/` (2 staging models + 1 mart, building on `RAW.ORDERS` + `RAW.CUSTOMERS`) and imports every dbt model as a Dagster asset via `DbtProjectComponent`. Lineage spans `RAW.*` (sources) → staging views → mart table, all in one graph alongside the workspace's tasks/DTs/procs.
 
 ## What gets generated
@@ -156,15 +158,19 @@ snowflake-dagster/
     │   ├── snowflake_table_observation_sensor/  (if observation add-on)
     │   ├── synthetic_data_generator/        (if partitioned-heterogeneous add-on)
     │   ├── dataframe_to_snowflake/          (if partitioned-heterogeneous add-on)
-    │   └── freshness_check/                 (if freshness add-on)
+    │   ├── freshness_check/                 (if freshness add-on)
+    │   ├── snowpark_pipeline/               (if snowpark add-on)
+    │   └── external_snowflake_table/        (if external-table add-on)
     └── defs/
         ├── snowflake_workspace/             # imports entities + assets_by_name deps
-        ├── regional_top_paid_pipeline/      (optional — pipeline)
+        ├── regional_top_paid_pipeline/      (optional — warehouse_pipeline)
+        ├── snowpark_pipeline_demo/          (optional — snowpark_pipeline)
         ├── cortex_demo/                     (optional — Cortex)
         ├── row_count_observer/              (optional — observation sensor)
         ├── python_daily_events/             (optional — partitioned heterogeneous)
         ├── python_daily_events_to_snowflake/(optional — partitioned heterogeneous)
         ├── freshness_check_demo/            (optional — freshness)
+        ├── external_table_demo/             (optional — external_snowflake_table)
         └── dbt_project/                     (optional — dbt)
 ```
 

@@ -470,6 +470,39 @@ if [ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ]; then
   prompt_default "Fail if no update within N hours"           FRESH_FAIL_HOURS "26"
 fi
 
+# snowpark_pipeline — the Snowpark DataFrame parallel to warehouse_pipeline.
+# Same multi-step shape (steps + ref + op:sql + multi-sink), but uses
+# Snowpark's lazy DataFrame API instead of compiling to CTAS+CTEs. Shows
+# customers that Dagster works equally well with either Snowflake compute
+# paradigm — pure SQL OR DataFrame.
+read -r -p "Add a snowpark_pipeline (DataFrame-API parallel to warehouse_pipeline)? [y/N] " WANT_SNOWPARK
+WANT_SNOWPARK="${WANT_SNOWPARK:-n}"
+SP_ORDERS=""
+SP_CUSTOMERS=""
+SP_OUT_SCHEMA=""
+if [ "$WANT_SNOWPARK" = "y" ] || [ "$WANT_SNOWPARK" = "Y" ]; then
+  prompt_default "Orders-like table for snowpark_pipeline"        SP_ORDERS    "${PIPE_ORDERS:-RAW.ORDERS}"
+  prompt_default "Customers-like table for snowpark_pipeline"     SP_CUSTOMERS "${PIPE_CUSTOMERS:-RAW.CUSTOMERS}"
+  prompt_default "Output schema for snowpark_pipeline sink tables" SP_OUT_SCHEMA "${PIPE_OUT_SCHEMA:-ANALYTICS}"
+fi
+
+# external_snowflake_table — declare-only lineage. Useful for "this table
+# is owned by another team / managed outside Dagster, but we want to
+# depend on it." Common enterprise pattern.
+read -r -p "Declare an external_snowflake_table (lineage to a table you don't manage)? [y/N] " WANT_EXTERNAL
+WANT_EXTERNAL="${WANT_EXTERNAL:-n}"
+EXT_DATABASE=""
+EXT_SCHEMA=""
+EXT_TABLE=""
+EXT_KEY=""
+if [ "$WANT_EXTERNAL" = "y" ] || [ "$WANT_EXTERNAL" = "Y" ]; then
+  prompt_default "Database of the externally-managed table"       EXT_DATABASE "$SNOW_DATABASE"
+  prompt_default "Schema of the externally-managed table"         EXT_SCHEMA   "RAW"
+  prompt_default "Table name"                                     EXT_TABLE    "PRODUCTS"
+  EXT_KEY_DEFAULT=$(echo "external/$EXT_DATABASE/$EXT_SCHEMA/$EXT_TABLE" | tr '[:upper:]' '[:lower:]')
+  prompt_default "Dagster asset key for this external reference"  EXT_KEY      "$EXT_KEY_DEFAULT"
+fi
+
 # dbt — Dagster's official `dagster-dbt` integration. Scaffolds a tiny
 # dbt project (dbt_project.yml + profiles.yml + 2 models) inside the
 # Dagster project. The DbtProjectComponent imports every model in the
@@ -504,7 +537,8 @@ if [ "$REUSE_EXISTING" = "true" ]; then
   # a prior run with different selections don't linger.
   for d in snowflake_workspace regional_top_paid_pipeline cortex_demo \
            row_count_observer python_daily_events python_daily_events_to_snowflake \
-           freshness_check_demo dbt_project; do
+           freshness_check_demo dbt_project \
+           snowpark_pipeline_demo external_table_demo; do
     rm -rf "src/$PKG/defs/$d"
   done
   rm -rf dbt
@@ -554,6 +588,17 @@ if [ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ]; then
   echo ">>> Installing freshness_check component ..."
   $CLI add freshness_check --auto-install
   rm -rf "src/$PKG/defs/freshness_check"
+fi
+if [ "$WANT_SNOWPARK" = "y" ] || [ "$WANT_SNOWPARK" = "Y" ]; then
+  echo ">>> Installing snowpark_pipeline component ..."
+  $CLI add snowpark_pipeline --auto-install
+  rm -rf "src/$PKG/defs/snowpark_pipeline"
+  uv add -q 'snowflake-snowpark-python>=1.10.0'
+fi
+if [ "$WANT_EXTERNAL" = "y" ] || [ "$WANT_EXTERNAL" = "Y" ]; then
+  echo ">>> Installing external_snowflake_table component ..."
+  $CLI add external_snowflake_table --auto-install
+  rm -rf "src/$PKG/defs/external_snowflake_table"
 fi
 if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then
   echo ">>> Installing dagster-dbt + dbt-snowflake ..."
@@ -757,7 +802,72 @@ attributes:
   warn_window_hours: $(echo "$FRESH_FAIL_HOURS / 2" | bc 2>/dev/null || echo "12")"
 fi
 
-# ── 15. Optional dbt project ───────────────────────────────────────────
+# ── 15a. Optional snowpark_pipeline ────────────────────────────────────
+# DataFrame-API parallel to warehouse_pipeline. Same multi-step shape
+# (steps/ref/op:sql/multi-sink) but uses Snowpark's lazy DataFrame
+# API and compiles to ONE Snowflake SQL statement per sink server-side.
+if [ "$WANT_SNOWPARK" = "y" ] || [ "$WANT_SNOWPARK" = "Y" ]; then
+  write_yaml "snowpark_pipeline_demo" "type: $PKG.components.snowpark_pipeline.component.SnowparkPipelineComponent
+attributes:
+  asset_name: snowpark_pipeline_demo
+  connection:
+    account_env_var:  SNOWFLAKE_ACCOUNT
+    user_env_var:     SNOWFLAKE_USER
+    password_env_var: SNOWFLAKE_PASSWORD
+    warehouse: \"$SNOW_WAREHOUSE\"
+    database:  \"$SNOW_DATABASE\"
+    schema:    \"$SNOW_SCHEMA\"
+  steps:
+    - id: delivered_orders
+      source: {kind: table, table: $SP_ORDERS}
+      operations:
+        - {op: filter, predicate: \"STATUS = 'delivered'\"}
+
+    - id: vip_customers
+      source: {kind: table, table: $SP_CUSTOMERS}
+      operations:
+        - {op: filter, predicate: \"LIFETIME_VALUE > 3000\"}
+
+    - id: enriched
+      source: {kind: ref, ref: delivered_orders}
+      operations:
+        - op: join
+          right: {ref: vip_customers}
+          on_columns: [CUSTOMER_ID]
+          how: inner
+        - op: sql
+          sql: |
+            SELECT *, TOTAL * 0.20 AS PREMIUM_COMMISSION
+            FROM self
+        - op: group_by
+          group_by: [STATE]
+          aggregations:
+            REVENUE:               {col: TOTAL,              agg: sum}
+            TOTAL_PREMIUM_COMM:    {col: PREMIUM_COMMISSION, agg: sum}
+            ORDER_COUNT:           {col: ORDER_ID,           agg: count}
+
+  sinks:
+    - {from: enriched, kind: table, table: $SP_OUT_SCHEMA.SNOWPARK_PREMIUM_REVENUE, mode: overwrite}
+  group_name: snowflake_transforms"
+fi
+
+# ── 15b. Optional external_snowflake_table ─────────────────────────────
+# Declare-only asset — Dagster sees the table as an upstream / sibling
+# but doesn't manage it. Common enterprise pattern: another team owns
+# this table; we want it on our lineage graph without taking ownership.
+if [ "$WANT_EXTERNAL" = "y" ] || [ "$WANT_EXTERNAL" = "Y" ]; then
+  write_yaml "external_table_demo" "type: $PKG.components.external_snowflake_table.component.ExternalSnowflakeTableAsset
+attributes:
+  asset_key: \"$EXT_KEY\"
+  account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
+  database: \"$EXT_DATABASE\"
+  schema_name: \"$EXT_SCHEMA\"
+  table_name: \"$EXT_TABLE\"
+  group_name: external_tables
+  description: \"Externally-managed table — lineage only, Dagster does not write or refresh.\""
+fi
+
+# ── 16. Optional dbt project ───────────────────────────────────────────
 # Scaffolds a tiny dbt project inside the Dagster project and wires it
 # in via Dagster's OFFICIAL dagster-dbt integration. Models build on top
 # of RAW.* tables and materialize into the chosen target schema.
@@ -919,6 +1029,15 @@ $(if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then cat <<P
 P
 fi)
 $([ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ] && echo "  • freshness_check_demo fails if $FRESH_ASSET_KEY hasn't been updated in $FRESH_FAIL_HOURS hours")
+$(if [ "$WANT_SNOWPARK" = "y" ] || [ "$WANT_SNOWPARK" = "Y" ]; then cat <<P
+  • snowpark_pipeline_demo (DataFrame API parallel to warehouse_pipeline) —
+    same multi-step shape, but uses Snowpark's lazy DataFrame API.
+    Writes $SP_OUT_SCHEMA.SNOWPARK_PREMIUM_REVENUE. Side-by-side with
+    regional_top_paid_pipeline this shows Dagster works equally well
+    with either Snowflake compute paradigm (SQL CTAS vs DataFrame).
+P
+fi)
+$([ "$WANT_EXTERNAL" = "y" ] || [ "$WANT_EXTERNAL" = "Y" ] && echo "  • external_table_demo declares $EXT_KEY — lineage only, Dagster doesn't manage the table")
 $(if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then cat <<P
   • dbt project at ./dbt — 2 staging models + 1 mart (customer_revenue).
     Imported via Dagster's official dagster-dbt integration; each model
