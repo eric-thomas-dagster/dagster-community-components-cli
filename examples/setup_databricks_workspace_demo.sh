@@ -280,50 +280,42 @@ while true; do
     "$DATABRICKS_HOST/api/2.0/preview/scim/v2/Me" 2>/dev/null)
   [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
 
+  # Successful verification — break out. For any failure, fall through to
+  # the "didn't verify — continue anyway?" prompt so a customer who's
+  # testing the script flow (bogus values, offline, behind a VPN, …) can
+  # press through with one keystroke.
   case "$HTTP_CODE" in
     200) echo "  ✓ Token authenticates."; break ;;
     404) echo "  ✓ Endpoint missing (HTTP 404) — your host may be older, continuing anyway."; break ;;
-    401|403)
-      echo "  ✗ HTTP $HTTP_CODE — token rejected."
-      echo "    [1] Enter a different token"
-      echo "    [2] Skip verification (accept this token as-is — useful if behind VPN/proxy)"
-      echo "    [3] Quit"
-      read -r -p "    Choice [1/2/3]: " TOKEN_CHOICE
-      case "${TOKEN_CHOICE:-1}" in
-        2) echo "  ⚠ Skipping verification — token accepted as-is."; break ;;
-        3) echo "  Aborting."; exit 1 ;;
-        *) DATABRICKS_TOKEN=""; TOKEN_ASKED_ENV=1 ;;  # back to "enter token"
-      esac
-      ;;
-    000)
-      echo "  ✗ Could not reach $DATABRICKS_HOST (DNS / network / hostname wrong)."
-      echo "    [1] Enter a different host"
-      echo "    [2] Skip verification (accept this host+token as-is — useful when offline)"
-      echo "    [3] Quit"
-      read -r -p "    Choice [1/2/3]: " HOST_CHOICE
-      case "${HOST_CHOICE:-1}" in
-        2) echo "  ⚠ Skipping verification — host+token accepted as-is."; break ;;
-        3) echo "  Aborting."; exit 1 ;;
-        *)
-          read -r -p "    New Databricks host (e.g. https://dbc-abc123.cloud.databricks.com): " NEW_HOST
-          if [ -n "$NEW_HOST" ]; then
-            DATABRICKS_HOST="${NEW_HOST%/}"
-          fi
-          ;;
-      esac
+    401|403) echo "  ✗ HTTP $HTTP_CODE — token rejected by $DATABRICKS_HOST." ;;
+    000)     echo "  ✗ Could not reach $DATABRICKS_HOST (DNS / network / hostname wrong)." ;;
+    *)       echo "  ✗ Unexpected HTTP $HTTP_CODE from $DATABRICKS_HOST." ;;
+  esac
+
+  # Single "continue anyway?" prompt. Default is N — so a customer just
+  # hitting Enter goes back to re-entering, but a `y` accepts bogus values
+  # for testing / offline / VPN scenarios.
+  echo "    These values weren't verified. Common reasons: typo, behind a"
+  echo "    VPN/proxy, offline, or you're testing the script flow."
+  read -r -p "    Continue with this host + token anyway? [y/N]: " CONT_ANYWAY
+  case "${CONT_ANYWAY:-n}" in
+    y|Y|yes|YES|Yes)
+      echo "  ⚠ Skipping verification — host + token accepted as-is."
+      break
       ;;
     *)
-      echo "  ✗ Unexpected HTTP $HTTP_CODE — check host/token."
-      echo "    [1] Re-enter token"
-      echo "    [2] Re-enter host"
-      echo "    [3] Skip verification"
-      echo "    [4] Quit"
-      read -r -p "    Choice [1/2/3/4]: " OTHER_CHOICE
-      case "${OTHER_CHOICE:-1}" in
-        2) read -r -p "    New host: " NEW_HOST; [ -n "$NEW_HOST" ] && DATABRICKS_HOST="${NEW_HOST%/}" ;;
-        3) echo "  ⚠ Skipping verification."; break ;;
-        4) echo "  Aborting."; exit 1 ;;
-        *) DATABRICKS_TOKEN=""; TOKEN_ASKED_ENV=1 ;;
+      echo "    What would you like to do?"
+      echo "      [t] Re-enter token"
+      echo "      [h] Re-enter host  (current: $DATABRICKS_HOST)"
+      echo "      [q] Quit"
+      read -r -p "    Choice [t/h/q]: " RETRY_CHOICE
+      case "${RETRY_CHOICE:-t}" in
+        h|H)
+          read -r -p "    New Databricks host (e.g. https://dbc-abc123.cloud.databricks.com): " NEW_HOST
+          [ -n "$NEW_HOST" ] && DATABRICKS_HOST="${NEW_HOST%/}"
+          ;;
+        q|Q) echo "  Aborting."; exit 1 ;;
+        *)   DATABRICKS_TOKEN=""; TOKEN_ASKED_ENV=1 ;;  # re-enter token
       esac
       ;;
   esac
