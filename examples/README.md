@@ -84,6 +84,7 @@ Components that push the compute to the engine instead of materializing through 
 | [Polars-native pushdown](polars_pushdown.md) | `synthetic_data_generator`, `dataframe_to_parquet`, `polars_scan_parquet`, `polars_pipeline` | Predicate + column pushdown to parquet, then 5-op LazyFrame chain in one asset (filter → with_columns → group_by → sort → head). Demonstrates what the per-asset `backend: polars` field architecturally can't deliver. |
 | [Polars pipeline (standalone)](polars_pipeline.md) | `synthetic_data_generator`, `polars_pipeline` | Same single-asset multi-op chain pattern, taking pandas DataFrame input (no parquet step). Useful when upstream is already in-memory. |
 | [PySpark pipeline](pyspark_pipeline.md) | `synthetic_data_generator`, `dataframe_to_parquet`, `pyspark_pipeline` | Multi-step Spark DataFrame chain compiled to ONE Catalyst plan. `local[*]` Spark for the demo; same YAML retargets to Standalone / YARN / Kubernetes / Databricks Connect. Requires Java 17+. |
+| [Snowpark pipeline](snowpark_pipeline.md) **(needs Snowflake creds)** | `snowpark_pipeline` | Multi-step Snowpark DataFrame chain compiled to ONE Snowflake SQL statement. Whole pipeline runs server-side in the Snowflake compute warehouse — no data through Python. Code-level validated; end-to-end run needs `SNOWFLAKE_ACCOUNT` / `SNOWFLAKE_USER` / `SNOWFLAKE_PASSWORD` plus a source table in `RAW.ORDERS`. |
 
 ### Database replication + migration
 
