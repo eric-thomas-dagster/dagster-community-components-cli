@@ -717,16 +717,28 @@ echo
 echo "─────────────────────────────────────────────────────────────────────"
 echo "  Cross-job dependencies"
 echo "─────────────────────────────────────────────────────────────────────"
+echo "These are CROSS-JOB deps (job → job). Within-job task deps are"
+echo "auto-discovered by DatabricksWorkspaceComponent from each job's own"
+echo "depends_on; don't re-declare them here."
+echo
+echo "Selected jobs (reference numbers for the prompt below):"
+for i in "${!SELECTED_IDS[@]}"; do
+  printf "  [%d] job_id=%-10s  %s\n" "$((i+1))" "${SELECTED_IDS[$i]}" "${SELECTED_NAMES[$i]}"
+done
+echo
 echo "For each selected job, list which OTHER selected jobs it depends on"
-echo "(by their number above, comma-separated). Press Enter for none."
+echo "(by their [N] reference number, comma-separated). Press Enter for none."
 echo
 
 DEPS_FOR_JOB=()
+# Parallel array DEPS_IDX_FOR_JOB holds the dep INDICES (1-based) for cycle detection.
+DEPS_IDX_FOR_JOB=()
 for i in "${!SELECTED_NAMES[@]}"; do
   NAME="${SELECTED_NAMES[$i]}"
   while true; do
     read -r -p "  [$((i+1))] '$NAME' depends on: " RAW_DEPS
     DEP_NAMES=""
+    DEP_IDXS=""
     BAD=false
     if [ -n "$RAW_DEPS" ]; then
       OLD_IFS="$IFS"; IFS=','
@@ -745,15 +757,68 @@ for i in "${!SELECTED_NAMES[@]}"; do
         fi
         D_NAME="${SELECTED_NAMES[$((didx-1))]}"
         DEP_NAMES="${DEP_NAMES}${D_NAME}|"
+        DEP_IDXS="${DEP_IDXS}${didx},"
       done
       IFS="$OLD_IFS"
       [ "$BAD" = "true" ] && continue
       DEP_NAMES="${DEP_NAMES%|}"
+      DEP_IDXS="${DEP_IDXS%,}"
     fi
     DEPS_FOR_JOB+=("$DEP_NAMES")
+    DEPS_IDX_FOR_JOB+=("$DEP_IDXS")
     break
   done
 done
+
+# Cycle detection — DFS over the (1-based) index graph in DEPS_IDX_FOR_JOB.
+# If we find a back-edge, abort with a clear message rather than emitting a
+# defs.yaml whose dependency graph would loop at materialization time.
+has_cycle() {
+  local n=$N_SELECTED
+  # 0=unvisited, 1=on-stack, 2=done
+  local state=()
+  local k
+  for ((k=0; k<n; k++)); do state[k]=0; done
+  local stack_path=()
+  _dfs() {
+    local v=$1
+    state[v]=1
+    stack_path+=("$((v+1))")
+    local deps_csv="${DEPS_IDX_FOR_JOB[$v]}"
+    [ -z "$deps_csv" ] && { state[v]=2; unset 'stack_path[${#stack_path[@]}-1]'; return 0; }
+    local OLD_IFS="$IFS"; IFS=','
+    for didx in $deps_csv; do
+      IFS="$OLD_IFS"
+      local u=$((didx-1))
+      if [ "${state[u]}" = "1" ]; then
+        stack_path+=("$((u+1))")
+        echo "  ⚠ Cycle detected: ${stack_path[*]}"
+        return 1
+      elif [ "${state[u]}" = "0" ]; then
+        _dfs "$u" || return 1
+      fi
+    done
+    IFS="$OLD_IFS"
+    state[v]=2
+    unset 'stack_path[${#stack_path[@]}-1]'
+    return 0
+  }
+  for ((k=0; k<n; k++)); do
+    if [ "${state[k]}" = "0" ]; then
+      _dfs "$k" || return 1
+    fi
+  done
+  return 0
+}
+
+if ! has_cycle; then
+  echo
+  echo "    The dependency graph above contains a cycle. Dagster can't materialize"
+  echo "    a cyclic asset graph — please re-run and pick non-circular deps."
+  echo "    (Tip: within-job task deps are auto-discovered by the component;"
+  echo "     only list CROSS-JOB deps here.)"
+  exit 1
+fi
 
 # ── 7. Orchestration mode ──────────────────────────────────────────────
 # How should the assets be triggered? Three options:
@@ -933,7 +998,7 @@ index_for_name() {
   # Emit assets_by_job_task_key for every DOWNSTREAM job (has deps).
   # Each task in the downstream job gets:
   #   - deps: every task asset key of every upstream job
-  #   - automation_condition: eager
+  #   - automation_condition: "{{ dg.AutomationCondition.eager() }}"
   HAS_DEPS=false
   for d in "${DEPS_FOR_JOB[@]}"; do
     if [ -n "$d" ]; then HAS_DEPS=true; break; fi
@@ -974,7 +1039,7 @@ index_for_name() {
         for uk in "${UPSTREAM_KEYS[@]}"; do
           echo "            - \"$uk\""
         done
-        echo "          automation_condition: eager"
+        echo "          automation_condition: \"{{ dg.AutomationCondition.eager() }}\""
       done
       IFS="$OLD_IFS"
     done
@@ -1069,7 +1134,7 @@ Orchestration:
     upstream completes. No further config needed.
 
 To pause the cron: set default_status: STOPPED in src/$PKG/defs/cron_schedule/defs.yaml.
-To pause the cascade: remove 'automation_condition: eager' lines from
+To pause the cascade: remove 'automation_condition' lines from
 $DEFS_YAML (downstream becomes manual-only).
 MSG
     ;;
