@@ -230,12 +230,69 @@ Supported `agg` values: `sum` / `mean` / `avg` / `min` / `max` / `count` / `nuni
 
 ### warehouse_pipeline
 
-Multi-step CTE chain compiled to ONE CTAS. Same op vocabulary as `polars_pipeline` and `snowpark_pipeline`. The shared shape fields above apply EXCEPT `upstream_table` — use `source:` instead.
+Multi-step CTE chain compiled to ONE CTAS plan **per sink**. Two YAML shapes — both compile to the same engine; pick whichever fits the asset:
+
+**Shape (a) — flat (one source, one ops chain, one sink):**
+
+```yaml
+source:
+  upstream_table: main.raw_orders
+operations:
+  - {op: filter, predicate: "status = 'paid'"}
+  - {op: group_by, group_by: [category],
+     aggregations: {revenue: {col: total, agg: sum}}}
+  - {op: top_n, sort_by: revenue, n: 5, ascending: false}
+output_table: main.top_5_categories_pipeline
+mode: replace
+```
+
+**Shape (b) — multi-step (multiple sources, inter-step refs, op:sql escape, multi-sink):**
+
+```yaml
+steps:
+  - id: delivered_orders
+    source: {kind: table, table: main.raw_orders}
+    operations:
+      - {op: filter, predicate: "status = 'delivered'"}
+
+  - id: vip_customers
+    source: {kind: table, table: main.raw_customers}
+    operations:
+      - {op: filter, predicate: "lifetime_value > 3000"}
+
+  - id: enriched
+    source: {kind: ref, ref: delivered_orders}
+    operations:
+      - {op: join, right: {ref: vip_customers}, on_columns: [customer_id], how: inner}
+      - op: sql
+        sql: "SELECT *, total * 0.15 AS commission FROM <<self>>"
+      - {op: group_by, group_by: [state],
+         aggregations: {revenue: {col: total, agg: sum},
+                         total_commission: {col: commission, agg: sum}}}
+
+  - id: top_states
+    source: {kind: ref, ref: enriched}
+    operations: [{op: top_n, sort_by: revenue, n: 3, ascending: false}]
+
+sinks:
+  - {from: enriched,   table: main.state_enriched, mode: replace}
+  - {from: top_states, table: main.top_3_states,   mode: replace}
+```
+
+The `regional_top_paid_multistep` asset in this demo exercises shape (b) end-to-end against DuckDB.
 
 | Field | Type | Required | Description |
 |---|---|---|---|
-| `source` | dict | yes | `{upstream_table: <name>}`. Inline SQL source planned for a future release |
-| `operations` | list[dict] | yes | Ordered ops compiled into one CTE chain |
+| `source` | dict | shape (a) | `{upstream_table: <name>}` or `{kind: table\|sql, ...}` |
+| `operations` | list[dict] | shape (a) | Ordered ops applied to `source` |
+| `output_table` | string | shape (a) | Destination table |
+| `mode` | string | (a) | `replace` (default) or `create_if_not_exists` |
+| `steps` | list[dict] | shape (b) | Named steps. Each: `{id, source: {kind: table\|ref\|sql, ...}, operations: [...]}` |
+| `sinks` | list[dict] | shape (b) | Each: `{from: <step_id>, table, mode}` |
+
+**Source kinds inside `steps[*].source`:** `table`, `ref` (an earlier step's output), `sql` (inline SELECT becomes a seed CTE).
+
+**The `op: sql` escape hatch.** Drop in raw SQL the DSL doesn't model. Use `<<self>>` to reference the previous CTE in this step, or `<<step_id>>` to reference any earlier step's output. Chevron syntax (not `{{ }}`) is used because Dagster pre-renders YAML through Jinja.
 
 Supported `operations[*].op` values:
 
@@ -252,8 +309,9 @@ Supported `operations[*].op` values:
 | `top_n_per_group` | `group_by`, `sort_by`, `n`, `ascending` | Top N per partition (uses SELECT * EXCEPT) |
 | `dedup` | `subset` + optional `order_by` + `descending` | ROW_NUMBER() = 1 |
 | `distinct` | (none) | `SELECT DISTINCT *` |
-| `union` | `other: <table>`, `distinct: bool`, `select_cols` | UNION / UNION ALL |
-| `join` | `right: <table>`, `how:`, `on_columns:` (or `left_on`+`right_on`), `select_cols` | Join with the running CTE chain on the left |
+| `union` | `other: <table>` OR `{ref: <step_id>}`, `distinct: bool`, `select_cols` | UNION / UNION ALL |
+| `join` | `right: <table>` OR `{ref: <step_id>}`, `how:`, `on_columns:` (or `left_on`+`right_on`), `select_cols` | Join with the running CTE chain on the left |
+| `sql` | `sql: <SELECT statement>` | Escape hatch. References `<<self>>` and `<<step_id>>` |
 
 ### Component READMEs (full reference)
 
