@@ -182,7 +182,7 @@ SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
   SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
   SF_PAT="$SNOW_PAT" \
   PRECHECK_OUT="$PRECHECK_OUT" \
-  uv run --quiet --with 'snowflake-connector-python' --no-project python - <<'PYEOF'
+  uv run --quiet --with 'snowflake-connector-python[secure-local-storage]' --no-project python - <<'PYEOF'
 import json, os, sys
 import snowflake.connector as sc
 
@@ -461,7 +461,7 @@ SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
   SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
   SF_PAT="$SNOW_PAT" \
   SF_SQL_FILE="$SQL_FILE" \
-  uv run --quiet --with 'snowflake-connector-python' --no-project python - <<'PYEOF'
+  uv run --quiet --with 'snowflake-connector-python[secure-local-storage]' --no-project python - <<'PYEOF'
 import os, re, sys, time
 import snowflake.connector as sc
 

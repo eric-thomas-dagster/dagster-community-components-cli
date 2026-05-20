@@ -261,7 +261,7 @@ PYHEAD
 SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_METHOD="$SNOW_AUTH_METHOD" SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" SF_PAT="$SNOW_PAT" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_DATABASE="$SNOW_DATABASE" SF_SCHEMA="$SNOW_SCHEMA" \
   SF_ROLE="$SNOW_ROLE" \
-  uv run --quiet --with 'snowflake-connector-python' --no-project python - <<EOF
+  uv run --quiet --with 'snowflake-connector-python[secure-local-storage]' --no-project python - <<EOF
 $SF_PY_PRELUDE
 cur.execute("SELECT CURRENT_VERSION()")
 row = cur.fetchone()
@@ -284,7 +284,7 @@ echo "────────────────────────�
 SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_METHOD="$SNOW_AUTH_METHOD" SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" SF_PAT="$SNOW_PAT" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_DATABASE="$SNOW_DATABASE" SF_SCHEMA="$SNOW_SCHEMA" \
   SF_ROLE="$SNOW_ROLE" INV_OUT="$INV_OUT" \
-  uv run --quiet --with 'snowflake-connector-python' --no-project python - <<EOF
+  uv run --quiet --with 'snowflake-connector-python[secure-local-storage]' --no-project python - <<EOF
 $SF_PY_PRELUDE
 inv = {"types": {}}
 # Per-type discovery queries. Wrap each in try/except so a permission error
