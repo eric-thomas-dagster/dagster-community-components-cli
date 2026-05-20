@@ -27,16 +27,32 @@
 
 set -eo pipefail
 
-# This script is interactive — prompts the user for every input.
-# Refuse to run in non-interactive mode (e.g. piped from curl) so prompts
-# don't silently fail when stdin is exhausted.
+# This script is interactive — prompts the user for project name, host,
+# token, job selection, dep wiring, schedule, etc. (Databricks setup
+# can't be canned into a single static demo; every workspace is shaped
+# differently.) Refuse to run when stdin isn't a TTY (e.g. piped from
+# curl) — prompts would silently fail with stdin exhausted.
 if [ ! -t 0 ]; then
-  echo "ERROR: this script is interactive — it asks for project name, host, token, etc."
-  echo "       Download it first, then run from a terminal:"
-  echo
-  echo "  curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_databricks_workspace_demo.sh -o setup_databricks_workspace_demo.sh"
-  echo "  chmod +x setup_databricks_workspace_demo.sh"
-  echo "  ./setup_databricks_workspace_demo.sh"
+  cat <<'NONINTERACTIVE_GUARD'
+════════════════════════════════════════════════════════════════════
+  This is an INTERACTIVE script — it can't be run via `curl | bash`.
+  It prompts you for project name, Databricks host, token, which
+  jobs to bring in, dep wiring between jobs, and the cron schedule.
+
+  Download it first, then run from a terminal:
+
+    curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_databricks_workspace_demo.sh -o setup_databricks_workspace_demo.sh
+    chmod +x setup_databricks_workspace_demo.sh
+    ./setup_databricks_workspace_demo.sh
+
+  Tip: set $DATABRICKS_HOST and $DATABRICKS_TOKEN in your shell first
+  and the script will pick them up as defaults.
+════════════════════════════════════════════════════════════════════
+NONINTERACTIVE_GUARD
+  # Drain any remaining stdin so the upstream `curl` finishes writing
+  # without SIGPIPE (which would emit a misleading "curl: (56)" error
+  # after our clean message above).
+  cat >/dev/null 2>&1 || true
   exit 1
 fi
 
