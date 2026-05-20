@@ -248,13 +248,18 @@ while true; do
 done
 
 # ── 3. Databricks token (verified) ─────────────────────────────────────
+# `confirm_only_once` controls the "Use $DATABRICKS_TOKEN from env?" prompt —
+# we only ask once per token entry, not on every retry, so verification
+# failures don't bounce the user back to that question.
+TOKEN_ASKED_ENV=0
 while true; do
-  if [ -n "${DATABRICKS_TOKEN:-}" ]; then
+  if [ -n "${DATABRICKS_TOKEN:-}" ] && [ "$TOKEN_ASKED_ENV" = "0" ]; then
     if confirm "Use \$DATABRICKS_TOKEN from environment?"; then
       :
     else
       DATABRICKS_TOKEN=""
     fi
+    TOKEN_ASKED_ENV=1
   fi
   if [ -z "${DATABRICKS_TOKEN:-}" ]; then
     read -r -s -p "Databricks personal access token (input hidden): " DATABRICKS_TOKEN
@@ -265,17 +270,62 @@ while true; do
     continue
   fi
 
-  # Verify by hitting an endpoint that needs only basic auth scope
+  # Verify by hitting an endpoint that needs only basic auth scope.
+  # NB: curl's %{http_code} format already prints "000" on connection
+  # failure, and exits non-zero — so DON'T also `|| echo "000"` (that
+  # would append, producing "000000"). Capture stdout cleanly.
   echo "  Verifying token against $DATABRICKS_HOST ..."
   HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" \
     -H "Authorization: Bearer $DATABRICKS_TOKEN" \
-    "$DATABRICKS_HOST/api/2.0/preview/scim/v2/Me" || echo "000")
+    "$DATABRICKS_HOST/api/2.0/preview/scim/v2/Me" 2>/dev/null)
+  [ -z "$HTTP_CODE" ] && HTTP_CODE="000"
+
   case "$HTTP_CODE" in
     200) echo "  ✓ Token authenticates."; break ;;
-    401|403) echo "  ✗ HTTP $HTTP_CODE — token rejected. Try again." ; DATABRICKS_TOKEN="" ;;
     404) echo "  ✓ Endpoint missing (HTTP 404) — your host may be older, continuing anyway."; break ;;
-    000) echo "  ✗ Could not reach $DATABRICKS_HOST. Check the URL + network." ;;
-    *)   echo "  ✗ Unexpected HTTP $HTTP_CODE — check host/token." ;;
+    401|403)
+      echo "  ✗ HTTP $HTTP_CODE — token rejected."
+      echo "    [1] Enter a different token"
+      echo "    [2] Skip verification (accept this token as-is — useful if behind VPN/proxy)"
+      echo "    [3] Quit"
+      read -r -p "    Choice [1/2/3]: " TOKEN_CHOICE
+      case "${TOKEN_CHOICE:-1}" in
+        2) echo "  ⚠ Skipping verification — token accepted as-is."; break ;;
+        3) echo "  Aborting."; exit 1 ;;
+        *) DATABRICKS_TOKEN=""; TOKEN_ASKED_ENV=1 ;;  # back to "enter token"
+      esac
+      ;;
+    000)
+      echo "  ✗ Could not reach $DATABRICKS_HOST (DNS / network / hostname wrong)."
+      echo "    [1] Enter a different host"
+      echo "    [2] Skip verification (accept this host+token as-is — useful when offline)"
+      echo "    [3] Quit"
+      read -r -p "    Choice [1/2/3]: " HOST_CHOICE
+      case "${HOST_CHOICE:-1}" in
+        2) echo "  ⚠ Skipping verification — host+token accepted as-is."; break ;;
+        3) echo "  Aborting."; exit 1 ;;
+        *)
+          read -r -p "    New Databricks host (e.g. https://dbc-abc123.cloud.databricks.com): " NEW_HOST
+          if [ -n "$NEW_HOST" ]; then
+            DATABRICKS_HOST="${NEW_HOST%/}"
+          fi
+          ;;
+      esac
+      ;;
+    *)
+      echo "  ✗ Unexpected HTTP $HTTP_CODE — check host/token."
+      echo "    [1] Re-enter token"
+      echo "    [2] Re-enter host"
+      echo "    [3] Skip verification"
+      echo "    [4] Quit"
+      read -r -p "    Choice [1/2/3/4]: " OTHER_CHOICE
+      case "${OTHER_CHOICE:-1}" in
+        2) read -r -p "    New host: " NEW_HOST; [ -n "$NEW_HOST" ] && DATABRICKS_HOST="${NEW_HOST%/}" ;;
+        3) echo "  ⚠ Skipping verification."; break ;;
+        4) echo "  Aborting."; exit 1 ;;
+        *) DATABRICKS_TOKEN=""; TOKEN_ASKED_ENV=1 ;;
+      esac
+      ;;
   esac
 done
 
