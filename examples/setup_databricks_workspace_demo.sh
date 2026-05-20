@@ -337,9 +337,57 @@ while true; do
   fi
   PAGE_JSON=$(curl -sf -H "Authorization: Bearer $DATABRICKS_TOKEN" "$URL" || echo "")
   if [ -z "$PAGE_JSON" ]; then
-    echo "ERROR: Jobs API call failed on page $PAGE."
-    exit 1
+    echo "  ✗ Jobs API call failed on page $PAGE (host unreachable or token lacks Jobs:Read)."
+    echo
+    echo "  If you're testing the script flow (bogus values, offline, no workspace yet)"
+    echo "  you can fall back to a small set of FIXTURE jobs that exercise the"
+    echo "  rest of the script — selection, dep wiring, schedule, scaffold."
+    echo "  The resulting Dagster project won't run against any real workspace,"
+    echo "  but you'll see the full UX end-to-end."
+    read -r -p "  Use fixture jobs to walk through the remaining flow? [y/N]: " USE_FIXTURE
+    case "${USE_FIXTURE:-n}" in
+      y|Y|yes|YES|Yes)
+        echo "  ⚠ Using fixture jobs. The scaffolded project will point at fake job IDs."
+        # Flag the per-job task lookup to read from ALL_JOBS_JSON instead of hitting the API
+        USE_FIXTURE_TASKS=1
+        # 5 realistic-shaped fake jobs covering single-task, linear, diamond, and fan-out DAGs.
+        ALL_JOBS_JSON='{"jobs":[
+          {"job_id":100001,"settings":{"name":"bronze_ingest_orders","tasks":[
+            {"task_key":"main"}
+          ]}},
+          {"job_id":100002,"settings":{"name":"bronze_ingest_customers","tasks":[
+            {"task_key":"extract"},
+            {"task_key":"land","depends_on":[{"task_key":"extract"}]}
+          ]}},
+          {"job_id":100003,"settings":{"name":"silver_orders_clean","tasks":[
+            {"task_key":"validate"},
+            {"task_key":"dedup","depends_on":[{"task_key":"validate"}]},
+            {"task_key":"enrich","depends_on":[{"task_key":"dedup"}]}
+          ]}},
+          {"job_id":100004,"settings":{"name":"silver_customers_clean","tasks":[
+            {"task_key":"normalize"},
+            {"task_key":"geocode","depends_on":[{"task_key":"normalize"}]},
+            {"task_key":"merge","depends_on":[{"task_key":"geocode"}]}
+          ]}},
+          {"job_id":100005,"settings":{"name":"gold_revenue_summary","tasks":[
+            {"task_key":"join_orders_customers"},
+            {"task_key":"by_region","depends_on":[{"task_key":"join_orders_customers"}]},
+            {"task_key":"by_category","depends_on":[{"task_key":"join_orders_customers"}]},
+            {"task_key":"final_report","depends_on":[
+              {"task_key":"by_region"},{"task_key":"by_category"}
+            ]}
+          ]}}
+        ]}'
+        break
+        ;;
+      *)
+        echo "  Aborting."
+        exit 1
+        ;;
+    esac
   fi
+  # Skip the next page logic when we just loaded fixtures
+  [ "$PAGE_JSON" = "" ] && break
   ALL_JOBS_JSON=$(jq -s '{jobs: (.[0].jobs + .[1].jobs)}' \
     <(echo "$ALL_JOBS_JSON") <(echo "$PAGE_JSON" | jq '{jobs: (.jobs // [])}'))
   NEXT_PAGE_TOKEN=$(echo "$PAGE_JSON" | jq -r '.next_page_token // empty')
