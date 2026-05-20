@@ -339,14 +339,49 @@ while true; do
   if [ -z "$PAGE_JSON" ]; then
     echo "  ✗ Jobs API call failed on page $PAGE (host unreachable or token lacks Jobs:Read)."
     echo
-    echo "  If you're testing the script flow (bogus values, offline, no workspace yet)"
-    echo "  you can fall back to a small set of FIXTURE jobs that exercise the"
-    echo "  rest of the script — selection, dep wiring, schedule, scaffold."
-    echo "  The resulting Dagster project won't run against any real workspace,"
-    echo "  but you'll see the full UX end-to-end."
-    read -r -p "  Use fixture jobs to walk through the remaining flow? [y/N]: " USE_FIXTURE
-    case "${USE_FIXTURE:-n}" in
-      y|Y|yes|YES|Yes)
+    echo "  How would you like to proceed?"
+    echo "    [1] Enter job IDs manually  (recommended if you know which jobs to bring in,"
+    echo "                                 or your token has jobs/get but not jobs/list scope)"
+    echo "    [2] Use fixture jobs        (testing the script flow — fake job IDs, project"
+    echo "                                 won't run against a real workspace)"
+    echo "    [3] Quit"
+    read -r -p "  Choice [1/2/3]: " API_FAIL_CHOICE
+    case "${API_FAIL_CHOICE:-1}" in
+      1|"")
+        # Manual job-ID entry. The script's later per-job task-lookup will try
+        # the jobs/get API for each ID — that may or may not succeed depending
+        # on token scope / host. The graceful fallback there defaults to a
+        # single "main" task per job.
+        echo
+        read -r -p "  Job IDs (comma-separated, e.g. '12345,67890'): " MANUAL_IDS
+        if [ -z "$MANUAL_IDS" ]; then
+          echo "  No IDs entered. Aborting."
+          exit 1
+        fi
+        # Build a minimal ALL_JOBS_JSON with the manual IDs (name defaults to "job_<id>")
+        MANUAL_JSON='{"jobs":['
+        FIRST_ENTRY=1
+        OLD_IFS="$IFS"; IFS=','
+        for jid in $MANUAL_IDS; do
+          IFS="$OLD_IFS"
+          jid="${jid// /}"
+          [ -z "$jid" ] && continue
+          if [ "$FIRST_ENTRY" -eq 1 ]; then FIRST_ENTRY=0; else MANUAL_JSON="$MANUAL_JSON,"; fi
+          # Try to fetch the real job name via jobs/get; if that fails, fall back to "job_<id>"
+          NAME=$(curl -sf -H "Authorization: Bearer $DATABRICKS_TOKEN" \
+            "$DATABRICKS_HOST/api/2.1/jobs/get?job_id=$jid" 2>/dev/null \
+            | jq -r '.settings.name // empty' 2>/dev/null || echo "")
+          [ -z "$NAME" ] && NAME="job_$jid"
+          MANUAL_JSON="$MANUAL_JSON{\"job_id\":$jid,\"settings\":{\"name\":\"$NAME\"}}"
+          OLD_IFS="$IFS"; IFS=','
+        done
+        IFS="$OLD_IFS"
+        MANUAL_JSON="$MANUAL_JSON]}"
+        ALL_JOBS_JSON="$MANUAL_JSON"
+        echo "  ✓ Loaded $(echo "$ALL_JOBS_JSON" | jq '.jobs | length') job(s) from manual entry."
+        break
+        ;;
+      2)
         echo "  ⚠ Using fixture jobs. The scaffolded project will point at fake job IDs."
         # Flag the per-job task lookup to read from ALL_JOBS_JSON instead of hitting the API
         USE_FIXTURE_TASKS=1
@@ -380,8 +415,12 @@ while true; do
         ]}'
         break
         ;;
-      *)
+      3|q|Q)
         echo "  Aborting."
+        exit 1
+        ;;
+      *)
+        echo "  Invalid choice. Aborting."
         exit 1
         ;;
     esac
