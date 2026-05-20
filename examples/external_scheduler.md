@@ -192,6 +192,85 @@ The script returns 0 only on `LaunchRunSuccess` *and* a `success` final run
 status. That's how the scheduler knows whether to retry, alert, or chain
 forward.
 
+## Trigger + monitor — Dagster kicks OFF scheduler jobs (future direction)
+
+The two patterns above cover most real-world cases — scheduler stays in charge, or scheduler runs and Dagster observes. There's a *third* shape: **Dagster wants to trigger a scheduler-owned job and wait for its result before continuing**. Think of a Dagster asset that depends on a Control-M batch job, or a Dagster pipeline that needs to kick off an Autosys box and block until completion.
+
+This pattern looks like an integration component:
+
+```yaml
+type: dagster_component_templates.AutosysJobAsset    # hypothetical
+attributes:
+  asset_name: nightly_mainframe_extract
+  job_name: NIGHTLY_BOX
+  poll_interval_seconds: 30
+  timeout_seconds: 3600
+  on_failure: raise    # or 'warn', 'skip'
+```
+
+At materialize time it would:
+1. Call the scheduler's REST API to kick off the named job (or job stream)
+2. Poll the same API until the job reaches a terminal state
+3. Emit metadata: `scheduler_run_id`, `start_time`, `duration_seconds`, `exit_code`, `log_url`
+4. Return `MaterializeResult` (success) or raise (failure) so downstream assets gate correctly
+
+This is the shape that lets Dagster compose with a scheduler-owned dependency — useful when the upstream lives in Control-M/Autosys but the downstream lineage and observability live in Dagster.
+
+### Status across schedulers
+
+| Scheduler | Trigger API | Status / poll API | Community-fair-game? |
+|---|---|---|---|
+| **Control-M** | REST `/automation-api/run/order/` | REST `/automation-api/run/jobs/<id>` | **No — commercial reserve.** Control-M trigger+monitor is built as a separate paid offering. Won't ship to the community registry. |
+| **IBM TWS / z/OS workload automation** | conman + Z/OS DDR | conman / DDR | **No — commercial reserve.** Same rationale as Control-M (mainframe footprint, paid engagement model). |
+| **Autosys (Workload Automation AE)** | WAAE REST `/aedb/api/v2/jobs/<name>/run` | WAAE REST `/aedb/api/v2/jobs/<name>` | Yes — community can ship `autosys_job_asset` |
+| **CA WA ESP** | iXp REST `/v1/executejob` | iXp REST `/v1/jobinfo` | Yes — community `esp_job_asset` |
+| **JAMS** | JAMS REST `/api/Jobs/Submit` | `/api/History/<id>` | Yes — community `jams_job_asset` |
+| **Stonebranch UAC** | UAC REST `/resources/task/runtask` | `/resources/taskinstance/<id>` | Yes — community `stonebranch_task_asset` |
+| **Redwood RMS** | RMS REST `/api/processes/submit` | `/api/processes/<id>` | Yes — community `redwood_process_asset` |
+| **Tidal** | Tidal REST `/api/scheduler/jobs/submit` | `/api/scheduler/jobs/<id>` | Yes — community `tidal_job_asset` |
+| **Airflow** | Airflow REST `/api/v1/dags/<id>/dagRuns` | `/api/v1/dags/<id>/dagRuns/<run_id>` | **Use the official `dagster-airlift`** package — it's a richer Airflow-Dagster integration than a custom component would be. |
+| **Jenkins** | Jenkins REST `/job/<name>/buildWithParameters` | `/job/<name>/<build>/api/json` | Yes — community `jenkins_job_asset` |
+| **cron** | n/a — cron has no API | n/a | Not applicable; cron is fire-and-forget |
+
+### Pattern for the community-fair-game ones
+
+The component shape is uniform across schedulers — just like the observation-sensor shape was. ~150 lines of vendor SDK glue per scheduler:
+
+```python
+# Pseudo-code shared by every scheduler-trigger asset:
+@asset(deps=[...])
+def scheduler_owned_step(context: AssetExecutionContext):
+    client = <vendor SDK>
+    run_id = client.submit(job_name, parameters=...)
+    context.log.info(f"Submitted {job_name} → run_id={run_id}")
+
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        status = client.get_status(run_id)
+        if status.state in TERMINAL:
+            break
+        time.sleep(poll_interval_seconds)
+    else:
+        client.cancel(run_id)
+        raise TimeoutError(f"{job_name} did not finish in {timeout_seconds}s")
+
+    if status.state != SUCCESS:
+        raise RuntimeError(f"{job_name} failed: {status.message}")
+
+    return MaterializeResult(metadata={
+        "scheduler_run_id":      MetadataValue.text(run_id),
+        "scheduler_start_time":  MetadataValue.text(status.start_time.isoformat()),
+        "scheduler_duration_s":  MetadataValue.float(status.duration_seconds),
+        "scheduler_log_url":     MetadataValue.url(status.log_url),
+    })
+```
+
+### Status today (registry)
+
+None of the trigger+monitor components are in the community registry yet — they've been roadmap items but lower priority than the kick-off-direction script (which covers the common case). If you need one for a specific scheduler, open an issue or contribute one — they're tractable (<200 LOC plus tests) once you have the vendor's REST API doc in hand.
+
+For **Control-M** and **IBM TWS / z/OS**, the trigger+monitor capability is built as a separate paid offering and won't ship in the community registry. If that's your target, contact Dagster Labs for the commercial path. The observation-direction story for those is also commercial — same reasoning.
+
 ## Auth notes — local vs Dagster+
 
 | Target | Auth | Header |
@@ -204,10 +283,16 @@ If you're testing against Dagster+ from your laptop, the same script works:
 just set `DAGSTER_PLUS_USER_TOKEN` and point `DAGSTER_GRAPHQL_URL` at the
 deployment. No code changes.
 
-## What this isn't
+## What this demo covers vs the broader story
 
-This isn't a "let Dagster trigger Control-M" demo — that's the reverse
-direction (Dagster orchestrates external systems) and is its own commercial
-integration. This demo is the case where customers say *"we already have a
-scheduler, we just need Dagster to be the executor"*. That's a much simpler
-problem and doesn't need a component at all — just a documented script.
+This demo is the case where customers say *"we already have a scheduler, we just need Dagster to be the executor"*. That's a simple problem — a documented `curl` script, no component required.
+
+The other two directions are real but live in different components:
+
+| Direction | Pattern | Where |
+|---|---|---|
+| Scheduler → Dagster (this demo) | `curl` to GraphQL | the `bin/kick_off_run.sh` script |
+| Scheduler → runs job → Dagster watches | per-vendor observation sensor | see *Observability* section above |
+| Dagster → triggers scheduler → waits → continues | per-vendor `*_job_asset` component | see *Trigger + monitor* section above |
+
+Control-M and IBM TWS (and the broader z/OS workload-automation family) are reserved for the **commercial** offering across all three directions — the community registry stays clean of them. Every other scheduler in the table is community-fair-game.
