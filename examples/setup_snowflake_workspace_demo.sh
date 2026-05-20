@@ -245,7 +245,7 @@ elif auth == 'sso':
     ck['authenticator'] = 'externalbrowser'
 elif auth == 'pat':
     ck['authenticator'] = 'PROGRAMMATIC_ACCESS_TOKEN'
-    ck['password'] = os.environ.get('SF_PAT', '')
+    ck['token'] = os.environ.get('SF_PAT', '')
 else:
     ck['password'] = os.environ.get('SF_PASS', '')
 try:
@@ -711,10 +711,11 @@ snow_auth_fields_direct() {
       printf '%sauthenticator: externalbrowser\n' "$I"
       ;;
     pat)
-      # PAT uses authenticator=PROGRAMMATIC_ACCESS_TOKEN with the token
-      # in the `password` field per Snowflake's connector contract.
+      # PAT uses authenticator=PROGRAMMATIC_ACCESS_TOKEN with the token in
+      # the dedicated `token` field. Components patched in templates commit
+      # bfadf23d already accept `token` as an Optional[str] field.
       printf '%sauthenticator: PROGRAMMATIC_ACCESS_TOKEN\n' "$I"
-      printf '%spassword: "{{ env('"'"'SNOWFLAKE_PAT'"'"') }}"\n' "$I"
+      printf '%stoken: "{{ env('"'"'SNOWFLAKE_PAT'"'"') }}"\n' "$I"
       ;;
     password|*)
       printf '%spassword: "{{ env('"'"'SNOWFLAKE_PASSWORD'"'"') }}"\n' "$I"
@@ -737,7 +738,7 @@ snow_auth_fields_envvar() {
       ;;
     pat)
       printf '%sauthenticator: PROGRAMMATIC_ACCESS_TOKEN\n' "$I"
-      printf '%spassword_env_var: SNOWFLAKE_PAT\n' "$I"
+      printf '%stoken_env_var: SNOWFLAKE_PAT\n' "$I"
       ;;
     password|*)
       printf '%spassword_env_var: SNOWFLAKE_PASSWORD\n' "$I"
@@ -765,10 +766,12 @@ build_snowflake_url() {
         "${SNOW_ROLE:+&role=$SNOW_ROLE}"
       ;;
     pat)
-      # PAT goes as the password field of the URL with the PAT authenticator.
-      # URL-encoding NOT needed for JWT-style tokens (base64url-safe chars).
-      printf 'snowflake://%s:%s@%s/%s/%s?warehouse=%s&authenticator=PROGRAMMATIC_ACCESS_TOKEN%s' \
-        "$SNOW_USER" "$SNOW_PAT" "$SNOW_ACCOUNT" "$SNOW_DATABASE" "$SNOW_SCHEMA" "$SNOW_WAREHOUSE" \
+      # PAT goes as a `token` query param (snowflake-sqlalchemy >=1.5 supports
+      # this) with authenticator=PROGRAMMATIC_ACCESS_TOKEN. No user:pwd in
+      # the URL path — auth is via the token param.
+      printf 'snowflake://%s@%s/%s/%s?warehouse=%s&authenticator=PROGRAMMATIC_ACCESS_TOKEN&token=%s%s' \
+        "$SNOW_USER" "$SNOW_ACCOUNT" "$SNOW_DATABASE" "$SNOW_SCHEMA" "$SNOW_WAREHOUSE" \
+        "$SNOW_PAT" \
         "${SNOW_ROLE:+&role=$SNOW_ROLE}"
       ;;
     password|*)

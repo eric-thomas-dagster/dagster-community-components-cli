@@ -205,7 +205,7 @@ elif auth == 'sso':
     ck['authenticator'] = 'externalbrowser'
 elif auth == 'pat':
     ck['authenticator'] = 'PROGRAMMATIC_ACCESS_TOKEN'
-    ck['password'] = os.environ.get('SF_PAT', '')
+    ck['token'] = os.environ.get('SF_PAT', '')
 else:  # password
     ck['password'] = os.environ.get('SF_PASS', '')
 
