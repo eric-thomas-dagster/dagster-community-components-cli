@@ -121,7 +121,14 @@ Auto-installs `uv` if missing (with consent). Refuses piped invocation — it's 
    - **[r]euse** — keeps the existing venv + installed components, *overwrites* `src/<pkg>/defs/` and `dbt/` and `.env.demo` with this run's choices. Fastest path for stage iteration ("I want to re-run with the Cortex add-on this time").
    - **[d]elete** — `rm -rf` and rebuild from scratch (incl. fresh venv + component installs).
    - **[c]hange** — pick a different project name.
-2. **Credentials.** account / user / password (hidden) / warehouse / database / schema / role. Verified by running `SELECT CURRENT_VERSION()` against your account before going further; offers a "continue anyway" if the verify fails (useful when you're testing scaffolding offline).
+2. **Credentials.** account / user / **auth method** / warehouse / database / schema / role. Verified by running `SELECT CURRENT_VERSION()` against your account before going further; offers a "continue anyway" if the verify fails (useful when you're testing scaffolding offline).
+
+   **Auth method prompt** — pick the one your Snowflake account allows:
+   - **[1] Keypair** (RSA private key file) — **the default**, and the right choice for production. Works headless (Dagster's daemon for sensors + schedules doesn't need a browser); generated `.env.demo` exports `SNOWFLAKE_PRIVATE_KEY_FILE` (+ `_PWD` if your key is encrypted); every emitted `defs.yaml` uses `authenticator: SNOWFLAKE_JWT` + `private_key_file: …`. Most enterprise accounts disable password auth — keypair is what you'll actually use.
+   - **[2] SSO** (externalbrowser) — fine for laptop `dg dev` only. A browser tab pops the first time per session. **Doesn't work for the Dagster daemon** (sensors + scheduled runs can't open a browser), so if you pick this, the row-count observation sensor add-on won't be able to fire its checks until you re-auth.
+   - **[3] Password** — preserved for accounts that still allow it. Same `.env.demo` shape as before.
+
+   The same auth choice flows through into every generated artifact: `snowflake_workspace`, `snowflake_table_observation_sensor`, `snowpark_pipeline`, `snowflake_cortex_asset`, `dataframe_to_snowflake`, the SQLAlchemy URL for `warehouse_pipeline`, AND `dbt/profiles.yml` (when you pick the dbt add-on). One choice; consistent config everywhere.
 3. **Discovery.** Queries `INFORMATION_SCHEMA.*` + `SHOW <kind>` for every entity type and prints counts:
    ```
    tasks                    12  daily_etl_orders, hourly_clickstream, monthly_revenue + 9 more

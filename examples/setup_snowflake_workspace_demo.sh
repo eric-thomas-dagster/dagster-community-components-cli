@@ -135,20 +135,70 @@ prompt_default() {
 
 prompt_default "Snowflake account (e.g. xy12345.us-east-1 or org-account)" SNOW_ACCOUNT "${SNOWFLAKE_ACCOUNT:-}"
 prompt_default "Username" SNOW_USER "${SNOWFLAKE_USER:-}"
-if [ -n "${SNOWFLAKE_PASSWORD:-}" ]; then
-  echo "Password: [using \$SNOWFLAKE_PASSWORD from env]"
-  SNOW_PASS="$SNOWFLAKE_PASSWORD"
-else
-  read -r -s -p "Password (hidden): " SNOW_PASS
-  echo
-fi
+
+# Auth method — keypair is the recommended default (headless, works with
+# Dagster's daemon for sensors + schedules). Password preserved for accounts
+# that still allow it. SSO is fine for laptop `dg dev` but the daemon can't
+# do browser auth.
+echo
+echo "Authentication method:"
+echo "  [1] Keypair (RSA private key file) — headless, recommended"
+echo "  [2] SSO (externalbrowser) — pops a browser; OK for laptop dg dev only"
+echo "  [3] Password (if your account still allows it)"
+read -r -p "Choice [1]: " AUTH_CHOICE
+AUTH_CHOICE="${AUTH_CHOICE:-1}"
+SNOW_AUTH_METHOD=""
+SNOW_PASS=""
+SNOW_KEY_FILE=""
+SNOW_KEY_PWD=""
+case "$AUTH_CHOICE" in
+  1|keypair)
+    SNOW_AUTH_METHOD="keypair"
+    prompt_default "Path to RSA private key file (PEM/P8)" SNOW_KEY_FILE \
+      "${SNOWFLAKE_PRIVATE_KEY_FILE:-$HOME/.ssh/snowflake_rsa_key.p8}"
+    if [ ! -f "$SNOW_KEY_FILE" ]; then
+      echo "  ⚠ Key file not found: $SNOW_KEY_FILE"
+      exit 1
+    fi
+    if [ -n "${SNOWFLAKE_PRIVATE_KEY_FILE_PWD:-}" ]; then
+      echo "Key passphrase: [using \$SNOWFLAKE_PRIVATE_KEY_FILE_PWD from env]"
+      SNOW_KEY_PWD="$SNOWFLAKE_PRIVATE_KEY_FILE_PWD"
+    else
+      read -r -s -p "Key passphrase (hidden; blank if key is unencrypted): " SNOW_KEY_PWD
+      echo
+    fi
+    ;;
+  2|sso)
+    SNOW_AUTH_METHOD="sso"
+    echo "  (SSO uses externalbrowser; a browser tab will open for auth)"
+    ;;
+  3|password)
+    SNOW_AUTH_METHOD="password"
+    if [ -n "${SNOWFLAKE_PASSWORD:-}" ]; then
+      echo "Password: [using \$SNOWFLAKE_PASSWORD from env]"
+      SNOW_PASS="$SNOWFLAKE_PASSWORD"
+    else
+      read -r -s -p "Password (hidden): " SNOW_PASS
+      echo
+    fi
+    ;;
+  *)
+    echo "  ⚠ Invalid choice — pick 1, 2, or 3."
+    exit 1
+    ;;
+esac
+
 prompt_default "Warehouse" SNOW_WAREHOUSE "${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
 prompt_default "Database"  SNOW_DATABASE  "${SNOWFLAKE_DATABASE:-}"
 prompt_default "Schema"    SNOW_SCHEMA    "${SNOWFLAKE_SCHEMA:-PUBLIC}"
 prompt_default "Role (leave blank for default)" SNOW_ROLE "${SNOWFLAKE_ROLE:-}"
 
-if [ -z "$SNOW_ACCOUNT" ] || [ -z "$SNOW_USER" ] || [ -z "$SNOW_PASS" ] || [ -z "$SNOW_DATABASE" ]; then
-  echo "  ⚠ account / user / password / database are required."
+if [ -z "$SNOW_ACCOUNT" ] || [ -z "$SNOW_USER" ] || [ -z "$SNOW_DATABASE" ]; then
+  echo "  ⚠ account / user / database are required."
+  exit 1
+fi
+if [ "$SNOW_AUTH_METHOD" = "password" ] && [ -z "$SNOW_PASS" ]; then
+  echo "  ⚠ password is required when auth method is 'password'."
   exit 1
 fi
 
@@ -161,16 +211,26 @@ INV_OUT="$(mktemp -t sf_inv.XXXXXX).json"
 SF_PY_PRELUDE=$(cat <<PYHEAD
 import json, os, sys
 import snowflake.connector as sc
+ck = dict(
+    account=os.environ['SF_ACCOUNT'],
+    user=os.environ['SF_USER'],
+    warehouse=os.environ['SF_WAREHOUSE'],
+    database=os.environ['SF_DATABASE'],
+    schema=os.environ['SF_SCHEMA'],
+    role=os.environ.get('SF_ROLE') or None,
+)
+auth = os.environ.get('SF_AUTH_METHOD', 'password')
+if auth == 'keypair':
+    ck['authenticator'] = 'SNOWFLAKE_JWT'
+    ck['private_key_file'] = os.environ['SF_KEY_FILE']
+    if os.environ.get('SF_KEY_PWD'):
+        ck['private_key_file_pwd'] = os.environ['SF_KEY_PWD']
+elif auth == 'sso':
+    ck['authenticator'] = 'externalbrowser'
+else:
+    ck['password'] = os.environ.get('SF_PASS', '')
 try:
-    conn = sc.connect(
-        account=os.environ['SF_ACCOUNT'],
-        user=os.environ['SF_USER'],
-        password=os.environ['SF_PASS'],
-        warehouse=os.environ['SF_WAREHOUSE'],
-        database=os.environ['SF_DATABASE'],
-        schema=os.environ['SF_SCHEMA'],
-        role=os.environ.get('SF_ROLE') or None,
-    )
+    conn = sc.connect(**ck)
 except Exception as e:
     print(f"ERR: {e}", file=sys.stderr)
     sys.exit(1)
@@ -179,7 +239,7 @@ PYHEAD
 )
 
 # Verification: SELECT CURRENT_VERSION() → must return a row.
-SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
+SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_METHOD="$SNOW_AUTH_METHOD" SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_DATABASE="$SNOW_DATABASE" SF_SCHEMA="$SNOW_SCHEMA" \
   SF_ROLE="$SNOW_ROLE" \
   uv run --quiet --with 'snowflake-connector-python' --no-project python - <<EOF
@@ -202,7 +262,7 @@ echo "────────────────────────�
 echo "  Discovering importable entities in $SNOW_DATABASE.$SNOW_SCHEMA ..."
 echo "─────────────────────────────────────────────────────────────────────"
 
-SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
+SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_METHOD="$SNOW_AUTH_METHOD" SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_DATABASE="$SNOW_DATABASE" SF_SCHEMA="$SNOW_SCHEMA" \
   SF_ROLE="$SNOW_ROLE" INV_OUT="$INV_OUT" \
   uv run --quiet --with 'snowflake-connector-python' --no-project python - <<EOF
@@ -612,6 +672,77 @@ write_yaml() {
   printf "%s\n" "$body" > "src/$PKG/defs/$name/defs.yaml"
 }
 
+# ── Auth helpers (emit the right YAML fields per auth method) ──────────
+# Two flavors needed since different components use different field names:
+#   _direct  emits direct fields:    password / authenticator / private_key_file
+#   _envvar  emits env-var fields:   password_env_var / private_key_file_env_var / etc.
+# Both prefix output with 2 spaces for indentation under `attributes:`.
+
+snow_auth_fields_direct() {
+  # Args: $1 = leading indent (e.g. "  " or "    ")
+  local I="${1:-  }"
+  case "$SNOW_AUTH_METHOD" in
+    keypair)
+      printf '%sauthenticator: SNOWFLAKE_JWT\n' "$I"
+      printf '%sprivate_key_file: "{{ env('"'"'SNOWFLAKE_PRIVATE_KEY_FILE'"'"') }}"\n' "$I"
+      [ -n "$SNOW_KEY_PWD" ] && \
+        printf '%sprivate_key_file_pwd: "{{ env('"'"'SNOWFLAKE_PRIVATE_KEY_FILE_PWD'"'"') }}"\n' "$I"
+      ;;
+    sso)
+      printf '%sauthenticator: externalbrowser\n' "$I"
+      ;;
+    password|*)
+      printf '%spassword: "{{ env('"'"'SNOWFLAKE_PASSWORD'"'"') }}"\n' "$I"
+      ;;
+  esac
+}
+
+snow_auth_fields_envvar() {
+  # Same shape but emits the *_env_var field-name convention.
+  local I="${1:-  }"
+  case "$SNOW_AUTH_METHOD" in
+    keypair)
+      printf '%sauthenticator: SNOWFLAKE_JWT\n' "$I"
+      printf '%sprivate_key_file_env_var: SNOWFLAKE_PRIVATE_KEY_FILE\n' "$I"
+      [ -n "$SNOW_KEY_PWD" ] && \
+        printf '%sprivate_key_file_pwd_env_var: SNOWFLAKE_PRIVATE_KEY_FILE_PWD\n' "$I"
+      ;;
+    sso)
+      printf '%sauthenticator: externalbrowser\n' "$I"
+      ;;
+    password|*)
+      printf '%spassword_env_var: SNOWFLAKE_PASSWORD\n' "$I"
+      ;;
+  esac
+}
+
+# SQLAlchemy URL for warehouse_pipeline. snowflake-sqlalchemy supports
+# both password-in-URL (deprecated for production) and keypair/SSO via
+# URL params + connect_args. For the demo, we use the URL-param form
+# since warehouse_pipeline only takes a string.
+build_snowflake_url() {
+  case "$SNOW_AUTH_METHOD" in
+    keypair)
+      local pwdarg=""
+      [ -n "$SNOW_KEY_PWD" ] && pwdarg="&private_key_file_pwd=$SNOW_KEY_PWD"
+      printf 'snowflake://%s@%s/%s/%s?warehouse=%s&authenticator=SNOWFLAKE_JWT&private_key_file=%s%s%s' \
+        "$SNOW_USER" "$SNOW_ACCOUNT" "$SNOW_DATABASE" "$SNOW_SCHEMA" "$SNOW_WAREHOUSE" \
+        "$SNOW_KEY_FILE" "$pwdarg" \
+        "${SNOW_ROLE:+&role=$SNOW_ROLE}"
+      ;;
+    sso)
+      printf 'snowflake://%s@%s/%s/%s?warehouse=%s&authenticator=externalbrowser%s' \
+        "$SNOW_USER" "$SNOW_ACCOUNT" "$SNOW_DATABASE" "$SNOW_SCHEMA" "$SNOW_WAREHOUSE" \
+        "${SNOW_ROLE:+&role=$SNOW_ROLE}"
+      ;;
+    password|*)
+      printf 'snowflake://%s:%s@%s/%s/%s?warehouse=%s%s' \
+        "$SNOW_USER" "$SNOW_PASS" "$SNOW_ACCOUNT" "$SNOW_DATABASE" "$SNOW_SCHEMA" "$SNOW_WAREHOUSE" \
+        "${SNOW_ROLE:+&role=$SNOW_ROLE}"
+      ;;
+  esac
+}
+
 # ── 9. workspace defs.yaml ─────────────────────────────────────────────
 ROLE_LINE=""
 [ -n "$SNOW_ROLE" ] && ROLE_LINE="  role: \"$SNOW_ROLE\""
@@ -622,12 +753,12 @@ FILTER_LINE=""
 [ -n "$EXCLUDE_NAME" ] && FILTER_LINE="$FILTER_LINE
   exclude_name_pattern: \"$EXCLUDE_NAME\""
 
+AUTH_FIELDS_DIRECT="$(snow_auth_fields_direct '  ')"
 WORKSPACE_YAML="type: $PKG.components.snowflake_workspace.component.SnowflakeWorkspaceComponent
 attributes:
   account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
   user:    \"{{ env('SNOWFLAKE_USER') }}\"
-  password: \"{{ env('SNOWFLAKE_PASSWORD') }}\"
-  warehouse: \"$SNOW_WAREHOUSE\"
+$(printf %s "$AUTH_FIELDS_DIRECT")  warehouse: \"$SNOW_WAREHOUSE\"
   database:  \"$SNOW_DATABASE\"
   schema:    \"$SNOW_SCHEMA\"
 $ROLE_LINE
@@ -720,19 +851,20 @@ fi
 
 # ── 11. Optional Cortex asset ──────────────────────────────────────────
 if [ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ]; then
+  # Cortex component uses snowflake_*_env_var field convention (4-space indent).
+  CORTEX_AUTH_FIELDS=$(snow_auth_fields_envvar '  ' | sed 's/^  authenticator/  snowflake_authenticator/; s/^  private_key_file_env_var/  snowflake_private_key_file_env_var/; s/^  private_key_file_pwd_env_var/  snowflake_private_key_file_pwd_env_var/; s/^  password_env_var/  snowflake_password_env_var/; s/^/  /')
   write_yaml "cortex_demo" "type: $PKG.components.snowflake_cortex_asset.component.SnowflakeCortexAssetComponent
 attributes:
   asset_name: cortex_demo
-  connection:
-    account_env_var:  SNOWFLAKE_ACCOUNT
-    user_env_var:     SNOWFLAKE_USER
-    password_env_var: SNOWFLAKE_PASSWORD
-    warehouse: \"$SNOW_WAREHOUSE\"
-    database:  \"$SNOW_DATABASE\"
-    schema:    \"$SNOW_SCHEMA\"
-  mode: $CORTEX_MODE
-  input: |
-    $CORTEX_INPUT
+  snowflake_account_env_var: SNOWFLAKE_ACCOUNT
+  snowflake_user_env_var:    SNOWFLAKE_USER
+$(printf %s "$CORTEX_AUTH_FIELDS")  snowflake_database: \"$SNOW_DATABASE\"
+  snowflake_schema:   \"$SNOW_SCHEMA\"
+  snowflake_warehouse: \"$SNOW_WAREHOUSE\"
+  cortex_function: $CORTEX_MODE
+  source_table: AI.CUSTOMER_FEEDBACK
+  target_table: AI.CUSTOMER_FEEDBACK_${CORTEX_MODE}D
+  text_column: COMMENT
   group_name: snowflake_ai"
 fi
 
@@ -744,6 +876,7 @@ if [ "$WANT_OBSERVER" = "y" ] || [ "$WANT_OBSERVER" = "Y" ]; then
   OBSERVER_TABLE_LC=$(echo "$OBSERVER_TABLE" | tr '[:upper:]' '[:lower:]')
   OBSERVER_DATABASE_LC=$(echo "$OBSERVER_DATABASE" | tr '[:upper:]' '[:lower:]')
   OBSERVER_SCHEMA_LC=$(echo "$OBSERVER_SCHEMA" | tr '[:upper:]' '[:lower:]')
+  OBS_AUTH_FIELDS="$(snow_auth_fields_envvar '  ')"
   write_yaml "row_count_observer" "type: $PKG.components.snowflake_table_observation_sensor.component.SnowflakeTableObservationSensorComponent
 attributes:
   sensor_name: ${OBSERVER_TABLE_LC}_row_count_observer
@@ -753,8 +886,7 @@ attributes:
   schema_name: \"$OBSERVER_SCHEMA\"
   table_name: \"$OBSERVER_TABLE\"
   username_env_var: SNOWFLAKE_USER
-  password_env_var: SNOWFLAKE_PASSWORD
-  warehouse: \"$SNOW_WAREHOUSE\"
+$(printf %s "$OBS_AUTH_FIELDS")  warehouse: \"$SNOW_WAREHOUSE\"
   check_interval_seconds: 60
   include_preview_metadata: true"
 fi
@@ -774,14 +906,14 @@ attributes:
   partition_start: \"$HET_PARTITION_START\"
   group_name: heterogeneous_ingest"
 
+  HET_AUTH_FIELDS="$(snow_auth_fields_envvar '  ')"
   write_yaml "python_daily_events_to_snowflake" "type: $PKG.components.dataframe_to_snowflake.component.DataframeToSnowflakeComponent
 attributes:
   asset_name: python_daily_events_to_snowflake
   upstream_asset_key: python_daily_events
   account_env_var: SNOWFLAKE_ACCOUNT
   user_env_var: SNOWFLAKE_USER
-  password_env_var: SNOWFLAKE_PASSWORD
-  warehouse: \"$SNOW_WAREHOUSE\"
+$(printf %s "$HET_AUTH_FIELDS")  warehouse: \"$SNOW_WAREHOUSE\"
   database: \"$HET_DATABASE\"
   schema: \"$HET_SCHEMA\"
   table: \"$HET_TABLE\"
@@ -807,14 +939,17 @@ fi
 # (steps/ref/op:sql/multi-sink) but uses Snowpark's lazy DataFrame
 # API and compiles to ONE Snowflake SQL statement per sink server-side.
 if [ "$WANT_SNOWPARK" = "y" ] || [ "$WANT_SNOWPARK" = "Y" ]; then
+  # snowpark_pipeline accepts an arbitrary `connection` dict that goes
+  # straight to Session.builder.configs(). Snowpark resolves env vars
+  # via the `<key>_env_var` convention. Plus authenticator + private key.
+  SP_AUTH_FIELDS="$(snow_auth_fields_envvar '    ')"
   write_yaml "snowpark_pipeline_demo" "type: $PKG.components.snowpark_pipeline.component.SnowparkPipelineComponent
 attributes:
   asset_name: snowpark_pipeline_demo
   connection:
     account_env_var:  SNOWFLAKE_ACCOUNT
     user_env_var:     SNOWFLAKE_USER
-    password_env_var: SNOWFLAKE_PASSWORD
-    warehouse: \"$SNOW_WAREHOUSE\"
+$(printf %s "$SP_AUTH_FIELDS")    warehouse: \"$SNOW_WAREHOUSE\"
     database:  \"$SNOW_DATABASE\"
     schema:    \"$SNOW_SCHEMA\"
   steps:
@@ -893,6 +1028,21 @@ models:
       +schema: $DBT_TARGET_SCHEMA
 DBTPRJ
 
+  # dbt-snowflake supports password, keypair (private_key_path), and SSO
+  # (authenticator: externalbrowser). Pick the right block based on the
+  # auth method the user selected at the top of this script.
+  case "$SNOW_AUTH_METHOD" in
+    keypair)
+      DBT_AUTH_BLOCK='      authenticator:    "jwt"
+      private_key_path: "{{ env_var('"'"'SNOWFLAKE_PRIVATE_KEY_FILE'"'"') }}"'
+      [ -n "$SNOW_KEY_PWD" ] && DBT_AUTH_BLOCK="$DBT_AUTH_BLOCK
+      private_key_passphrase: \"{{ env_var('SNOWFLAKE_PRIVATE_KEY_FILE_PWD') }}\""
+      ;;
+    sso)
+      DBT_AUTH_BLOCK='      authenticator:    "externalbrowser"' ;;
+    *)
+      DBT_AUTH_BLOCK='      password:  "{{ env_var('"'"'SNOWFLAKE_PASSWORD'"'"') }}"' ;;
+  esac
   cat > dbt/profiles.yml <<DBTPROF
 snowflake_dagster_dbt:
   target: dev
@@ -901,7 +1051,7 @@ snowflake_dagster_dbt:
       type: snowflake
       account:   "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
       user:      "{{ env_var('SNOWFLAKE_USER') }}"
-      password:  "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+$DBT_AUTH_BLOCK
       role:      "{{ env_var('SNOWFLAKE_ROLE', 'SYSADMIN') }}"
       database:  "$DBT_SOURCE_DB"
       warehouse: "$SNOW_WAREHOUSE"
@@ -971,19 +1121,35 @@ attributes:
 fi
 
 # ── 12. .env.demo ──────────────────────────────────────────────────────
-cat > .env.demo <<EOF
-# Snowflake credentials — gitignored. Source before running:
-#   source .env.demo
-export SNOWFLAKE_ACCOUNT="$SNOW_ACCOUNT"
-export SNOWFLAKE_USER="$SNOW_USER"
-export SNOWFLAKE_PASSWORD="$SNOW_PASS"
-export SNOWFLAKE_WAREHOUSE="$SNOW_WAREHOUSE"
-export SNOWFLAKE_DATABASE="$SNOW_DATABASE"
-export SNOWFLAKE_SCHEMA="$SNOW_SCHEMA"
-${SNOW_ROLE:+export SNOWFLAKE_ROLE=\"$SNOW_ROLE\"}
-# warehouse_pipeline reads this single URL form via database_url_env_var:
-export SNOWFLAKE_URL="snowflake://$SNOW_USER:$SNOW_PASS@$SNOW_ACCOUNT/$SNOW_DATABASE/$SNOW_SCHEMA?warehouse=$SNOW_WAREHOUSE${SNOW_ROLE:+&role=$SNOW_ROLE}"
-EOF
+# Emit only the env vars relevant to the chosen auth method, plus the
+# always-needed account/user/warehouse/database/schema.
+SNOWFLAKE_URL_VAL="$(build_snowflake_url)"
+{
+  echo "# Snowflake credentials — gitignored. Source before running:"
+  echo "#   source .env.demo"
+  echo "export SNOWFLAKE_ACCOUNT=\"$SNOW_ACCOUNT\""
+  echo "export SNOWFLAKE_USER=\"$SNOW_USER\""
+  echo "export SNOWFLAKE_WAREHOUSE=\"$SNOW_WAREHOUSE\""
+  echo "export SNOWFLAKE_DATABASE=\"$SNOW_DATABASE\""
+  echo "export SNOWFLAKE_SCHEMA=\"$SNOW_SCHEMA\""
+  [ -n "$SNOW_ROLE" ] && echo "export SNOWFLAKE_ROLE=\"$SNOW_ROLE\""
+  case "$SNOW_AUTH_METHOD" in
+    keypair)
+      echo "# Keypair auth (headless — works for daemon + dg dev + Dagster+)"
+      echo "export SNOWFLAKE_PRIVATE_KEY_FILE=\"$SNOW_KEY_FILE\""
+      [ -n "$SNOW_KEY_PWD" ] && echo "export SNOWFLAKE_PRIVATE_KEY_FILE_PWD=\"$SNOW_KEY_PWD\""
+      ;;
+    sso)
+      echo "# SSO auth (externalbrowser — laptop dg dev only; daemon won't work)"
+      echo "# No password / key env vars needed."
+      ;;
+    password)
+      echo "export SNOWFLAKE_PASSWORD=\"$SNOW_PASS\""
+      ;;
+  esac
+  echo "# warehouse_pipeline reads this single URL form via database_url_env_var:"
+  echo "export SNOWFLAKE_URL=\"$SNOWFLAKE_URL_VAL\""
+} > .env.demo
 chmod 600 .env.demo
 grep -q '^\.env\.demo' .gitignore 2>/dev/null || echo ".env.demo" >> .gitignore
 

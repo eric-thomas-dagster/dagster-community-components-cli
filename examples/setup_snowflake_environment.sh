@@ -81,18 +81,66 @@ prompt_default() {
 
 prompt_default "Snowflake account (e.g. xy12345.us-east-1 or org-account)" SNOW_ACCOUNT "${SNOWFLAKE_ACCOUNT:-}"
 prompt_default "Username" SNOW_USER "${SNOWFLAKE_USER:-}"
-if [ -n "${SNOWFLAKE_PASSWORD:-}" ]; then
-  echo "Password: [using \$SNOWFLAKE_PASSWORD from env]"
-  SNOW_PASS="$SNOWFLAKE_PASSWORD"
-else
-  read -r -s -p "Password (hidden): " SNOW_PASS
-  echo
-fi
+
+# Auth method — most enterprise Snowflake accounts disable password auth.
+# Keypair is recommended for headless / production (no browser needed).
+echo
+echo "Authentication method:"
+echo "  [1] Keypair (RSA private key file) — headless, recommended"
+echo "  [2] SSO (externalbrowser) — pops a browser for auth"
+echo "  [3] Password (if your account still allows it)"
+read -r -p "Choice [1]: " AUTH_CHOICE
+AUTH_CHOICE="${AUTH_CHOICE:-1}"
+SNOW_AUTH_METHOD=""
+SNOW_PASS=""
+SNOW_KEY_FILE=""
+SNOW_KEY_PWD=""
+case "$AUTH_CHOICE" in
+  1|keypair)
+    SNOW_AUTH_METHOD="keypair"
+    prompt_default "Path to RSA private key file (PEM)" SNOW_KEY_FILE \
+      "${SNOWFLAKE_PRIVATE_KEY_FILE:-$HOME/.ssh/snowflake_rsa_key.p8}"
+    if [ ! -f "$SNOW_KEY_FILE" ]; then
+      echo "  ⚠ Key file not found: $SNOW_KEY_FILE"
+      exit 1
+    fi
+    if [ -n "${SNOWFLAKE_PRIVATE_KEY_FILE_PWD:-}" ]; then
+      echo "Key passphrase: [using \$SNOWFLAKE_PRIVATE_KEY_FILE_PWD from env]"
+      SNOW_KEY_PWD="$SNOWFLAKE_PRIVATE_KEY_FILE_PWD"
+    else
+      read -r -s -p "Key passphrase (hidden; blank if key is unencrypted): " SNOW_KEY_PWD
+      echo
+    fi
+    ;;
+  2|sso)
+    SNOW_AUTH_METHOD="sso"
+    echo "  (SSO uses externalbrowser — a browser tab will open for auth)"
+    ;;
+  3|password)
+    SNOW_AUTH_METHOD="password"
+    if [ -n "${SNOWFLAKE_PASSWORD:-}" ]; then
+      echo "Password: [using \$SNOWFLAKE_PASSWORD from env]"
+      SNOW_PASS="$SNOWFLAKE_PASSWORD"
+    else
+      read -r -s -p "Password (hidden): " SNOW_PASS
+      echo
+    fi
+    ;;
+  *)
+    echo "  ⚠ Invalid choice — pick 1, 2, or 3."
+    exit 1
+    ;;
+esac
+
 prompt_default "Warehouse" SNOW_WAREHOUSE "${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
 prompt_default "Role (leave blank for default; SYSADMIN is recommended)" SNOW_ROLE "${SNOWFLAKE_ROLE:-SYSADMIN}"
 
-if [ -z "$SNOW_ACCOUNT" ] || [ -z "$SNOW_USER" ] || [ -z "$SNOW_PASS" ]; then
-  echo "  ⚠ account / user / password are required."
+if [ -z "$SNOW_ACCOUNT" ] || [ -z "$SNOW_USER" ]; then
+  echo "  ⚠ account / user are required."
+  exit 1
+fi
+if [ "$SNOW_AUTH_METHOD" = "password" ] && [ -z "$SNOW_PASS" ]; then
+  echo "  ⚠ password is required when auth method is 'password'."
   exit 1
 fi
 
@@ -114,6 +162,8 @@ PRECHECK_OUT="$(mktemp -t sf_preflight.XXXXXX).json"
 SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_ROLE="$SNOW_ROLE" \
   SF_TARGET_DB="$SNOW_TARGET_DB" \
+  SF_AUTH_METHOD="$SNOW_AUTH_METHOD" \
+  SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
   PRECHECK_OUT="$PRECHECK_OUT" \
   uv run --quiet --with 'snowflake-connector-python' --no-project python - <<'PYEOF'
 import json, os, sys
@@ -121,14 +171,26 @@ import snowflake.connector as sc
 
 result = {"role_ok": False, "warehouse_ok": False, "db_exists": False, "collisions": {}, "errors": []}
 
+# Build connect kwargs per auth method.
+ck = dict(
+    account=os.environ['SF_ACCOUNT'],
+    user=os.environ['SF_USER'],
+    warehouse=os.environ['SF_WAREHOUSE'],
+    role=os.environ.get('SF_ROLE') or None,
+)
+auth = os.environ.get('SF_AUTH_METHOD', 'password')
+if auth == 'keypair':
+    ck['authenticator'] = 'SNOWFLAKE_JWT'
+    ck['private_key_file'] = os.environ['SF_KEY_FILE']
+    if os.environ.get('SF_KEY_PWD'):
+        ck['private_key_file_pwd'] = os.environ['SF_KEY_PWD']
+elif auth == 'sso':
+    ck['authenticator'] = 'externalbrowser'
+else:  # password
+    ck['password'] = os.environ.get('SF_PASS', '')
+
 try:
-    conn = sc.connect(
-        account=os.environ['SF_ACCOUNT'],
-        user=os.environ['SF_USER'],
-        password=os.environ['SF_PASS'],
-        warehouse=os.environ['SF_WAREHOUSE'],
-        role=os.environ.get('SF_ROLE') or None,
-    )
+    conn = sc.connect(**ck)
 except Exception as e:
     result["errors"].append(f"connect: {e}")
     json.dump(result, open(os.environ['PRECHECK_OUT'], 'w'))
@@ -326,19 +388,32 @@ echo
 
 SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_ROLE="$SNOW_ROLE" \
+  SF_AUTH_METHOD="$SNOW_AUTH_METHOD" \
+  SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
   SF_SQL_FILE="$SQL_FILE" \
   uv run --quiet --with 'snowflake-connector-python' --no-project python - <<'PYEOF'
 import os, re, sys, time
 import snowflake.connector as sc
 
+ck = dict(
+    account=os.environ['SF_ACCOUNT'],
+    user=os.environ['SF_USER'],
+    warehouse=os.environ['SF_WAREHOUSE'],
+    role=os.environ.get('SF_ROLE') or None,
+)
+auth = os.environ.get('SF_AUTH_METHOD', 'password')
+if auth == 'keypair':
+    ck['authenticator'] = 'SNOWFLAKE_JWT'
+    ck['private_key_file'] = os.environ['SF_KEY_FILE']
+    if os.environ.get('SF_KEY_PWD'):
+        ck['private_key_file_pwd'] = os.environ['SF_KEY_PWD']
+elif auth == 'sso':
+    ck['authenticator'] = 'externalbrowser'
+else:
+    ck['password'] = os.environ.get('SF_PASS', '')
+
 try:
-    conn = sc.connect(
-        account=os.environ['SF_ACCOUNT'],
-        user=os.environ['SF_USER'],
-        password=os.environ['SF_PASS'],
-        warehouse=os.environ['SF_WAREHOUSE'],
-        role=os.environ.get('SF_ROLE') or None,
-    )
+    conn = sc.connect(**ck)
 except Exception as e:
     print(f"  ✗ Connection failed: {e}", file=sys.stderr)
     sys.exit(1)
