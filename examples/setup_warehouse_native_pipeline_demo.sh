@@ -264,6 +264,82 @@ attributes:
   deps: [revenue_by_status]
   group_name: warehouse_native"
 
+# ── 11. warehouse_pipeline (MULTI-STEP shape) — multiple sources, ref between
+#       steps, op:sql escape hatch, multi-sink. Same component as #10, but
+#       exercising the YAML form that lets you write stored-procedure-style
+#       pipelines: join two filtered streams, drop into raw SQL for a
+#       commission calc the DSL doesn't model, group + sort + fan out to two
+#       output tables. Compiles to ONE CTE-CTAS plan per sink.
+
+# Seed: synthetic customers → main.raw_customers
+# Pin customers gen AFTER the whole warehouse_* chain so its DB write doesn't
+# race with the per-step writers on DuckDB's single-writer constraint. Chains
+# off top_5_categories_pipeline (the existing tail of the chain).
+write_yaml "customers" "type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
+attributes:
+  asset_name: customers
+  schema_type: customers
+  row_count: 200
+  random_state: 7
+  deps: [top_5_categories_pipeline]
+  group_name: warehouse_native"
+
+write_yaml "raw_customers_in_warehouse" "type: $PKG.components.dataframe_to_table.component.DataframeToTableComponent
+attributes:
+  asset_name: raw_customers_in_warehouse
+  upstream_asset_key: customers
+  database_url: duckdb:///$DB
+  table_name: raw_customers
+  if_exists: replace
+  group_name: warehouse_native"
+
+write_yaml "regional_top_paid_multistep" "type: $PKG.components.warehouse_pipeline.component.WarehousePipelineComponent
+attributes:
+  asset_name: regional_top_paid_multistep
+  database_url: duckdb:///$DB
+  dialect: duckdb
+  steps:
+    - id: delivered_orders
+      source: {kind: table, table: main.raw_orders}
+      operations:
+        - {op: filter, predicate: \"status = 'delivered'\"}
+
+    - id: vip_customers
+      source: {kind: table, table: main.raw_customers}
+      operations:
+        - {op: filter, predicate: \"lifetime_value > 3000\"}
+
+    - id: enriched
+      source: {kind: ref, ref: delivered_orders}
+      operations:
+        - op: join
+          right: {ref: vip_customers}
+          on_columns: [customer_id]
+          how: inner
+        - op: sql
+          sql: |
+            SELECT *, total * 0.15 AS commission
+            FROM <<self>>
+        - op: group_by
+          group_by: [state]
+          aggregations:
+            revenue:          {col: total,      agg: sum}
+            total_commission: {col: commission, agg: sum}
+            order_count:      {col: order_id,   agg: count}
+
+    - id: top_states
+      source: {kind: ref, ref: enriched}
+      operations:
+        - {op: top_n, sort_by: revenue, n: 3, ascending: false}
+
+  sinks:
+    - {from: enriched,    table: main.state_enriched, mode: replace}
+    - {from: top_states,  table: main.top_3_states,   mode: replace}
+
+  deps: [raw_orders_in_warehouse, raw_customers_in_warehouse, top_5_categories_pipeline]
+  group_name: warehouse_native
+  include_preview_metadata: true"
+
 cat <<MSG
 
 >>> Setup complete.
@@ -277,7 +353,19 @@ After the run, inspect the chain in DuckDB:
       .tables
       SELECT * FROM main.revenue_by_status;
       SELECT * FROM main.top_5_categories_pipeline;
+      SELECT * FROM main.state_enriched ORDER BY revenue DESC;
+      SELECT * FROM main.top_3_states   ORDER BY revenue DESC;
       SELECT COUNT(*) AS rows_in_orders_running FROM main.orders_running;"
+
+What's notable about regional_top_paid_multistep:
+  • TWO sources (orders + customers) — both filtered independently
+  • Inter-step JOIN via {ref: vip_customers}
+  • Raw-SQL escape hatch (op: sql) for the commission calc — anything
+    the DSL doesn't model, just write the SQL. <<self>> refers to the
+    previous CTE in this step; <<step_id>> works for cross-step refs.
+  • MULTI-SINK — one asset writes BOTH 'state_enriched' (full set) AND
+    'top_3_states' (the top-N), each as its own CTE-CTAS, both seeing
+    the same WITH clause so the optimizer reasons about the whole graph.
 
 Production retargeting (no code changes):
   - Snowflake:  dialect: snowflake  + database_url: snowflake://user:pass@account/db/schema?warehouse=COMPUTE_WH
