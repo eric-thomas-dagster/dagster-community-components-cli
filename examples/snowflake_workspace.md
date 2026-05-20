@@ -2,6 +2,37 @@
 
 Run one script. Answer the prompts. Your Snowflake **tasks, dynamic tables, stored procedures, streams, pipes, stages, materialized views, external tables, and alerts** become Dagster assets — with cross-entity dependencies declared, optional multi-step SQL pipelines layered on top, and Cortex AI as a first-class asset.
 
+## Why Dagster on top of Snowflake?
+
+Snowflake's native scheduling (tasks + dynamic tables + alerts) is powerful **inside Snowflake**. Dagster orchestrating Snowflake earns its keep when the work the team actually does *crosses* Snowflake — into ingestion sources, Python transforms, BI tools, reverse-ETL, ML, and data-quality. The pitch in one sentence: **Snowflake schedules what runs inside Snowflake; Dagster orchestrates everything that runs anywhere and shows it as one asset graph.**
+
+| Capability | Snowflake-only | Dagster + Snowflake |
+|---|---|---|
+| **Lineage across tools** | Stops at the Snowflake boundary | One graph: Fivetran / Airbyte / Sling / Python ingest → Snowflake tables → tasks/DTs → dbt → BI (Tableau/Power BI/Looker) → reverse-ETL (Hightouch/Census). Click any node, see every upstream + downstream. |
+| **Heterogeneous compute** | Cross-tool work needs External Functions, custom polling, or third-party orchestrators | Snowflake + Databricks + BigQuery + Postgres + S3 + Kafka + Python tasks side-by-side in one project, with deps between them. |
+| **Trigger model** | Pure cron + AFTER chains for task graphs | Cron, sensors (file landing / table changes / external events), AND `AutomationCondition` — *"materialize when this upstream changes,"* even if the upstream lives outside Snowflake. |
+| **Backfills + partitions** | DIY — write a script that loops over date ranges, calls EXECUTE TASK with arguments | First-class daily/hourly/multi-dimensional partitions, parallel backfills with concurrency limits, partition mapping between assets, replay over arbitrary date ranges from the UI. |
+| **Data quality** | Tasks-as-tests pattern; DIY assertions | `@asset_check` runs inline with the asset, surfaces pass/fail in the same UI, can block downstream materialization on failure. |
+| **Per-asset metadata** | Task history is query-centric (duration, bytes) | Schemas auto-extracted, row counts, freshness, table preview, code-version pins, run history per-asset — all in one place. |
+| **Local development** | Can't run a task outside the account | `dg dev` runs the full asset graph locally, including the bits that target a dev Snowflake account or even a DuckDB stand-in. |
+| **Branching + preview deploys** | No native git-style branching for orchestration | Dagster+ branch deployments give every PR an isolated environment — preview a Snowflake change with its full downstream impact before merge. |
+| **Failure surfaces** | Task failures surface in `TASK_HISTORY` view; one tool at a time | One unified timeline across all tools; a failed Snowflake task fails in Dagster with full upstream context + downstream impact, plus retry policy + alerting per-asset. |
+| **Day-2 ops** | Suspend/resume per task; ALTER TASK for changes | Bulk suspend/resume, scheduled freeze windows, role-based access, audit log of who-materialized-what, alerting hooks into Slack/PagerDuty/email (in Dagster+). |
+
+**When Dagster is overkill:** if your *entire* pipeline lives inside Snowflake and you have no upstream ingest, no Python transforms, no downstream BI orchestration, and no cross-account/cross-region work — native Snowflake tasks are fine and add no extra moving parts. The break-even point comes fast though, because most teams hit *some* of those needs within a quarter or two.
+
+## Don't have a populated Snowflake account yet?
+
+There's a companion seed script that creates a realistic "before" state — a `DAGSTER_DEMO` database with `RAW.{ORDERS,CUSTOMERS,PRODUCTS,EVENTS}` (seeded with synthetic data) and a `STAGING` schema populated with **6 tasks**, **4 dynamic tables**, **3 stored procedures** (including one Snowpark Python proc), **2 streams**, **1 materialized view**, **2 stages**, **1 snowpipe**, and **1 alert**. Idempotent. Run it once on a demo account, then point the workspace setup at `DAGSTER_DEMO.STAGING` for a discovery output that's genuinely impressive:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_environment.sh -o setup_snowflake_environment.sh
+chmod +x setup_snowflake_environment.sh
+./setup_snowflake_environment.sh
+```
+
+Teardown with [`teardown_snowflake_environment.sql`](teardown_snowflake_environment.sql) — drops the whole `DAGSTER_DEMO` database. (OpenFlow flows can't be created via SQL DDL — they're built in the Openflow UI / Apache NiFi canvas. If you already have flows in your account, the workspace component discovers them via the `import_openflow_flows: true` flag.)
+
 ## Run it
 
 ```bash

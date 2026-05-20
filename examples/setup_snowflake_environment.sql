@@ -1,0 +1,501 @@
+-- ===========================================================================
+-- DAGSTER DEMO — Snowflake environment seed
+-- ===========================================================================
+-- Creates a realistic "before" state for the snowflake_workspace component
+-- demo: a database with multiple schemas, seeded raw tables, and a wide
+-- variety of orchestratable entities — TASKS, DYNAMIC TABLES, STORED
+-- PROCEDURES (SQL + Snowpark Python), STREAMS, MATERIALIZED VIEWS, STAGES,
+-- SNOWPIPES, ALERTS — so the workspace discovery step finds a lot of stuff.
+--
+-- IDEMPOTENT. Uses CREATE OR REPLACE throughout. Safe to re-run.
+--
+-- WHAT IT BUILDS
+--   Database: DAGSTER_DEMO
+--   Schemas:  RAW       — base seed tables
+--             STAGING   — orchestratable entities (tasks/DTs/procs/etc.)
+--             ANALYTICS — empty sink for Dagster pipelines to write into
+--             AI        — small text table for Cortex demos
+--
+-- ENTITIES CREATED (per snowflake_workspace component's discovery list)
+--   • 4 base tables in RAW (ORDERS, CUSTOMERS, PRODUCTS, EVENTS)
+--   • 1 base table in AI (CUSTOMER_FEEDBACK for Cortex summarize/sentiment)
+--   • 6 TASKS (daily/hourly/weekly/monthly + a 2-step parent→child chain)
+--   • 4 DYNAMIC TABLES (TARGET_LAG ranges from 1 min to 1 hour)
+--   • 3 STORED PROCEDURES (pure SQL, parameterized SQL, Snowpark Python)
+--   • 2 STREAMS (CDC on ORDERS + CUSTOMERS)
+--   • 1 MATERIALIZED VIEW
+--   • 1 INTERNAL STAGE
+--   • 1 SNOWPIPE (auto_ingest=FALSE — manual REFRESH)
+--   • 1 ALERT (high-revenue-day trigger)
+--
+-- NOT BUILT (Snowflake doesn't support via SQL DDL):
+--   • OPENFLOW FLOWS — created via the Openflow UI / NiFi canvas. If you
+--     already have flows in the account, the workspace component will
+--     discover them via the `IMPORT_OPENFLOW_FLOWS` flag.
+--   • EXTERNAL TABLES — require external cloud storage. Add manually if
+--     you have an S3 / GCS / Azure stage.
+--
+-- COST ESTIMATE
+--   Metadata DDL is free. The seed data + initial DT materializations
+--   will cost a few credits on an XS warehouse (single-digit total for
+--   the full seed). Dropping the demo database releases everything.
+--
+-- REQUIREMENTS
+--   - A role with CREATE DATABASE on the account, OR a pre-existing
+--     database where the runner has CREATE SCHEMA / CREATE TASK / etc.
+--   - A warehouse the runner can USE.
+--   - Snowflake Standard edition or higher. (Cortex AI needs Enterprise+
+--     in supported regions — see the AI section.)
+-- ===========================================================================
+
+-- ── 0. Setup ────────────────────────────────────────────────────────────
+-- The runner sets the warehouse + database via session params before
+-- running this script. Override here if you want to hardcode.
+--   USE WAREHOUSE COMPUTE_WH;
+--   USE ROLE ...;
+USE ROLE SYSADMIN;
+
+CREATE DATABASE IF NOT EXISTS DAGSTER_DEMO
+  COMMENT = 'Seeded environment for the Dagster snowflake_workspace demo';
+USE DATABASE DAGSTER_DEMO;
+
+CREATE SCHEMA IF NOT EXISTS RAW       COMMENT = 'Source tables — seeded synthetic data';
+CREATE SCHEMA IF NOT EXISTS STAGING   COMMENT = 'Orchestratable entities (tasks/DTs/procs)';
+CREATE SCHEMA IF NOT EXISTS ANALYTICS COMMENT = 'Empty sink for Dagster pipelines';
+CREATE SCHEMA IF NOT EXISTS AI        COMMENT = 'Text data for Snowflake Cortex demos';
+
+-- ── 1. RAW.ORDERS — 10000 rows over the last 365 days ──────────────────
+USE SCHEMA RAW;
+
+CREATE OR REPLACE TABLE ORDERS (
+  ORDER_ID     VARCHAR PRIMARY KEY,
+  CUSTOMER_ID  VARCHAR NOT NULL,
+  ORDER_DATE   TIMESTAMP_NTZ NOT NULL,
+  CATEGORY     VARCHAR,
+  NUM_ITEMS    INT,
+  SUBTOTAL     NUMBER(18,2),
+  SHIPPING     NUMBER(10,2),
+  TAX          NUMBER(10,2),
+  TOTAL        NUMBER(18,2),
+  STATUS       VARCHAR,
+  REGION       VARCHAR
+);
+
+INSERT INTO ORDERS
+SELECT
+  'ORD' || LPAD(SEQ4(), 8, '0')                                  AS ORDER_ID,
+  'CUST' || LPAD(UNIFORM(1, 1000, RANDOM()), 6, '0')             AS CUSTOMER_ID,
+  DATEADD('second', -UNIFORM(0, 365*86400, RANDOM()), CURRENT_TIMESTAMP())
+                                                                 AS ORDER_DATE,
+  DECODE(UNIFORM(1, 6, RANDOM()),
+         1, 'electronics', 2, 'apparel', 3, 'home',
+         4, 'grocery',     5, 'beauty',  6, 'sports')            AS CATEGORY,
+  UNIFORM(1, 8, RANDOM())                                        AS NUM_ITEMS,
+  ROUND(UNIFORM(10, 2000, RANDOM()) + UNIFORM(0, 100, RANDOM()) / 100, 2) AS SUBTOTAL,
+  ROUND(UNIFORM(5, 25, RANDOM()),  2)                            AS SHIPPING,
+  0                                                              AS TAX,
+  0                                                              AS TOTAL,
+  DECODE(UNIFORM(1, 4, RANDOM()),
+         1, 'pending', 2, 'paid', 3, 'delivered', 4, 'cancelled') AS STATUS,
+  DECODE(UNIFORM(1, 5, RANDOM()),
+         1, 'us-east', 2, 'us-west', 3, 'us-central',
+         4, 'emea',    5, 'apac')                                AS REGION
+FROM TABLE(GENERATOR(ROWCOUNT => 10000));
+
+-- Fix derived columns (TAX = 8% subtotal, TOTAL = subtotal + shipping + tax).
+UPDATE ORDERS SET
+  TAX   = ROUND(SUBTOTAL * 0.08, 2),
+  TOTAL = ROUND(SUBTOTAL * 1.08 + SHIPPING, 2);
+
+-- ── 2. RAW.CUSTOMERS — 1000 rows ───────────────────────────────────────
+CREATE OR REPLACE TABLE CUSTOMERS (
+  CUSTOMER_ID    VARCHAR PRIMARY KEY,
+  FIRST_NAME     VARCHAR,
+  LAST_NAME      VARCHAR,
+  EMAIL          VARCHAR,
+  COUNTRY        VARCHAR,
+  STATE          VARCHAR,
+  SIGNUP_DATE    DATE,
+  LIFETIME_VALUE NUMBER(18,2),
+  TIER           VARCHAR,
+  IS_ACTIVE      BOOLEAN
+);
+
+INSERT INTO CUSTOMERS
+SELECT
+  'CUST' || LPAD(SEQ4() + 1, 6, '0')                              AS CUSTOMER_ID,
+  DECODE(UNIFORM(1, 5, RANDOM()),
+         1, 'Alex', 2, 'Sam', 3, 'Jordan', 4, 'Casey', 5, 'Morgan') AS FIRST_NAME,
+  DECODE(UNIFORM(1, 5, RANDOM()),
+         1, 'Smith', 2, 'Lee', 3, 'Patel', 4, 'Garcia', 5, 'Chen') AS LAST_NAME,
+  LOWER('user' || (SEQ4() + 1) || '@example.com')                 AS EMAIL,
+  DECODE(UNIFORM(1, 4, RANDOM()),
+         1, 'US', 2, 'CA', 3, 'UK', 4, 'DE')                      AS COUNTRY,
+  DECODE(UNIFORM(1, 6, RANDOM()),
+         1, 'CA', 2, 'NY', 3, 'TX', 4, 'WA', 5, 'IL', 6, 'PA')    AS STATE,
+  DATEADD('day', -UNIFORM(0, 1825, RANDOM()), CURRENT_DATE())     AS SIGNUP_DATE,
+  ROUND(UNIFORM(50, 8000, RANDOM()), 2)                           AS LIFETIME_VALUE,
+  NULL                                                            AS TIER,
+  UNIFORM(0, 10, RANDOM()) > 1                                    AS IS_ACTIVE
+FROM TABLE(GENERATOR(ROWCOUNT => 1000));
+
+UPDATE CUSTOMERS SET TIER = CASE
+  WHEN LIFETIME_VALUE > 5000 THEN 'platinum'
+  WHEN LIFETIME_VALUE > 2000 THEN 'gold'
+  WHEN LIFETIME_VALUE > 500  THEN 'silver'
+  ELSE 'bronze'
+END;
+
+-- ── 3. RAW.PRODUCTS — 200 rows ─────────────────────────────────────────
+CREATE OR REPLACE TABLE PRODUCTS (
+  PRODUCT_ID  VARCHAR PRIMARY KEY,
+  SKU         VARCHAR,
+  NAME        VARCHAR,
+  CATEGORY    VARCHAR,
+  PRICE       NUMBER(10,2),
+  IN_STOCK    BOOLEAN
+);
+
+INSERT INTO PRODUCTS
+SELECT
+  'PROD' || LPAD(SEQ4() + 1, 6, '0')                              AS PRODUCT_ID,
+  'SKU-' || UPPER(RANDSTR(8, RANDOM()))                           AS SKU,
+  'Item-' || (SEQ4() + 1)                                         AS NAME,
+  DECODE(UNIFORM(1, 6, RANDOM()),
+         1, 'electronics', 2, 'apparel', 3, 'home',
+         4, 'grocery',     5, 'beauty',  6, 'sports')             AS CATEGORY,
+  ROUND(UNIFORM(5, 500, RANDOM()), 2)                             AS PRICE,
+  UNIFORM(0, 10, RANDOM()) > 1                                    AS IN_STOCK
+FROM TABLE(GENERATOR(ROWCOUNT => 200));
+
+-- ── 4. RAW.EVENTS — 50000 clickstream rows ─────────────────────────────
+CREATE OR REPLACE TABLE EVENTS (
+  EVENT_ID     VARCHAR,
+  CUSTOMER_ID  VARCHAR,
+  EVENT_TYPE   VARCHAR,
+  EVENT_TS     TIMESTAMP_NTZ,
+  PAGE_URL     VARCHAR,
+  REFERRER     VARCHAR
+);
+
+INSERT INTO EVENTS
+SELECT
+  'EVT' || LPAD(SEQ4(), 10, '0')                                  AS EVENT_ID,
+  'CUST' || LPAD(UNIFORM(1, 1000, RANDOM()), 6, '0')              AS CUSTOMER_ID,
+  DECODE(UNIFORM(1, 5, RANDOM()),
+         1, 'pageview', 2, 'click', 3, 'add_to_cart',
+         4, 'checkout', 5, 'purchase')                            AS EVENT_TYPE,
+  DATEADD('second', -UNIFORM(0, 30*86400, RANDOM()), CURRENT_TIMESTAMP())
+                                                                  AS EVENT_TS,
+  '/product/' || UNIFORM(1, 200, RANDOM())                        AS PAGE_URL,
+  DECODE(UNIFORM(1, 4, RANDOM()),
+         1, 'google',  2, 'direct',
+         3, 'twitter', 4, 'newsletter')                           AS REFERRER
+FROM TABLE(GENERATOR(ROWCOUNT => 50000));
+
+-- ── 5. AI.CUSTOMER_FEEDBACK — small text table for Cortex demos ────────
+USE SCHEMA AI;
+
+CREATE OR REPLACE TABLE CUSTOMER_FEEDBACK (
+  FEEDBACK_ID INT,
+  CUSTOMER_ID VARCHAR,
+  RATING      INT,
+  COMMENT     VARCHAR
+);
+
+INSERT INTO CUSTOMER_FEEDBACK VALUES
+  (1,  'CUST000001', 5, 'Loved the fast shipping and the quality is amazing. Will buy again.'),
+  (2,  'CUST000002', 2, 'Item arrived damaged and customer service was slow to respond.'),
+  (3,  'CUST000003', 4, 'Good product but a bit pricey. Overall happy with the purchase.'),
+  (4,  'CUST000004', 1, 'Terrible experience. Never received my order and could not get a refund.'),
+  (5,  'CUST000005', 5, 'Best customer service I have ever had. Quick, kind, and effective.'),
+  (6,  'CUST000006', 3, 'Average. Nothing special but no complaints either.'),
+  (7,  'CUST000007', 5, 'Exceeded my expectations. The packaging alone made it feel premium.'),
+  (8,  'CUST000008', 2, 'Color was different from what was shown online. Disappointed.'),
+  (9,  'CUST000009', 4, 'Solid build quality. Took a while to arrive but worth the wait.'),
+  (10, 'CUST000010', 5, 'Saved me hours of work. This product is genuinely game-changing.');
+
+-- ===========================================================================
+-- STAGING — orchestratable entities
+-- ===========================================================================
+USE SCHEMA STAGING;
+
+-- ── 6. INTERNAL STAGE (1) ──────────────────────────────────────────────
+CREATE OR REPLACE STAGE INTERNAL_STAGE
+  COMMENT = 'Internal stage for snowpipe ingestion + ad-hoc PUTs';
+
+-- A second stage so the workspace discovery finds more than one
+CREATE OR REPLACE STAGE LANDING_STAGE
+  COMMENT = 'Landing zone for batch file drops';
+
+-- ── 7. STREAMS — CDC on ORDERS + CUSTOMERS (2) ─────────────────────────
+CREATE OR REPLACE STREAM ORDERS_STREAM
+  ON TABLE DAGSTER_DEMO.RAW.ORDERS
+  COMMENT = 'Captures row-level changes to RAW.ORDERS';
+
+CREATE OR REPLACE STREAM CUSTOMERS_STREAM
+  ON TABLE DAGSTER_DEMO.RAW.CUSTOMERS
+  COMMENT = 'Captures row-level changes to RAW.CUSTOMERS';
+
+-- ── 8. MATERIALIZED VIEW (1) ───────────────────────────────────────────
+CREATE OR REPLACE MATERIALIZED VIEW CUSTOMER_LIFETIME_VALUE_MV
+  COMMENT = 'Pre-aggregated lifetime spend per customer'
+AS
+SELECT
+  CUSTOMER_ID,
+  COUNT(*)                       AS ORDER_COUNT,
+  SUM(TOTAL)                     AS TOTAL_SPEND,
+  MAX(ORDER_DATE)                AS LAST_ORDER_DATE
+FROM DAGSTER_DEMO.RAW.ORDERS
+WHERE STATUS IN ('paid', 'delivered')
+GROUP BY CUSTOMER_ID;
+
+-- ── 9. DYNAMIC TABLES (4) ──────────────────────────────────────────────
+-- Initial materialization happens at creation time — burns a little compute.
+CREATE OR REPLACE DYNAMIC TABLE PAID_ORDERS_DT
+  TARGET_LAG = '5 minutes'
+  WAREHOUSE = COMPUTE_WH
+  COMMENT = 'Filtered view of paid+delivered orders. Refreshes every 5 min.'
+AS
+SELECT * FROM DAGSTER_DEMO.RAW.ORDERS WHERE STATUS IN ('paid', 'delivered');
+
+CREATE OR REPLACE DYNAMIC TABLE CUSTOMER_360_DT
+  TARGET_LAG = '15 minutes'
+  WAREHOUSE = COMPUTE_WH
+  COMMENT = 'Customers joined with their order rollup. Refreshes every 15 min.'
+AS
+SELECT
+  c.CUSTOMER_ID,
+  c.FIRST_NAME,
+  c.LAST_NAME,
+  c.TIER,
+  c.LIFETIME_VALUE,
+  COUNT(o.ORDER_ID) AS ORDER_COUNT,
+  COALESCE(SUM(o.TOTAL), 0) AS REVENUE
+FROM DAGSTER_DEMO.RAW.CUSTOMERS c
+LEFT JOIN DAGSTER_DEMO.RAW.ORDERS o ON c.CUSTOMER_ID = o.CUSTOMER_ID
+GROUP BY 1, 2, 3, 4, 5;
+
+CREATE OR REPLACE DYNAMIC TABLE TOP_PRODUCTS_DT
+  TARGET_LAG = '1 hour'
+  WAREHOUSE = COMPUTE_WH
+  COMMENT = 'Top categories by paid revenue. Refreshes hourly.'
+AS
+SELECT
+  CATEGORY,
+  COUNT(*) AS ORDER_COUNT,
+  SUM(TOTAL) AS REVENUE
+FROM DAGSTER_DEMO.RAW.ORDERS
+WHERE STATUS IN ('paid', 'delivered')
+GROUP BY CATEGORY
+ORDER BY REVENUE DESC;
+
+CREATE OR REPLACE DYNAMIC TABLE HOURLY_ACTIVITY_DT
+  TARGET_LAG = '1 minute'
+  WAREHOUSE = COMPUTE_WH
+  COMMENT = 'Recent clickstream activity, bucketed hourly. Refreshes every minute.'
+AS
+SELECT
+  DATE_TRUNC('hour', EVENT_TS) AS EVENT_HOUR,
+  EVENT_TYPE,
+  COUNT(*) AS EVENT_COUNT
+FROM DAGSTER_DEMO.RAW.EVENTS
+WHERE EVENT_TS >= DATEADD('day', -7, CURRENT_TIMESTAMP())
+GROUP BY 1, 2;
+
+-- ── 10. STORED PROCEDURES — pure SQL + Snowpark Python (3) ─────────────
+
+-- (a) Pure SQL stored proc
+CREATE OR REPLACE PROCEDURE STAGING.SP_RECOMPUTE_TIERS()
+  RETURNS VARCHAR
+  LANGUAGE SQL
+  COMMENT = 'Recompute customer tier based on current lifetime_value.'
+AS
+$$
+BEGIN
+  UPDATE DAGSTER_DEMO.RAW.CUSTOMERS
+  SET TIER = CASE
+    WHEN LIFETIME_VALUE > 5000 THEN 'platinum'
+    WHEN LIFETIME_VALUE > 2000 THEN 'gold'
+    WHEN LIFETIME_VALUE > 500  THEN 'silver'
+    ELSE 'bronze'
+  END;
+  RETURN 'Tiers recomputed for ' || (SELECT COUNT(*) FROM DAGSTER_DEMO.RAW.CUSTOMERS) || ' customers';
+END;
+$$;
+
+-- (b) Parameterized SQL stored proc
+CREATE OR REPLACE PROCEDURE STAGING.SP_PURGE_OLD_EVENTS(DAYS_OLD INT)
+  RETURNS VARCHAR
+  LANGUAGE SQL
+  COMMENT = 'Delete events older than the given number of days. Param: DAYS_OLD.'
+AS
+$$
+DECLARE
+  ROWS_DELETED NUMBER;
+BEGIN
+  DELETE FROM DAGSTER_DEMO.RAW.EVENTS
+  WHERE EVENT_TS < DATEADD('day', -:DAYS_OLD, CURRENT_TIMESTAMP());
+  ROWS_DELETED := SQLROWCOUNT;
+  RETURN 'Purged ' || ROWS_DELETED || ' events older than ' || :DAYS_OLD || ' days';
+END;
+$$;
+
+-- (c) Snowpark Python stored proc — the marquee one
+CREATE OR REPLACE PROCEDURE STAGING.SP_SNOWPARK_TOP_N(N INT)
+  RETURNS TABLE(CATEGORY VARCHAR, REVENUE NUMBER, ORDER_COUNT NUMBER)
+  LANGUAGE PYTHON
+  RUNTIME_VERSION = '3.10'
+  PACKAGES = ('snowflake-snowpark-python')
+  HANDLER = 'top_n'
+  COMMENT = 'Snowpark Python: return top N categories by paid-revenue.'
+AS
+$$
+def top_n(session, n):
+    from snowflake.snowpark.functions import col, sum as ssum, count
+    df = (session.table("DAGSTER_DEMO.RAW.ORDERS")
+            .filter(col("STATUS").isin("paid", "delivered"))
+            .group_by("CATEGORY")
+            .agg(ssum("TOTAL").alias("REVENUE"),
+                 count("ORDER_ID").alias("ORDER_COUNT"))
+            .sort(col("REVENUE").desc())
+            .limit(n))
+    return df
+$$;
+
+-- ── 11. SNOWPIPE (1) ───────────────────────────────────────────────────
+-- AUTO_INGEST=FALSE so we don't need cloud event notifications for the
+-- demo. Workspace discovery still finds it; in Dagster, materializing the
+-- snowpipe asset triggers ALTER PIPE ... REFRESH.
+CREATE OR REPLACE PIPE ORDERS_PIPE
+  AUTO_INGEST = FALSE
+  COMMENT = 'Manual-refresh pipe — copies CSVs landed in INTERNAL_STAGE into RAW.ORDERS_INGESTED'
+AS
+COPY INTO DAGSTER_DEMO.STAGING.ORDERS_INGESTED
+FROM @DAGSTER_DEMO.STAGING.INTERNAL_STAGE
+FILE_FORMAT = (TYPE = CSV SKIP_HEADER = 1)
+ON_ERROR = 'CONTINUE';
+
+-- The destination table for the pipe to write into.
+CREATE OR REPLACE TABLE ORDERS_INGESTED LIKE DAGSTER_DEMO.RAW.ORDERS;
+
+-- ── 12. TASKS (6) ──────────────────────────────────────────────────────
+-- TASKS are created SUSPENDED. The runner script resumes them at the end
+-- (you can also leave them suspended for the demo — Dagster's
+-- snowflake_workspace component discovers tasks regardless of state, and
+-- materializing the asset runs EXECUTE TASK directly).
+
+CREATE OR REPLACE TASK DAILY_ORDERS_ROLLUP
+  WAREHOUSE = COMPUTE_WH
+  SCHEDULE = 'USING CRON 0 2 * * * UTC'
+  COMMENT = 'Roll up yesterday''s orders into ANALYTICS.DAILY_REVENUE.'
+AS
+  INSERT INTO DAGSTER_DEMO.ANALYTICS.DAILY_REVENUE
+  SELECT
+    DATE(ORDER_DATE)              AS REVENUE_DATE,
+    REGION,
+    COUNT(*)                       AS ORDER_COUNT,
+    SUM(TOTAL)                     AS REVENUE
+  FROM DAGSTER_DEMO.RAW.ORDERS
+  WHERE DATE(ORDER_DATE) = DATEADD('day', -1, CURRENT_DATE())
+    AND STATUS IN ('paid', 'delivered')
+  GROUP BY 1, 2;
+
+CREATE OR REPLACE TASK HOURLY_CUSTOMER_METRICS
+  WAREHOUSE = COMPUTE_WH
+  SCHEDULE = '60 minute'
+  COMMENT = 'Refresh CUSTOMER_360_DT (forced refresh — DT auto-refreshes too).'
+AS
+  ALTER DYNAMIC TABLE DAGSTER_DEMO.STAGING.CUSTOMER_360_DT REFRESH;
+
+CREATE OR REPLACE TASK WEEKLY_CHURN_SCORE
+  WAREHOUSE = COMPUTE_WH
+  SCHEDULE = 'USING CRON 0 0 * * 0 UTC'
+  COMMENT = 'Weekly churn-score recompute (Sunday midnight UTC).'
+AS
+  CREATE OR REPLACE TABLE DAGSTER_DEMO.ANALYTICS.CHURN_SCORES AS
+  SELECT
+    c.CUSTOMER_ID,
+    c.TIER,
+    DATEDIFF('day', MAX(o.ORDER_DATE), CURRENT_DATE()) AS DAYS_SINCE_LAST_ORDER,
+    CASE
+      WHEN DATEDIFF('day', MAX(o.ORDER_DATE), CURRENT_DATE()) > 90 THEN 0.8
+      WHEN DATEDIFF('day', MAX(o.ORDER_DATE), CURRENT_DATE()) > 30 THEN 0.4
+      ELSE 0.1
+    END AS CHURN_PROBABILITY
+  FROM DAGSTER_DEMO.RAW.CUSTOMERS c
+  LEFT JOIN DAGSTER_DEMO.RAW.ORDERS o ON c.CUSTOMER_ID = o.CUSTOMER_ID
+  GROUP BY 1, 2;
+
+CREATE OR REPLACE TASK MONTHLY_REVENUE_REPORT
+  WAREHOUSE = COMPUTE_WH
+  SCHEDULE = 'USING CRON 0 0 1 * * UTC'
+  COMMENT = 'Monthly revenue snapshot (1st of month, midnight UTC).'
+AS
+  CREATE OR REPLACE TABLE DAGSTER_DEMO.ANALYTICS.MONTHLY_REVENUE AS
+  SELECT
+    DATE_TRUNC('month', ORDER_DATE) AS MONTH,
+    CATEGORY,
+    SUM(TOTAL) AS REVENUE
+  FROM DAGSTER_DEMO.RAW.ORDERS
+  WHERE STATUS IN ('paid', 'delivered')
+  GROUP BY 1, 2;
+
+-- Parent → child task chain (uses AFTER clause — discoverable by the
+-- workspace component as a dep edge).
+CREATE OR REPLACE TASK PARENT_ETL_TASK
+  WAREHOUSE = COMPUTE_WH
+  SCHEDULE = 'USING CRON 0 3 * * * UTC'
+  COMMENT = 'Parent task in a 2-step chain. Triggers child via AFTER.'
+AS
+  CALL DAGSTER_DEMO.STAGING.SP_RECOMPUTE_TIERS();
+
+CREATE OR REPLACE TASK CHILD_ETL_TASK
+  WAREHOUSE = COMPUTE_WH
+  AFTER PARENT_ETL_TASK
+  COMMENT = 'Child task — runs after PARENT_ETL_TASK completes successfully.'
+AS
+  CALL DAGSTER_DEMO.STAGING.SP_PURGE_OLD_EVENTS(90);
+
+-- Destination tables for the tasks above (so they don't fail at first run).
+CREATE TABLE IF NOT EXISTS DAGSTER_DEMO.ANALYTICS.DAILY_REVENUE (
+  REVENUE_DATE  DATE,
+  REGION        VARCHAR,
+  ORDER_COUNT   NUMBER,
+  REVENUE       NUMBER(18,2)
+);
+
+-- ── 13. ALERT (1) ──────────────────────────────────────────────────────
+CREATE OR REPLACE ALERT HIGH_REVENUE_DAY_ALERT
+  WAREHOUSE = COMPUTE_WH
+  SCHEDULE = '60 minute'
+  IF (EXISTS (
+    SELECT 1
+    FROM DAGSTER_DEMO.ANALYTICS.DAILY_REVENUE
+    WHERE REVENUE_DATE = DATEADD('day', -1, CURRENT_DATE())
+      AND REVENUE > 50000
+  ))
+  THEN INSERT INTO DAGSTER_DEMO.ANALYTICS.ALERT_LOG
+       VALUES (CURRENT_TIMESTAMP(), 'high_revenue_day', 'Yesterday exceeded $50k');
+
+CREATE TABLE IF NOT EXISTS DAGSTER_DEMO.ANALYTICS.ALERT_LOG (
+  ALERT_TS  TIMESTAMP_NTZ,
+  ALERT_KEY VARCHAR,
+  MESSAGE   VARCHAR
+);
+
+-- ── 14. Resume the tasks ───────────────────────────────────────────────
+-- Comment these out if you don't want tasks running on their schedules.
+-- (Dagster still discovers + materializes them either way.)
+ALTER TASK DAILY_ORDERS_ROLLUP        RESUME;
+ALTER TASK HOURLY_CUSTOMER_METRICS    RESUME;
+ALTER TASK WEEKLY_CHURN_SCORE         RESUME;
+ALTER TASK MONTHLY_REVENUE_REPORT     RESUME;
+-- Child task must be resumed BEFORE parent so the AFTER chain works.
+ALTER TASK CHILD_ETL_TASK             RESUME;
+ALTER TASK PARENT_ETL_TASK            RESUME;
+
+-- ── 15. Done ───────────────────────────────────────────────────────────
+SELECT 'Setup complete. Run the snowflake_workspace demo against database='
+       || CURRENT_DATABASE() || ', schema=STAGING to discover everything.'
+       AS STATUS;
