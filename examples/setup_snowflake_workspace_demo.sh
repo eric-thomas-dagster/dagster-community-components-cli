@@ -392,6 +392,76 @@ if [ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ]; then
     "Snowflake is a cloud data platform. It separates storage and compute, supports semi-structured data natively, and offers time-travel features."
 fi
 
+# Reactive trigger: snowflake_table_observation_sensor watches a table's
+# row count + ingests changes. Demonstrates "react to table mutation"
+# beyond what Snowpipe's cloud-storage trigger can express.
+read -r -p "Add a snowflake_table_observation_sensor watching a table for changes? [y/N] " WANT_OBSERVER
+WANT_OBSERVER="${WANT_OBSERVER:-n}"
+OBSERVER_DATABASE=""
+OBSERVER_SCHEMA=""
+OBSERVER_TABLE=""
+if [ "$WANT_OBSERVER" = "y" ] || [ "$WANT_OBSERVER" = "Y" ]; then
+  prompt_default "Database to watch"          OBSERVER_DATABASE "$SNOW_DATABASE"
+  prompt_default "Schema to watch"            OBSERVER_SCHEMA   "RAW"
+  prompt_default "Table to watch"             OBSERVER_TABLE    "ORDERS"
+fi
+
+# Reactive chaining: wire AutomationCondition.eager() on the pipeline
+# asset so it fires the moment any of its imported upstreams change.
+# Only meaningful if the user selected the pipeline add-on.
+WANT_AUTOCOND="n"
+if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
+  read -r -p "Wire AutomationCondition.eager() on the pipeline so it auto-reacts to upstream changes? [y/N] " WANT_AUTOCOND
+  WANT_AUTOCOND="${WANT_AUTOCOND:-n}"
+fi
+
+# Heterogeneous + partitioned: synthetic_data_generator (Python, daily
+# partitioned) -> dataframe_to_snowflake (also daily partitioned). One
+# scaffold proves TWO claims: cross-engine lineage (Python on the left,
+# Snowflake on the right) AND first-class partition replay (backfill 30
+# days, concurrency-capped, from the dg dev UI).
+read -r -p "Add a partitioned Python -> Snowflake landing chain (heterogeneous + backfillable)? [y/N] " WANT_HET
+WANT_HET="${WANT_HET:-n}"
+HET_DATABASE=""
+HET_SCHEMA=""
+HET_TABLE=""
+HET_PARTITION_START=""
+if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then
+  prompt_default "Destination database for the daily landing"      HET_DATABASE "$SNOW_DATABASE"
+  prompt_default "Destination schema for the daily landing"        HET_SCHEMA   "RAW"
+  prompt_default "Destination table for the daily landing"         HET_TABLE    "PYTHON_DAILY_EVENTS"
+  prompt_default "Partition start date (YYYY-MM-DD; today by default)" HET_PARTITION_START \
+    "$(date -u -v-30d +%Y-%m-%d 2>/dev/null || date -u --date='30 days ago' +%Y-%m-%d)"
+fi
+
+# Data quality: freshness_check on a chosen imported asset.
+read -r -p "Add a freshness_check asset check on one of the imported entities? [y/N] " WANT_FRESH
+WANT_FRESH="${WANT_FRESH:-n}"
+FRESH_ASSET_KEY=""
+FRESH_FAIL_HOURS=""
+if [ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ]; then
+  echo "  Asset key format mirrors workspace asset keys: <type>/<lowercased_name>."
+  echo "  Examples: tasks/daily_orders_rollup, dynamic_tables/paid_orders_dt"
+  prompt_default "Asset key to attach the freshness check to" FRESH_ASSET_KEY "tasks/daily_orders_rollup"
+  prompt_default "Fail if no update within N hours"           FRESH_FAIL_HOURS "26"
+fi
+
+# dbt — Dagster's official `dagster-dbt` integration. Scaffolds a tiny
+# dbt project (dbt_project.yml + profiles.yml + 2 models) inside the
+# Dagster project. The DbtProjectComponent imports every model in the
+# project as a Dagster asset, with lineage from the source tables in
+# RAW.* through the dbt models to the final mart.
+read -r -p "Add a dbt project (Dagster's official dagster-dbt integration)? [y/N] " WANT_DBT
+WANT_DBT="${WANT_DBT:-n}"
+DBT_SOURCE_DB=""
+DBT_SOURCE_SCHEMA=""
+DBT_TARGET_SCHEMA=""
+if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then
+  prompt_default "Source database for dbt models"       DBT_SOURCE_DB    "$SNOW_DATABASE"
+  prompt_default "Source schema (where RAW.* tables live)" DBT_SOURCE_SCHEMA "RAW"
+  prompt_default "Target schema (where dbt models materialize)" DBT_TARGET_SCHEMA "DBT_ANALYTICS"
+fi
+
 # ── 8. Scaffold the project ────────────────────────────────────────────
 echo
 echo ">>> Scaffolding Dagster project at $PROJECT ..."
@@ -420,6 +490,27 @@ if [ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ]; then
   echo ">>> Installing snowflake_cortex_asset component ..."
   $CLI add snowflake_cortex_asset --auto-install
   rm -rf "src/$PKG/defs/snowflake_cortex_asset"
+fi
+if [ "$WANT_OBSERVER" = "y" ] || [ "$WANT_OBSERVER" = "Y" ]; then
+  echo ">>> Installing snowflake_table_observation_sensor component ..."
+  $CLI add snowflake_table_observation_sensor --auto-install
+  rm -rf "src/$PKG/defs/snowflake_table_observation_sensor"
+fi
+if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then
+  echo ">>> Installing synthetic_data_generator + dataframe_to_snowflake components ..."
+  $CLI add synthetic_data_generator --auto-install
+  rm -rf "src/$PKG/defs/synthetic_data_generator"
+  $CLI add dataframe_to_snowflake --auto-install
+  rm -rf "src/$PKG/defs/dataframe_to_snowflake"
+fi
+if [ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ]; then
+  echo ">>> Installing freshness_check component ..."
+  $CLI add freshness_check --auto-install
+  rm -rf "src/$PKG/defs/freshness_check"
+fi
+if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then
+  echo ">>> Installing dagster-dbt + dbt-snowflake ..."
+  uv add -q dagster-dbt 'dbt-core>=1.7' dbt-snowflake
 fi
 
 write_yaml() {
@@ -530,7 +621,9 @@ attributes:
     - {from: top_states, table: $PIPE_OUT_SCHEMA.TOP_3_STATES,   mode: replace}
 
   group_name: snowflake_transforms
-  include_preview_metadata: true"
+  include_preview_metadata: true$(if [ "$WANT_AUTOCOND" = "y" ] || [ "$WANT_AUTOCOND" = "Y" ]; then
+  printf "\n  automation_condition: \"{{ dg.AutomationCondition.eager() }}\""
+  fi)"
 fi
 
 # ── 11. Optional Cortex asset ──────────────────────────────────────────
@@ -549,6 +642,175 @@ attributes:
   input: |
     $CORTEX_INPUT
   group_name: snowflake_ai"
+fi
+
+# ── 12. Optional observation sensor ────────────────────────────────────
+# Reactive trigger: emits a runtime metric every check_interval_seconds
+# AND triggers downstream when row count changes — no Snowpipe needed.
+if [ "$WANT_OBSERVER" = "y" ] || [ "$WANT_OBSERVER" = "Y" ]; then
+  # bash 3.2 (macOS default) lacks `${var,,}` lowercase — use tr.
+  OBSERVER_TABLE_LC=$(echo "$OBSERVER_TABLE" | tr '[:upper:]' '[:lower:]')
+  OBSERVER_DATABASE_LC=$(echo "$OBSERVER_DATABASE" | tr '[:upper:]' '[:lower:]')
+  OBSERVER_SCHEMA_LC=$(echo "$OBSERVER_SCHEMA" | tr '[:upper:]' '[:lower:]')
+  write_yaml "row_count_observer" "type: $PKG.components.snowflake_table_observation_sensor.component.SnowflakeTableObservationSensorComponent
+attributes:
+  sensor_name: ${OBSERVER_TABLE_LC}_row_count_observer
+  asset_key: external/$OBSERVER_DATABASE_LC/$OBSERVER_SCHEMA_LC/$OBSERVER_TABLE_LC
+  account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
+  database: \"$OBSERVER_DATABASE\"
+  schema_name: \"$OBSERVER_SCHEMA\"
+  table_name: \"$OBSERVER_TABLE\"
+  username_env_var: SNOWFLAKE_USER
+  password_env_var: SNOWFLAKE_PASSWORD
+  warehouse: \"$SNOW_WAREHOUSE\"
+  check_interval_seconds: 60
+  include_preview_metadata: true"
+fi
+
+# ── 13. Optional partitioned heterogeneous chain ───────────────────────
+# Python synthetic_data_generator (daily partitioned) -> dataframe_to_snowflake
+# (also daily partitioned). Proves cross-engine lineage (Python ⇄ Snowflake)
+# AND lets you backfill arbitrary date ranges from the dg dev UI.
+if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then
+  write_yaml "python_daily_events" "type: $PKG.components.synthetic_data_generator.component.SyntheticDataGeneratorComponent
+attributes:
+  asset_name: python_daily_events
+  schema_type: events
+  row_count: 200
+  random_state: 42
+  partition_type: daily
+  partition_start: \"$HET_PARTITION_START\"
+  group_name: heterogeneous_ingest"
+
+  write_yaml "python_daily_events_to_snowflake" "type: $PKG.components.dataframe_to_snowflake.component.DataframeToSnowflakeComponent
+attributes:
+  asset_name: python_daily_events_to_snowflake
+  upstream_asset_key: python_daily_events
+  account_env_var: SNOWFLAKE_ACCOUNT
+  user_env_var: SNOWFLAKE_USER
+  password_env_var: SNOWFLAKE_PASSWORD
+  warehouse: \"$SNOW_WAREHOUSE\"
+  database: \"$HET_DATABASE\"
+  schema: \"$HET_SCHEMA\"
+  table: \"$HET_TABLE\"
+  if_exists: append
+  partition_type: daily
+  partition_start: \"$HET_PARTITION_START\"
+  partition_date_column: event_ts
+  group_name: heterogeneous_ingest"
+fi
+
+# ── 14. Optional freshness check ───────────────────────────────────────
+if [ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ]; then
+  write_yaml "freshness_check_demo" "type: $PKG.components.freshness_check.component.FreshnessPolicyComponent
+attributes:
+  asset_key: \"$FRESH_ASSET_KEY\"
+  policy_type: time_window
+  fail_window_hours: $FRESH_FAIL_HOURS
+  warn_window_hours: $(echo "$FRESH_FAIL_HOURS / 2" | bc 2>/dev/null || echo "12")"
+fi
+
+# ── 15. Optional dbt project ───────────────────────────────────────────
+# Scaffolds a tiny dbt project inside the Dagster project and wires it
+# in via Dagster's OFFICIAL dagster-dbt integration. Models build on top
+# of RAW.* tables and materialize into the chosen target schema.
+if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then
+  echo ">>> Scaffolding dbt project at dbt/ ..."
+  mkdir -p dbt/models/staging dbt/models/marts
+
+  cat > dbt/dbt_project.yml <<DBTPRJ
+name: 'snowflake_dagster_dbt'
+version: '1.0.0'
+config-version: 2
+profile: 'snowflake_dagster_dbt'
+model-paths: ["models"]
+target-path: "target"
+clean-targets: ["target", "dbt_packages"]
+models:
+  snowflake_dagster_dbt:
+    staging:
+      +materialized: view
+      +schema: dbt_staging
+    marts:
+      +materialized: table
+      +schema: $DBT_TARGET_SCHEMA
+DBTPRJ
+
+  cat > dbt/profiles.yml <<DBTPROF
+snowflake_dagster_dbt:
+  target: dev
+  outputs:
+    dev:
+      type: snowflake
+      account:   "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user:      "{{ env_var('SNOWFLAKE_USER') }}"
+      password:  "{{ env_var('SNOWFLAKE_PASSWORD') }}"
+      role:      "{{ env_var('SNOWFLAKE_ROLE', 'SYSADMIN') }}"
+      database:  "$DBT_SOURCE_DB"
+      warehouse: "$SNOW_WAREHOUSE"
+      schema:    "$DBT_TARGET_SCHEMA"
+      threads: 4
+DBTPROF
+
+  cat > dbt/models/staging/stg_orders.sql <<'DBTSQL'
+SELECT
+    order_id,
+    customer_id,
+    order_date,
+    category,
+    region,
+    total,
+    status
+FROM {{ source('raw', 'orders') }}
+WHERE status IN ('paid', 'delivered')
+DBTSQL
+
+  cat > dbt/models/staging/stg_customers.sql <<'DBTSQL'
+SELECT
+    customer_id,
+    first_name,
+    last_name,
+    tier,
+    lifetime_value
+FROM {{ source('raw', 'customers') }}
+WHERE is_active = true
+DBTSQL
+
+  cat > dbt/models/marts/customer_revenue.sql <<'DBTSQL'
+SELECT
+    c.customer_id,
+    c.tier,
+    c.lifetime_value,
+    COUNT(o.order_id)  AS order_count,
+    COALESCE(SUM(o.total), 0) AS recent_revenue
+FROM {{ ref('stg_customers') }} c
+LEFT JOIN {{ ref('stg_orders') }} o ON c.customer_id = o.customer_id
+GROUP BY 1, 2, 3
+DBTSQL
+
+  cat > dbt/models/staging/sources.yml <<DBTYAML
+version: 2
+sources:
+  - name: raw
+    database: $DBT_SOURCE_DB
+    schema:   $DBT_SOURCE_SCHEMA
+    tables:
+      - name: orders
+      - name: customers
+DBTYAML
+
+  # Parse the dbt project so DbtProjectComponent can load the manifest.
+  ( cd dbt && DBT_PROFILES_DIR=. uv run dbt parse --quiet 2>&1 | tail -5 || true )
+
+  # Dagster defs for the dbt project — uses the OFFICIAL dagster-dbt
+  # integration. Each model becomes a Dagster asset; sources become
+  # external observable assets; the lineage shows RAW → staging → marts.
+  write_yaml "dbt_project" "type: dagster_dbt.DbtProjectComponent
+attributes:
+  project:
+    dbt_project_dir: ../../../dbt
+    profiles_dir: ../../../dbt
+  group_name: dbt_models"
 fi
 
 # ── 12. .env.demo ──────────────────────────────────────────────────────
@@ -600,6 +862,22 @@ $([ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ] && cat <<P
 P
 )
 $([ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ] && echo "  • cortex_demo calls Snowflake Cortex ($CORTEX_MODE mode) — LLM as a first-class asset")
+$([ "$WANT_OBSERVER" = "y" ] || [ "$WANT_OBSERVER" = "Y" ] && echo "  • row_count_observer watches $OBSERVER_DATABASE.$OBSERVER_SCHEMA.$OBSERVER_TABLE for changes (every 60s)")
+$([ "$WANT_AUTOCOND" = "y" ] || [ "$WANT_AUTOCOND" = "Y" ] && echo "  • regional_top_paid_pipeline runs with AutomationCondition.eager() — fires the moment any upstream changes")
+$(if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then cat <<P
+  • python_daily_events → python_daily_events_to_snowflake (daily-partitioned).
+    Heterogeneous lineage: Python on the left, Snowflake on the right.
+    Backfill 30 days with:
+      uv run dg launch --assets python_daily_events_to_snowflake --partition-range $HET_PARTITION_START...\$(date -u +%Y-%m-%d) --max-concurrent 5
+P
+fi)
+$([ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ] && echo "  • freshness_check_demo fails if $FRESH_ASSET_KEY hasn't been updated in $FRESH_FAIL_HOURS hours")
+$(if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then cat <<P
+  • dbt project at ./dbt — 2 staging models + 1 mart (customer_revenue).
+    Imported via Dagster's official dagster-dbt integration; each model
+    is a Dagster asset with lineage from RAW.* → staging → marts.
+P
+fi)
 
 Cross-entity dep wiring:
 $(if [ "${#DEP_ENTITIES[@]}" -gt 0 ]; then

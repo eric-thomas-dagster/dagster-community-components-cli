@@ -42,7 +42,7 @@ Plus the things that aren't trigger-shaped but still help even in a pure-Snowfla
 
 ---
 
-### If you're a hybrid stack (most teams)
+### If you're a heterogeneous stack (most teams)
 
 Snowflake is one node in your data graph. You also have Fivetran / Airbyte / Sling for ingest, dbt for transforms, BI tools like Tableau / Power BI / Looker reading downstream, maybe a reverse-ETL step pushing data to Salesforce / HubSpot, ML models scoring upstream of all of it, and Python jobs gluing the edges. The pitch is straightforward: **one asset graph for the whole flow.**
 
@@ -112,9 +112,14 @@ Auto-installs `uv` if missing (with consent). Refuses piped invocation — it's 
 4. **Pick entity types.** `y/n` per type. Sensible defaults: tasks + dynamic_tables on; everything else off. Tighter scoping = less Snowflake metadata in your project and faster `dg dev` loads.
 5. **Optional pattern filters.** `filter_by_name_pattern` / `exclude_name_pattern` (regex). E.g. only import names matching `HOURLY_*` and skip anything matching `_TEMP$`.
 6. **Optional cross-entity deps.** Same flow as `databricks_workspace.md`: shows your imports numbered, asks "what does this depend on" for each, wires `assets_by_name` with `deps:` overrides under the hood.
-7. **Optional add-ons:**
+7. **Optional add-ons** — each prompted separately so you can stage exactly the demo you want. Every one of these corresponds to a specific row in the *"Why Dagster?"* table above:
    - **Multi-step `warehouse_pipeline`** — pick two of your tables, get a generated multi-step asset that joins them, adds a commission column via `op: sql`, groups by region, and writes two output tables (one per sink). All compute pushed to Snowflake.
    - **`snowflake_cortex_asset`** — picks `summarize` / `sentiment` / `complete` and an input string. Cortex LLM runs server-side, no extra API key.
+   - **`snowflake_table_observation_sensor`** — watches a chosen table for row-count changes (default: `RAW.ORDERS`). Materializes a downstream asset directly when changes are detected. Demonstrates the *"react to table mutation beyond what Snowpipe expresses"* pattern.
+   - **`AutomationCondition.eager()` on the pipeline** — only offered if you selected the multi-step pipeline above. Wires the pipeline asset to auto-fire the moment any of its imported upstreams change. Demonstrates *"fire when upstreams finish"* declarative chaining (vs. cron + AFTER).
+   - **Partitioned Python → Snowflake landing chain** — scaffolds a daily-partitioned `synthetic_data_generator` (Python) feeding `dataframe_to_snowflake`. Two claims in one: cross-engine lineage (Python on the left, Snowflake on the right) AND first-class partition replay — backfill 30 days from the `dg dev` UI with concurrency control.
+   - **`freshness_check` asset check** — attaches a fail-if-not-updated-within-N-hours check to one of the imported entities. Demonstrates per-asset data quality with native pass/fail surfacing.
+   - **Official `dagster-dbt` integration** — scaffolds a tiny dbt project under `./dbt/` (2 staging models + 1 mart, building on `RAW.ORDERS` + `RAW.CUSTOMERS`) and imports every dbt model as a Dagster asset via `DbtProjectComponent`. Lineage spans `RAW.*` (sources) → staging views → mart table, all in one graph alongside the workspace's tasks/DTs/procs.
 
 ## What gets generated
 
@@ -122,18 +127,30 @@ Auto-installs `uv` if missing (with consent). Refuses piped invocation — it's 
 snowflake-dagster/
 ├── .env.demo                              # mode 600, gitignored, contains your password
 ├── pyproject.toml                         # snowflake-connector-python pinned
+├── dbt/                                   # (if you picked the dbt add-on)
+│   ├── dbt_project.yml
+│   ├── profiles.yml                       # uses $SNOWFLAKE_* env vars
+│   └── models/
+│       ├── staging/{stg_orders.sql, stg_customers.sql, sources.yml}
+│       └── marts/customer_revenue.sql
 └── src/snowflake_dagster/
     ├── components/                        # community component sources scaffolded
     │   ├── snowflake_workspace/
-    │   ├── warehouse_pipeline/             (if you picked the pipeline add-on)
-    │   └── snowflake_cortex_asset/         (if you picked the Cortex add-on)
+    │   ├── warehouse_pipeline/             (if pipeline add-on)
+    │   ├── snowflake_cortex_asset/         (if Cortex add-on)
+    │   ├── snowflake_table_observation_sensor/  (if observation add-on)
+    │   ├── synthetic_data_generator/        (if partitioned-heterogeneous add-on)
+    │   ├── dataframe_to_snowflake/          (if partitioned-heterogeneous add-on)
+    │   └── freshness_check/                 (if freshness add-on)
     └── defs/
-        ├── snowflake_workspace/
-        │   └── defs.yaml                  # imports your entities, plus assets_by_name deps
-        ├── regional_top_paid_pipeline/    (optional add-on)
-        │   └── defs.yaml
-        └── cortex_demo/                   (optional add-on)
-            └── defs.yaml
+        ├── snowflake_workspace/             # imports entities + assets_by_name deps
+        ├── regional_top_paid_pipeline/      (optional — pipeline)
+        ├── cortex_demo/                     (optional — Cortex)
+        ├── row_count_observer/              (optional — observation sensor)
+        ├── python_daily_events/             (optional — partitioned heterogeneous)
+        ├── python_daily_events_to_snowflake/(optional — partitioned heterogeneous)
+        ├── freshness_check_demo/            (optional — freshness)
+        └── dbt_project/                     (optional — dbt)
 ```
 
 ### `defs/snowflake_workspace/defs.yaml`
