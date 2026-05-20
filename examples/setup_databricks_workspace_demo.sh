@@ -672,6 +672,11 @@ done
 
 TASK_KEYS_FOR_JOB=()
 LEAVES_FOR_JOB=()
+# INVOKES_JOB_IDS_FOR_JOB[i] = comma-separated job_ids that job i invokes via
+# `run_job_task` (Databricks' job-calls-job task type). The component
+# auto-wires these as cross-job deps; the script must not let the user
+# re-declare them (or, worse, declare them in reverse — that's a real cycle).
+INVOKES_JOB_IDS_FOR_JOB=()
 echo
 echo ">>> Looking up tasks for each selected job ..."
 for i in "${!SELECTED_IDS[@]}"; do
@@ -683,6 +688,7 @@ for i in "${!SELECTED_IDS[@]}"; do
     echo "  ⚠ Could not fetch job $JID detail — defaulting to a single task named 'main'."
     TASK_KEYS_FOR_JOB+=("main")
     LEAVES_FOR_JOB+=("main")
+    INVOKES_JOB_IDS_FOR_JOB+=("")
     continue
   fi
   TKS=$(echo "$JOB_DETAIL" | jq -r '.settings.tasks[]?.task_key' 2>/dev/null | paste -sd, -)
@@ -701,14 +707,20 @@ for i in "${!SELECTED_IDS[@]}"; do
       LEAVES="$TKS"
     fi
   fi
+  # run_job_task linkages: pull every task's .run_job_task.job_id (if set).
+  INVOKES=$(echo "$JOB_DETAIL" | jq -r \
+    '.settings.tasks[]? | select(.run_job_task) | .run_job_task.job_id' \
+    2>/dev/null | sort -u | paste -sd, -)
   TASK_KEYS_FOR_JOB+=("$TKS")
   LEAVES_FOR_JOB+=("$LEAVES")
+  INVOKES_JOB_IDS_FOR_JOB+=("$INVOKES")
   TASK_COUNT=$(echo "$TKS" | tr ',' '\n' | grep -c .)
-  LEAF_COUNT=$(echo "$LEAVES" | tr ',' '\n' | grep -c .)
+  INVOKE_NOTE=""
+  [ -n "$INVOKES" ] && INVOKE_NOTE="  (invokes job_id: $INVOKES via run_job_task)"
   if [ "$TASK_COUNT" -eq 1 ]; then
-    printf "  job_id=%-10s  %s\n" "$JID" "$JNAME"
+    printf "  job_id=%-10s  %s%s\n" "$JID" "$JNAME" "$INVOKE_NOTE"
   else
-    printf "  job_id=%-10s  %s  (%d tasks, leaf: %s)\n" "$JID" "$JNAME" "$TASK_COUNT" "$LEAVES"
+    printf "  job_id=%-10s  %s  (%d tasks, leaf: %s)%s\n" "$JID" "$JNAME" "$TASK_COUNT" "$LEAVES" "$INVOKE_NOTE"
   fi
 done
 
@@ -811,12 +823,68 @@ has_cycle() {
   return 0
 }
 
+# Merge implicit run_job_task edges into the graph BEFORE the cycle check.
+# If job i invokes job j via run_job_task, the component already wires
+# (i depends on j). We add that edge here so:
+#   (a) Any user-declared (j depends on i) will be caught as a cycle.
+#   (b) Any user-declared (i depends on j) is redundant — we warn and dedupe.
+# Build lookup: SELECTED_ID_TO_INDEX[<job_id>] = 1-based index
+declare -A SELECTED_ID_TO_INDEX=()
+for i in "${!SELECTED_IDS[@]}"; do
+  SELECTED_ID_TO_INDEX["${SELECTED_IDS[$i]}"]=$((i+1))
+done
+
+IMPLICIT_EDGE_COUNT=0
+REDUNDANT_USER_DEPS=0
+for i in "${!SELECTED_IDS[@]}"; do
+  INVOKES_CSV="${INVOKES_JOB_IDS_FOR_JOB[$i]}"
+  [ -z "$INVOKES_CSV" ] && continue
+  OLD_IFS="$IFS"; IFS=','
+  for invoked_jid in $INVOKES_CSV; do
+    IFS="$OLD_IFS"
+    target_idx="${SELECTED_ID_TO_INDEX[$invoked_jid]:-}"
+    if [ -z "$target_idx" ]; then
+      # The invoked job is not in the selected set — nothing to wire here.
+      echo "  ℹ '${SELECTED_NAMES[$i]}' invokes job_id $invoked_jid via run_job_task,"
+      echo "    but that job wasn't selected, so no asset will be created for it."
+      continue
+    fi
+    # Is this edge (i depends on target_idx-1) already in the user's deps?
+    cur_deps_csv="${DEPS_IDX_FOR_JOB[$i]}"
+    if echo ",$cur_deps_csv," | grep -q ",$target_idx,"; then
+      echo "  ℹ '${SELECTED_NAMES[$i]}' depends on '${SELECTED_NAMES[$((target_idx-1))]}' —"
+      echo "    already auto-wired by the component via run_job_task. Your manual"
+      echo "    declaration is redundant (kept, but harmless)."
+      REDUNDANT_USER_DEPS=$((REDUNDANT_USER_DEPS+1))
+    else
+      # Append the implicit edge to the user's deps so the cycle check sees it.
+      if [ -z "$cur_deps_csv" ]; then
+        DEPS_IDX_FOR_JOB[$i]="$target_idx"
+      else
+        DEPS_IDX_FOR_JOB[$i]="${cur_deps_csv},$target_idx"
+      fi
+      # Also extend DEPS_FOR_JOB so YAML emission picks up the implicit edge.
+      target_name="${SELECTED_NAMES[$((target_idx-1))]}"
+      cur_names="${DEPS_FOR_JOB[$i]}"
+      if [ -z "$cur_names" ]; then
+        DEPS_FOR_JOB[$i]="$target_name"
+      else
+        DEPS_FOR_JOB[$i]="${cur_names}|${target_name}"
+      fi
+      IMPLICIT_EDGE_COUNT=$((IMPLICIT_EDGE_COUNT+1))
+      echo "  ✓ Implicit dep added: '${SELECTED_NAMES[$i]}' → '$target_name' (via run_job_task)"
+    fi
+  done
+  IFS="$OLD_IFS"
+done
+
 if ! has_cycle; then
   echo
   echo "    The dependency graph above contains a cycle. Dagster can't materialize"
   echo "    a cyclic asset graph — please re-run and pick non-circular deps."
   echo "    (Tip: within-job task deps are auto-discovered by the component;"
-  echo "     only list CROSS-JOB deps here.)"
+  echo "     only list CROSS-JOB deps here. Also note: a run_job_task linkage"
+  echo "     implies the calling job depends on the called one — you can't reverse it.)"
   exit 1
 fi
 
