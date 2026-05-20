@@ -59,3 +59,42 @@ attributes:
 ## Streaming
 
 Set `streaming: true` to use polars's streaming engine — out-of-core execution for frames larger than memory. Combine with `polars_scan_parquet` upstream for the full predicate-pushdown + streaming story.
+
+## Component reference
+
+### polars_pipeline
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `asset_name` | string | yes | Output Dagster asset name |
+| `upstream_asset_key` | string | yes | Upstream asset key (pandas or polars DataFrame) |
+| `operations` | list[dict] | yes | Ordered ops applied as one lazy chain. Each is `{op: <kind>, ...params}` |
+| `output_type` | enum | no | `polars` (default) or `pandas`. Polars preserves type for downstream chains |
+| `streaming` | bool | no | Use polars's streaming engine on the final `.collect()`. Default `false` |
+| `group_name`, `description`, `asset_tags`, `kinds`, `owners`, `deps` | (standard) | no | Standard Dagster metadata fields |
+| `include_preview_metadata` | bool | no | Default `false` |
+| `preview_rows` | int (1–500) | no | Default `25` |
+
+Supported `operations[*].op` values:
+
+| `op` | Params | Notes |
+|---|---|---|
+| `filter` | `predicate: "<SQL>"` | Polars SQLContext over the condition string |
+| `with_columns` | `expressions: {name: <SQL expr>}` | Add/replace columns from SQL expressions |
+| `select` | `columns: [a, b]` | Keep only these columns |
+| `drop` | `columns: [a, b]` | Drop these columns |
+| `rename` | `mapping: {old: new}` | Rename columns |
+| `group_by` | `group_by: [cols]`, `aggregations: {out: {col, agg}}` | Aggregations as `out_col: {col, agg}` |
+| `sort` | `by: [cols]`, `descending: bool/list` | Sort |
+| `head` / `tail` | `n: int` | First/last N rows |
+| `head_per_group` | `group_by: [cols]`, `n: int` | Top-N per group (sort first if order matters) |
+| `unique` | `subset: [cols]`, `keep: first/last/none` | Dedup |
+| `drop_nulls` | `subset: [cols]` (optional) | Drop rows with null in subset |
+| `fill_null` | `value: <any>` | Fill nulls |
+| `cast` | `mapping: {col: 'Int64'}` | Type cast |
+
+Supported `agg` values in `group_by`: `sum / mean / avg / min / max / count / median / std / var / first / last / nunique`.
+
+### Component README (full reference)
+
+[polars_pipeline](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/polars_pipeline/README.md)

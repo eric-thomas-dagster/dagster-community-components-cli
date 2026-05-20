@@ -84,3 +84,196 @@ When you'd switch to a single-asset chain instead:
 - You want the warehouse engine to plan the whole chain as one query (CTEs / subqueries) for execution-plan optimization
 
 For that case, use `snowpark_pipeline` (Snowflake-native, full DataFrame API), `sql_transform` (Jinja-templated CTAS that can contain CTE chains), or write a single `warehouse_summarize` with a complex `upstream_table` that's itself a CTE-shaped view.
+
+## Component reference
+
+Every component in the `warehouse_*` family shares the same six "shape" fields and adds 1–4 op-specific fields. The shared ones are listed once below; the op-specific fields follow per component.
+
+### Shared shape fields (every warehouse_* component)
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `asset_name` | string | yes | Dagster asset name (the output table this asset produces) |
+| `database_url` | string | one of | Literal SQLAlchemy URL — quick demos / DuckDB |
+| `database_url_env_var` | string | one of | Env var holding the URL — production / secrets |
+| `dialect` | enum | yes | `duckdb` / `postgres` / `postgresql` / `snowflake` / `bigquery` / `redshift` / `databricks` / `mssql` / `mysql` |
+| `upstream_table` | string | yes | Source table name (e.g. `raw.orders`) |
+| `output_table` | string | yes | Destination table name (e.g. `analytics.paid_orders`) |
+| `mode` | enum | no | `replace` (CREATE OR REPLACE / DROP+CREATE) or `create_if_not_exists`. Default `replace` |
+| `group_name` | string | no | Dagster asset group name |
+| `deps` | list[string] | no | Upstream Dagster asset keys (lineage-only — no data passed) |
+| `owners` | list[string] | no | Asset owners |
+| `description` | string | no | Asset description shown in the catalog |
+| `asset_tags` | dict[string, string] | no | Catalog tags |
+| `kinds` | list[string] | no | Asset kinds (default: `[<dialect>, sql]`) |
+| `include_preview_metadata` | bool | no | Emit a `SELECT … LIMIT N` preview after CTAS. Default `false` |
+| `preview_rows` | int (1–200) | no | Rows in the preview when emitted. Default `25` |
+
+Only the op-specific fields are listed below per component.
+
+### warehouse_filter
+
+CTAS WHERE predicate pushdown. The warehouse engine evaluates the WHERE clause and writes only matching rows.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `predicate` | string | yes | SQL WHERE predicate, e.g. `"status = 'paid' AND amount > 100"` |
+| `negate` | bool | no | If true, keep rows that do NOT match (becomes `NOT (predicate)`). Default `false` |
+
+### warehouse_top_n_per_group
+
+Top-N-per-group via `ROW_NUMBER() OVER (PARTITION BY ... ORDER BY ...) ≤ N`.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `group_by` | list[string] | yes | Partition columns (e.g. `[category]`) |
+| `sort_by` | string | yes | Column to sort by within each group (the "top" criterion) |
+| `n` | int | no | Rows to keep per group. Default `3` |
+| `ascending` | bool | no | If true, keep BOTTOM N. Default `false` (top N) |
+| `rank_column` | string | no | Optional output column with the 1..N rank. If unset, helper column is hidden |
+
+### warehouse_dedup
+
+Deduplicate via `ROW_NUMBER() = 1` per `subset` key (or `SELECT DISTINCT *` when no subset given).
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `subset` | list[string] | no | Columns to dedup by. If unset, uses `SELECT DISTINCT *` |
+| `order_by` | list[string] | no | Tiebreaker columns (which row to keep when subset values collide). Falls back to subset cols |
+| `descending` | bool | no | If true, ORDER BY DESC (keep latest). Default `false` (keep first) |
+
+### warehouse_join
+
+Standard SQL join (INNER / LEFT / RIGHT / OUTER / FULL / CROSS) into a CTAS.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `left_table` | string | yes | Left-side table name (aliased as `_l` in `select_cols`) |
+| `right_table` | string | yes | Right-side table name (aliased as `_r`) |
+| `how` | enum | no | `inner` / `left` / `right` / `outer` / `full` / `cross`. Default `inner` |
+| `on_columns` | list[string] | one of | Join columns (same name on both sides). NB: NOT `on` — YAML 1.1 parses bare `on:` as boolean |
+| `left_on` + `right_on` | list[string] | one of | When join columns have different names — must have same length |
+| `select_cols` | list[string] | no | Explicit projection — use `_l.col` / `_r.col` to disambiguate. Default `_l.*, _r.*` |
+
+### warehouse_union
+
+Stack N tables vertically via UNION ALL (default) or UNION DISTINCT.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `upstream_tables` | list[string] | yes | Table names to union (≥ 2). Replaces the shared `upstream_table` field |
+| `distinct` | bool | no | True → UNION (drops duplicates); false → UNION ALL. Default `false` |
+| `select_cols` | list[string] | no | Optional common projection when input schemas only partially overlap |
+
+(Note: `warehouse_union` is the only `warehouse_*` component that uses `upstream_tables` instead of the singular `upstream_table`.)
+
+### warehouse_formula
+
+Add/replace columns via inline SQL expressions — Alteryx "Formula In-DB" equivalent.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `expressions` | dict[string, string] | yes | Map of `output_col → SQL expression`. The expression is inlined verbatim into the SELECT clause and aliased as the output column |
+| `keep_existing` | bool | no | `true` (default) → `SELECT *, <expressions>`. `false` + `keep_columns` → only those originals + new |
+| `keep_columns` | list[string] | no | Explicit original-column projection when `keep_existing=false` |
+
+Expression bodies are opaque SQL — arithmetic, `CASE`, `EXTRACT`, date funcs, JSON paths, window functions, subqueries all work.
+
+### warehouse_multi_field_formula
+
+Apply ONE formula template to N columns. The Alteryx "Multi-Field Formula" equivalent. `{col}` is the placeholder for each column name.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `expression` | string | yes | Formula template using `{col}` placeholder, e.g. `"UPPER(TRIM({col}))"` |
+| `columns` | list[string] | yes | Columns to apply the expression to |
+| `output_mode` | enum | no | `replace` (in-place, uses `SELECT * EXCLUDE/EXCEPT` — duckdb/snowflake/bigquery/databricks only), `add_suffix` (default), `add_prefix` |
+| `suffix` | string | no | Suffix for `add_suffix` mode. Default `"_calc"` |
+| `prefix` | string | no | Prefix for `add_prefix` mode. Default `"calc_"` |
+
+### warehouse_multi_row_formula
+
+Row-relative formulas (running totals, LAG/LEAD, ranks) via SQL window functions. The Alteryx "Multi-Row Formula" equivalent. All entries in `expressions` share the same `OVER(PARTITION BY ... ORDER BY ...)` clause.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `expressions` | dict[string, dict] | yes | Map of `output_col → {kind: <pattern>, col: <src>, ...}` |
+| `partition_by` | list[string] | no | PARTITION BY columns. Omit for unpartitioned window |
+| `order_by` | list[string] | no | ORDER BY columns. Required for ordered window functions (lag/lead/rank/running_*) |
+| `order_descending` | list[bool] | no | Per-`order_by` descending flags. Default all ascending |
+
+`expressions[*].kind:` supported values:
+
+| `kind` | Required `col:` | SQL form |
+|---|---|---|
+| `running_total` / `running_sum` | yes | `SUM(col)` |
+| `running_avg` / `running_mean` | yes | `AVG(col)` |
+| `lag` | yes | `LAG(col, offset, default)` — `offset:` and `default:` optional |
+| `lead` | yes | `LEAD(col, offset, default)` |
+| `row_number` | no | `ROW_NUMBER()` |
+| `rank` | no | `RANK()` |
+| `dense_rank` | no | `DENSE_RANK()` |
+| `percent_rank` | no | `PERCENT_RANK()` |
+| `first_value` / `last_value` | yes | `FIRST_VALUE(col)` / `LAST_VALUE(col)` |
+| `expression` | optional | Raw SQL — `{col}` substituted if both `col:` and `{col}` present |
+
+### warehouse_summarize
+
+GROUP BY + aggregation, CTAS-pushdown.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `group_by` | list[string] | yes | Columns to group by |
+| `aggregations` | dict[string, …] | yes | Map of `output_col → agg`. Two forms: `{out_col: agg_func}` (e.g. `revenue: sum`) or `{out_col: {col: <src>, agg: <func>}}` |
+
+Supported `agg` values: `sum` / `mean` / `avg` / `min` / `max` / `count` / `nunique` / `n_unique`. Dialect-specific aggregates (`median`, `stddev`, percentiles) are not supported in the first cut — write a custom expression in `warehouse_formula` instead.
+
+### warehouse_pipeline
+
+Multi-step CTE chain compiled to ONE CTAS. Same op vocabulary as `polars_pipeline` and `snowpark_pipeline`. The shared shape fields above apply EXCEPT `upstream_table` — use `source:` instead.
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `source` | dict | yes | `{upstream_table: <name>}`. Inline SQL source planned for a future release |
+| `operations` | list[dict] | yes | Ordered ops compiled into one CTE chain |
+
+Supported `operations[*].op` values:
+
+| `op` | Required params | Notes |
+|---|---|---|
+| `filter` | `predicate: <SQL>` | WHERE clause |
+| `select` | `columns: [...]` | SELECT projection |
+| `drop` | `columns: [...]` | Uses `SELECT * EXCEPT/EXCLUDE` — duckdb/bigquery/snowflake/databricks only |
+| `with_columns` | `expressions: {out: <SQL expr>}` | Add computed columns |
+| `group_by` | `group_by: [cols]`, `aggregations: {out: {col, agg}}` | Same shape as `warehouse_summarize` |
+| `sort` | `by: [cols]`, `descending: bool/list` | ORDER BY |
+| `limit` | `n: int` | LIMIT |
+| `top_n` | `sort_by`, `n`, `ascending` | Global top N |
+| `top_n_per_group` | `group_by`, `sort_by`, `n`, `ascending` | Top N per partition (uses SELECT * EXCEPT) |
+| `dedup` | `subset` + optional `order_by` + `descending` | ROW_NUMBER() = 1 |
+| `distinct` | (none) | `SELECT DISTINCT *` |
+| `union` | `other: <table>`, `distinct: bool`, `select_cols` | UNION / UNION ALL |
+| `join` | `right: <table>`, `how:`, `on_columns:` (or `left_on`+`right_on`), `select_cols` | Join with the running CTE chain on the left |
+
+### Component READMEs (full reference)
+
+For everything not exercised by this demo (rarely-used fields, dialect quirks, etc.), the per-component READMEs in the templates repo are authoritative:
+
+- [warehouse_filter](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_filter/README.md)
+- [warehouse_top_n_per_group](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_top_n_per_group/README.md)
+- [warehouse_dedup](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_dedup/README.md)
+- [warehouse_join](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_join/README.md)
+- [warehouse_union](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_union/README.md)
+- [warehouse_formula](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_formula/README.md)
+- [warehouse_multi_field_formula](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_multi_field_formula/README.md)
+- [warehouse_multi_row_formula](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_multi_row_formula/README.md)
+- [warehouse_summarize](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_summarize/README.md)
+- [warehouse_pipeline](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/warehouse_pipeline/README.md)
+
+## Demo notes
+
+- **DuckDB single-writer.** The setup chains every step with explicit `deps:` so they run serially. Production warehouses don't need this; drop the artificial deps when retargeting.
+- **The CTAS is in the metadata.** Each materialized asset emits `warehouse/sql` in its asset metadata — the exact CREATE statement that ran. Click into the asset in `dg dev` to see the SQL.
+- **No Python pandas in flight.** The only Python-side work is `synthetic_data_generator → dataframe_to_table` to seed the source table. Every step after that is the warehouse engine doing all the work; the Python process just submits CTAS statements and reads back row counts.
+- **`mode: replace` semantics.** On DuckDB / Snowflake / BigQuery / Databricks this becomes `CREATE OR REPLACE TABLE`. On Postgres / Redshift / MSSQL / MySQL (no `CREATE OR REPLACE` support) it becomes `DROP TABLE IF EXISTS` + `CREATE TABLE AS`.
+- **`SELECT * EXCEPT()` vs `EXCLUDE`.** DuckDB and Snowflake use `EXCLUDE`; BigQuery and Databricks use `EXCEPT`. `warehouse_multi_field_formula` `output_mode: replace` and `warehouse_pipeline` `op: drop` / `op: top_n_per_group` depend on this — they only work on the four dialects that support star-projection-minus-columns.

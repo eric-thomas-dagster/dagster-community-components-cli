@@ -127,3 +127,76 @@ Use `snowpark_pipeline` when you're Snowflake-native and want the rich DataFrame
 - `snowpark_pipeline` — multi-step Snowpark DataFrame in one asset. Compute pushed to Snowflake; **no data through Python at all** — Snowflake-resident the whole time.
 
 Pick by where the data already lives.
+
+## Component reference
+
+### snowpark_pipeline
+
+| Field | Type | Required | Description |
+|---|---|---|---|
+| `asset_name` | string | yes | Output Dagster asset name |
+| `connection` | dict | yes | Snowpark `Session.builder.configs(...)` fields. Any key suffixed `_env_var` is resolved from the environment at runtime |
+| `source` | dict | yes | `{kind: table\|sql, table\|query: ...}` |
+| `operations` | list[dict] | yes | Ordered Snowpark DataFrame ops compiled to one Snowflake SQL statement |
+| `sink` | dict | yes | `{kind: table\|none, table: ..., mode: overwrite\|append}` |
+| `group_name`, `description`, `asset_tags`, `kinds`, `owners`, `deps` | (standard) | no | Standard Dagster metadata fields |
+
+`connection` fields (any of these can be `<field>_env_var: ENV_NAME` for env-var sourcing):
+
+| Field | Required | Description |
+|---|---|---|
+| `account` | yes | Snowflake account identifier (`<org>-<account>` or full URL) |
+| `user` | yes | Username |
+| `password` | one of | Password (literal or `_env_var`) |
+| `private_key` | one of | Private key for key-pair auth (literal or `_env_var`) |
+| `private_key_passphrase` | optional | Passphrase for encrypted private key (literal or `_env_var`) |
+| `authenticator` | one of | `externalbrowser` (SSO), `oauth`, etc. (literal or `_env_var`) |
+| `token` | conditional | Required when `authenticator: oauth` (literal or `_env_var`) |
+| `role` | recommended | Snowflake role for the session |
+| `warehouse` | recommended | Snowflake compute warehouse |
+| `database` | recommended | Default database for the session |
+| `schema` | recommended | Default schema |
+
+`source` kinds:
+
+| `source.kind` | Required fields | Notes |
+|---|---|---|
+| `table` | `table` | Reads via `session.table(<name>)` |
+| `sql` | `query` | Reads via `session.sql(<query>)` |
+
+`sink` kinds:
+
+| `sink.kind` | Required fields | Behavior |
+|---|---|---|
+| `table` | `table`, optional `mode` (overwrite/append) | Snowpark writes via `save_as_table(...)`. Result lives in Snowflake |
+| `none` | (none) | Collects to pandas via `.to_pandas()`. Use only for small results |
+
+Supported `operations[*].op` values:
+
+| `op` | Params | Notes |
+|---|---|---|
+| `filter` | `predicate: "<SQL>"` | Snowpark `F.sql_expr(...)` filter |
+| `select` | `columns: [a, b]` | `.select(...)` |
+| `drop` | `columns: [a, b]` | `.drop(...)` |
+| `rename` | `mapping: {old: new}` | Renames via repeated `.rename({old: new})` |
+| `with_columns` | `expressions: {name: <SQL expr>}` | `.with_column(name, F.sql_expr(...))` |
+| `group_by` | `group_by: [cols]`, `aggregations: {out: {col, agg}}` | `.group_by(...).agg(...)` |
+| `sort` | `by: [cols]`, `descending: bool/list` | `.sort(...)` |
+| `limit` | `n: int` | `.limit(n)` |
+| `distinct` | (none) | `.distinct()` |
+| `drop_nulls` | `subset: [cols]` (optional) | `.na.drop(subset=...)` |
+| `join` | `right_table: <name>`, `how:`, `on:` (or `left_on`+`right_on`) | Reads right side via `session.table(...)` then `.join(...)` |
+
+Supported `agg` values: `sum / mean / avg / min / max / count / count_distinct / stddev / variance`.
+
+### Component README (full reference)
+
+[snowpark_pipeline](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/snowpark_pipeline/README.md)
+
+## Demo notes
+
+- **Compute is 100% server-side.** Snowpark builds a query plan from your op list and compiles it to ONE Snowflake SQL statement at the sink. The Python process only submits the SQL and reads back row count. No data leaves Snowflake.
+- **Universal `*_env_var` resolution.** Any key in `connection:` suffixed `_env_var` is resolved from `os.environ` at runtime. So all credentials — account / user / password / private_key / authenticator / token — can be sourced from env vars uniformly. Literal values pass through unchanged.
+- **Session is per-asset.** Each materialization opens a new Snowpark `Session`, runs the chain, then closes the session. For long-running cluster reuse, use a shared Snowflake session resource (out of scope for this single-asset component).
+- **`sink.kind: none` calls `.to_pandas()`.** Useful for downstream Dagster assets that are pandas-shaped. For large results, write to a Snowflake table — collecting to pandas brings everything through the Python wire format.
+- **Cost.** Charged to your Snowflake compute warehouse. The demo's workload (small filter / group_by / sort / limit) runs on an XS warehouse in well under a minute — fractions of a credit.
