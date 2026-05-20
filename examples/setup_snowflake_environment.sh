@@ -89,12 +89,14 @@ echo "Authentication method:"
 echo "  [1] Keypair (RSA private key file) — headless, recommended"
 echo "  [2] SSO (externalbrowser) — pops a browser for auth"
 echo "  [3] Password (if your account still allows it)"
+echo "  [4] PAT (Programmatic Access Token) — works when keypair registration is blocked"
 read -r -p "Choice [1]: " AUTH_CHOICE
 AUTH_CHOICE="${AUTH_CHOICE:-1}"
 SNOW_AUTH_METHOD=""
 SNOW_PASS=""
 SNOW_KEY_FILE=""
 SNOW_KEY_PWD=""
+SNOW_PAT=""
 case "$AUTH_CHOICE" in
   1|keypair)
     SNOW_AUTH_METHOD="keypair"
@@ -126,8 +128,22 @@ case "$AUTH_CHOICE" in
       echo
     fi
     ;;
+  4|pat|PAT)
+    SNOW_AUTH_METHOD="pat"
+    if [ -n "${SNOWFLAKE_PAT:-}" ]; then
+      echo "PAT: [using \$SNOWFLAKE_PAT from env]"
+      SNOW_PAT="$SNOWFLAKE_PAT"
+    else
+      read -r -s -p "Programmatic Access Token (hidden): " SNOW_PAT
+      echo
+    fi
+    if [ -z "$SNOW_PAT" ]; then
+      echo "  ⚠ PAT is required when auth method is 'pat'."
+      exit 1
+    fi
+    ;;
   *)
-    echo "  ⚠ Invalid choice — pick 1, 2, or 3."
+    echo "  ⚠ Invalid choice — pick 1, 2, 3, or 4."
     exit 1
     ;;
 esac
@@ -164,6 +180,7 @@ SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
   SF_TARGET_DB="$SNOW_TARGET_DB" \
   SF_AUTH_METHOD="$SNOW_AUTH_METHOD" \
   SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
+  SF_PAT="$SNOW_PAT" \
   PRECHECK_OUT="$PRECHECK_OUT" \
   uv run --quiet --with 'snowflake-connector-python' --no-project python - <<'PYEOF'
 import json, os, sys
@@ -186,6 +203,9 @@ if auth == 'keypair':
         ck['private_key_file_pwd'] = os.environ['SF_KEY_PWD']
 elif auth == 'sso':
     ck['authenticator'] = 'externalbrowser'
+elif auth == 'pat':
+    ck['authenticator'] = 'PROGRAMMATIC_ACCESS_TOKEN'
+    ck['password'] = os.environ.get('SF_PAT', '')
 else:  # password
     ck['password'] = os.environ.get('SF_PASS', '')
 
@@ -390,6 +410,7 @@ SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_ROLE="$SNOW_ROLE" \
   SF_AUTH_METHOD="$SNOW_AUTH_METHOD" \
   SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
+  SF_PAT="$SNOW_PAT" \
   SF_SQL_FILE="$SQL_FILE" \
   uv run --quiet --with 'snowflake-connector-python' --no-project python - <<'PYEOF'
 import os, re, sys, time

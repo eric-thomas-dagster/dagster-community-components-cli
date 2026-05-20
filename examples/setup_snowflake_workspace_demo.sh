@@ -145,12 +145,14 @@ echo "Authentication method:"
 echo "  [1] Keypair (RSA private key file) — headless, recommended"
 echo "  [2] SSO (externalbrowser) — pops a browser; OK for laptop dg dev only"
 echo "  [3] Password (if your account still allows it)"
+echo "  [4] PAT (Programmatic Access Token) — works when keypair registration is blocked"
 read -r -p "Choice [1]: " AUTH_CHOICE
 AUTH_CHOICE="${AUTH_CHOICE:-1}"
 SNOW_AUTH_METHOD=""
 SNOW_PASS=""
 SNOW_KEY_FILE=""
 SNOW_KEY_PWD=""
+SNOW_PAT=""
 case "$AUTH_CHOICE" in
   1|keypair)
     SNOW_AUTH_METHOD="keypair"
@@ -182,8 +184,22 @@ case "$AUTH_CHOICE" in
       echo
     fi
     ;;
+  4|pat|PAT)
+    SNOW_AUTH_METHOD="pat"
+    if [ -n "${SNOWFLAKE_PAT:-}" ]; then
+      echo "PAT: [using \$SNOWFLAKE_PAT from env]"
+      SNOW_PAT="$SNOWFLAKE_PAT"
+    else
+      read -r -s -p "Programmatic Access Token (hidden): " SNOW_PAT
+      echo
+    fi
+    if [ -z "$SNOW_PAT" ]; then
+      echo "  ⚠ PAT is required when auth method is 'pat'."
+      exit 1
+    fi
+    ;;
   *)
-    echo "  ⚠ Invalid choice — pick 1, 2, or 3."
+    echo "  ⚠ Invalid choice — pick 1, 2, 3, or 4."
     exit 1
     ;;
 esac
@@ -227,6 +243,9 @@ if auth == 'keypair':
         ck['private_key_file_pwd'] = os.environ['SF_KEY_PWD']
 elif auth == 'sso':
     ck['authenticator'] = 'externalbrowser'
+elif auth == 'pat':
+    ck['authenticator'] = 'PROGRAMMATIC_ACCESS_TOKEN'
+    ck['password'] = os.environ.get('SF_PAT', '')
 else:
     ck['password'] = os.environ.get('SF_PASS', '')
 try:
@@ -239,7 +258,7 @@ PYHEAD
 )
 
 # Verification: SELECT CURRENT_VERSION() → must return a row.
-SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_METHOD="$SNOW_AUTH_METHOD" SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
+SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_METHOD="$SNOW_AUTH_METHOD" SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" SF_PAT="$SNOW_PAT" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_DATABASE="$SNOW_DATABASE" SF_SCHEMA="$SNOW_SCHEMA" \
   SF_ROLE="$SNOW_ROLE" \
   uv run --quiet --with 'snowflake-connector-python' --no-project python - <<EOF
@@ -262,7 +281,7 @@ echo "────────────────────────�
 echo "  Discovering importable entities in $SNOW_DATABASE.$SNOW_SCHEMA ..."
 echo "─────────────────────────────────────────────────────────────────────"
 
-SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_METHOD="$SNOW_AUTH_METHOD" SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
+SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_METHOD="$SNOW_AUTH_METHOD" SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" SF_PAT="$SNOW_PAT" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_DATABASE="$SNOW_DATABASE" SF_SCHEMA="$SNOW_SCHEMA" \
   SF_ROLE="$SNOW_ROLE" INV_OUT="$INV_OUT" \
   uv run --quiet --with 'snowflake-connector-python' --no-project python - <<EOF
@@ -691,6 +710,12 @@ snow_auth_fields_direct() {
     sso)
       printf '%sauthenticator: externalbrowser\n' "$I"
       ;;
+    pat)
+      # PAT uses authenticator=PROGRAMMATIC_ACCESS_TOKEN with the token
+      # in the `password` field per Snowflake's connector contract.
+      printf '%sauthenticator: PROGRAMMATIC_ACCESS_TOKEN\n' "$I"
+      printf '%spassword: "{{ env('"'"'SNOWFLAKE_PAT'"'"') }}"\n' "$I"
+      ;;
     password|*)
       printf '%spassword: "{{ env('"'"'SNOWFLAKE_PASSWORD'"'"') }}"\n' "$I"
       ;;
@@ -709,6 +734,10 @@ snow_auth_fields_envvar() {
       ;;
     sso)
       printf '%sauthenticator: externalbrowser\n' "$I"
+      ;;
+    pat)
+      printf '%sauthenticator: PROGRAMMATIC_ACCESS_TOKEN\n' "$I"
+      printf '%spassword_env_var: SNOWFLAKE_PAT\n' "$I"
       ;;
     password|*)
       printf '%spassword_env_var: SNOWFLAKE_PASSWORD\n' "$I"
@@ -733,6 +762,13 @@ build_snowflake_url() {
     sso)
       printf 'snowflake://%s@%s/%s/%s?warehouse=%s&authenticator=externalbrowser%s' \
         "$SNOW_USER" "$SNOW_ACCOUNT" "$SNOW_DATABASE" "$SNOW_SCHEMA" "$SNOW_WAREHOUSE" \
+        "${SNOW_ROLE:+&role=$SNOW_ROLE}"
+      ;;
+    pat)
+      # PAT goes as the password field of the URL with the PAT authenticator.
+      # URL-encoding NOT needed for JWT-style tokens (base64url-safe chars).
+      printf 'snowflake://%s:%s@%s/%s/%s?warehouse=%s&authenticator=PROGRAMMATIC_ACCESS_TOKEN%s' \
+        "$SNOW_USER" "$SNOW_PAT" "$SNOW_ACCOUNT" "$SNOW_DATABASE" "$SNOW_SCHEMA" "$SNOW_WAREHOUSE" \
         "${SNOW_ROLE:+&role=$SNOW_ROLE}"
       ;;
     password|*)
@@ -1142,6 +1178,10 @@ SNOWFLAKE_URL_VAL="$(build_snowflake_url)"
     sso)
       echo "# SSO auth (externalbrowser — laptop dg dev only; daemon won't work)"
       echo "# No password / key env vars needed."
+      ;;
+    pat)
+      echo "# Programmatic Access Token auth (headless; works for daemon + dg dev)"
+      echo "export SNOWFLAKE_PAT=\"$SNOW_PAT\""
       ;;
     password)
       echo "export SNOWFLAKE_PASSWORD=\"$SNOW_PASS\""
