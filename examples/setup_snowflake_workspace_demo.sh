@@ -598,6 +598,20 @@ if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then
   prompt_default "Target schema (where dbt models materialize)" DBT_TARGET_SCHEMA "DBT_ANALYTICS"
 fi
 
+# 7 'define-as-code' DDL components (snowflake_task, snowflake_dynamic_table,
+# snowflake_stream, snowflake_stored_procedure, snowflake_snowpipe,
+# snowflake_alert, snowflake_materialized_view). Single y/N to scaffold ONE
+# minimal example of each into the project, demonstrating "Dagster as Snowflake's
+# control plane" alongside the workspace component's "import existing" pattern.
+# Entities are name-prefixed DG_ to avoid colliding with the seed's objects and
+# to let the workspace component exclude them via exclude_name_pattern.
+read -r -p "Add a showcase of all 7 'define-Snowflake-as-code' DDL components? [y/N] " WANT_DDL_SHOWCASE
+WANT_DDL_SHOWCASE="${WANT_DDL_SHOWCASE:-n}"
+DDL_TARGET_SCHEMA=""
+if [ "$WANT_DDL_SHOWCASE" = "y" ] || [ "$WANT_DDL_SHOWCASE" = "Y" ]; then
+  prompt_default "Schema where the 7 Dagster-defined entities go" DDL_TARGET_SCHEMA "$SNOW_SCHEMA"
+fi
+
 # ── 8. Scaffold the project (or reuse existing) ────────────────────────
 echo
 if [ "$REUSE_EXISTING" = "true" ]; then
@@ -617,7 +631,9 @@ if [ "$REUSE_EXISTING" = "true" ]; then
   for d in snowflake_workspace regional_top_paid_pipeline cortex_demo \
            row_count_observer python_daily_events python_daily_events_to_snowflake \
            freshness_check_demo dbt_project \
-           snowpark_pipeline_demo external_table_demo; do
+           snowpark_pipeline_demo external_table_demo \
+           dg_task dg_dynamic_table dg_stream dg_stored_procedure \
+           dg_snowpipe dg_alert dg_materialized_view; do
     rm -rf "src/$PKG/defs/$d"
   done
   rm -rf dbt
@@ -682,6 +698,15 @@ fi
 if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then
   echo ">>> Installing dagster-dbt + dbt-snowflake ..."
   uv add -q dagster-dbt 'dbt-core>=1.7' dbt-snowflake
+fi
+if [ "$WANT_DDL_SHOWCASE" = "y" ] || [ "$WANT_DDL_SHOWCASE" = "Y" ]; then
+  echo ">>> Installing 7 snowflake_<entity> DDL components ..."
+  for c in snowflake_task snowflake_dynamic_table snowflake_stream \
+           snowflake_stored_procedure snowflake_snowpipe \
+           snowflake_alert snowflake_materialized_view; do
+    $CLI add "$c" --auto-install
+    rm -rf "src/$PKG/defs/$c"
+  done
 fi
 
 write_yaml() {
@@ -1157,6 +1182,111 @@ attributes:
     dbt_project_dir: ../../../dbt
     profiles_dir: ../../../dbt
   group_name: dbt_models"
+fi
+
+# ── 17. Optional 'define-as-code' DDL showcase ─────────────────────────
+# 7 minimal defs.yaml files, one per snowflake_<entity> component.
+# Each defines a Dagster-managed sibling to the seed's objects (with DG_
+# prefix to avoid collisions). The workspace component's
+# exclude_name_pattern is set below so they don't get double-imported.
+if [ "$WANT_DDL_SHOWCASE" = "y" ] || [ "$WANT_DDL_SHOWCASE" = "Y" ]; then
+  # Shared connection block reused by all 7 — emitted via the auth helper.
+  DDL_AUTH_FIELDS="$(snow_auth_fields_direct '  ')"
+  DDL_CONN_HEADER="\
+  account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
+  user:    \"{{ env('SNOWFLAKE_USER') }}\"
+$(printf %s "$DDL_AUTH_FIELDS")  warehouse: \"$SNOW_WAREHOUSE\"
+  database: \"$SNOW_DATABASE\"
+  schema_name: \"$DDL_TARGET_SCHEMA\""
+  [ -n "$SNOW_ROLE" ] && DDL_CONN_HEADER="$DDL_CONN_HEADER
+  role: \"$SNOW_ROLE\""
+
+  write_yaml "dg_task" "type: $PKG.components.snowflake_task.component.SnowflakeTaskComponent
+attributes:
+  asset_name: dg_task_daily_rollup
+  task_name: DG_DAILY_ORDERS_ROLLUP
+$DDL_CONN_HEADER
+  schedule: \"USING CRON 0 4 * * * UTC\"
+  sql: |
+    SELECT 1
+  on_materialize: create_only
+  group_name: snowflake_ddl_showcase"
+
+  write_yaml "dg_dynamic_table" "type: $PKG.components.snowflake_dynamic_table.component.SnowflakeDynamicTableComponent
+attributes:
+  asset_name: dg_dt_paid_orders
+  dt_name: DG_PAID_ORDERS_DT
+$DDL_CONN_HEADER
+  target_lag: \"15 minutes\"
+  initialize: ON_SCHEDULE
+  refresh_mode: AUTO
+  sql: |
+    SELECT * FROM $SNOW_DATABASE.$SNOW_SCHEMA.ORDERS WHERE STATUS IN ('paid', 'delivered')
+  group_name: snowflake_ddl_showcase"
+
+  write_yaml "dg_stream" "type: $PKG.components.snowflake_stream.component.SnowflakeStreamComponent
+attributes:
+  asset_name: dg_stream_orders
+  stream_name: DG_ORDERS_STREAM
+  on_table: $SNOW_DATABASE.$SNOW_SCHEMA.ORDERS
+$DDL_CONN_HEADER
+  append_only: false
+  group_name: snowflake_ddl_showcase"
+
+  write_yaml "dg_stored_procedure" "type: $PKG.components.snowflake_stored_procedure.component.SnowflakeStoredProcedureComponent
+attributes:
+  asset_name: dg_sp_count_orders
+  procedure_name: DG_SP_COUNT_ORDERS
+$DDL_CONN_HEADER
+  language: SQL
+  returns: NUMBER
+  body: |
+    \$\$
+    BEGIN
+      RETURN (SELECT COUNT(*) FROM $SNOW_DATABASE.$SNOW_SCHEMA.ORDERS);
+    END;
+    \$\$
+  on_materialize: call
+  group_name: snowflake_ddl_showcase"
+
+  write_yaml "dg_snowpipe" "type: $PKG.components.snowflake_snowpipe.component.SnowflakeSnowpipeComponent
+attributes:
+  asset_name: dg_pipe_orders
+  pipe_name: DG_ORDERS_PIPE
+$DDL_CONN_HEADER
+  auto_ingest: false
+  copy_statement: |
+    COPY INTO $SNOW_DATABASE.$SNOW_SCHEMA.ORDERS_INGESTED
+    FROM @$SNOW_DATABASE.$SNOW_SCHEMA.INTERNAL_STAGE
+    FILE_FORMAT = (TYPE = CSV SKIP_HEADER = 1)
+    ON_ERROR = 'CONTINUE'
+  on_materialize: create_only
+  group_name: snowflake_ddl_showcase"
+
+  write_yaml "dg_alert" "type: $PKG.components.snowflake_alert.component.SnowflakeAlertComponent
+attributes:
+  asset_name: dg_alert_high_revenue
+  alert_name: DG_HIGH_REVENUE_DAY
+$DDL_CONN_HEADER
+  schedule: \"60 minute\"
+  condition_sql: |
+    SELECT 1 FROM $SNOW_DATABASE.$SNOW_SCHEMA.ORDERS WHERE TOTAL > 1000 LIMIT 1
+  action_sql: |
+    SELECT SYSTEM\$SET_RETURN_VALUE('high_revenue_detected')
+  on_materialize: create_only
+  group_name: snowflake_ddl_showcase"
+
+  write_yaml "dg_materialized_view" "type: $PKG.components.snowflake_materialized_view.component.SnowflakeMaterializedViewComponent
+attributes:
+  asset_name: dg_mv_customer_ltv
+  mv_name: DG_CUSTOMER_LTV_MV
+$DDL_CONN_HEADER
+  sql: |
+    SELECT CUSTOMER_ID, SUM(TOTAL) AS LIFETIME_REVENUE
+    FROM $SNOW_DATABASE.$SNOW_SCHEMA.ORDERS
+    WHERE STATUS IN ('paid', 'delivered')
+    GROUP BY CUSTOMER_ID
+  group_name: snowflake_ddl_showcase"
 fi
 
 # ── 12. .env.demo ──────────────────────────────────────────────────────
