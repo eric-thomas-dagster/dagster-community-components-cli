@@ -983,10 +983,15 @@ index_for_name() {
 
 # Cron schedule for ROOT jobs only — downstream cascades via automation_condition.
 if [ "$ORCH_MODE" = "cron" ]; then
-  mkdir -p "src/$PKG/defs/schedule"
-  SCHED_YAML="src/$PKG/defs/schedule/defs.yaml"
+  echo ">>> Installing the community cron_schedule component ..."
+  # `--auto-install` copies the component source into src/<pkg>/components/cron_schedule/
+  # AND writes a default sample defs.yaml at src/<pkg>/defs/cron_schedule/defs.yaml.
+  # We then overwrite that defs.yaml with the one targeting THIS project's root jobs.
+  uvx --from dagster-community-components-cli dagster-component add cron_schedule --auto-install
+
+  SCHED_YAML="src/$PKG/defs/cron_schedule/defs.yaml"
   {
-    echo "type: dagster_community_components.CronScheduleComponent"
+    echo "type: $PKG.components.cron_schedule.component.CronScheduleComponent"
     echo "attributes:"
     echo "  schedule_name: \"$SCHEDULE_NAME\""
     echo "  cron_expression: \"$CRON_EXPR\""
@@ -999,9 +1004,6 @@ if [ "$ORCH_MODE" = "cron" ]; then
       done < <(asset_keys_for_job_index "$idx")
     done
   } > "$SCHED_YAML"
-
-  echo ">>> Installing dagster-community-components for the cron_schedule component ..."
-  uv add -q dagster-community-components
 fi
 
 # ── 10. .env.demo (mode 600, gitignored) ───────────────────────────────
@@ -1039,7 +1041,7 @@ Generated:
   $DEFS_YAML
 MSG
 if [ "$ORCH_MODE" = "cron" ]; then
-  echo "  src/$PKG/defs/schedule/defs.yaml  (cron: '$CRON_EXPR' $CRON_TZ)"
+  echo "  src/$PKG/defs/cron_schedule/defs.yaml  (cron: '$CRON_EXPR' $CRON_TZ)"
 fi
 echo "  .env.demo  (mode 600 — contains your token; gitignored)"
 echo
@@ -1066,7 +1068,7 @@ Orchestration:
   • Downstream jobs auto-cascade via AutomationCondition.eager when their
     upstream completes. No further config needed.
 
-To pause the cron: set default_status: STOPPED in src/$PKG/defs/schedule/defs.yaml.
+To pause the cron: set default_status: STOPPED in src/$PKG/defs/cron_schedule/defs.yaml.
 To pause the cascade: remove 'automation_condition: eager' lines from
 $DEFS_YAML (downstream becomes manual-only).
 MSG
@@ -1080,7 +1082,7 @@ Orchestration:
     finishes.
 
 To add a cron later: copy a CronScheduleComponent defs.yaml into
-src/$PKG/defs/schedule/ targeting the root asset keys.
+src/$PKG/defs/cron_schedule/ targeting the root asset keys.
 MSG
     ;;
 esac
