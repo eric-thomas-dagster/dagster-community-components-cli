@@ -1,0 +1,61 @@
+# Polars Pipeline (single-asset multi-step lazy chain)
+
+Run multiple polars operations as **one** LazyFrame chain inside a single Dagster asset. The polars query planner fuses filters, prunes projections, and parallelizes execution — but only within one lazy chain. Spread across separate Dagster assets, the asset boundary forces materialization and breaks the optimization.
+
+## When to use
+
+- Multiple polars ops that are tightly coupled (filter → group_by → sort → head)
+- You care about throughput more than per-step Dagster lineage
+- You want polars's full query optimization (fusion + parallelism)
+
+For per-step lineage, use the per-asset `backend: polars` field on `filter` / `summarize` / `top_n_per_group` etc. — each is its own asset, no fusion across.
+
+## Components exercised (2)
+
+- `synthetic_data_generator` — seed 1000 synthetic orders
+- `polars_pipeline` — apply filter → group_by → sort → head_per_group as one lazy chain
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_polars_pipeline_demo.sh | bash
+cd polars-pipeline-demo
+uv run dg launch --assets '*'
+```
+
+## Validated end-to-end
+
+RUN_SUCCESS on 1000 rows. The polars planner fuses the 4 operations into a single execution; the asset emits a polars DataFrame (`output_type: polars`) so downstream polars-aware chains can continue without conversion.
+
+## What's in the YAML
+
+```yaml
+type: dagster_component_templates.PolarsPipelineComponent
+attributes:
+  asset_name: top_status_per_category
+  upstream_asset_key: orders
+  operations:
+    - op: filter
+      predicate: "total > 100"
+    - op: group_by
+      group_by: [category, status]
+      aggregations:
+        revenue:     {col: total, agg: sum}
+        order_count: {col: order_id, agg: count}
+    - op: sort
+      by: [category, revenue]
+      descending: [false, true]
+    - op: head_per_group
+      group_by: [category]
+      n: 2
+  output_type: polars
+  include_preview_metadata: true
+```
+
+## Supported ops
+
+`filter` / `with_columns` / `select` / `drop` / `rename` / `group_by` / `sort` / `head` / `tail` / `head_per_group` / `unique` / `drop_nulls` / `fill_null` / `cast`. See [the component README](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/polars_pipeline/README.md) for the full op vocabulary.
+
+## Streaming
+
+Set `streaming: true` to use polars's streaming engine — out-of-core execution for frames larger than memory. Combine with `polars_scan_parquet` upstream for the full predicate-pushdown + streaming story.
