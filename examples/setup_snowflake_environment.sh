@@ -96,6 +96,228 @@ if [ -z "$SNOW_ACCOUNT" ] || [ -z "$SNOW_USER" ] || [ -z "$SNOW_PASS" ]; then
   exit 1
 fi
 
+# Configurable target database — default DAGSTER_DEMO but lets users avoid
+# a collision with anything already in the account. We sed-substitute this
+# into the SQL text before execution so EVERY reference matches.
+prompt_default "Target database name (will be created if absent)" SNOW_TARGET_DB "${SNOWFLAKE_TARGET_DATABASE:-DAGSTER_DEMO}"
+
+# ── Pre-flight: role / warehouse / database / collision check ──────────
+# Three safety passes before any DDL runs:
+#   1. role + warehouse exist and the user can USE them
+#   2. target database exists? If so, query every seed object name against
+#      INFORMATION_SCHEMA to inventory exactly what would be overwritten
+#   3. ask the user what to do based on what we found
+echo
+echo ">>> Pre-flight checks (role / warehouse / database / object collisions) ..."
+
+PRECHECK_OUT="$(mktemp -t sf_preflight.XXXXXX).json"
+SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
+  SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_ROLE="$SNOW_ROLE" \
+  SF_TARGET_DB="$SNOW_TARGET_DB" \
+  PRECHECK_OUT="$PRECHECK_OUT" \
+  uv run --quiet --with 'snowflake-connector-python' --no-project python - <<'PYEOF'
+import json, os, sys
+import snowflake.connector as sc
+
+result = {"role_ok": False, "warehouse_ok": False, "db_exists": False, "collisions": {}, "errors": []}
+
+try:
+    conn = sc.connect(
+        account=os.environ['SF_ACCOUNT'],
+        user=os.environ['SF_USER'],
+        password=os.environ['SF_PASS'],
+        warehouse=os.environ['SF_WAREHOUSE'],
+        role=os.environ.get('SF_ROLE') or None,
+    )
+except Exception as e:
+    result["errors"].append(f"connect: {e}")
+    json.dump(result, open(os.environ['PRECHECK_OUT'], 'w'))
+    sys.exit(0)
+
+cur = conn.cursor()
+
+# 1. Role + warehouse — already enforced by `connect()` succeeding with
+#    those values. SHOW confirms they're visible to the user.
+try:
+    cur.execute(f"SHOW ROLES LIKE '{os.environ['SF_ROLE']}'")
+    result["role_ok"] = len(cur.fetchall()) > 0
+except Exception as e:
+    result["errors"].append(f"role check: {e}")
+
+try:
+    cur.execute(f"SHOW WAREHOUSES LIKE '{os.environ['SF_WAREHOUSE']}'")
+    result["warehouse_ok"] = len(cur.fetchall()) > 0
+except Exception as e:
+    result["errors"].append(f"warehouse check: {e}")
+
+# 2. Does the target database exist?
+db = os.environ['SF_TARGET_DB']
+try:
+    cur.execute(f"SHOW DATABASES LIKE '{db}'")
+    result["db_exists"] = len(cur.fetchall()) > 0
+except Exception as e:
+    result["errors"].append(f"database check: {e}")
+
+# 3. If it exists, inventory collisions with the names this script will
+#    CREATE OR REPLACE. We declare them explicitly here so we always
+#    know exactly what's about to land.
+SEED_OBJECTS = {
+    "RAW.tables":           ["ORDERS", "CUSTOMERS", "PRODUCTS", "EVENTS"],
+    "AI.tables":            ["CUSTOMER_FEEDBACK"],
+    "STAGING.tables":       ["ORDERS_INGESTED"],
+    "ANALYTICS.tables":     ["DAILY_REVENUE", "ALERT_LOG"],
+    "STAGING.tasks":        ["DAILY_ORDERS_ROLLUP", "HOURLY_CUSTOMER_METRICS",
+                              "WEEKLY_CHURN_SCORE", "MONTHLY_REVENUE_REPORT",
+                              "PARENT_ETL_TASK", "CHILD_ETL_TASK"],
+    "STAGING.dynamic_tables": ["PAID_ORDERS_DT", "CUSTOMER_360_DT",
+                                "TOP_PRODUCTS_DT", "HOURLY_ACTIVITY_DT"],
+    "STAGING.procedures":   ["SP_RECOMPUTE_TIERS", "SP_PURGE_OLD_EVENTS",
+                              "SP_SNOWPARK_TOP_N"],
+    "STAGING.streams":      ["ORDERS_STREAM", "CUSTOMERS_STREAM"],
+    "STAGING.materialized_views": ["CUSTOMER_LIFETIME_VALUE_MV"],
+    "STAGING.stages":       ["INTERNAL_STAGE", "LANDING_STAGE"],
+    "STAGING.pipes":        ["ORDERS_PIPE"],
+    "STAGING.alerts":       ["HIGH_REVENUE_DAY_ALERT"],
+}
+
+if result["db_exists"]:
+    queries = {
+        "tables":             "SELECT table_schema, table_name FROM {db}.INFORMATION_SCHEMA.TABLES WHERE table_schema IN ('RAW','STAGING','ANALYTICS','AI') AND table_type IN ('BASE TABLE')",
+        "tasks":              "SELECT schema_name, name FROM {db}.INFORMATION_SCHEMA.TASKS WHERE schema_name = 'STAGING'",
+        "dynamic_tables":     "SELECT schema_name, name FROM {db}.INFORMATION_SCHEMA.DYNAMIC_TABLES WHERE schema_name = 'STAGING'",
+        "procedures":         "SELECT procedure_schema, procedure_name FROM {db}.INFORMATION_SCHEMA.PROCEDURES WHERE procedure_schema = 'STAGING'",
+        "materialized_views": "SELECT table_schema, table_name FROM {db}.INFORMATION_SCHEMA.VIEWS WHERE table_schema = 'STAGING'",
+    }
+    existing = {}
+    for kind, q in queries.items():
+        try:
+            cur.execute(q.format(db=db))
+            existing[kind] = {f"{r[0]}.{r[1]}" for r in cur.fetchall()}
+        except Exception as e:
+            existing[kind] = set()  # missing schema or permission — treat as no existing
+    # SHOW for kinds without an INFORMATION_SCHEMA view (streams/pipes/stages/alerts)
+    for kind, sql_cmd in [("streams", "SHOW STREAMS"), ("pipes", "SHOW PIPES"),
+                            ("stages", "SHOW STAGES"), ("alerts", "SHOW ALERTS")]:
+        try:
+            cur.execute(f"{sql_cmd} IN SCHEMA {db}.STAGING")
+            # SHOW result column layout varies; name is usually col[1]
+            existing[kind] = {f"STAGING.{r[1]}" for r in cur.fetchall()}
+        except Exception:
+            existing[kind] = set()
+
+    # Compare against SEED_OBJECTS
+    for slot, names in SEED_OBJECTS.items():
+        schema, kind = slot.split(".", 1)
+        live = existing.get(kind, set())
+        hits = sorted([n for n in names if f"{schema}.{n}" in live])
+        if hits:
+            result["collisions"][slot] = hits
+
+cur.close(); conn.close()
+json.dump(result, open(os.environ['PRECHECK_OUT'], 'w'))
+PYEOF
+PRECHECK_RC=$?
+
+if [ $PRECHECK_RC -ne 0 ] || [ ! -s "$PRECHECK_OUT" ]; then
+  echo "  ⚠ Pre-flight check failed to run. Aborting."
+  rm -f "$PRECHECK_OUT"
+  exit 1
+fi
+
+# Parse pre-flight result and decide what to do.
+PRECHECK_VERDICT=$(python3 - "$PRECHECK_OUT" <<'PYEOF'
+import json, sys
+r = json.load(open(sys.argv[1]))
+if r["errors"]:
+    print("ERROR")
+    for e in r["errors"]: print(f"  {e}")
+    sys.exit(0)
+if not r["role_ok"]:
+    print("ROLE_MISSING")
+    sys.exit(0)
+if not r["warehouse_ok"]:
+    print("WAREHOUSE_MISSING")
+    sys.exit(0)
+if not r["db_exists"]:
+    print("ALL_CLEAR")
+    sys.exit(0)
+# DB exists — count collisions
+total = sum(len(v) for v in r["collisions"].values())
+if total == 0:
+    print("DB_EXISTS_NO_COLLISIONS")
+    sys.exit(0)
+print(f"COLLISIONS:{total}")
+for slot, hits in r["collisions"].items():
+    print(f"  {slot}: {', '.join(hits)}")
+PYEOF
+)
+echo "$PRECHECK_VERDICT" | head -1
+case "$(echo "$PRECHECK_VERDICT" | head -1)" in
+  ERROR*)
+    echo "$PRECHECK_VERDICT" | tail -n +2
+    rm -f "$PRECHECK_OUT"; exit 1 ;;
+  ROLE_MISSING)
+    echo "  ⚠ Role '$SNOW_ROLE' is not visible to the user. Pick a role you have access to and re-run."
+    rm -f "$PRECHECK_OUT"; exit 1 ;;
+  WAREHOUSE_MISSING)
+    echo "  ⚠ Warehouse '$SNOW_WAREHOUSE' is not visible to the user (or doesn't exist)."
+    echo "    Common defaults: COMPUTE_WH, ANALYTICS_WH. Pick one you have access to."
+    rm -f "$PRECHECK_OUT"; exit 1 ;;
+  ALL_CLEAR)
+    echo "  ✓ Role + warehouse OK. Target database '$SNOW_TARGET_DB' does NOT exist — will create fresh." ;;
+  DB_EXISTS_NO_COLLISIONS)
+    echo "  ✓ Role + warehouse OK. Target database '$SNOW_TARGET_DB' exists but has NO objects that share names with the seed. Safe to overlay." ;;
+  COLLISIONS:*)
+    N=$(echo "$PRECHECK_VERDICT" | head -1 | cut -d: -f2)
+    echo "  ⚠ Target database '$SNOW_TARGET_DB' exists AND contains $N object(s) that share names with the seed:"
+    echo "$PRECHECK_VERDICT" | tail -n +2
+    echo
+    echo "    These objects WILL BE OVERWRITTEN by CREATE OR REPLACE if you continue."
+    echo
+    while :; do
+      read -r -p "    [r]euse and overwrite / [d]rop database and recreate / [c]hange database name / [q]uit: " CHOICE
+      case "${CHOICE:-q}" in
+        r|R|reuse)
+          echo "  → Proceeding with overwrite. Existing objects with conflicting names will be replaced."
+          break ;;
+        d|D|drop)
+          echo "  → Will DROP DATABASE $SNOW_TARGET_DB first, then recreate from scratch."
+          # Inject a DROP DATABASE at the head of our SQL by prepending it.
+          DROP_FIRST=true
+          break ;;
+        c|C|change)
+          prompt_default "New target database name" SNOW_TARGET_DB "DAGSTER_DEMO_$(date +%s)"
+          echo "  → Will use '$SNOW_TARGET_DB'. Re-running pre-flight ..."
+          # Re-exec ourselves — easiest way to re-run the pre-flight cleanly.
+          rm -f "$PRECHECK_OUT"
+          SNOWFLAKE_TARGET_DATABASE="$SNOW_TARGET_DB" \
+            SNOWFLAKE_ACCOUNT="$SNOW_ACCOUNT" SNOWFLAKE_USER="$SNOW_USER" \
+            SNOWFLAKE_PASSWORD="$SNOW_PASS" SNOWFLAKE_WAREHOUSE="$SNOW_WAREHOUSE" \
+            SNOWFLAKE_ROLE="$SNOW_ROLE" \
+            exec "$0" "$@"
+          ;;
+        q|Q|quit) echo "  Aborted."; rm -f "$PRECHECK_OUT"; exit 0 ;;
+        *) echo "    Pick r, d, c, or q." ;;
+      esac
+    done ;;
+esac
+rm -f "$PRECHECK_OUT"
+
+# Read the SQL, substitute the database name, write to a temp file for execution.
+SUBST_SQL="$(mktemp -t sf_seed_subst.XXXXXX).sql"
+if [ "${DROP_FIRST:-false}" = "true" ]; then
+  printf "USE ROLE %s;\nDROP DATABASE IF EXISTS %s;\n" "$SNOW_ROLE" "$SNOW_TARGET_DB" > "$SUBST_SQL"
+fi
+# Substitute every literal DAGSTER_DEMO occurrence with the chosen name.
+# Use python for safe string replace (sed would need escaping for special chars).
+python3 -c "
+import sys
+src = open(sys.argv[1]).read()
+out = src.replace('DAGSTER_DEMO', sys.argv[2])
+open(sys.argv[3], 'a').write(out)
+" "$SQL_FILE" "$SNOW_TARGET_DB" "$SUBST_SQL"
+SQL_FILE="$SUBST_SQL"
+
 # ── Run the SQL ────────────────────────────────────────────────────────
 echo
 echo ">>> Executing setup against $SNOW_ACCOUNT (warehouse=$SNOW_WAREHOUSE role=$SNOW_ROLE) ..."
@@ -204,12 +426,12 @@ cat <<MSG
   Done.
 ═══════════════════════════════════════════════════════════════════════
 Created in $SNOW_ACCOUNT:
-  • DAGSTER_DEMO.RAW       — ORDERS (10000), CUSTOMERS (1000), PRODUCTS (200), EVENTS (50000)
-  • DAGSTER_DEMO.STAGING   — 6 TASKS, 4 DYNAMIC TABLES, 3 STORED PROCEDURES,
+  • $SNOW_TARGET_DB.RAW       — ORDERS (10000), CUSTOMERS (1000), PRODUCTS (200), EVENTS (50000)
+  • $SNOW_TARGET_DB.STAGING   — 6 TASKS, 4 DYNAMIC TABLES, 3 STORED PROCEDURES,
                              2 STREAMS, 1 MATERIALIZED VIEW, 2 STAGES,
                              1 SNOWPIPE, 1 ALERT
-  • DAGSTER_DEMO.ANALYTICS — empty (your Dagster pipeline writes here)
-  • DAGSTER_DEMO.AI        — CUSTOMER_FEEDBACK (for Cortex demos)
+  • $SNOW_TARGET_DB.ANALYTICS — empty (your Dagster pipeline writes here)
+  • $SNOW_TARGET_DB.AI        — CUSTOMER_FEEDBACK (for Cortex demos)
 
 Next: run the workspace demo to discover everything and pull it into Dagster:
 
@@ -218,7 +440,7 @@ Next: run the workspace demo to discover everything and pull it into Dagster:
     ./setup_snowflake_workspace_demo.sh
 
 When the workspace demo asks for database/schema, use:
-    database = DAGSTER_DEMO
+    database = $SNOW_TARGET_DB
     schema   = STAGING
 
 The discovery output should look like:
@@ -253,5 +475,9 @@ To clean everything up later:
     # Then paste teardown_snowflake_environment.sql into a Snowflake worksheet, OR:
     # snowsql -a $SNOWFLAKE_ACCOUNT -u $SNOWFLAKE_USER -f teardown_snowflake_environment.sql
 MSG
+
+# Clean up the substituted SQL temp file (the original SQL_FILE was reassigned
+# to point at it in the pre-flight block).
+case "$SQL_FILE" in /tmp/*|/var/folders/*) rm -f "$SQL_FILE" ;; esac
 
 exit $RC

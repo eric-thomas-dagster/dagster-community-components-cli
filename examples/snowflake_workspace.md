@@ -83,6 +83,16 @@ chmod +x setup_snowflake_environment.sh
 
 Teardown with [`teardown_snowflake_environment.sql`](teardown_snowflake_environment.sql) — drops the whole `DAGSTER_DEMO` database.
 
+**Safety guards before the seed runs anything:**
+
+The bash wrapper does three pre-flight checks against your account *before* any DDL fires:
+
+1. **Role + warehouse exist** and are visible to the connected user. If `SHOW ROLES LIKE '<role>'` or `SHOW WAREHOUSES LIKE '<wh>'` returns nothing, it aborts with a clear error instead of failing opaquely on the first `USE` statement.
+2. **Target database name is configurable** — prompted at startup (default `DAGSTER_DEMO`, override with the `SNOWFLAKE_TARGET_DATABASE` env var). The bash wrapper string-substitutes that name into all 32 SQL references before executing, so you can stage the seed into an isolated `DAGSTER_DEMO_$(whoami)` if you're sharing the account.
+3. **Object-level collision inventory** — if the target database already exists, the wrapper queries `INFORMATION_SCHEMA.{TABLES, TASKS, DYNAMIC_TABLES, PROCEDURES, VIEWS}` + `SHOW {STREAMS, PIPES, STAGES, ALERTS}` for every name the seed is about to `CREATE OR REPLACE`. Prints a manifest of any overlap and asks: **[r]euse and overwrite** / **[d]rop database first and recreate** / **[c]hange to a different name** / **[q]uit**.
+
+Net effect: you can't accidentally clobber production work by running this on the wrong account. If anything's off, the wrapper surfaces it before issuing any DDL.
+
 ### A note on OpenFlow
 
 **Dagster can orchestrate OpenFlow. We can't pre-build OpenFlow flows in this seed script.**
