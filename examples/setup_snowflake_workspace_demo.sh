@@ -81,16 +81,40 @@ fi
 
 # ── 2. Project name ────────────────────────────────────────────────────
 DEFAULT_PROJECT="snowflake-dagster"
+REUSE_EXISTING=false
 while :; do
   read -r -p "Project name [$DEFAULT_PROJECT]: " PROJECT
   PROJECT="${PROJECT:-$DEFAULT_PROJECT}"
   if [ -e "$PROJECT" ]; then
-    echo "  ⚠ '$PROJECT' already exists — pick another."
-    continue
+    # Existing project — offer fast paths for stage iteration.
+    echo "  '$PROJECT' already exists."
+    echo "    [r]euse — keep venv + installed components, OVERWRITE defs.yaml / .env.demo / dbt/ from this run (fastest)"
+    echo "    [d]elete — rm -rf and rebuild from scratch"
+    echo "    [c]hange — pick a different name"
+    read -r -p "  Choice [r/d/c]: " CHOICE
+    case "${CHOICE:-r}" in
+      r|R|reuse)
+        echo "  ✓ Reusing existing project (defs/ will be overwritten)."
+        REUSE_EXISTING=true
+        break
+        ;;
+      d|D|delete)
+        echo "  Deleting $PROJECT ..."
+        rm -rf "$PROJECT"
+        break
+        ;;
+      c|C|change)
+        continue
+        ;;
+      *)
+        echo "  Pick r, d, or c." ; continue
+        ;;
+    esac
+  else
+    break
   fi
-  break
 done
-PARTIAL_PROJECT_PATH="$PROJECT"
+[ "$REUSE_EXISTING" = "true" ] || PARTIAL_PROJECT_PATH="$PROJECT"
 
 # ── 3. Snowflake credentials (prompt + verify) ──────────────────────────
 echo
@@ -462,25 +486,48 @@ if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then
   prompt_default "Target schema (where dbt models materialize)" DBT_TARGET_SCHEMA "DBT_ANALYTICS"
 fi
 
-# ── 8. Scaffold the project ────────────────────────────────────────────
+# ── 8. Scaffold the project (or reuse existing) ────────────────────────
 echo
-echo ">>> Scaffolding Dagster project at $PROJECT ..."
-uvx create-dagster@latest project "$PROJECT" --no-uv-sync >/dev/null
-cd "$PROJECT"
-PKG="$(ls src/ | head -1)"
-
-uv add -q 'yarl<1.24'
-uv add --dev -q dagster-dg-cli dagster-webserver
-uv add -q 'snowflake-connector-python>=3.7.0'
+if [ "$REUSE_EXISTING" = "true" ]; then
+  echo ">>> Reusing existing project at $PROJECT ..."
+  cd "$PROJECT"
+  # Safety guard: confirm this directory IS a create-dagster project before
+  # we start mutating it.
+  if [ ! -d src ] || [ -z "$(ls src 2>/dev/null)" ] || [ ! -f pyproject.toml ]; then
+    echo "  ⚠ $PROJECT doesn't look like a Dagster project (missing src/<pkg>/ or"
+    echo "    pyproject.toml). Refusing to mutate. Pick [d]elete next time, or"
+    echo "    use a different project name."
+    exit 1
+  fi
+  PKG="$(ls src/ | head -1)"
+  # Wipe every defs.yaml dir we MIGHT recreate this run so stale ones from
+  # a prior run with different selections don't linger.
+  for d in snowflake_workspace regional_top_paid_pipeline cortex_demo \
+           row_count_observer python_daily_events python_daily_events_to_snowflake \
+           freshness_check_demo dbt_project; do
+    rm -rf "src/$PKG/defs/$d"
+  done
+  rm -rf dbt
+else
+  echo ">>> Scaffolding Dagster project at $PROJECT ..."
+  uvx create-dagster@latest project "$PROJECT" --no-uv-sync >/dev/null
+  cd "$PROJECT"
+  PKG="$(ls src/ | head -1)"
+  uv add -q 'yarl<1.24'
+  uv add --dev -q dagster-dg-cli dagster-webserver
+  uv add -q 'snowflake-connector-python>=3.7.0'
+fi
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-# Install the workspace component (community).
+# Install components — idempotent: `dagster-component add --auto-install`
+# is safe to call when the component dir already exists (re-fetches +
+# overwrites the source). The auto-installed sample defs.yaml is removed
+# below; we'll write our own.
 echo ">>> Installing snowflake_workspace component ..."
 $CLI add snowflake_workspace --auto-install
 rm -rf "src/$PKG/defs/snowflake_workspace"
 
-# Optional add-ons.
 if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
   echo ">>> Installing warehouse_pipeline component ..."
   $CLI add warehouse_pipeline --auto-install

@@ -95,7 +95,10 @@ Auto-installs `uv` if missing (with consent). Refuses piped invocation — it's 
 
 ## What it asks
 
-1. **Project name.** Default `snowflake-dagster`. Collision-checked.
+1. **Project name.** Default `snowflake-dagster`. If the directory already exists, the script offers three fast paths so re-runs don't fail:
+   - **[r]euse** — keeps the existing venv + installed components, *overwrites* `src/<pkg>/defs/` and `dbt/` and `.env.demo` with this run's choices. Fastest path for stage iteration ("I want to re-run with the Cortex add-on this time").
+   - **[d]elete** — `rm -rf` and rebuild from scratch (incl. fresh venv + component installs).
+   - **[c]hange** — pick a different project name.
 2. **Credentials.** account / user / password (hidden) / warehouse / database / schema / role. Verified by running `SELECT CURRENT_VERSION()` against your account before going further; offers a "continue anyway" if the verify fails (useful when you're testing scaffolding offline).
 3. **Discovery.** Queries `INFORMATION_SCHEMA.*` + `SHOW <kind>` for every entity type and prints counts:
    ```
