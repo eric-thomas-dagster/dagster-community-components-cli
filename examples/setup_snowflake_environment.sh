@@ -413,7 +413,12 @@ import re, sys
 src = open(sys.argv[1]).read()
 target_db = sys.argv[2]
 sandbox_mode = sys.argv[3] == 'true'
+target_warehouse = sys.argv[5] if len(sys.argv) > 5 else 'COMPUTE_WH'
 out = src.replace('DAGSTER_DEMO', target_db)
+# Substitute the warehouse name in CREATE DYNAMIC TABLE / TASK / ALERT.
+# The SQL hardcodes WAREHOUSE = COMPUTE_WH; replace with the user's actual.
+if target_warehouse != 'COMPUTE_WH':
+    out = re.sub(r'\bWAREHOUSE\s*=\s*COMPUTE_WH\b', f'WAREHOUSE = {target_warehouse}', out)
 
 if sandbox_mode:
     # Remove admin-only statements (line-anchored so we don't kill content).
@@ -440,7 +445,7 @@ if sandbox_mode:
         out = re.sub(rf'(?<![A-Z_]){s}\.([A-Z_]+)', rf'{new_s}.\1', out)
 
 open(sys.argv[4], 'a').write(out)
-" "$SQL_FILE" "$SNOW_TARGET_DB" "$SANDBOX_MODE" "$SUBST_SQL"
+" "$SQL_FILE" "$SNOW_TARGET_DB" "$SANDBOX_MODE" "$SUBST_SQL" "$SNOW_WAREHOUSE"
 SQL_FILE="$SUBST_SQL"
 
 if [ "$SANDBOX_MODE" = "true" ]; then
