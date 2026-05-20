@@ -450,8 +450,13 @@ fi
 # ── 5. Select jobs (scale-aware) ───────────────────────────────────────
 # Below threshold: show all + pick by number.
 # Above threshold: prompt for IDs / glob / paginated 'list'.
+#
+# The whole selection + task-lookup block is wrapped in a redo loop so the
+# duplicate-script detector at the end can offer a re-select option without
+# losing the user's place (they haven't typed any cross-job deps yet).
 
 SELECTION_THRESHOLD=30
+while :; do
 SELECTED_IDS=()
 SELECTED_NAMES=()
 
@@ -677,6 +682,11 @@ LEAVES_FOR_JOB=()
 # auto-wires these as cross-job deps; the script must not let the user
 # re-declare them (or, worse, declare them in reverse — that's a real cycle).
 INVOKES_JOB_IDS_FOR_JOB=()
+# SCRIPT_IDS_FOR_JOB[i] = newline-separated "task_key=script_id" rows.
+# script_id is "<kind>:<path-or-payload>" — used by the duplicate-script
+# detector at the end of this block to spot two (job, task) selections that
+# point at the same underlying Spark / notebook / wheel.
+SCRIPT_IDS_FOR_JOB=()
 echo
 echo ">>> Looking up tasks for each selected job ..."
 for i in "${!SELECTED_IDS[@]}"; do
@@ -689,6 +699,7 @@ for i in "${!SELECTED_IDS[@]}"; do
     TASK_KEYS_FOR_JOB+=("main")
     LEAVES_FOR_JOB+=("main")
     INVOKES_JOB_IDS_FOR_JOB+=("")
+    SCRIPT_IDS_FOR_JOB+=("")
     continue
   fi
   TKS=$(echo "$JOB_DETAIL" | jq -r '.settings.tasks[]?.task_key' 2>/dev/null | paste -sd, -)
@@ -711,9 +722,24 @@ for i in "${!SELECTED_IDS[@]}"; do
   INVOKES=$(echo "$JOB_DETAIL" | jq -r \
     '.settings.tasks[]? | select(.run_job_task) | .run_job_task.job_id' \
     2>/dev/null | sort -u | paste -sd, -)
+  # Script identity per task — for the duplicate-script detector below.
+  # Covers the common task types; others get "other:<task_key>" (unique per
+  # task, so they never collide with another task's identity).
+  SCRIPT_IDS=$(echo "$JOB_DETAIL" | jq -r '
+    .settings.tasks[]? | (.task_key as $tk |
+      if .spark_python_task   then "\($tk)=spark_py:\(.spark_python_task.python_file)"
+      elif .notebook_task     then "\($tk)=notebook:\(.notebook_task.notebook_path)"
+      elif .python_wheel_task then "\($tk)=wheel:\(.python_wheel_task.package_name):\(.python_wheel_task.entry_point)"
+      elif .sql_task          then "\($tk)=sql:\(.sql_task.file.path // .sql_task.query.query_id // "inline")"
+      elif .dbt_task          then "\($tk)=dbt:\(.dbt_task.project_directory):\((.dbt_task.commands // []) | join(\",\"))"
+      elif .run_job_task      then "\($tk)=run_job:\(.run_job_task.job_id)"
+      else "\($tk)=other:\($tk)"
+      end)
+  ' 2>/dev/null)
   TASK_KEYS_FOR_JOB+=("$TKS")
   LEAVES_FOR_JOB+=("$LEAVES")
   INVOKES_JOB_IDS_FOR_JOB+=("$INVOKES")
+  SCRIPT_IDS_FOR_JOB+=("$SCRIPT_IDS")
   TASK_COUNT=$(echo "$TKS" | tr ',' '\n' | grep -c .)
   INVOKE_NOTE=""
   [ -n "$INVOKES" ] && INVOKE_NOTE="  (invokes job_id: $INVOKES via run_job_task)"
@@ -722,6 +748,76 @@ for i in "${!SELECTED_IDS[@]}"; do
   else
     printf "  job_id=%-10s  %s  (%d tasks, leaf: %s)%s\n" "$JID" "$JNAME" "$TASK_COUNT" "$LEAVES" "$INVOKE_NOTE"
   fi
+done
+
+# ── 5c. Duplicate-script detector ─────────────────────────────────────
+# Databricks lets you register the same Spark script / notebook / wheel
+# under any number of jobs+tasks. DatabricksWorkspaceComponent keys assets
+# by (job_id, task_key), so two registrations of number_x.py become two
+# separate Dagster assets — and materializing the graph runs the script
+# twice. Warn the user when we detect this, and offer a re-select.
+DUP_TABLE=""  # multi-line "script_id<TAB>owner1,owner2,..."
+# Flatten all (job, task) → script_id rows into one stream, then group by
+# script_id and keep groups with > 1 owner.
+ALL_ROWS=""
+for i in "${!SELECTED_IDS[@]}"; do
+  JNAME="${SELECTED_NAMES[$i]}"
+  ROWS="${SCRIPT_IDS_FOR_JOB[$i]}"
+  [ -z "$ROWS" ] && continue
+  while IFS= read -r row; do
+    [ -z "$row" ] && continue
+    tk="${row%%=*}"
+    sid="${row#*=}"
+    # Skip identities that aren't safely comparable (e.g. "other:<task_key>"
+    # uses the task_key as a tiebreaker — never collides across jobs).
+    case "$sid" in
+      other:*) continue ;;
+    esac
+    ALL_ROWS+="${sid}"$'\t'"${JNAME}/${tk}"$'\n'
+  done <<< "$ROWS"
+done
+
+if [ -n "$ALL_ROWS" ]; then
+  # Group rows by script_id; keep only groups with > 1 owner.
+  DUP_TABLE=$(printf "%s" "$ALL_ROWS" | sort | \
+    awk -F'\t' '{
+      if ($1 == prev) { owners = owners "," $2; count++ }
+      else {
+        if (count > 1) print prev "\t" owners
+        prev = $1; owners = $2; count = 1
+      }
+    } END {
+      if (count > 1) print prev "\t" owners
+    }')
+fi
+
+if [ -n "$DUP_TABLE" ]; then
+  echo
+  echo "─────────────────────────────────────────────────────────────────────"
+  echo "  ⚠ Duplicate scripts across selected (job, task) pairs"
+  echo "─────────────────────────────────────────────────────────────────────"
+  echo "These selections reference the same underlying script — Dagster will"
+  echo "create separate assets for each, and materializing the graph will run"
+  echo "the script once per asset:"
+  echo
+  printf "%s\n" "$DUP_TABLE" | awk -F'\t' '{printf "  • %s\n      → %s\n", $1, $2}'
+  echo
+  echo "Common cause: a script is registered as a standalone job AND as a"
+  echo "subtask of a larger orchestrating job. Pick one form, not both."
+  echo
+  while :; do
+    read -r -p "What now? [y]es continue / [r]edo selection / [n]o quit: " DUP_CHOICE
+    case "$DUP_CHOICE" in
+      y|Y|yes) echo "  → continuing with duplicates."; break 2 ;;
+      r|R|redo) echo "  → restarting selection."; continue 2 ;;
+      n|N|no|"") echo "  → quitting; re-run when ready."; exit 0 ;;
+      *) echo "    Pick y, r, or n." ;;
+    esac
+  done
+fi
+
+# No dupes (or user chose to continue) — exit the redo loop.
+break
 done
 
 # ── 6. Cross-job dependencies ──────────────────────────────────────────
