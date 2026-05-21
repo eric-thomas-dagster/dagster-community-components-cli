@@ -933,7 +933,13 @@ attributes:
     - {from: top_states, table: $PIPE_OUT_SCHEMA.TOP_3_STATES,   mode: replace}
 
   group_name: snowflake_transforms
-  include_preview_metadata: true$(if [ "$WANT_AUTOCOND" = "y" ] || [ "$WANT_AUTOCOND" = "Y" ]; then
+  include_preview_metadata: true
+
+  # Demonstrate retries — opt into Dagster's RetryPolicy with 3 retries +
+  # exponential backoff, useful for transient warehouse / network issues.
+  retry_policy_max_retries: 3
+  retry_policy_delay_seconds: 5
+  retry_policy_backoff: exponential$(if [ "$WANT_AUTOCOND" = "y" ] || [ "$WANT_AUTOCOND" = "Y" ]; then
   printf "\n  automation_condition: \"{{ dg.AutomationCondition.eager() }}\""
   fi)"
 fi
