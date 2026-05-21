@@ -6,11 +6,15 @@ It exists because **a sandboxed Snowflake account will hit walls the demo gracef
 
 ## Why this doc exists
 
-The demo uses [graceful degradation](#graceful-degradation): every Dagster asset still scaffolds and shows up in `dg dev`, but materialization either:
-- ✅ **runs live** if the infrastructure / privilege exists, OR
-- ⚠️ **runs as an explanatory no-op** if it doesn't — Dagster asset materializes successfully with metadata listing the missing privilege / DDL to remediate
+The setup script runs **scaffold-time capability probes** against your account. Components your role + tier can actually materialize are scaffolded into the project. Capabilities you don't have access to are **silently skipped** — they don't end up as broken / red assets in `dg dev`.
 
-So the demo never breaks. But a customer-facing demo with full ACCOUNTADMIN lights up more nodes. Use this table to right-size your demo environment.
+When the script finishes, if any capabilities were skipped it prints a security-ask table and writes the same content to `<project>/SECURITY_ASK.md`. Send that file to your security / partnership contact and they'll know exactly what to grant. Re-run the script after the grants land — the missing components automatically scaffold into the project.
+
+This means:
+
+- **Your sandbox demo always runs end-to-end** (only includes what works in your account — every asset is green)
+- **Your customer's account scaffolds more components** when they have higher privileges
+- **The same script powers both cases** — no separate "demo for sandboxed SE" vs "demo for full ACCOUNTADMIN" paths
 
 ## Blocked capabilities — permissions
 
@@ -61,15 +65,43 @@ If you want one paragraph to paste into Slack / email / a ticket:
 
 That single ask unlocks the full surface the Dagster demo covers.
 
-## Graceful degradation
+## How the scaffold-time skip works
 
-The demo is intentionally designed so a sandboxed role's account still produces a valuable customer-facing demonstration:
+Capability probes run as part of the discovery step (after credential verify). For each probe, the script tries a non-destructive query against your account:
 
-- Every add-on **always scaffolds** — the asset appears in the `dg dev` UI's asset graph
-- The component-side materialization logic **catches "infrastructure missing" errors specifically** and surfaces them as `MaterializeResult` metadata with a `remediation_sql` field
-- So the asset graph shows the **full Dagster Snowflake surface** regardless of account state. Some assets will show "🟡 needs CREATE EXTERNAL VOLUME" in their materialization metadata; the graph is still green
+| Probe | What it checks |
+|---|---|
+| `SHOW EXTERNAL VOLUMES` | Iceberg add-on enabled iff ≥1 volume exists |
+| `SHOW CORTEX SEARCH SERVICES IN ACCOUNT` | Cortex Search add-on enabled iff ≥1 service exists |
+| `SELECT SNOWFLAKE.CORTEX.COMPLETE('mistral-7b', 'hi')` | Cortex LLM add-on enabled iff function responds |
+| `SHOW MATERIALIZED VIEWS IN ACCOUNT LIMIT 1` | MV component in DDL showcase included iff query succeeds (Enterprise+) |
+| `SHOW NOTIFICATION INTEGRATIONS` | Snowpipe uses AUTO_INGEST mode iff ≥1 integration exists; else PUT-COPY |
+| `SHOW HYBRID TABLES IN ACCOUNT LIMIT 1` | Hybrid Tables capability noted (no component yet) |
 
-Why this matters for SE demos: **what you're selling is the asset graph itself** — the unified view of Snowflake-native primitives orchestrated by Dagster. Even if 30% of those nodes can't materialize live in your sandbox, the graph still demonstrates the integration story end-to-end. The customer's environment will light up live materializations on those same nodes.
+Probe failures are non-fatal: if the privilege/feature isn't there, the script just sets a capability flag to `no` and moves on. Every probe is wrapped in `try/except` so a permission error on one capability doesn't blow up the rest of the scan.
+
+### Resulting demo project
+
+After scaffold completes, your project contains **only the components that can materialize**:
+
+```
+src/<pkg>/defs/
+├── snowflake_workspace/           # always
+├── regional_top_paid_pipeline/    # warehouse_pipeline (always)
+├── snowpark_pipeline_demo/        # snowpark_pipeline (always)
+├── snowflake_time_travel_asset/   # always (queries existing tables)
+├── snowflake_cortex_asset/        # ⊘ skipped if Cortex LLM unavailable
+├── snowflake_iceberg_table/       # ⊘ skipped if no EXTERNAL VOLUMES exist
+├── snowflake_cortex_search/       # ⊘ skipped if no CORTEX SEARCH SERVICES
+├── dg_materialized_view/          # ⊘ skipped from DDL showcase on Standard edition
+└── ... (other always-on add-ons)
+```
+
+Every asset in the resulting `dg dev` graph is green. The skipped components live in the registry waiting for you to re-run the script once permissions/tier are unlocked.
+
+### SECURITY_ASK.md output
+
+When at least one capability is skipped, the script also writes a `SECURITY_ASK.md` file inside the project containing a table formatted exactly like the [permissions table above](#blocked-capabilities--permissions), but scoped to **the specific capabilities your account couldn't reach** — not the full universe. Send that file to your security team and they know precisely what's needed for this customer's demo to add the missing pieces.
 
 ## See also
 

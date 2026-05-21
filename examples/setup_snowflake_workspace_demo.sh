@@ -339,6 +339,56 @@ try:
     inv["base_tables"] = [r[0] for r in cur.fetchall()]
 except Exception as e:
     inv["base_tables"] = {"error": str(e)}
+
+# ── Capability probes ──────────────────────────────────────────────────
+# Detect what infra/privileges/tier exists in this account so the demo
+# only scaffolds components the user can actually use. Every probe is
+# wrapped in try/except — missing privileges are non-fatal, just mean
+# the capability is unavailable.
+caps = {}
+def _probe(label, sql, parse=None):
+    try:
+        cur.execute(sql)
+        rows = cur.fetchall()
+        return (parse(rows) if parse else rows), None
+    except Exception as e:
+        return None, str(e)[:300]
+
+iceberg_vols, err = _probe("iceberg",
+    "SHOW EXTERNAL VOLUMES",
+    parse=lambda rows: [r[0] for r in rows])
+caps["iceberg_volumes"] = iceberg_vols or []
+if err: caps["_iceberg_error"] = err
+
+cortex_svcs, err = _probe("cortex_search",
+    "SHOW CORTEX SEARCH SERVICES IN ACCOUNT",
+    parse=lambda rows: [f"{r[2]}.{r[3]}.{r[1]}" for r in rows if len(r) > 3])
+caps["cortex_search_services"] = cortex_svcs or []
+if err: caps["_cortex_search_error"] = err
+
+_, err = _probe("cortex_llm",
+    "SELECT SNOWFLAKE.CORTEX.COMPLETE('mistral-7b', 'hi')")
+caps["cortex_llm"] = err is None
+if err: caps["_cortex_llm_error"] = err
+
+notif_ints, err = _probe("notification_integrations",
+    "SHOW NOTIFICATION INTEGRATIONS",
+    parse=lambda rows: [r[0] for r in rows])
+caps["notification_integrations"] = notif_ints or []
+if err: caps["_notification_error"] = err
+
+_, err = _probe("materialized_views",
+    "SHOW MATERIALIZED VIEWS IN ACCOUNT LIMIT 1")
+caps["materialized_views"] = err is None
+if err: caps["_mv_error"] = err
+
+_, err = _probe("hybrid_tables",
+    "SHOW HYBRID TABLES IN ACCOUNT LIMIT 1")
+caps["hybrid_tables"] = err is None
+if err: caps["_hybrid_error"] = err
+
+inv["capabilities"] = caps
+
 with open(os.environ['INV_OUT'], 'w') as f:
     json.dump(inv, f)
 cur.close(); conn.close()
@@ -371,6 +421,108 @@ bt = inv.get("base_tables", [])
 if isinstance(bt, list):
     print(f"  base_tables (info)     {len(bt):4}  {', '.join(bt[:3])}{' + …' if len(bt)>3 else ''}")
 PYEOF
+
+# ── 4.5. Parse capabilities + build security ask ──────────────────────
+# For each capability the user's role/account can't reach, record what
+# they'd need to grant / which tier to upgrade. The demo silently
+# excludes the corresponding add-on; the security ask is printed at the
+# end + saved to SECURITY_ASK.md inside the project.
+echo
+echo "─────────────────────────────────────────────────────────────────────"
+echo "  Capability scan — what your role + account can do"
+echo "─────────────────────────────────────────────────────────────────────"
+# Parse caps from INV_OUT into shell-readable form via tab-separated lines.
+CAP_INFO=$(python3 - "$INV_OUT" <<'PYEOF'
+import json, sys
+inv = json.load(open(sys.argv[1]))
+caps = inv.get("capabilities", {})
+# Each line: KEY<TAB>VALUE  where VALUE is yes/no OR pipe-separated list.
+def emit(k, v):
+    print(f"{k}\t{v}")
+emit("iceberg_volumes", "|".join(caps.get("iceberg_volumes", [])))
+emit("cortex_search_services", "|".join(caps.get("cortex_search_services", [])))
+emit("notification_integrations", "|".join(caps.get("notification_integrations", [])))
+emit("cortex_llm", "yes" if caps.get("cortex_llm") else "no")
+emit("materialized_views", "yes" if caps.get("materialized_views") else "no")
+emit("hybrid_tables", "yes" if caps.get("hybrid_tables") else "no")
+PYEOF
+)
+# Extract into shell variables (bash 3.2 compatible — no associative arrays).
+ICEBERG_VOLS=$(echo "$CAP_INFO" | awk -F'\t' '$1=="iceberg_volumes"{print $2}')
+CORTEX_SVCS=$(echo "$CAP_INFO" | awk -F'\t' '$1=="cortex_search_services"{print $2}')
+NOTIF_INTS=$(echo  "$CAP_INFO" | awk -F'\t' '$1=="notification_integrations"{print $2}')
+CAP_CORTEX_LLM=$(echo  "$CAP_INFO" | awk -F'\t' '$1=="cortex_llm"{print $2}')
+CAP_MV=$(echo          "$CAP_INFO" | awk -F'\t' '$1=="materialized_views"{print $2}')
+CAP_HYBRID=$(echo      "$CAP_INFO" | awk -F'\t' '$1=="hybrid_tables"{print $2}')
+CAP_ICEBERG=$([ -n "$ICEBERG_VOLS" ] && echo "yes" || echo "no")
+CAP_CORTEX_SEARCH=$([ -n "$CORTEX_SVCS" ] && echo "yes" || echo "no")
+CAP_SNOWPIPE_AUTO=$([ -n "$NOTIF_INTS" ] && echo "yes" || echo "no")
+
+# First values (for the emitted defs.yaml).
+ICEBERG_FIRST_VOL=$(echo "$ICEBERG_VOLS" | cut -d'|' -f1)
+CORTEX_SEARCH_FIRST=$(echo "$CORTEX_SVCS" | cut -d'|' -f1)
+
+# SECURITY_ASK accumulates one TSV row per missing capability:
+#   capability<TAB>privilege_or_tier<TAB>granted_by<TAB>why
+SECURITY_ASK=""
+add_security_ask() {
+  SECURITY_ASK="${SECURITY_ASK}${1}	${2}	${3}	${4}
+"
+}
+icon() { [ "$1" = "yes" ] && echo "✅" || echo "❌"; }
+
+echo "  $(icon yes)  Time Travel              (always available — queries existing tables)"
+echo "  $(icon $CAP_CORTEX_LLM)  Cortex LLM (COMPLETE)    (SNOWFLAKE.CORTEX.COMPLETE probe)"
+[ "$CAP_CORTEX_LLM" = "no" ] && add_security_ask \
+  "Cortex LLM (COMPLETE / SUMMARIZE / SENTIMENT)" \
+  "Enable cross-region inference OR deploy in Cortex region" \
+  "ACCOUNTADMIN" \
+  "Unlocks snowflake_cortex_asset add-on (LLM completion / summarize / sentiment via SNOWFLAKE.CORTEX.*)"
+
+echo "  $(icon $CAP_ICEBERG)  Iceberg Tables           ($(echo "$ICEBERG_VOLS" | tr '|' ',' | head -c 60) external volumes)"
+[ "$CAP_ICEBERG" = "no" ] && add_security_ask \
+  "Iceberg Tables" \
+  "CREATE EXTERNAL VOLUME on account + IAM role in cloud storage" \
+  "ACCOUNTADMIN" \
+  "Unlocks snowflake_iceberg_table component (Apache Iceberg open-table-format demo)"
+
+echo "  $(icon $CAP_CORTEX_SEARCH)  Cortex Search Service    ($(echo "$CORTEX_SVCS" | tr '|' ',' | head -c 60) services)"
+[ "$CAP_CORTEX_SEARCH" = "no" ] && add_security_ask \
+  "Cortex Search Service" \
+  "CREATE CORTEX SEARCH SERVICE on schema + USAGE on warehouse" \
+  "SECURITYADMIN" \
+  "Unlocks snowflake_cortex_search component (managed RAG / vector search over Snowflake docs)"
+
+echo "  $(icon $CAP_MV)  Materialized Views       (Standard edition = no; Enterprise+ = yes)"
+[ "$CAP_MV" = "no" ] && add_security_ask \
+  "Materialized Views" \
+  "Enterprise edition (or higher)" \
+  "Account team / partnership contact" \
+  "Unlocks snowflake_materialized_view component in the DDL showcase (auto-maintained query result cache)"
+
+echo "  $(icon $CAP_HYBRID)  Hybrid Tables (Unistore) (ENABLE_UNISTORE_FEATURES at account level)"
+[ "$CAP_HYBRID" = "no" ] && add_security_ask \
+  "Hybrid Tables (Unistore)" \
+  "ALTER ACCOUNT SET ENABLE_UNISTORE_FEATURES = TRUE" \
+  "ACCOUNTADMIN" \
+  "Unlocks OLTP+analytics Unistore demo (currently no community component but the parameter unblocks future ones)"
+
+echo "  $(icon $CAP_SNOWPIPE_AUTO)  Snowpipe AUTO_INGEST    ($(echo "$NOTIF_INTS" | tr '|' ',' | head -c 60) notification integrations)"
+[ "$CAP_SNOWPIPE_AUTO" = "no" ] && add_security_ask \
+  "Snowpipe AUTO_INGEST" \
+  "CREATE NOTIFICATION INTEGRATION on account" \
+  "ACCOUNTADMIN" \
+  "Lets snowflake_snowpipe use AUTO_INGEST mode (S3/GCS/Azure event-driven). PUT-COPY mode still works without this."
+
+# Count add-ons that will scaffold vs. skipped.
+TOTAL_OPTIONAL=11
+SKIP_COUNT=0
+[ "$CAP_ICEBERG" = "no" ]       && SKIP_COUNT=$((SKIP_COUNT+1))
+[ "$CAP_CORTEX_SEARCH" = "no" ] && SKIP_COUNT=$((SKIP_COUNT+1))
+[ "$CAP_CORTEX_LLM" = "no" ]    && SKIP_COUNT=$((SKIP_COUNT+1))
+echo
+echo "  Will scaffold $((TOTAL_OPTIONAL - SKIP_COUNT)) of $TOTAL_OPTIONAL possible add-ons. $SKIP_COUNT silently skipped."
+echo "  (full table of skipped capabilities + how to unlock printed at end of run + saved to SECURITY_ASK.md)"
 
 # ── 5. Pick entity TYPES to import ─────────────────────────────────────
 echo
@@ -508,8 +660,15 @@ if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
   fi
 fi
 
-[ -n "${WANT_CORTEX:-}" ] || read -r -p "Add a snowflake_cortex_asset (LLM completion / summarize / sentiment)? [Y/n] " WANT_CORTEX
-WANT_CORTEX="${WANT_CORTEX:-y}"
+# Cortex LLM gated on capability — silently skip if Cortex isn't reachable
+# in this region/account. The capability scan above already noted the gap.
+if [ "$CAP_CORTEX_LLM" = "no" ]; then
+  WANT_CORTEX="n"
+  echo "  (skipping snowflake_cortex_asset — Cortex LLM not available in this account)"
+else
+  [ -n "${WANT_CORTEX:-}" ] || read -r -p "Add a snowflake_cortex_asset (LLM completion / summarize / sentiment)? [Y/n] " WANT_CORTEX
+  WANT_CORTEX="${WANT_CORTEX:-y}"
+fi
 CORTEX_MODE=""
 CORTEX_INPUT=""
 if [ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ]; then
@@ -633,7 +792,44 @@ fi
 WANT_DDL_SHOWCASE="${WANT_DDL_SHOWCASE:-y}"
 DDL_TARGET_SCHEMA=""
 if [ "$WANT_DDL_SHOWCASE" = "y" ] || [ "$WANT_DDL_SHOWCASE" = "Y" ]; then
-  prompt_default "Schema where the 7 Dagster-defined entities go" DDL_TARGET_SCHEMA "$SNOW_SCHEMA"
+  prompt_default "Schema where the Dagster-defined entities go" DDL_TARGET_SCHEMA "$SNOW_SCHEMA"
+  if [ "$CAP_MV" = "no" ]; then
+    echo "  (Materialized View component will be silently dropped — needs Enterprise edition)"
+  fi
+fi
+
+# ── Time Travel (always-Y; no infra needed) ────────────────────────────
+[ -n "${WANT_TIME_TRAVEL:-}" ] || read -r -p "Add a snowflake_time_travel_asset against your seeded ORDERS table? [Y/n] " WANT_TIME_TRAVEL
+WANT_TIME_TRAVEL="${WANT_TIME_TRAVEL:-y}"
+TIME_TRAVEL_TABLE=""
+if [ "$WANT_TIME_TRAVEL" = "y" ] || [ "$WANT_TIME_TRAVEL" = "Y" ]; then
+  prompt_default "Source table for Time Travel demo (unqualified)" TIME_TRAVEL_TABLE "ORDERS"
+fi
+
+# ── Iceberg (gated on EXTERNAL VOLUMES existing) ───────────────────────
+if [ "$CAP_ICEBERG" = "no" ]; then
+  WANT_ICEBERG="n"
+  echo "  (skipping snowflake_iceberg_table — no EXTERNAL VOLUMES in account)"
+else
+  [ -n "${WANT_ICEBERG:-}" ] || read -r -p "Add a snowflake_iceberg_table demo (uses existing external volume '$ICEBERG_FIRST_VOL')? [Y/n] " WANT_ICEBERG
+  WANT_ICEBERG="${WANT_ICEBERG:-y}"
+fi
+ICEBERG_BASE_LOCATION=""
+if [ "$WANT_ICEBERG" = "y" ] || [ "$WANT_ICEBERG" = "Y" ]; then
+  prompt_default "Iceberg table BASE_LOCATION (prefix under the volume)" ICEBERG_BASE_LOCATION "iceberg/dagster_demo/"
+fi
+
+# ── Cortex Search (gated on existing services) ─────────────────────────
+if [ "$CAP_CORTEX_SEARCH" = "no" ]; then
+  WANT_CORTEX_SEARCH="n"
+  echo "  (skipping snowflake_cortex_search — no CORTEX SEARCH SERVICES in account)"
+else
+  [ -n "${WANT_CORTEX_SEARCH:-}" ] || read -r -p "Add a snowflake_cortex_search asset against '$CORTEX_SEARCH_FIRST'? [Y/n] " WANT_CORTEX_SEARCH
+  WANT_CORTEX_SEARCH="${WANT_CORTEX_SEARCH:-y}"
+fi
+CORTEX_SEARCH_QUERY=""
+if [ "$WANT_CORTEX_SEARCH" = "y" ] || [ "$WANT_CORTEX_SEARCH" = "Y" ]; then
+  prompt_default "Cortex Search query" CORTEX_SEARCH_QUERY "how do I configure Snowpipe auto-ingest?"
 fi
 
 # ── 8. Scaffold the project (or reuse existing) ────────────────────────
@@ -724,13 +920,30 @@ if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then
   uv add -q dagster-dbt 'dbt-core>=1.7' dbt-snowflake
 fi
 if [ "$WANT_DDL_SHOWCASE" = "y" ] || [ "$WANT_DDL_SHOWCASE" = "Y" ]; then
-  echo ">>> Installing 7 snowflake_<entity> DDL components ..."
-  for c in snowflake_task snowflake_dynamic_table snowflake_stream \
-           snowflake_stored_procedure snowflake_snowpipe \
-           snowflake_alert snowflake_materialized_view; do
+  # Drop the MV component from the install bundle if the account is on
+  # Standard edition (it would scaffold but never materialize).
+  DDL_BUNDLE="snowflake_task snowflake_dynamic_table snowflake_stream snowflake_stored_procedure snowflake_snowpipe snowflake_alert"
+  [ "$CAP_MV" = "yes" ] && DDL_BUNDLE="$DDL_BUNDLE snowflake_materialized_view"
+  echo ">>> Installing $(echo $DDL_BUNDLE | wc -w | tr -d ' ') snowflake_<entity> DDL components ..."
+  for c in $DDL_BUNDLE; do
     $CLI add "$c" --auto-install
     rm -rf "src/$PKG/defs/$c"
   done
+fi
+if [ "$WANT_TIME_TRAVEL" = "y" ] || [ "$WANT_TIME_TRAVEL" = "Y" ]; then
+  echo ">>> Installing snowflake_time_travel_asset component ..."
+  $CLI add snowflake_time_travel_asset --auto-install
+  rm -rf "src/$PKG/defs/snowflake_time_travel_asset"
+fi
+if [ "$WANT_ICEBERG" = "y" ] || [ "$WANT_ICEBERG" = "Y" ]; then
+  echo ">>> Installing snowflake_iceberg_table component ..."
+  $CLI add snowflake_iceberg_table --auto-install
+  rm -rf "src/$PKG/defs/snowflake_iceberg_table"
+fi
+if [ "$WANT_CORTEX_SEARCH" = "y" ] || [ "$WANT_CORTEX_SEARCH" = "Y" ]; then
+  echo ">>> Installing snowflake_cortex_search component ..."
+  $CLI add snowflake_cortex_search --auto-install
+  rm -rf "src/$PKG/defs/snowflake_cortex_search"
 fi
 
 write_yaml() {
@@ -1312,7 +1525,9 @@ $DDL_CONN_HEADER
   on_materialize: create_only
   group_name: snowflake_ddl_showcase"
 
-  write_yaml "dg_materialized_view" "type: $PKG.components.snowflake_materialized_view.component.SnowflakeMaterializedViewComponent
+  # Materialized View — only emit on Enterprise+ accounts.
+  if [ "$CAP_MV" = "yes" ]; then
+    write_yaml "dg_materialized_view" "type: $PKG.components.snowflake_materialized_view.component.SnowflakeMaterializedViewComponent
 attributes:
   asset_name: dg_mv_customer_ltv
   mv_name: DG_CUSTOMER_LTV_MV
@@ -1323,6 +1538,77 @@ $DDL_CONN_HEADER
     WHERE STATUS IN ('paid', 'delivered')
     GROUP BY CUSTOMER_ID
   group_name: snowflake_ddl_showcase"
+  fi
+fi
+
+# ── Time Travel asset (always available; queries existing tables) ──────
+if [ "$WANT_TIME_TRAVEL" = "y" ] || [ "$WANT_TIME_TRAVEL" = "Y" ]; then
+  TT_AUTH_FIELDS="$(snow_auth_fields_direct '  ')"
+  # bash 3.2 (macOS) lacks ${var,,} lowercase — use tr.
+  TT_ASSET_LC=$(echo "$TIME_TRAVEL_TABLE" | tr '[:upper:]' '[:lower:]')
+  write_yaml "snowflake_time_travel_asset" "type: $PKG.components.snowflake_time_travel_asset.component.SnowflakeTimeTravelAssetComponent
+attributes:
+  asset_name: ${TT_ASSET_LC}_one_hour_ago
+  account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
+  user:    \"{{ env('SNOWFLAKE_USER') }}\"
+$TT_AUTH_FIELDS
+  warehouse:   \"$SNOW_WAREHOUSE\"
+  database:    \"$SNOW_DATABASE\"
+  schema_name: \"$SNOW_SCHEMA\"$([ -n "$SNOW_ROLE" ] && printf "\n  role: \"%s\"" "$SNOW_ROLE")
+  source_table: \"$TIME_TRAVEL_TABLE\"
+  time_travel_offset_seconds: -3600    # 1 hour ago — adjust as needed
+  row_limit: 1000
+  group_name: snowflake_time_travel
+  kinds: [snowflake, time_travel]"
+fi
+
+# ── Iceberg table (only when external volumes exist) ───────────────────
+if [ "$WANT_ICEBERG" = "y" ] || [ "$WANT_ICEBERG" = "Y" ]; then
+  ICE_AUTH_FIELDS="$(snow_auth_fields_direct '  ')"
+  write_yaml "snowflake_iceberg_table" "type: $PKG.components.snowflake_iceberg_table.component.SnowflakeIcebergTableComponent
+attributes:
+  asset_name: dagster_demo_iceberg
+  account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
+  user:    \"{{ env('SNOWFLAKE_USER') }}\"
+$ICE_AUTH_FIELDS
+  warehouse:   \"$SNOW_WAREHOUSE\"
+  database:    \"$SNOW_DATABASE\"
+  schema_name: \"$SNOW_SCHEMA\"$([ -n "$SNOW_ROLE" ] && printf "\n  role: \"%s\"" "$SNOW_ROLE")
+  table_name:      DAGSTER_DEMO_ICEBERG
+  external_volume: \"$ICEBERG_FIRST_VOL\"
+  catalog:         SNOWFLAKE
+  base_location:   \"$ICEBERG_BASE_LOCATION\"
+  sql: |
+    SELECT ORDER_ID, CUSTOMER_ID, TOTAL,
+           DATE_TRUNC('day', CREATED_AT) AS ORDER_DATE
+    FROM $SNOW_DATABASE.$SNOW_SCHEMA.ORDERS
+    WHERE STATUS = 'delivered'
+  cluster_by: [ORDER_DATE]
+  group_name: snowflake_iceberg
+  kinds: [snowflake, iceberg]"
+fi
+
+# ── Cortex Search (only when a search service exists) ──────────────────
+if [ "$WANT_CORTEX_SEARCH" = "y" ] || [ "$WANT_CORTEX_SEARCH" = "Y" ]; then
+  CS_AUTH_FIELDS="$(snow_auth_fields_direct '  ')"
+  # Split DB.SCHEMA.SERVICE into parts for the component (which takes them separately).
+  CS_DB=$(echo "$CORTEX_SEARCH_FIRST" | cut -d'.' -f1)
+  CS_SCHEMA=$(echo "$CORTEX_SEARCH_FIRST" | cut -d'.' -f2)
+  CS_SERVICE=$(echo "$CORTEX_SEARCH_FIRST" | cut -d'.' -f3)
+  write_yaml "snowflake_cortex_search" "type: $PKG.components.snowflake_cortex_search.component.SnowflakeCortexSearchComponent
+attributes:
+  asset_name: cortex_search_results
+  account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
+  user:    \"{{ env('SNOWFLAKE_USER') }}\"
+$CS_AUTH_FIELDS
+  warehouse:   \"$SNOW_WAREHOUSE\"
+  database:    \"$CS_DB\"
+  schema_name: \"$CS_SCHEMA\"$([ -n "$SNOW_ROLE" ] && printf "\n  role: \"%s\"" "$SNOW_ROLE")
+  service_name: \"$CS_SERVICE\"
+  query: \"$CORTEX_SEARCH_QUERY\"
+  result_limit: 10
+  group_name: snowflake_ai
+  kinds: [snowflake, cortex, rag]"
 fi
 
 # ── 12. .env.demo ──────────────────────────────────────────────────────
@@ -1447,5 +1733,59 @@ Other Snowflake components in the registry you can layer in:
 Add any of them with:
     uvx --from dagster-community-components-cli dagster-component add <name>
 MSG
+
+# ── Security ask ───────────────────────────────────────────────────────
+# If the capability scan recorded any missing capabilities, print + save
+# the table so it can be sent to the security team / partnership contact.
+if [ -n "$SECURITY_ASK" ]; then
+  ASK_FILE="SECURITY_ASK.md"
+  {
+    echo "# Snowflake capabilities your demo couldn't reach"
+    echo
+    echo "Generated by \`setup_snowflake_workspace_demo.sh\` on $(date)."
+    echo
+    echo "Account: \`$SNOW_ACCOUNT\`  ·  User: \`$SNOW_USER\`  ·  Role: \`${SNOW_ROLE:-(default)}\`"
+    echo
+    echo "The Dagster project at \`$PWD\` was scaffolded with the components"
+    echo "your role + account can actually use. The following Snowflake"
+    echo "capabilities were silently skipped during scaffold because the"
+    echo "underlying infrastructure, privilege, or product tier is missing."
+    echo
+    echo "Send this list to your security / platform team — once the grants"
+    echo "land, **re-run the same setup script** and the missing components"
+    echo "will automatically scaffold into the project."
+    echo
+    echo "| Capability | Privilege / tier needed | Granted by | Why I need it for the demo |"
+    echo "|---|---|---|---|"
+    printf "%s" "$SECURITY_ASK" | while IFS=$'\t' read -r cap priv granter why; do
+      [ -z "$cap" ] && continue
+      echo "| $cap | $priv | $granter | $why |"
+    done
+    echo
+    echo "## See also"
+    echo
+    echo "- [Full Snowflake demo account requirements](https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/snowflake_demo_account_requirements.md)"
+  } > "$ASK_FILE"
+  echo
+  echo "═════════════════════════════════════════════════════════════════════"
+  echo "  Security ask — capabilities skipped due to permissions / tier"
+  echo "═════════════════════════════════════════════════════════════════════"
+  echo "  The following capabilities couldn't be scaffolded against your"
+  echo "  account. Send the saved file to your security team / partnership"
+  echo "  contact:"
+  echo
+  echo "    $PWD/$ASK_FILE"
+  echo
+  printf "%s" "$SECURITY_ASK" | while IFS=$'\t' read -r cap priv granter why; do
+    [ -z "$cap" ] && continue
+    echo "  • $cap"
+    echo "      needs:    $priv"
+    echo "      grant by: $granter"
+  done
+  echo
+  echo "  Once granted: re-run this script and the components automatically"
+  echo "  scaffold into the project."
+  echo "═════════════════════════════════════════════════════════════════════"
+fi
 
 rm -f "$INV_OUT"
