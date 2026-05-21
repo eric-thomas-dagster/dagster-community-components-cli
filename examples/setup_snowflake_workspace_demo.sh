@@ -320,31 +320,52 @@ try:
 except Exception:
     pass
 
-# Per-type discovery queries. Wrap each in try/except so a permission error
-# (or a timeout) on one type doesn't blow up the whole discovery.
+# Per-type discovery queries.
+# - Every query uses SHOW (metadata cache; fast) — NOT INFORMATION_SCHEMA
+#   (live engine; can be 2-5s per query on cold warehouses). SHOW's
+#   "name" column is at index 1 for every entity type below.
+# - All queries run in parallel via ThreadPoolExecutor, each on its own
+#   cursor (sharing the connection). Cuts ~9× serial latency down to
+#   ~1× the single slowest query.
+DB = os.environ['SF_DATABASE']
+SCH = os.environ['SF_SCHEMA']
 queries = [
-    ("tasks",                f"SELECT name FROM {os.environ['SF_DATABASE']}.INFORMATION_SCHEMA.TASKS WHERE schema_name = '{os.environ['SF_SCHEMA']}' ORDER BY name"),
-    ("dynamic_tables",       f"SELECT name FROM {os.environ['SF_DATABASE']}.INFORMATION_SCHEMA.DYNAMIC_TABLES WHERE schema_name = '{os.environ['SF_SCHEMA']}' ORDER BY name"),
-    ("stored_procedures",    f"SELECT procedure_name AS name FROM {os.environ['SF_DATABASE']}.INFORMATION_SCHEMA.PROCEDURES WHERE procedure_schema = '{os.environ['SF_SCHEMA']}' ORDER BY name"),
-    ("streams",              f"SHOW STREAMS IN SCHEMA {os.environ['SF_DATABASE']}.{os.environ['SF_SCHEMA']}"),
-    ("snowpipes",            f"SHOW PIPES IN SCHEMA {os.environ['SF_DATABASE']}.{os.environ['SF_SCHEMA']}"),
-    ("stages",               f"SHOW STAGES IN SCHEMA {os.environ['SF_DATABASE']}.{os.environ['SF_SCHEMA']}"),
-    ("materialized_views",   f"SELECT table_name AS name FROM {os.environ['SF_DATABASE']}.INFORMATION_SCHEMA.VIEWS WHERE table_schema = '{os.environ['SF_SCHEMA']}' AND is_secure = 'NO'"),
-    ("external_tables",      f"SHOW EXTERNAL TABLES IN SCHEMA {os.environ['SF_DATABASE']}.{os.environ['SF_SCHEMA']}"),
-    ("alerts",               f"SHOW ALERTS IN SCHEMA {os.environ['SF_DATABASE']}.{os.environ['SF_SCHEMA']}"),
+    ("tasks",                f"SHOW TASKS IN SCHEMA {DB}.{SCH}"),
+    ("dynamic_tables",       f"SHOW DYNAMIC TABLES IN SCHEMA {DB}.{SCH}"),
+    ("stored_procedures",    f"SHOW PROCEDURES IN SCHEMA {DB}.{SCH}"),
+    ("streams",              f"SHOW STREAMS IN SCHEMA {DB}.{SCH}"),
+    ("snowpipes",            f"SHOW PIPES IN SCHEMA {DB}.{SCH}"),
+    ("stages",               f"SHOW STAGES IN SCHEMA {DB}.{SCH}"),
+    ("materialized_views",   f"SHOW MATERIALIZED VIEWS IN SCHEMA {DB}.{SCH}"),
+    ("external_tables",      f"SHOW EXTERNAL TABLES IN SCHEMA {DB}.{SCH}"),
+    ("alerts",               f"SHOW ALERTS IN SCHEMA {DB}.{SCH}"),
 ]
-for label, q in queries:
-    # Per-query progress so the user sees movement and knows which query
-    # any potential hang/timeout is happening on.
-    print(f"  ... {label}", flush=True)
+
+def _run_one(label_sql):
+    label, sql = label_sql
+    c = conn.cursor()
     try:
-        cur.execute(q)
-        rows = cur.fetchall()
-        # First column is the entity name across both SHOW and SELECT shapes.
-        names = [r[1] if (label in ("streams","snowpipes","stages","external_tables","alerts") and len(r) > 1) else r[0] for r in rows]
-        inv["types"][label] = names
+        c.execute(sql)
+        rows = c.fetchall()
+        # SHOW: first user-visible column is at index 1 (index 0 is created_on).
+        return label, [r[1] for r in rows if len(r) > 1], None
     except Exception as e:
-        inv["types"][label] = {"error": str(e)}
+        return label, None, str(e)[:200]
+    finally:
+        c.close()
+
+from concurrent.futures import ThreadPoolExecutor, as_completed
+print(f"  (running {len(queries)} discovery queries in parallel ...)", flush=True)
+with ThreadPoolExecutor(max_workers=min(8, len(queries))) as pool:
+    futures = [pool.submit(_run_one, q) for q in queries]
+    for fut in as_completed(futures):
+        label, names, err = fut.result()
+        if err is not None:
+            inv["types"][label] = {"error": err}
+            print(f"  ... {label:<22}  (skipped: {err[:60]})", flush=True)
+        else:
+            inv["types"][label] = names
+            print(f"  ... {label:<22}  {len(names)} found", flush=True)
 # Also enumerate base tables — useful to pick source tables for warehouse_pipeline.
 try:
     cur.execute(f"SELECT table_name FROM {os.environ['SF_DATABASE']}.INFORMATION_SCHEMA.TABLES WHERE table_schema = '{os.environ['SF_SCHEMA']}' AND table_type = 'BASE TABLE' ORDER BY table_name")
