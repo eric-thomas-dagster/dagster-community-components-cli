@@ -865,6 +865,10 @@ else
   uv add -q 'yarl<1.24'
   uv add --dev -q dagster-dg-cli dagster-webserver
   uv add -q 'snowflake-connector-python>=3.7.0'
+  # pandas is needed by dataframe_to_snowflake, snowflake_time_travel_asset,
+  # synthetic_data_generator — base components in the demo. --auto-install
+  # doesn't reliably pull component requirements.txt, so add explicitly.
+  uv add -q 'pandas>=1.5.0'
 fi
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
