@@ -1164,7 +1164,10 @@ fi
 # ── 11. Optional Cortex asset ──────────────────────────────────────────
 if [ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ]; then
   # Cortex component uses snowflake_*_env_var field convention (4-space indent).
-  CORTEX_AUTH_FIELDS=$(snow_auth_fields_envvar '  ' | sed 's/^  authenticator/  snowflake_authenticator/; s/^  private_key_file_env_var/  snowflake_private_key_file_env_var/; s/^  private_key_file_pwd_env_var/  snowflake_private_key_file_pwd_env_var/; s/^  password_env_var/  snowflake_password_env_var/; s/^/  /')
+  # Cortex's field naming convention prefixes auth fields with 'snowflake_'.
+  # The trailing `s/^/  /` from the original was over-indenting (auth fields
+  # ended up 4-space under `attributes:` instead of 2). Dropped.
+  CORTEX_AUTH_FIELDS=$(snow_auth_fields_envvar '  ' | sed 's/^  authenticator/  snowflake_authenticator/; s/^  private_key_file_env_var/  snowflake_private_key_file_env_var/; s/^  private_key_file_pwd_env_var/  snowflake_private_key_file_pwd_env_var/; s/^  password_env_var/  snowflake_password_env_var/')
   write_yaml "cortex_demo" "type: $PKG.components.snowflake_cortex_asset.component.SnowflakeCortexAssetComponent
 attributes:
   asset_name: cortex_demo
@@ -1428,12 +1431,15 @@ DBTYAML
   # Dagster defs for the dbt project — uses the OFFICIAL dagster-dbt
   # integration. Each model becomes a Dagster asset; sources become
   # external observable assets; the lineage shows RAW → staging → marts.
+  # DbtProjectComponent schema: `project` is either a string path or a
+  # DbtProjectArgsModel (uses `project_dir` — not `dbt_project_dir`).
+  # `group_name` lives under `translation:` (AssetSpecUpdateKwargsModel),
+  # not at the top level.
   write_yaml "dbt_project" "type: dagster_dbt.DbtProjectComponent
 attributes:
-  project:
-    dbt_project_dir: ../../../dbt
-    profiles_dir: ../../../dbt
-  group_name: dbt_models"
+  project: ../../../dbt
+  translation:
+    group_name: dbt_models"
 fi
 
 # ── 17. Optional 'define-as-code' DDL showcase ─────────────────────────
