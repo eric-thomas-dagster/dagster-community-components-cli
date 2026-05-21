@@ -346,6 +346,13 @@ except Exception as e:
 # wrapped in try/except — missing privileges are non-fatal, just mean
 # the capability is unavailable.
 caps = {}
+# Cap every probe at 15s so a hung query (e.g. Cortex throttled / waiting
+# on warehouse resume) doesn't lock up the whole script.
+try:
+    cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 15")
+except Exception:
+    pass
+
 def _probe(label, sql, parse=None):
     try:
         cur.execute(sql)
@@ -366,8 +373,13 @@ cortex_svcs, err = _probe("cortex_search",
 caps["cortex_search_services"] = cortex_svcs or []
 if err: caps["_cortex_search_error"] = err
 
+# Cortex LLM probe — DESCRIBE FUNCTION is metadata-only (instant), instead
+# of actually calling COMPLETE (which fires a real LLM request that can
+# hang for 30s+ in throttled accounts or stall indefinitely if the model
+# is unavailable in the region). Function presence ≠ guaranteed runtime
+# usability, but it's a strong signal and won't lock up the script.
 _, err = _probe("cortex_llm",
-    "SELECT SNOWFLAKE.CORTEX.COMPLETE('mistral-7b', 'hi')")
+    "DESCRIBE FUNCTION SNOWFLAKE.CORTEX.COMPLETE(VARCHAR, VARCHAR)")
 caps["cortex_llm"] = err is None
 if err: caps["_cortex_llm_error"] = err
 
