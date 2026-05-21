@@ -495,8 +495,8 @@ echo
 echo "─────────────────────────────────────────────────────────────────────"
 echo "  Optional add-ons"
 echo "─────────────────────────────────────────────────────────────────────"
-[ -n "${WANT_PIPELINE:-}" ] || read -r -p "Add a multi-step warehouse_pipeline demo (joins + op:sql commission + multi-sink)? [y/N] " WANT_PIPELINE
-WANT_PIPELINE="${WANT_PIPELINE:-n}"
+[ -n "${WANT_PIPELINE:-}" ] || read -r -p "Add a multi-step warehouse_pipeline demo (joins + op:sql commission + multi-sink)? [Y/n] " WANT_PIPELINE
+WANT_PIPELINE="${WANT_PIPELINE:-y}"
 if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
   echo "  Pick two base tables from the discovered list, or paste your own."
   prompt_default "Orders-like table (FULLY QUALIFIED, e.g. RAW.ORDERS)" PIPE_ORDERS ""
@@ -508,8 +508,8 @@ if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
   fi
 fi
 
-[ -n "${WANT_CORTEX:-}" ] || read -r -p "Add a snowflake_cortex_asset (LLM completion / summarize / sentiment)? [y/N] " WANT_CORTEX
-WANT_CORTEX="${WANT_CORTEX:-n}"
+[ -n "${WANT_CORTEX:-}" ] || read -r -p "Add a snowflake_cortex_asset (LLM completion / summarize / sentiment)? [Y/n] " WANT_CORTEX
+WANT_CORTEX="${WANT_CORTEX:-y}"
 CORTEX_MODE=""
 CORTEX_INPUT=""
 if [ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ]; then
@@ -522,8 +522,8 @@ fi
 # Reactive trigger: snowflake_table_observation_sensor watches a table's
 # row count + ingests changes. Demonstrates "react to table mutation"
 # beyond what Snowpipe's cloud-storage trigger can express.
-[ -n "${WANT_OBSERVER:-}" ] || read -r -p "Add a snowflake_table_observation_sensor watching a table for changes? [y/N] " WANT_OBSERVER
-WANT_OBSERVER="${WANT_OBSERVER:-n}"
+[ -n "${WANT_OBSERVER:-}" ] || read -r -p "Add a snowflake_table_observation_sensor watching a table for changes? [Y/n] " WANT_OBSERVER
+WANT_OBSERVER="${WANT_OBSERVER:-y}"
 OBSERVER_DATABASE=""
 OBSERVER_SCHEMA=""
 OBSERVER_TABLE=""
@@ -538,8 +538,8 @@ fi
 # Only meaningful if the user selected the pipeline add-on.
 WANT_AUTOCOND="${WANT_AUTOCOND:-}"
 if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
-  [ -n "$WANT_AUTOCOND" ] || read -r -p "Wire AutomationCondition.eager() on the pipeline so it auto-reacts to upstream changes? [y/N] " WANT_AUTOCOND
-  WANT_AUTOCOND="${WANT_AUTOCOND:-n}"
+  [ -n "$WANT_AUTOCOND" ] || read -r -p "Wire AutomationCondition.eager() on the pipeline so it auto-reacts to upstream changes? [Y/n] " WANT_AUTOCOND
+  WANT_AUTOCOND="${WANT_AUTOCOND:-y}"
 fi
 
 # Heterogeneous + partitioned: synthetic_data_generator (Python, daily
@@ -547,8 +547,8 @@ fi
 # scaffold proves TWO claims: cross-engine lineage (Python on the left,
 # Snowflake on the right) AND first-class partition replay (backfill 30
 # days, concurrency-capped, from the dg dev UI).
-[ -n "${WANT_HET:-}" ] || read -r -p "Add a partitioned Python -> Snowflake landing chain (heterogeneous + backfillable)? [y/N] " WANT_HET
-WANT_HET="${WANT_HET:-n}"
+[ -n "${WANT_HET:-}" ] || read -r -p "Add a partitioned Python -> Snowflake landing chain (heterogeneous + backfillable)? [Y/n] " WANT_HET
+WANT_HET="${WANT_HET:-y}"
 HET_DATABASE=""
 HET_SCHEMA=""
 HET_TABLE=""
@@ -562,8 +562,8 @@ if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then
 fi
 
 # Data quality: freshness_check on a chosen imported asset.
-[ -n "${WANT_FRESH:-}" ] || read -r -p "Add a freshness_check asset check on one of the imported entities? [y/N] " WANT_FRESH
-WANT_FRESH="${WANT_FRESH:-n}"
+[ -n "${WANT_FRESH:-}" ] || read -r -p "Add a freshness_check asset check on one of the imported entities? [Y/n] " WANT_FRESH
+WANT_FRESH="${WANT_FRESH:-y}"
 FRESH_ASSET_KEY=""
 FRESH_FAIL_HOURS=""
 if [ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ]; then
@@ -578,8 +578,8 @@ fi
 # Snowpark's lazy DataFrame API instead of compiling to CTAS+CTEs. Shows
 # customers that Dagster works equally well with either Snowflake compute
 # paradigm — pure SQL OR DataFrame.
-[ -n "${WANT_SNOWPARK:-}" ] || read -r -p "Add a snowpark_pipeline (DataFrame-API parallel to warehouse_pipeline)? [y/N] " WANT_SNOWPARK
-WANT_SNOWPARK="${WANT_SNOWPARK:-n}"
+[ -n "${WANT_SNOWPARK:-}" ] || read -r -p "Add a snowpark_pipeline (DataFrame-API parallel to warehouse_pipeline)? [Y/n] " WANT_SNOWPARK
+WANT_SNOWPARK="${WANT_SNOWPARK:-y}"
 SP_ORDERS=""
 SP_CUSTOMERS=""
 SP_OUT_SCHEMA=""
@@ -592,8 +592,8 @@ fi
 # external_snowflake_table — declare-only lineage. Useful for "this table
 # is owned by another team / managed outside Dagster, but we want to
 # depend on it." Common enterprise pattern.
-[ -n "${WANT_EXTERNAL:-}" ] || read -r -p "Declare an external_snowflake_table (lineage to a table you don't manage)? [y/N] " WANT_EXTERNAL
-WANT_EXTERNAL="${WANT_EXTERNAL:-n}"
+[ -n "${WANT_EXTERNAL:-}" ] || read -r -p "Declare an external_snowflake_table (lineage to a table you don't manage)? [Y/n] " WANT_EXTERNAL
+WANT_EXTERNAL="${WANT_EXTERNAL:-y}"
 EXT_DATABASE=""
 EXT_SCHEMA=""
 EXT_TABLE=""
@@ -611,8 +611,8 @@ fi
 # Dagster project. The DbtProjectComponent imports every model in the
 # project as a Dagster asset, with lineage from the source tables in
 # RAW.* through the dbt models to the final mart.
-[ -n "${WANT_DBT:-}" ] || read -r -p "Add a dbt project (Dagster's official dagster-dbt integration)? [y/N] " WANT_DBT
-WANT_DBT="${WANT_DBT:-n}"
+[ -n "${WANT_DBT:-}" ] || read -r -p "Add a dbt project (Dagster's official dagster-dbt integration)? [Y/n] " WANT_DBT
+WANT_DBT="${WANT_DBT:-y}"
 DBT_SOURCE_DB=""
 DBT_SOURCE_SCHEMA=""
 DBT_TARGET_SCHEMA=""
@@ -629,8 +629,8 @@ fi
 # control plane" alongside the workspace component's "import existing" pattern.
 # Entities are name-prefixed DG_ to avoid colliding with the seed's objects and
 # to let the workspace component exclude them via exclude_name_pattern.
-[ -n "${WANT_DDL_SHOWCASE:-}" ] || read -r -p "Add a showcase of all 7 'define-Snowflake-as-code' DDL components? [y/N] " WANT_DDL_SHOWCASE
-WANT_DDL_SHOWCASE="${WANT_DDL_SHOWCASE:-n}"
+[ -n "${WANT_DDL_SHOWCASE:-}" ] || read -r -p "Add a showcase of all 7 'define-Snowflake-as-code' DDL components? [Y/n] " WANT_DDL_SHOWCASE
+WANT_DDL_SHOWCASE="${WANT_DDL_SHOWCASE:-y}"
 DDL_TARGET_SCHEMA=""
 if [ "$WANT_DDL_SHOWCASE" = "y" ] || [ "$WANT_DDL_SHOWCASE" = "Y" ]; then
   prompt_default "Schema where the 7 Dagster-defined entities go" DDL_TARGET_SCHEMA "$SNOW_SCHEMA"
@@ -846,7 +846,8 @@ WORKSPACE_YAML="type: $PKG.components.snowflake_workspace.component.SnowflakeWor
 attributes:
   account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
   user:    \"{{ env('SNOWFLAKE_USER') }}\"
-$(printf %s "$AUTH_FIELDS_DIRECT")  warehouse: \"$SNOW_WAREHOUSE\"
+$AUTH_FIELDS_DIRECT
+  warehouse: \"$SNOW_WAREHOUSE\"
   database:  \"$SNOW_DATABASE\"
   schema:    \"$SNOW_SCHEMA\"
 $ROLE_LINE
@@ -946,7 +947,8 @@ attributes:
   asset_name: cortex_demo
   snowflake_account_env_var: SNOWFLAKE_ACCOUNT
   snowflake_user_env_var:    SNOWFLAKE_USER
-$(printf %s "$CORTEX_AUTH_FIELDS")  snowflake_database: \"$SNOW_DATABASE\"
+$CORTEX_AUTH_FIELDS
+  snowflake_database: \"$SNOW_DATABASE\"
   snowflake_schema:   \"$SNOW_SCHEMA\"
   snowflake_warehouse: \"$SNOW_WAREHOUSE\"
   cortex_function: $CORTEX_MODE
@@ -974,7 +976,8 @@ attributes:
   schema_name: \"$OBSERVER_SCHEMA\"
   table_name: \"$OBSERVER_TABLE\"
   username_env_var: SNOWFLAKE_USER
-$(printf %s "$OBS_AUTH_FIELDS")  warehouse: \"$SNOW_WAREHOUSE\"
+$OBS_AUTH_FIELDS
+  warehouse: \"$SNOW_WAREHOUSE\"
   check_interval_seconds: 60
   include_preview_metadata: true"
 fi
@@ -1001,7 +1004,8 @@ attributes:
   upstream_asset_key: python_daily_events
   account_env_var: SNOWFLAKE_ACCOUNT
   user_env_var: SNOWFLAKE_USER
-$(printf %s "$HET_AUTH_FIELDS")  warehouse: \"$SNOW_WAREHOUSE\"
+$HET_AUTH_FIELDS
+  warehouse: \"$SNOW_WAREHOUSE\"
   database: \"$HET_DATABASE\"
   schema: \"$HET_SCHEMA\"
   table: \"$HET_TABLE\"
@@ -1037,7 +1041,8 @@ attributes:
   connection:
     account_env_var:  SNOWFLAKE_ACCOUNT
     user_env_var:     SNOWFLAKE_USER
-$(printf %s "$SP_AUTH_FIELDS")    warehouse: \"$SNOW_WAREHOUSE\"
+$SP_AUTH_FIELDS
+    warehouse: \"$SNOW_WAREHOUSE\"
     database:  \"$SNOW_DATABASE\"
     schema:    \"$SNOW_SCHEMA\"
   steps:
@@ -1219,7 +1224,8 @@ if [ "$WANT_DDL_SHOWCASE" = "y" ] || [ "$WANT_DDL_SHOWCASE" = "Y" ]; then
   DDL_CONN_HEADER="\
   account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
   user:    \"{{ env('SNOWFLAKE_USER') }}\"
-$(printf %s "$DDL_AUTH_FIELDS")  warehouse: \"$SNOW_WAREHOUSE\"
+$DDL_AUTH_FIELDS
+  warehouse: \"$SNOW_WAREHOUSE\"
   database: \"$SNOW_DATABASE\"
   schema_name: \"$DDL_TARGET_SCHEMA\""
   [ -n "$SNOW_ROLE" ] && DDL_CONN_HEADER="$DDL_CONN_HEADER

@@ -240,7 +240,9 @@ export WANT_DBT=n
 ./setup_snowflake_workspace_demo.sh
 ```
 
-The full list of env vars (each takes `y` or `n`, default `n` unless `WANT_EVERYTHING=true`): `WANT_DEPS` `WANT_PIPELINE` `WANT_AUTOCOND` `WANT_CORTEX` `WANT_OBSERVER` `WANT_HET` `WANT_FRESH` `WANT_SNOWPARK` `WANT_EXTERNAL` `WANT_DBT` `WANT_DDL_SHOWCASE`.
+The full list of env vars (each takes `y` or `n`). **Defaults are `y` (opt-out)** for every add-on prompt — the script's purpose is showing the full Snowflake surface, so pressing Enter at each prompt gives you the full demo. Type `n` to opt out of a specific add-on. The only prompt that defaults `n` is the cross-entity dep wiring (`WANT_DEPS`) — that one's an opt-in because typing entity names is finicky.
+
+Available env vars: `WANT_DEPS` `WANT_PIPELINE` `WANT_AUTOCOND` `WANT_CORTEX` `WANT_OBSERVER` `WANT_HET` `WANT_FRESH` `WANT_SNOWPARK` `WANT_EXTERNAL` `WANT_DBT` `WANT_DDL_SHOWCASE`.
 
 ## What it asks
 
