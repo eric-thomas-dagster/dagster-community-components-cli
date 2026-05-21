@@ -1455,9 +1455,12 @@ DBTYAML
   # DbtProjectArgsModel (uses `project_dir` — not `dbt_project_dir`).
   # `group_name` lives under `translation:` (AssetSpecUpdateKwargsModel),
   # not at the top level.
+  # Use the {{ project_root }} Jinja macro so the path resolves to the
+  # Dagster project root regardless of how nested the defs.yaml is.
+  # (Relative paths like ../../../dbt resolve to src/dbt, not <project>/dbt.)
   write_yaml "dbt_project" "type: dagster_dbt.DbtProjectComponent
 attributes:
-  project: ../../../dbt
+  project: '{{ project_root }}/dbt'
   translation:
     group_name: dbt_models"
 fi
