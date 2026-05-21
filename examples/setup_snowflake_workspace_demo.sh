@@ -311,8 +311,17 @@ SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" SF_AUTH_MET
   uv run --quiet --with 'snowflake-connector-python[secure-local-storage]' --no-project python - <<EOF
 $SF_PY_PRELUDE
 inv = {"types": {}}
+# Cap every discovery + probe query at 15s so a hung query (slow warehouse
+# resume, server-side timeout, Cortex throttling, etc.) doesn't lock up
+# the script. Applied at the very start of the session so it covers
+# discovery AND the capability probes below.
+try:
+    cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 15")
+except Exception:
+    pass
+
 # Per-type discovery queries. Wrap each in try/except so a permission error
-# on one type doesn't blow up the whole discovery.
+# (or a timeout) on one type doesn't blow up the whole discovery.
 queries = [
     ("tasks",                f"SELECT name FROM {os.environ['SF_DATABASE']}.INFORMATION_SCHEMA.TASKS WHERE schema_name = '{os.environ['SF_SCHEMA']}' ORDER BY name"),
     ("dynamic_tables",       f"SELECT name FROM {os.environ['SF_DATABASE']}.INFORMATION_SCHEMA.DYNAMIC_TABLES WHERE schema_name = '{os.environ['SF_SCHEMA']}' ORDER BY name"),
@@ -325,6 +334,9 @@ queries = [
     ("alerts",               f"SHOW ALERTS IN SCHEMA {os.environ['SF_DATABASE']}.{os.environ['SF_SCHEMA']}"),
 ]
 for label, q in queries:
+    # Per-query progress so the user sees movement and knows which query
+    # any potential hang/timeout is happening on.
+    print(f"  ... {label}", flush=True)
     try:
         cur.execute(q)
         rows = cur.fetchall()
@@ -346,14 +358,10 @@ except Exception as e:
 # wrapped in try/except — missing privileges are non-fatal, just mean
 # the capability is unavailable.
 caps = {}
-# Cap every probe at 15s so a hung query (e.g. Cortex throttled / waiting
-# on warehouse resume) doesn't lock up the whole script.
-try:
-    cur.execute("ALTER SESSION SET STATEMENT_TIMEOUT_IN_SECONDS = 15")
-except Exception:
-    pass
+# (STATEMENT_TIMEOUT_IN_SECONDS=15 already set at the top of the session.)
 
 def _probe(label, sql, parse=None):
+    print(f"  ... capability: {label}", flush=True)
     try:
         cur.execute(sql)
         rows = cur.fetchall()
