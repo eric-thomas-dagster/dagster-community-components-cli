@@ -172,8 +172,16 @@ echo "  [3] Password (if your account still allows it)"
 echo "  [4] PAT (Programmatic Access Token) — works when keypair registration is blocked"
 echo "  [5] Password + MFA (TOTP) — use when account requires MFA. Driver caches"
 echo "      the MFA token in your OS keychain for ~4 hours after first prompt."
-read -r -p "Choice [1]: " AUTH_CHOICE
-AUTH_CHOICE="${AUTH_CHOICE:-1}"
+# Auto-pick a sensible default based on which env var is set.
+# This lets users export SNOWFLAKE_PAT (or *_PRIVATE_KEY_FILE / *_PASSWORD)
+# and just press Enter through the prompt.
+_DEFAULT_AUTH=1
+if   [ -n "${SNOWFLAKE_PAT:-}" ]; then _DEFAULT_AUTH=4
+elif [ -n "${SNOWFLAKE_PRIVATE_KEY_FILE:-}" ]; then _DEFAULT_AUTH=1
+elif [ -n "${SNOWFLAKE_PASSWORD:-}" ]; then _DEFAULT_AUTH=3
+fi
+read -r -p "Choice [$_DEFAULT_AUTH]: " AUTH_CHOICE
+AUTH_CHOICE="${AUTH_CHOICE:-$_DEFAULT_AUTH}"
 SNOW_AUTH_METHOD=""
 SNOW_PASS=""
 SNOW_KEY_FILE=""
