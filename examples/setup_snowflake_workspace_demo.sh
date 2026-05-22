@@ -792,6 +792,136 @@ if [ "$CAP_ICEBERG" = "no" ]; then
   fi
 fi
 
+# ── 4.7. Optional: wire AUTO_INGEST pipe → S3 events (make it fire live) ──
+# Triggered when an AUTO_INGEST pipe exists (typically the seeded
+# ORDERS_AUTO_PIPE). Configures the user's S3 bucket to publish PUT
+# events to the SQS queue Snowflake created when the pipe was created.
+# Uses snow CLI to get the SQS ARN + aws CLI to configure S3 events.
+setup_autoingest_s3_wiring() {
+  local snow_args; snow_args=$(_snow_cli_auth_args)
+  if [ -z "$snow_args" ]; then
+    echo "  ⚠ snow CLI auto-auth doesn't yet support auth method '$SNOW_AUTH_METHOD'. Skipping."
+    return 1
+  fi
+  echo "  Installing CLIs if missing ..."
+  _install_with_brew_if_missing aws awscli || return 1
+  _install_with_brew_if_missing snow snowflake-cli || return 1
+
+  if ! aws sts get-caller-identity >/dev/null 2>&1; then
+    echo "    ⚠ aws CLI not authenticated. Run 'aws configure'. Skipping."
+    return 1
+  fi
+
+  # Pick the first detected autoingest pipe — typically ORDERS_AUTO_PIPE.
+  local pipe_name; pipe_name=$(echo "$AUTOINGEST_PIPES" | cut -d'|' -f1)
+  if [ -z "$pipe_name" ]; then
+    echo "    ⚠ No autoingest pipe found in capability scan."
+    return 1
+  fi
+  local fq_pipe="$SNOW_DATABASE.$SNOW_SCHEMA.$pipe_name"
+  echo "  Using pipe: $fq_pipe"
+
+  # Prompt for S3 bucket (default to the Iceberg bucket if one exists).
+  local default_bucket=""
+  if [ -n "$ICEBERG_FIRST_VOL" ]; then
+    # Try to extract the bucket name from the external volume's STORAGE_BASE_URL.
+    default_bucket=$(snow sql $snow_args -q "DESC EXTERNAL VOLUME $ICEBERG_FIRST_VOL;" --format json 2>/dev/null \
+      | python3 -c "
+import json, sys, re
+data = json.load(sys.stdin)
+rows = data if isinstance(data, list) else data.get('rows', [])
+for r in rows:
+    val = r.get('property_value') or r.get('PROPERTY_VALUE') or ''
+    m = re.search(r's3://([^/\"\\'']+)', val)
+    if m:
+        print(m.group(1).strip())
+        break
+")
+  fi
+  local bucket=""
+  if [ -n "$default_bucket" ]; then
+    read -r -p "  S3 bucket [$default_bucket]: " bucket
+    bucket="${bucket:-$default_bucket}"
+  else
+    read -r -p "  S3 bucket name (the one for inbound files): " bucket
+  fi
+  if [ -z "$bucket" ]; then
+    echo "    ⚠ No bucket provided. Skipping."
+    return 1
+  fi
+  read -r -p "  S3 prefix to watch (files dropped here auto-ingest) [inbound/]: " prefix
+  prefix="${prefix:-inbound/}"
+
+  # Get the SQS ARN from DESC PIPE.
+  echo "  >>> Getting NOTIFICATION_CHANNEL (SQS ARN) from $fq_pipe ..."
+  local sqs_arn
+  sqs_arn=$(snow sql $snow_args -q "DESC PIPE $fq_pipe;" --format json 2>/dev/null \
+    | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+rows = data if isinstance(data, list) else data.get('rows', [])
+for r in rows:
+    keys = {k.lower(): v for k, v in r.items()}
+    if 'notification_channel' in keys and keys['notification_channel']:
+        print(keys['notification_channel'])
+        break
+")
+  if [ -z "$sqs_arn" ]; then
+    echo "    ⚠ Couldn't get SQS ARN from DESC PIPE. Skipping."
+    return 1
+  fi
+  echo "    ✓ SQS ARN: $sqs_arn"
+
+  echo "  >>> Configuring S3 bucket events on s3://$bucket/$prefix → SQS ..."
+  local notif_json; notif_json=$(mktemp -t s3_notif.XXXX).json
+  cat > "$notif_json" <<EOF
+{
+  "QueueConfigurations": [{
+    "Id": "dagster-demo-autoingest",
+    "QueueArn": "$sqs_arn",
+    "Events": ["s3:ObjectCreated:*"],
+    "Filter": {"Key": {"FilterRules": [{"Name": "prefix", "Value": "$prefix"}]}}
+  }]
+}
+EOF
+  aws s3api put-bucket-notification-configuration \
+    --bucket "$bucket" --notification-configuration file://"$notif_json" \
+    || { echo "    ⚠ S3 notification config failed. Check that the bucket policy / SQS"; \
+         echo "       queue policy allows s3.amazonaws.com to send messages."; return 1; }
+  echo "    ✓ Done. AUTO_INGEST is now live."
+
+  # Optional smoke test: drop a CSV + wait for it to land.
+  read -r -p "  Drop a test CSV into s3://$bucket/$prefix to verify? [Y/n] " do_test
+  do_test="${do_test:-y}"
+  if [ "$do_test" = "y" ] || [ "$do_test" = "Y" ]; then
+    local test_file; test_file=$(mktemp -t autoingest_test.XXXX).csv
+    cat > "$test_file" <<'EOF'
+ORDER_ID,CUSTOMER_ID,TOTAL,STATUS,ORDER_DATE
+99001,CUST000001,42.99,delivered,2026-05-22
+99002,CUST000002,128.50,paid,2026-05-22
+EOF
+    aws s3 cp "$test_file" "s3://$bucket/${prefix}autoingest_smoke_test.csv" >/dev/null \
+      && echo "    ✓ Test file uploaded. Snowflake should ingest within ~30s."
+    echo "    Check it landed:"
+    echo "      SELECT * FROM $SNOW_DATABASE.$SNOW_SCHEMA.ORDERS_INGESTED ORDER BY \$1 DESC LIMIT 5;"
+  fi
+}
+
+if [ "$CAP_SNOWPIPE_AUTO" = "yes" ] && [ -n "$AUTOINGEST_PIPES" ]; then
+  echo
+  echo "─────────────────────────────────────────────────────────────────────"
+  echo "  AUTO_INGEST pipe detected — wire S3 events to fire it live?"
+  echo "─────────────────────────────────────────────────────────────────────"
+  echo "Snowflake has a managed SQS queue ready. To make the pipe actually"
+  echo "fire on S3 PUTs, the bucket's event notifications need to publish"
+  echo "to that queue. This script can do that for you via aws CLI."
+  read -r -p "Wire S3 events to AUTO_INGEST queue? [y/N] " WANT_AUTOINGEST_WIRE
+  WANT_AUTOINGEST_WIRE="${WANT_AUTOINGEST_WIRE:-n}"
+  if [ "$WANT_AUTOINGEST_WIRE" = "y" ] || [ "$WANT_AUTOINGEST_WIRE" = "Y" ]; then
+    setup_autoingest_s3_wiring || echo "  (continuing — AUTO_INGEST pipe still configured, just not wired live)"
+  fi
+fi
+
 # ── 5. Pick entity TYPES to import ─────────────────────────────────────
 echo
 echo "─────────────────────────────────────────────────────────────────────"
