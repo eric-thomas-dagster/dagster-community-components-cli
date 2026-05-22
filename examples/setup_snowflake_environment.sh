@@ -90,6 +90,7 @@ echo "  [1] Keypair (RSA private key file) — headless, recommended"
 echo "  [2] SSO (externalbrowser) — pops a browser for auth"
 echo "  [3] Password (if your account still allows it)"
 echo "  [4] PAT (Programmatic Access Token) — works when keypair registration is blocked"
+echo "  [5] Password + MFA (TOTP) — account requires MFA; driver caches token in OS keychain"
 read -r -p "Choice [1]: " AUTH_CHOICE
 AUTH_CHOICE="${AUTH_CHOICE:-1}"
 SNOW_AUTH_METHOD=""
@@ -97,6 +98,7 @@ SNOW_PASS=""
 SNOW_KEY_FILE=""
 SNOW_KEY_PWD=""
 SNOW_PAT=""
+SNOW_MFA_PASSCODE=""
 case "$AUTH_CHOICE" in
   1|keypair)
     SNOW_AUTH_METHOD="keypair"
@@ -142,8 +144,24 @@ case "$AUTH_CHOICE" in
       exit 1
     fi
     ;;
+  5|mfa|password_mfa)
+    SNOW_AUTH_METHOD="password_mfa"
+    if [ -n "${SNOWFLAKE_PASSWORD:-}" ]; then
+      echo "Password: [using \$SNOWFLAKE_PASSWORD from env]"
+      SNOW_PASS="$SNOWFLAKE_PASSWORD"
+    else
+      read -r -s -p "Password (hidden): " SNOW_PASS
+      echo
+    fi
+    echo "  Enter your current 6-digit TOTP code (or press Enter to use Duo Push)."
+    read -r -p "  MFA code: " SNOW_MFA_PASSCODE
+    if [ -z "$SNOW_PASS" ]; then
+      echo "  ⚠ Password is required."
+      exit 1
+    fi
+    ;;
   *)
-    echo "  ⚠ Invalid choice — pick 1, 2, 3, or 4."
+    echo "  ⚠ Invalid choice — pick 1, 2, 3, 4, or 5."
     exit 1
     ;;
 esac
@@ -180,7 +198,7 @@ SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
   SF_TARGET_DB="$SNOW_TARGET_DB" \
   SF_AUTH_METHOD="$SNOW_AUTH_METHOD" \
   SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
-  SF_PAT="$SNOW_PAT" \
+  SF_PAT="$SNOW_PAT" SF_MFA_PASSCODE="$SNOW_MFA_PASSCODE" \
   PRECHECK_OUT="$PRECHECK_OUT" \
   uv run --quiet --with 'snowflake-connector-python[secure-local-storage]' --no-project python - <<'PYEOF'
 import json, os, sys
@@ -206,6 +224,15 @@ elif auth == 'sso':
 elif auth == 'pat':
     ck['authenticator'] = 'PROGRAMMATIC_ACCESS_TOKEN'
     ck['token'] = os.environ.get('SF_PAT', '')
+elif auth == 'password_mfa':
+    # MFA via TOTP / Duo. Driver caches an MFA token to the OS keychain
+    # (via [secure-local-storage] extra) so subsequent calls within ~4h
+    # reuse it without re-prompting.
+    ck['authenticator'] = 'username_password_mfa'
+    ck['password'] = os.environ.get('SF_PASS', '')
+    if os.environ.get('SF_MFA_PASSCODE'):
+        ck['passcode'] = os.environ['SF_MFA_PASSCODE']
+    ck['client_request_mfa_token'] = True
 else:  # password
     ck['password'] = os.environ.get('SF_PASS', '')
 
@@ -464,7 +491,7 @@ SF_ACCOUNT="$SNOW_ACCOUNT" SF_USER="$SNOW_USER" SF_PASS="$SNOW_PASS" \
   SF_WAREHOUSE="$SNOW_WAREHOUSE" SF_ROLE="$SNOW_ROLE" \
   SF_AUTH_METHOD="$SNOW_AUTH_METHOD" \
   SF_KEY_FILE="$SNOW_KEY_FILE" SF_KEY_PWD="$SNOW_KEY_PWD" \
-  SF_PAT="$SNOW_PAT" \
+  SF_PAT="$SNOW_PAT" SF_MFA_PASSCODE="$SNOW_MFA_PASSCODE" \
   SF_SQL_FILE="$SQL_FILE" \
   uv run --quiet --with 'snowflake-connector-python[secure-local-storage]' --no-project python - <<'PYEOF'
 import os, re, sys, time
@@ -484,6 +511,15 @@ if auth == 'keypair':
         ck['private_key_file_pwd'] = os.environ['SF_KEY_PWD']
 elif auth == 'sso':
     ck['authenticator'] = 'externalbrowser'
+elif auth == 'pat':
+    ck['authenticator'] = 'PROGRAMMATIC_ACCESS_TOKEN'
+    ck['token'] = os.environ.get('SF_PAT', '')
+elif auth == 'password_mfa':
+    ck['authenticator'] = 'username_password_mfa'
+    ck['password'] = os.environ.get('SF_PASS', '')
+    if os.environ.get('SF_MFA_PASSCODE'):
+        ck['passcode'] = os.environ['SF_MFA_PASSCODE']
+    ck['client_request_mfa_token'] = True
 else:
     ck['password'] = os.environ.get('SF_PASS', '')
 
