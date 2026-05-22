@@ -451,19 +451,18 @@ caps["notification_integrations"] = notif_ints or []
 # filters for autoingest_enabled=YES (column name varies by Snowflake
 # version: 'autoingest_enabled' or 'is_autoingest_enabled').
 def _probe_autoingest():
+    # SHOW PIPES doesn't expose an "is_autoingest_enabled" column. The
+    # canonical way to detect auto-ingest is a non-empty NOTIFICATION_CHANNEL
+    # column (Snowflake creates an SQS queue ARN there when AUTO_INGEST=TRUE).
     try:
         cur.execute("SHOW PIPES IN ACCOUNT")
         rows = cur.fetchall()
         cols = [d[0].lower() for d in (cur.description or [])]
-        # Find the autoingest column (varies across Snowflake versions).
-        idx = next((i for i, c in enumerate(cols)
-                    if c in ("is_autoingest_enabled","autoingest_enabled")), None)
-        name_idx = next((i for i, c in enumerate(cols)
-                         if c in ("name","pipe_name")), 1)
-        if idx is None:
+        nc_idx = next((i for i, c in enumerate(cols) if c == "notification_channel"), None)
+        name_idx = next((i for i, c in enumerate(cols) if c == "name"), 1)
+        if nc_idx is None:
             return []
-        return [r[name_idx] for r in rows
-                if str(r[idx]).upper() in ("YES","TRUE")]
+        return [r[name_idx] for r in rows if r[nc_idx]]
     except Exception:
         return []
 caps["autoingest_pipes"] = _probe_autoingest()
@@ -1066,8 +1065,8 @@ echo "────────────────────────�
 WANT_PIPELINE="${WANT_PIPELINE:-y}"
 if [ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ]; then
   echo "  Pick two base tables from the discovered list, or paste your own."
-  prompt_default "Orders-like table (FULLY QUALIFIED, e.g. RAW.ORDERS)" PIPE_ORDERS ""
-  prompt_default "Customers-like table (FULLY QUALIFIED, e.g. RAW.CUSTOMERS)" PIPE_CUSTOMERS ""
+  prompt_default "Orders-like table (FULLY QUALIFIED, e.g. RAW.ORDERS)" PIPE_ORDERS "RAW.ORDERS"
+  prompt_default "Customers-like table (FULLY QUALIFIED, e.g. RAW.CUSTOMERS)" PIPE_CUSTOMERS "RAW.CUSTOMERS"
   prompt_default "Output schema for the pipeline's two sink tables" PIPE_OUT_SCHEMA "ANALYTICS"
   if [ -z "$PIPE_ORDERS" ] || [ -z "$PIPE_CUSTOMERS" ]; then
     echo "  (both table names required — skipping pipeline add-on)"
@@ -2137,63 +2136,73 @@ grep -q '^\.env\.demo' .gitignore 2>/dev/null || echo ".env.demo" >> .gitignore
 PARTIAL_PROJECT_PATH=""
 
 # ── 13. Trailing guide ─────────────────────────────────────────────────
-cat <<MSG
+# Plain echo statements with conditional blocks — avoids nested heredocs
+# inside command substitution (which bash can't parse reliably).
+_is_y() { [ "$1" = "y" ] || [ "$1" = "Y" ]; }
 
->>> Setup complete.
+echo
+echo ">>> Setup complete."
+echo
+echo "Generated:"
+echo "  src/$PKG/defs/snowflake_workspace/defs.yaml"
+_is_y "$WANT_PIPELINE"      && echo "  src/$PKG/defs/regional_top_paid_pipeline/defs.yaml"
+_is_y "$WANT_CORTEX"        && echo "  src/$PKG/defs/cortex_demo/defs.yaml"
+_is_y "$WANT_OBSERVER"      && echo "  src/$PKG/defs/row_count_observer/defs.yaml"
+_is_y "$WANT_HET"           && echo "  src/$PKG/defs/python_daily_events{,_to_snowflake}/defs.yaml"
+_is_y "$WANT_FRESH"         && echo "  src/$PKG/defs/freshness_check_demo/defs.yaml"
+_is_y "$WANT_SNOWPARK"      && echo "  src/$PKG/defs/snowpark_pipeline_demo/defs.yaml"
+_is_y "$WANT_EXTERNAL"      && echo "  src/$PKG/defs/external_table_demo/defs.yaml"
+_is_y "$WANT_DBT"           && echo "  src/$PKG/defs/dbt_project/defs.yaml + ./dbt/ project"
+_is_y "$WANT_DDL_SHOWCASE"  && echo "  src/$PKG/defs/dg_{task,dynamic_table,stream,stored_procedure,snowpipe,alert,materialized_view}/defs.yaml"
+_is_y "$WANT_TIME_TRAVEL"   && echo "  src/$PKG/defs/snowflake_time_travel_asset/defs.yaml"
+_is_y "$WANT_ICEBERG"       && echo "  src/$PKG/defs/snowflake_iceberg_table/defs.yaml"
+_is_y "$WANT_CORTEX_SEARCH" && echo "  src/$PKG/defs/snowflake_cortex_search/defs.yaml"
+_is_y "$WANT_PIPE_SENSOR"   && echo "  src/$PKG/defs/snowflake_snowpipe_load_sensor/defs.yaml"
+echo "  .env.demo  (mode 600 — contains your password; gitignored)"
+echo
+echo "Run it:"
+echo "    cd $PROJECT"
+echo "    source .env.demo"
+echo "    uv run dg check defs        # validate"
+echo "    uv run dg dev               # opens UI at http://localhost:3000"
+echo
+echo "What you'll see in dg dev:"
+echo "  • Every imported Snowflake entity surfaces as a Dagster asset"
+echo "    (tasks, dynamic tables, stored procs, streams, … per your picks)"
+echo "  • Clicking 'Materialize' triggers the actual Snowflake TASK / refreshes"
+echo "    the DYNAMIC TABLE / calls the stored proc / etc."
+if _is_y "$WANT_PIPELINE"; then
+  echo "  • regional_top_paid_pipeline — multi-step SQL pushdown (joins + op:sql"
+  echo "    commission + group_by + multi-sink). Compiled to ONE Snowflake plan"
+  echo "    per sink (STATE_ENRICHED + TOP_3_STATES under $PIPE_OUT_SCHEMA)."
+fi
+_is_y "$WANT_CORTEX"   && echo "  • cortex_demo calls Snowflake Cortex ($CORTEX_MODE) — LLM as a Dagster asset"
+_is_y "$WANT_OBSERVER" && echo "  • row_count_observer watches $OBSERVER_DATABASE.$OBSERVER_SCHEMA.$OBSERVER_TABLE for changes (60s polls)"
+_is_y "$WANT_AUTOCOND" && echo "  • regional_top_paid_pipeline + AutomationCondition.eager() — fires on upstream change"
+if _is_y "$WANT_HET"; then
+  echo "  • python_daily_events → python_daily_events_to_snowflake (daily-partitioned)."
+  echo "    Heterogeneous lineage. Backfill 30 days:"
+  echo "      uv run dg launch --assets python_daily_events_to_snowflake \\"
+  echo "        --partition-range $HET_PARTITION_START...\$(date -u +%Y-%m-%d) --max-concurrent 5"
+fi
+_is_y "$WANT_FRESH"    && echo "  • freshness_check_demo — fails if $FRESH_ASSET_KEY hasn't been updated in $FRESH_FAIL_HOURS h"
+if _is_y "$WANT_SNOWPARK"; then
+  echo "  • snowpark_pipeline_demo — DataFrame API parallel to warehouse_pipeline."
+  echo "    Same multi-step shape, lazy Snowpark, writes $SP_OUT_SCHEMA.SNOWPARK_PREMIUM_REVENUE."
+fi
+_is_y "$WANT_EXTERNAL" && echo "  • external_table_demo — declares $EXT_KEY (lineage-only)"
+if _is_y "$WANT_DBT"; then
+  echo "  • dbt project at ./dbt — 2 staging models + 1 mart (customer_revenue)."
+  echo "    Imported via dagster-dbt; each model = Dagster asset; RAW → staging → marts."
+fi
+_is_y "$WANT_TIME_TRAVEL"   && echo "  • snowflake_time_travel_asset — queries $TIME_TRAVEL_TABLE AT(OFFSET => -3600) as a Dagster asset"
+_is_y "$WANT_ICEBERG"       && echo "  • snowflake_iceberg_table — creates Iceberg table on $ICEBERG_FIRST_VOL"
+_is_y "$WANT_CORTEX_SEARCH" && echo "  • snowflake_cortex_search — RAG query against $CORTEX_SEARCH_FIRST"
+_is_y "$WANT_PIPE_SENSOR"   && echo "  • snowflake_snowpipe_load_sensor — watches $PIPE_SENSOR_NAME for new file loads"
 
-Generated:
-  src/$PKG/defs/snowflake_workspace/defs.yaml
-$([ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ] && echo "  src/$PKG/defs/regional_top_paid_pipeline/defs.yaml")
-$([ "$WANT_CORTEX"   = "y" ] || [ "$WANT_CORTEX"   = "Y" ] && echo "  src/$PKG/defs/cortex_demo/defs.yaml")
-  .env.demo  (mode 600 — contains your password; gitignored)
-
-Run it:
-    cd $PROJECT
-    source .env.demo
-    uv run dg check defs        # validate
-    uv run dg dev               # opens UI at http://localhost:3000
-
-What you'll see in dg dev:
-  • Every imported Snowflake entity surfaces as a Dagster asset
-    (tasks, dynamic tables, stored procs, streams, … per your picks)
-  • Clicking 'Materialize' triggers the actual Snowflake TASK / refreshes
-    the DYNAMIC TABLE / calls the stored proc / etc.
-$([ "$WANT_PIPELINE" = "y" ] || [ "$WANT_PIPELINE" = "Y" ] && cat <<P
-  • regional_top_paid_pipeline runs multi-step transforms ON TOP of
-    your existing tables — join + op:sql commission + group_by — all
-    compiled to ONE Snowflake SQL plan per sink (STATE_ENRICHED +
-    TOP_3_STATES under $PIPE_OUT_SCHEMA).
-P
-)
-$([ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ] && echo "  • cortex_demo calls Snowflake Cortex ($CORTEX_MODE mode) — LLM as a first-class asset")
-$([ "$WANT_OBSERVER" = "y" ] || [ "$WANT_OBSERVER" = "Y" ] && echo "  • row_count_observer watches $OBSERVER_DATABASE.$OBSERVER_SCHEMA.$OBSERVER_TABLE for changes (every 60s)")
-$([ "$WANT_AUTOCOND" = "y" ] || [ "$WANT_AUTOCOND" = "Y" ] && echo "  • regional_top_paid_pipeline runs with AutomationCondition.eager() — fires the moment any upstream changes")
-$(if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then cat <<P
-  • python_daily_events → python_daily_events_to_snowflake (daily-partitioned).
-    Heterogeneous lineage: Python on the left, Snowflake on the right.
-    Backfill 30 days with:
-      uv run dg launch --assets python_daily_events_to_snowflake --partition-range $HET_PARTITION_START...\$(date -u +%Y-%m-%d) --max-concurrent 5
-P
-fi)
-$([ "$WANT_FRESH" = "y" ] || [ "$WANT_FRESH" = "Y" ] && echo "  • freshness_check_demo fails if $FRESH_ASSET_KEY hasn't been updated in $FRESH_FAIL_HOURS hours")
-$(if [ "$WANT_SNOWPARK" = "y" ] || [ "$WANT_SNOWPARK" = "Y" ]; then cat <<P
-  • snowpark_pipeline_demo (DataFrame API parallel to warehouse_pipeline) —
-    same multi-step shape, but uses Snowpark's lazy DataFrame API.
-    Writes $SP_OUT_SCHEMA.SNOWPARK_PREMIUM_REVENUE. Side-by-side with
-    regional_top_paid_pipeline this shows Dagster works equally well
-    with either Snowflake compute paradigm (SQL CTAS vs DataFrame).
-P
-fi)
-$([ "$WANT_EXTERNAL" = "y" ] || [ "$WANT_EXTERNAL" = "Y" ] && echo "  • external_table_demo declares $EXT_KEY — lineage only, Dagster doesn't manage the table")
-$(if [ "$WANT_DBT" = "y" ] || [ "$WANT_DBT" = "Y" ]; then cat <<P
-  • dbt project at ./dbt — 2 staging models + 1 mart (customer_revenue).
-    Imported via Dagster's official dagster-dbt integration; each model
-    is a Dagster asset with lineage from RAW.* → staging → marts.
-P
-fi)
-
-Cross-entity dep wiring:
-$(if [ "${#DEP_ENTITIES[@]}" -gt 0 ]; then
+echo
+echo "Cross-entity dep wiring:"
+if [ "${#DEP_ENTITIES[@]}" -gt 0 ]; then
   echo "  You declared ${#DEP_ENTITIES[@]} cross-entity dep(s) via assets_by_name."
   echo "  Edit src/$PKG/defs/snowflake_workspace/defs.yaml to add more later."
 else
@@ -2201,24 +2210,18 @@ else
   echo "      assets_by_name:"
   echo "        MY_TASK_NAME:"
   echo "          deps: [raw/orders, raw/customers]"
-fi)
+fi
 
-Switching auth (password → PAT / key-pair / SSO):
-  The workspace component supports any field's '<field>_env_var' alternate
-  AND password / authenticator / private_key / token. Edit the workspace
-  defs.yaml — the official Snowflake connector docs cover each combo.
-
-Other Snowflake components in the registry you can layer in:
-  • dataframe_to_snowflake / dataframe_to_snowflake_bulk — write data IN
-  • external_snowflake_table                            — declare-only refs
-  • snowflake_io_manager / _polars_io_manager / _pyspark_io_manager
-  • snowflake_table_observation_sensor                  — watch + react
-  • snowflake_access_history_ingestion                  — audit trail asset
-  • snowpark_pipeline                                   — Snowpark DataFrame multi-step
-
-Add any of them with:
-    uvx --from dagster-community-components-cli dagster-component add <name>
-MSG
+echo
+echo "Switching auth (password → PAT / key-pair / SSO):"
+echo "  The workspace component accepts password / authenticator / private_key / token."
+echo "  Edit the workspace defs.yaml — Snowflake connector docs cover each combo."
+echo
+echo "Layer in more Snowflake components:"
+echo "    uvx --from dagster-community-components-cli dagster-component add <name>"
+echo "  Options: dataframe_to_snowflake / external_snowflake_table /"
+echo "           snowflake_io_manager / snowflake_table_observation_sensor /"
+echo "           snowflake_access_history_ingestion / snowpark_pipeline"
 
 # ── Security ask ───────────────────────────────────────────────────────
 # If the capability scan recorded any missing capabilities, print + save
