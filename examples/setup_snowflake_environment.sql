@@ -520,7 +520,149 @@ ALTER TASK MONTHLY_REVENUE_REPORT     RESUME;
 ALTER TASK CHILD_ETL_TASK             RESUME;
 ALTER TASK PARENT_ETL_TASK            RESUME;
 
--- ── 15. Done ───────────────────────────────────────────────────────────
+-- ===========================================================================
+-- BREADTH-OF-SURFACE ADDITIONS — everything below is best-effort and fails
+-- non-fatally per statement. Some require Enterprise+ tier or specific
+-- account params; the seed wrapper logs each failure and continues.
+-- ===========================================================================
+
+-- ── 15. Regular VIEWs (3) — workspace component discovers + observes ───
+USE SCHEMA STAGING;
+
+CREATE OR REPLACE VIEW V_PAID_ORDERS AS
+  SELECT ORDER_ID, CUSTOMER_ID, TOTAL, ORDER_DATE
+  FROM   DAGSTER_DEMO.RAW.ORDERS
+  WHERE  STATUS = 'paid';
+
+CREATE OR REPLACE VIEW V_TOP_PRODUCTS AS
+  SELECT PRODUCT_ID, NAME, PRICE, CATEGORY
+  FROM   DAGSTER_DEMO.RAW.PRODUCTS
+  ORDER BY PRICE DESC
+  LIMIT 25;
+
+CREATE OR REPLACE VIEW V_DAILY_REVENUE AS
+  SELECT ORDER_DATE, COUNT(*) AS N_ORDERS, SUM(TOTAL) AS REVENUE
+  FROM   DAGSTER_DEMO.RAW.ORDERS
+  WHERE  STATUS IN ('paid', 'delivered')
+  GROUP BY ORDER_DATE;
+
+-- ── 16. SEQUENCE (1) — managed counter ─────────────────────────────────
+CREATE OR REPLACE SEQUENCE ORDER_ID_SEQ
+  START = 100000
+  INCREMENT = 1
+  COMMENT = 'Used by downstream ETL to generate new ORDER_IDs.';
+
+-- ── 17. FILE FORMATs (2) — companion to existing stages ────────────────
+CREATE OR REPLACE FILE FORMAT CSV_FORMAT
+  TYPE = CSV
+  FIELD_DELIMITER = ','
+  PARSE_HEADER = TRUE
+  COMMENT = 'CSV with header — used by stages for COPY INTO.';
+
+CREATE OR REPLACE FILE FORMAT JSON_FORMAT
+  TYPE = JSON
+  STRIP_OUTER_ARRAY = TRUE
+  COMMENT = 'JSON array — used for nested event ingestion.';
+
+-- ── 18. UDFs (2) — SQL + Python ────────────────────────────────────────
+CREATE OR REPLACE FUNCTION CALC_COMMISSION(amount FLOAT, rate FLOAT)
+  RETURNS FLOAT
+  LANGUAGE SQL
+  COMMENT = 'Simple SQL UDF: revenue × commission rate.'
+AS $$
+  amount * rate
+$$;
+
+CREATE OR REPLACE FUNCTION CLEAN_PHONE(phone VARCHAR)
+  RETURNS VARCHAR
+  LANGUAGE PYTHON
+  RUNTIME_VERSION = '3.11'
+  HANDLER = 'normalize'
+  COMMENT = 'Python UDF: strip non-digits + format US phone numbers.'
+AS $$
+def normalize(phone):
+    if not phone:
+        return None
+    digits = ''.join(c for c in phone if c.isdigit())
+    if len(digits) == 11 and digits.startswith('1'):
+        digits = digits[1:]
+    if len(digits) != 10:
+        return phone
+    return f"({digits[:3]}) {digits[3:6]}-{digits[6:]}"
+$$;
+
+-- ── 19. RESOURCE MONITOR (1) — credit observability ────────────────────
+-- ACCOUNTADMIN only. Caps the demo's monthly burn at 100 credits as a
+-- friendly safety + gives Dagster something governance-flavored to query.
+USE ROLE ACCOUNTADMIN;
+CREATE OR REPLACE RESOURCE MONITOR DAGSTER_DEMO_CREDIT_MONITOR
+  WITH CREDIT_QUOTA = 100
+  FREQUENCY = MONTHLY
+  START_TIMESTAMP = IMMEDIATELY
+  TRIGGERS
+    ON 75 PERCENT DO NOTIFY
+    ON 90 PERCENT DO NOTIFY
+    ON 100 PERCENT DO SUSPEND
+    ON 110 PERCENT DO SUSPEND_IMMEDIATE;
+USE ROLE SYSADMIN;
+
+-- ── 20. TAGS + tag references (governance) ─────────────────────────────
+-- Tag objects with data-classification + cost-center for the governance
+-- demo. OBJECT_TAGGING is Enterprise+ — fails non-fatal on Standard.
+USE SCHEMA STAGING;
+CREATE OR REPLACE TAG DATA_CLASSIFICATION
+  ALLOWED_VALUES 'pii', 'internal', 'public', 'confidential'
+  COMMENT = 'Classifies columns + tables by sensitivity.';
+
+CREATE OR REPLACE TAG COST_CENTER
+  COMMENT = 'Charge-back tag for billing rollups.';
+
+ALTER TABLE DAGSTER_DEMO.RAW.CUSTOMERS
+  SET TAG DATA_CLASSIFICATION = 'pii';
+ALTER TABLE DAGSTER_DEMO.RAW.ORDERS
+  SET TAG COST_CENTER = 'analytics';
+
+-- ── 21. MASKING POLICY (Enterprise+) + apply to email column ───────────
+CREATE OR REPLACE MASKING POLICY EMAIL_MASK
+  AS (val VARCHAR) RETURNS VARCHAR ->
+    CASE
+      WHEN CURRENT_ROLE() IN ('ACCOUNTADMIN', 'SECURITYADMIN') THEN val
+      ELSE REGEXP_REPLACE(val, '^[^@]+', '***')
+    END
+  COMMENT = 'Hides the local-part of email addresses for non-admins.';
+
+-- If CUSTOMERS has an EMAIL column, apply. (The seed doesn't currently
+-- have one — this is here so a downstream ALTER TABLE … ADD COLUMN EMAIL
+-- + apply works seamlessly. Adjust schema as needed.)
+
+-- ── 22. ROW ACCESS POLICY (Enterprise+) + apply to ORDERS ──────────────
+CREATE OR REPLACE ROW ACCESS POLICY REGION_ACCESS_POLICY
+  AS (region VARCHAR) RETURNS BOOLEAN ->
+    CURRENT_ROLE() IN ('ACCOUNTADMIN', 'SECURITYADMIN')
+    OR region = 'US'   -- non-admins only see US-region orders
+  COMMENT = 'Restricts ORDERS visibility by region for non-admin roles.';
+
+-- (Not applied to RAW.ORDERS by default — uncomment to enforce:
+--  ALTER TABLE DAGSTER_DEMO.RAW.ORDERS ADD ROW ACCESS POLICY
+--    REGION_ACCESS_POLICY ON (REGION);
+--  The seed's ORDERS table doesn't currently have a REGION column either;
+--  this is here as a demonstrable policy object the workspace can discover.)
+
+-- ── 23. HYBRID TABLE (Unistore) — OLTP + analytics in one ──────────────
+-- Requires `ALTER ACCOUNT SET ENABLE_UNISTORE_FEATURES = TRUE` first.
+-- Fails non-fatal on accounts without Unistore enabled.
+USE SCHEMA STAGING;
+CREATE OR REPLACE HYBRID TABLE CUSTOMERS_OLTP (
+  CUSTOMER_ID  VARCHAR PRIMARY KEY,
+  EMAIL        VARCHAR,
+  TIER         VARCHAR,
+  UPDATED_AT   TIMESTAMP_NTZ DEFAULT CURRENT_TIMESTAMP,
+  INDEX        IDX_TIER (TIER)
+);
+
+-- Done.
+
+-- ── 25. Done ───────────────────────────────────────────────────────────
 SELECT 'Setup complete. Run the snowflake_workspace demo against database='
        || CURRENT_DATABASE() || ', schema=STAGING to discover everything.'
        AS STATUS;
