@@ -1,6 +1,60 @@
-# Bring your existing Snowflake into Dagster — interactive setup
+# Dagster + Snowflake — booth demo
 
-Run one script. Answer the prompts. Your Snowflake **tasks, dynamic tables, stored procedures, streams, pipes, stages, materialized views, external tables, and alerts** become Dagster assets — with cross-entity dependencies declared, optional multi-step SQL pipelines layered on top, and Cortex AI as a first-class asset.
+Two scripts. Five minutes. A fully-orchestrated Dagster project against Snowflake.
+
+## Quickstart
+
+### Prerequisites
+
+You need:
+
+1. A **Snowflake account** (any tier — Standard works, Enterprise+ unlocks more features)
+2. A **role** that can `CREATE DATABASE` (e.g. `ACCOUNTADMIN`, `SYSADMIN`) — or the seed silently falls back to "sandbox mode" inside an existing DB you own
+3. An **auth method** — keypair (best), PAT, SSO browser, password+MFA, or plain password
+
+### Step 1 — Seed Snowflake with realistic stuff to orchestrate
+
+Creates a `DAGSTER_DEMO` database with ~30 entities across `RAW` / `STAGING` / `ANALYTICS` / `AI` schemas:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_environment.sh -o setup_snowflake_environment.sh
+chmod +x setup_snowflake_environment.sh
+./setup_snowflake_environment.sh
+```
+
+Tasks, dynamic tables, stored procedures (incl. Snowpark Python), streams, snowpipes, alerts, materialized view, Cortex Search service, Hybrid table, views, UDFs, tags, resource monitor — every Snowflake primitive that can be created via SQL. Idempotent. Takes 2-3 minutes.
+
+### Step 2 — Scaffold the Dagster project
+
+Auto-detects what's available on your account (Iceberg volumes, Cortex services, account edition) and only scaffolds components that can actually materialize:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_workspace_demo.sh -o setup_snowflake_workspace_demo.sh
+chmod +x setup_snowflake_workspace_demo.sh
+
+export WANT_EVERYTHING=true   # auto-accept all add-on prompts
+./setup_snowflake_workspace_demo.sh
+```
+
+### Step 3 — Run it
+
+```bash
+cd snowflake-dagster
+source .env.demo
+uv run dg dev
+```
+
+Opens the UI at <http://localhost:3000>. You'll see an asset graph spanning the imported Snowflake entities + Dagster's orchestration overlay (warehouse pipelines, Snowpark pipelines, Cortex assets, partitioned chains, the new Snowpipe load sensor, time-travel queries, Iceberg, dbt, etc).
+
+### After it works — what to try
+
+1. **Click an imported task** and materialize it — runs `EXECUTE TASK` server-side
+2. **Click `regional_top_paid_pipeline`** — multi-step SQL pipeline running joins + commission calc + multi-sink, all pushed down to Snowflake
+3. **Click `cortex_demo`** — calls `SNOWFLAKE.CORTEX.COMPLETE` and lands the LLM output as an asset
+4. **Click `cortex_search_results`** — queries your seeded Cortex Search Service
+5. **Click `python_daily_events` → backfill 30 days** — partitioned Python → Snowflake landing chain, replays in parallel
+
+If any of this breaks, [Troubleshooting](#troubleshooting) is at the bottom of this doc.
 
 ## Why Dagster on top of Snowflake?
 
