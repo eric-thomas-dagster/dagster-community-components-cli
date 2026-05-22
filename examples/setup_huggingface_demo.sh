@@ -2,8 +2,10 @@
 # HuggingFace — full integration surface demo scaffold.
 #
 # WHAT THIS DEMONSTRATES
-#   5 HuggingFace community components in one Dagster project:
+#   7 HuggingFace community components in one Dagster project:
 #     - huggingface_pipeline (local + Inference API single-input runners)
+#     - huggingface_chat_completion (OpenAI-compatible chat via HF router)
+#     - huggingface_text_to_image (image generation w/ multi-provider routing)
 #     - huggingface_dataset_asset (observable_source_asset for Hub datasets)
 #     - huggingface_model_asset (observable_source_asset for Hub models)
 #     - huggingface_inference_endpoint (paid dedicated endpoints)
@@ -13,6 +15,8 @@
 #   hf/datasets/imdb              ← observable_source_asset (Hub dataset metadata)
 #   hf/models/sentiment_model     ← observable_source_asset (Hub model metadata)
 #   hf/sentiment                  ← pipeline asset (local sentiment classification)
+#   hf/chat/photosynthesis        ← chat-completion asset (Kimi-K2 via router — needs HF_TOKEN)
+#   hf/images/airship             ← text-to-image asset (FLUX.1 via wavespeed — needs HF_TOKEN)
 #   hf/quick_detect               ← pipeline asset (Inference API object-detection — needs HF_TOKEN)
 #   hf/endpoint/sentiment         ← dedicated endpoint asset (needs your endpoint)
 #   space_rebuilt sensor          ← fires on Space RUNNING → downstream_eval_job
@@ -36,8 +40,9 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 5 HuggingFace components"
-for c in huggingface_pipeline huggingface_dataset_asset huggingface_model_asset \
+echo ">>> Installing 7 HuggingFace components"
+for c in huggingface_pipeline huggingface_chat_completion huggingface_text_to_image \
+         huggingface_dataset_asset huggingface_model_asset \
          huggingface_inference_endpoint huggingface_space_status_sensor; do
   $CLI add $c --auto-install
 done
@@ -108,6 +113,26 @@ attributes:
   hf_token_env_var: HF_TOKEN
   group_name: huggingface
   description: 'Placeholder — set endpoint_name to a real dedicated endpoint in your HF account.'"
+
+write_yaml "huggingface_chat_completion" "type: $PKG.components.huggingface_chat_completion.component.HuggingfaceChatCompletionComponent
+attributes:
+  asset_key: hf/chat/photosynthesis
+  model: moonshotai/Kimi-K2-Instruct-0905
+  prompt: 'Describe the process of photosynthesis in two short paragraphs.'
+  max_tokens: 400
+  hf_token_env_var: HF_TOKEN
+  group_name: huggingface"
+
+write_yaml "huggingface_text_to_image" "type: $PKG.components.huggingface_text_to_image.component.HuggingfaceTextToImageComponent
+attributes:
+  asset_key: hf/images/airship
+  model: black-forest-labs/FLUX.1-dev
+  provider: wavespeed
+  prompts:
+    - 'A steampunk airship in the clouds'
+  output_dir: ./generated_images
+  hf_token_env_var: HF_TOKEN
+  group_name: huggingface"
 
 write_yaml "huggingface_space_status_sensor" "type: $PKG.components.huggingface_space_status_sensor.component.HuggingfaceSpaceStatusSensorComponent
 attributes:

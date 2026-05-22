@@ -1,10 +1,12 @@
 # HuggingFace — full integration surface
 
-End-to-end walkthrough wiring **5 community components** that cover the HuggingFace surface from one Dagster project:
+End-to-end walkthrough wiring **7 community components** that cover the HuggingFace surface from one Dagster project:
 
 | Component | Purpose |
 |---|---|
 | [`huggingface_pipeline`](https://dagster-component-ui.vercel.app/c/huggingface_pipeline) | Run any `transformers.pipeline()` task on a list of inputs. No DataFrame required. Local or Inference API. |
+| [`huggingface_chat_completion`](https://dagster-component-ui.vercel.app/c/huggingface_chat_completion) | Call any chat-completion model on the HF router via OpenAI-compatible API (Kimi-K2, Llama-3.3, Mistral, Qwen, DeepSeek, …) |
+| [`huggingface_text_to_image`](https://dagster-component-ui.vercel.app/c/huggingface_text_to_image) | Generate images from prompts via `InferenceClient.text_to_image()`. Multi-provider routing (wavespeed / falai / replicate / together) |
 | [`huggingface_dataset_asset`](https://dagster-component-ui.vercel.app/c/huggingface_dataset_asset) | Surface a Hub dataset's metadata (downloads, likes, configs, license) as an `observable_source_asset` |
 | [`huggingface_model_asset`](https://dagster-component-ui.vercel.app/c/huggingface_model_asset) | Surface a Hub model's metadata (downloads, pipeline tag, last_modified, license) as an `observable_source_asset` |
 | [`huggingface_inference_endpoint`](https://dagster-component-ui.vercel.app/c/huggingface_inference_endpoint) | Call a paid dedicated Inference Endpoint (different from the shared public API) |
@@ -25,7 +27,13 @@ UI at `http://localhost:3000`. The compile-check works without a token; runtime 
 ## Pick the right component for the job
 
 ```
-Need to RUN HuggingFace inference?
+Need a HOSTED CHAT model?
+└── huggingface_chat_completion (OpenAI-compatible router; Kimi / Llama / Mistral / …)
+
+Need to GENERATE IMAGES?
+└── huggingface_text_to_image (FLUX / SDXL / etc.; multi-provider routing)
+
+Need to RUN HuggingFace task inference?
 ├── Local compute, prototyping → huggingface_pipeline (mode: local)
 ├── Cheap shared inference     → huggingface_pipeline (mode: inference_api)
 └── Production, dedicated      → huggingface_inference_endpoint
@@ -48,6 +56,8 @@ hf/models/sentiment_model         ← observable_source_asset (Hub model metadat
                                    │
                                    ↓
 hf/sentiment                      ← huggingface_pipeline (local sentiment classification)
+hf/chat/photosynthesis            ← huggingface_chat_completion (Kimi-K2 via router)
+hf/images/airship                 ← huggingface_text_to_image (FLUX.1 via wavespeed)
 hf/quick_detect                   ← huggingface_pipeline (Inference API object-detection)
 hf/endpoint/sentiment             ← huggingface_inference_endpoint (dedicated; needs your endpoint)
 
@@ -82,6 +92,8 @@ For **batch inference over a DataFrame column**, use the task-specific component
 |---|---|
 | `huggingface_pipeline` `mode: local` | $0 (downloads a model, runs locally) |
 | `huggingface_pipeline` `mode: inference_api` | Free for many Hub models; some are pay-as-you-go (cents per call) |
+| `huggingface_chat_completion` | Usage-priced by the HF router — per-token billing per model |
+| `huggingface_text_to_image` | Usage-priced by the routed provider (wavespeed / falai / replicate etc.) — per-image billing |
 | `huggingface_inference_endpoint` | **Paid** — billed per endpoint-hour by HuggingFace |
 | `huggingface_dataset_asset` / `huggingface_model_asset` | $0 (read-only Hub API calls) |
 | `huggingface_space_status_sensor` | $0 (read-only Hub API calls) |

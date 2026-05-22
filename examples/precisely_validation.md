@@ -34,6 +34,17 @@ The sensor polls the **single verified endpoint** from Precisely's public REST d
 | Status enum (failure) | `COMPLETED_WITH_ERRORS`, `CANCELLED`, `ERRORED`, `LOST_CONTACT` | same |
 | Status enum (in-progress) | `WAITING`, `RUNNING` | same |
 
+## Validation status — what we CAN claim vs. theoretical
+
+| Aspect | Validation level | How |
+|---|---|---|
+| Component compiles + `dg check defs` passes | ✅ **Verified** | `setup_precisely_validation_demo.sh` + `dg check defs` on a fresh project |
+| Polled URL + method + response parsing matches Precisely's public REST docs | ✅ **Verified** | Side-by-side diff against the [Job Status spec](https://help.precisely.com/r/Connect-ETL/pub/Latest/en-US/Connect-ETL-Rest-API-Reference/Job-Status) — see the API verification table above |
+| Sensor fires a `RunRequest` end-to-end against a real Precisely Connect ETL cluster | ⚠ **NOT verified** — we don't have a Precisely cluster to validate against |
+| Customer-side end-to-end (sensor → RunRequest → downstream Dagster job materialization) | ⚠ **NOT verified** — depends on the live-validation gap above |
+
+The sensor is shipped at validation level `code` because of the bottom two rows — when a customer with a real Precisely Connect ETL install runs this against a live job-run-id and we observe a clean fire, we'll promote to `live`.
+
 ## Demo
 
 ```bash
@@ -51,7 +62,7 @@ The scaffolded project:
 3. Registers a no-op downstream Dagster job (`precisely_downstream_job`)
 4. Starts the sensor in `stopped` state (you flip it on in the UI once you have a real `job_run_id`)
 
-`dg dev` loads cleanly and shows the sensor + job in the UI. No real Precisely instance needed for the compile-check; once you've got a real run-id, edit the `defs.yaml`, set `default_status: running`, and `dg dev` will poll and fire on terminal SUCCESS.
+`dg dev` loads cleanly and shows the sensor + job in the UI. **This is the part we can guarantee.** Once you've got a real run-id, edit the `defs.yaml`, set `default_status: running`, and `dg dev` should poll and fire on terminal SUCCESS — based on Precisely's documented Job Status endpoint behavior, but not yet validated end-to-end on our side.
 
 ## Customer-facing shape
 
