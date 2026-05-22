@@ -41,6 +41,11 @@ The demos are grouped by what they need to run.
   - [AI / LLM](#ai--llm)
   - [Real-pipeline patterns (multi-component chains)](#real-pipeline-patterns-multi-component-chains)
   - [Auth: workload identity in GCP compute](#auth-workload-identity-in-gcp-compute)
+- [Snowflake (subscription required)](#snowflake-subscription-required)
+  - [Primary — Snowflake workspace (booth demo)](#primary--snowflake-workspace-booth-demo)
+  - [Companion — single-entity components](#companion--single-entity-components-manual-selection)
+  - [Pushdown / Snowpark](#pushdown--snowpark)
+  - [Snowflake as part of a cross-vendor blueprint](#snowflake-as-part-of-a-cross-vendor-blueprint)
 - [Dagster+ required](#dagster-required)
 - [Catalog Lineage Sync — multi-target](#catalog-lineage-sync--multi-target-no-auth-required-for-the-file-demo)
 - [Cross-vendor blueprints (not validated)](#cross-vendor-blueprints-not-validated)
@@ -431,6 +436,46 @@ attached SA.
 - Vertex embeddings: 5 product descriptions → 5 × 768-dim vectors via `text-embedding-004`, all distinct
 - Vision + Translation: 3 synthetic PNGs → labels (`Red`, `Blue`, `Clip art`) → translated to es/fr/de/ja (赤 / 青 / クリップアート)
 - Speech + Translation: `brooklyn_bridge.mp3` → "How old is the Brooklyn Bridge?" → translated to es/fr/de/ja (`ブルックリン橋は何年前にできたのですか？`)
+
+---
+
+## Snowflake (subscription required)
+
+Each Snowflake demo runs against a real Snowflake account. Auth via
+`SNOWFLAKE_ACCOUNT` + `SNOWFLAKE_USER` + (password / PAT / keypair) +
+`SNOWFLAKE_WAREHOUSE` + `SNOWFLAKE_ROLE`. The booth demo is the primary
+shape; single-entity components are the companion when you want to wire
+one named task / proc / dynamic table by hand.
+
+### Primary — Snowflake workspace (booth demo)
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [**Snowflake Workspace → Dagster**](snowflake_workspace.md) **(booth demo)** | `snowflake_workspace` + 11 optional add-ons (`warehouse_pipeline`, `snowpark_pipeline`, `snowflake_cortex_asset`, `snowflake_cortex_search`, `snowflake_iceberg_table`, `snowflake_time_travel_asset`, `snowflake_snowpipe_load_sensor`, partitioned heterogeneous chain, `dagster-dbt`, 7 DDL components, freshness checks, external table refs) | Snowflake account (any edition; the script auto-detects capabilities and only scaffolds what your tier supports) | Snowflake credits to materialize |
+| [Snowflake account requirements](snowflake_demo_account_requirements.md) | Reference doc — what each privilege / tier unlocks; the booth demo's capability probes; the SECURITY_ASK.md auto-output | — | — |
+
+### Companion — single-entity components (manual selection)
+
+| Demo | Components exercised | Infra needed |
+|---|---|---|
+| [Snowflake single-entity components](snowflake_single_entity.md) | `snowflake_task_execute_asset`, `snowflake_stored_procedure_call_asset`, `snowflake_dynamic_table_refresh_asset`, `snowflake_task_completion_sensor`, `external_snowflake_openflow_flow`, `snowflake_openflow_status_sensor` | Same Snowflake account, but only the privileges for the named entities |
+
+Use this companion when you want to wire one specific task / proc / DT by hand instead of scanning the whole account. Same auth surface; finer-grained control over `deps`, `partitions_def`, `automation_condition` per asset.
+
+### Pushdown / Snowpark
+
+| Demo | Components exercised | Infra needed | ~Cost |
+|---|---|---|---|
+| [Snowpark pipeline](snowpark_pipeline.md) | `snowpark_pipeline` | Snowflake account + `RAW.ORDERS` source table | Snowflake credits |
+
+Multi-step Snowpark DataFrame chain compiled to ONE Snowflake SQL statement. Whole pipeline runs server-side in the Snowflake compute warehouse — no data through Python.
+
+### Snowflake as part of a cross-vendor blueprint
+
+| Blueprint | What Snowflake does | Other vendors |
+|---|---|---|
+| [Snowflake → Iceberg → Databricks Lakeflow](snowflake_iceberg_databricks.md) | Source — Dynamic Iceberg Tables written via `snowflake_workspace` | Databricks Lakeflow (Lakeflow pipelines wrapped in Jobs) |
+| [Snowflake → Dagster cross-engine Iceberg](snowflake_to_dagster_iceberg.md) | Source — writes Iceberg via Snowflake-managed catalog | PyIceberg REST client; zero Snowflake compute per Dagster read |
 
 ---
 
