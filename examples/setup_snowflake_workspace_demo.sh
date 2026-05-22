@@ -761,6 +761,36 @@ if [ "$WANT_OBSERVER" = "y" ] || [ "$WANT_OBSERVER" = "Y" ]; then
   prompt_default "Table to watch"             OBSERVER_TABLE    "ORDERS"
 fi
 
+# ── Snowpipe load sensor (gated on a snowpipe existing in discovery) ───
+# Fires per ingested file from COPY_HISTORY. Differentiator vs the
+# row-count observer above: per-file granularity + rich metadata.
+SNOWPIPE_COUNT=$(python3 -c "
+import json
+inv = json.load(open('$INV_OUT'))
+v = inv.get('types', {}).get('snowpipes', [])
+print(len(v) if isinstance(v, list) else 0)
+" 2>/dev/null || echo 0)
+if [ "${SNOWPIPE_COUNT:-0}" -gt 0 ]; then
+  [ -n "${WANT_PIPE_SENSOR:-}" ] || read -r -p "Add a snowflake_snowpipe_load_sensor watching $SNOWPIPE_COUNT pipe(s) for new file ingestions? [Y/n] " WANT_PIPE_SENSOR
+  WANT_PIPE_SENSOR="${WANT_PIPE_SENSOR:-y}"
+else
+  WANT_PIPE_SENSOR="n"
+  echo "  (skipping snowflake_snowpipe_load_sensor — no snowpipes discovered)"
+fi
+PIPE_SENSOR_NAME=""
+PIPE_SENSOR_DEST=""
+if [ "$WANT_PIPE_SENSOR" = "y" ] || [ "$WANT_PIPE_SENSOR" = "Y" ]; then
+  # Pick the first discovered snowpipe name + suggest a default destination.
+  FIRST_PIPE=$(python3 -c "
+import json
+inv = json.load(open('$INV_OUT'))
+v = inv.get('types', {}).get('snowpipes', [])
+print(v[0] if isinstance(v, list) and v else '')
+" 2>/dev/null)
+  prompt_default "Snowpipe to watch (unqualified)"      PIPE_SENSOR_NAME "${FIRST_PIPE:-ORDERS_PIPE}"
+  prompt_default "Destination table the pipe COPYs INTO" PIPE_SENSOR_DEST "ORDERS_INGESTED"
+fi
+
 # Reactive chaining: wire AutomationCondition.eager() on the pipeline
 # asset so it fires the moment any of its imported upstreams change.
 # Only meaningful if the user selected the pipeline add-on.
@@ -964,6 +994,11 @@ if [ "$WANT_OBSERVER" = "y" ] || [ "$WANT_OBSERVER" = "Y" ]; then
   echo ">>> Installing snowflake_table_observation_sensor component ..."
   $CLI add snowflake_table_observation_sensor --auto-install
   rm -rf "src/$PKG/defs/snowflake_table_observation_sensor"
+fi
+if [ "$WANT_PIPE_SENSOR" = "y" ] || [ "$WANT_PIPE_SENSOR" = "Y" ]; then
+  echo ">>> Installing snowflake_snowpipe_load_sensor component ..."
+  $CLI add snowflake_snowpipe_load_sensor --auto-install
+  rm -rf "src/$PKG/defs/snowflake_snowpipe_load_sensor"
 fi
 if [ "$WANT_HET" = "y" ] || [ "$WANT_HET" = "Y" ]; then
   echo ">>> Installing synthetic_data_generator + dataframe_to_snowflake components ..."
@@ -1275,6 +1310,29 @@ $OBS_AUTH_FIELDS
   warehouse: \"$SNOW_WAREHOUSE\"
   check_interval_seconds: 60
   include_preview_metadata: true"
+fi
+
+# ── Snowpipe load sensor — emit only if a snowpipe was detected ────────
+if [ "$WANT_PIPE_SENSOR" = "y" ] || [ "$WANT_PIPE_SENSOR" = "Y" ]; then
+  PIPE_SENSOR_AUTH_FIELDS="$(snow_auth_fields_direct '  ')"
+  # bash 3.2 lowercase via tr.
+  PIPE_SENSOR_NAME_LC=$(echo "$PIPE_SENSOR_NAME" | tr '[:upper:]' '[:lower:]')
+  write_yaml "snowflake_snowpipe_load_sensor" "type: $PKG.components.snowflake_snowpipe_load_sensor.component.SnowflakeSnowpipeLoadSensorComponent
+attributes:
+  sensor_name:  ${PIPE_SENSOR_NAME_LC}_load_sensor
+  job_name:     __ASSET_JOB
+  pipe_name:    \"$PIPE_SENSOR_NAME\"
+  destination_table: \"$PIPE_SENSOR_DEST\"
+  account: \"{{ env('SNOWFLAKE_ACCOUNT') }}\"
+  user:    \"{{ env('SNOWFLAKE_USER') }}\"
+$PIPE_SENSOR_AUTH_FIELDS
+  warehouse:   \"$SNOW_WAREHOUSE\"
+  database:    \"$SNOW_DATABASE\"
+  schema:      \"$SNOW_SCHEMA\"$([ -n "$SNOW_ROLE" ] && printf "\n  role: \"%s\"" "$SNOW_ROLE")
+  minimum_interval_seconds: 60
+  lookback_minutes: 60
+  pass_file_metadata: true
+  default_status: running"
 fi
 
 # ── 13. Optional partitioned heterogeneous chain ───────────────────────
