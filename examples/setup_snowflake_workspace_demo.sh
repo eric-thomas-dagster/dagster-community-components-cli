@@ -839,7 +839,7 @@ data = json.load(sys.stdin)
 rows = data if isinstance(data, list) else data.get('rows', [])
 for r in rows:
     val = r.get('property_value') or r.get('PROPERTY_VALUE') or ''
-    m = re.search(r's3://([^/\"\\'']+)', val)
+    m = re.search(r's3://([^/]+)', val)
     if m:
         print(m.group(1).strip())
         break
