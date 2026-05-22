@@ -444,6 +444,29 @@ notif_ints, err = _probe("notification_integrations",
     "SHOW NOTIFICATION INTEGRATIONS",
     parse=lambda rows: [r[0] for r in rows])
 caps["notification_integrations"] = notif_ints or []
+# AUTO_INGEST pipes — for AWS this works WITHOUT a notification
+# integration (Snowflake auto-creates an SQS queue). So the real
+# capability check is "any AUTO_INGEST=TRUE pipe", not "any notif
+# integration". The probe queries SHOW PIPES at account level and
+# filters for autoingest_enabled=YES (column name varies by Snowflake
+# version: 'autoingest_enabled' or 'is_autoingest_enabled').
+def _probe_autoingest():
+    try:
+        cur.execute("SHOW PIPES IN ACCOUNT")
+        rows = cur.fetchall()
+        cols = [d[0].lower() for d in (cur.description or [])]
+        # Find the autoingest column (varies across Snowflake versions).
+        idx = next((i for i, c in enumerate(cols)
+                    if c in ("is_autoingest_enabled","autoingest_enabled")), None)
+        name_idx = next((i for i, c in enumerate(cols)
+                         if c in ("name","pipe_name")), 1)
+        if idx is None:
+            return []
+        return [r[name_idx] for r in rows
+                if str(r[idx]).upper() in ("YES","TRUE")]
+    except Exception:
+        return []
+caps["autoingest_pipes"] = _probe_autoingest()
 if err: caps["_notification_error"] = err
 
 _, err = _probe("materialized_views",
@@ -511,6 +534,7 @@ def emit(k, v):
 emit("iceberg_volumes", "|".join(caps.get("iceberg_volumes", [])))
 emit("cortex_search_services", "|".join(caps.get("cortex_search_services", [])))
 emit("notification_integrations", "|".join(caps.get("notification_integrations", [])))
+emit("autoingest_pipes", "|".join(caps.get("autoingest_pipes", [])))
 emit("cortex_llm", "yes" if caps.get("cortex_llm") else "no")
 emit("materialized_views", "yes" if caps.get("materialized_views") else "no")
 emit("hybrid_tables", "yes" if caps.get("hybrid_tables") else "no")
@@ -520,12 +544,13 @@ PYEOF
 ICEBERG_VOLS=$(echo "$CAP_INFO" | awk -F'\t' '$1=="iceberg_volumes"{print $2}')
 CORTEX_SVCS=$(echo "$CAP_INFO" | awk -F'\t' '$1=="cortex_search_services"{print $2}')
 NOTIF_INTS=$(echo  "$CAP_INFO" | awk -F'\t' '$1=="notification_integrations"{print $2}')
+AUTOINGEST_PIPES=$(echo "$CAP_INFO" | awk -F'\t' '$1=="autoingest_pipes"{print $2}')
 CAP_CORTEX_LLM=$(echo  "$CAP_INFO" | awk -F'\t' '$1=="cortex_llm"{print $2}')
 CAP_MV=$(echo          "$CAP_INFO" | awk -F'\t' '$1=="materialized_views"{print $2}')
 CAP_HYBRID=$(echo      "$CAP_INFO" | awk -F'\t' '$1=="hybrid_tables"{print $2}')
 CAP_ICEBERG=$([ -n "$ICEBERG_VOLS" ] && echo "yes" || echo "no")
 CAP_CORTEX_SEARCH=$([ -n "$CORTEX_SVCS" ] && echo "yes" || echo "no")
-CAP_SNOWPIPE_AUTO=$([ -n "$NOTIF_INTS" ] && echo "yes" || echo "no")
+CAP_SNOWPIPE_AUTO=$([ -n "$AUTOINGEST_PIPES" ] || [ -n "$NOTIF_INTS" ] && echo "yes" || echo "no")
 
 # First values (for the emitted defs.yaml).
 ICEBERG_FIRST_VOL=$(echo "$ICEBERG_VOLS" | cut -d'|' -f1)
@@ -576,7 +601,7 @@ echo "  $(icon $CAP_HYBRID)  Hybrid Tables (Unistore) (ENABLE_UNISTORE_FEATURES 
   "ACCOUNTADMIN" \
   "Unlocks OLTP+analytics Unistore demo (currently no community component but the parameter unblocks future ones)"
 
-echo "  $(icon $CAP_SNOWPIPE_AUTO)  Snowpipe AUTO_INGEST    ($(echo "$NOTIF_INTS" | tr '|' ',' | head -c 60) notification integrations)"
+echo "  $(icon $CAP_SNOWPIPE_AUTO)  Snowpipe AUTO_INGEST    ($(echo "$AUTOINGEST_PIPES" | tr '|' ',' | head -c 60) autoingest pipes)"
 [ "$CAP_SNOWPIPE_AUTO" = "no" ] && add_security_ask \
   "Snowpipe AUTO_INGEST" \
   "CREATE NOTIFICATION INTEGRATION on account" \

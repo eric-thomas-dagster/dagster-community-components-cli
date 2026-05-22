@@ -407,6 +407,21 @@ FROM @DAGSTER_DEMO.STAGING.INTERNAL_STAGE
 FILE_FORMAT = (TYPE = CSV SKIP_HEADER = 1)
 ON_ERROR = 'CONTINUE';
 
+-- AUTO_INGEST pipe — Snowflake creates an SQS queue automatically.
+-- For AWS this works WITHOUT a notification integration resource.
+-- To make this actually fire on S3 PUTs, configure the S3 bucket event
+-- notifications to publish to the SQS queue ARN returned by
+--   DESC PIPE ORDERS_AUTO_PIPE;
+-- (look for NOTIFICATION_CHANNEL in the output)
+CREATE OR REPLACE PIPE ORDERS_AUTO_PIPE
+  AUTO_INGEST = TRUE
+  COMMENT = 'AUTO_INGEST pipe — uses Snowflake-managed SQS queue. Wire S3 events to NOTIFICATION_CHANNEL ARN to enable live ingest.'
+AS
+COPY INTO DAGSTER_DEMO.STAGING.ORDERS_INGESTED
+FROM @DAGSTER_DEMO.STAGING.INTERNAL_STAGE
+FILE_FORMAT = (TYPE = CSV SKIP_HEADER = 1)
+ON_ERROR = 'CONTINUE';
+
 -- ── 12. TASKS (6) ──────────────────────────────────────────────────────
 -- TASKS are created SUSPENDED. The runner script resumes them at the end
 -- (you can also leave them suspended for the demo — Dagster's
