@@ -26,10 +26,17 @@ rule-based and ML signals on identical input.
 **Free.** OpenAI's `/moderations` endpoint isn't billed against the
 gpt-4o-mini quota, and the rule-based scorer is pure local Python.
 
-## Required env vars
+## Auth — OpenAI is optional
+
+The setup script branches on `OPENAI_API_KEY`:
+
+| With key set | Without key |
+|---|---|
+| Both `moderation_scorer` (rule-based) AND `text_moderator` (OpenAI /moderations) scaffold | Only `moderation_scorer` scaffolds — true no-auth side-by-side comparison disappears, you get the rule-based pass only |
 
 ```bash
-OPENAI_API_KEY=sk-...      # SDK still needs a key even for the free endpoint
+# Optional — only set if you want the OpenAI /moderations comparison pass.
+OPENAI_API_KEY=sk-...
 ```
 
 ## Run it

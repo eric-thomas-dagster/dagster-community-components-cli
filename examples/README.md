@@ -239,16 +239,30 @@ The component family — `database_schema_inventory`, `database_migration_assess
 | [Text Codec Convert](codec_convert.md) | `synthetic_data_generator`, `text_codec_convert_asset` | Sanitize multilingual text to ASCII (NFD + transliteration) |
 | [Vision Pipeline](vision_pipeline.md) | `synthetic_image_generator`, `image_metadata_extractor`, `vision_model` | Image metadata + vision-LLM description |
 
-### AI / NLP (no auth required)
+### AI / NLP — truly no auth (local-only)
+
+These demos run end-to-end with **no API keys** — just `pip install` of local libraries (spaCy / nltk / pandas / etc.) or a locally-installed model server.
 
 | Demo | Components | Highlights |
 |---|---|---|
 | [AI without LLMs](ai_no_llm.md) | `synthetic_data_generator`, `keyword_extractor`, `language_detector`, `pii_detector`, `pii_redactor`, `embeddings_generator` | Rule-based + local-model AI — no API keys needed |
-| [Local NLP Mega-Demo](local_nlp.md) | 13 components — `document_chunker`, `text_chunker`, `part_of_speech_tagger`, … | Full local NLP toolbox (spaCy / nltk / regex / heuristics) |
-| [Content Moderation](content_moderation.md) | `moderation_scorer`, `text_moderator` | Rule-based + ML-based moderation side by side |
-| [Ollama (local LLM)](ollama.md) | `synthetic_data_generator`, `ollama_inference_asset` | Local Llama / Mistral / etc. inference — zero API cost (requires Ollama installed) |
-| [NLP Utilities](nlp_utilities.md) | 6 standalone transforms — `document_chunker`, `word_cloud`, `part_of_speech_tagger`, `topic_modeler`, `text_similarity` | Drop-in NLP helpers |
+| [Ollama (local LLM)](ollama.md) | `synthetic_data_generator`, `ollama_inference_asset` | Local Llama / Mistral / etc. via Ollama (free, runs in your laptop) — requires `ollama serve` running |
 | [Text Extraction](text_extraction.md) | `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `xml_parser`, `html_parser`, `regex_parser` | Pull structured fields from semi-structured columns |
+
+### AI / NLP — optional OpenAI (works without; better with)
+
+These demos run **without** `OPENAI_API_KEY` set (skipping the OpenAI-touching components) AND **with** it set (full LLM features). Cost is near-zero when the key is set.
+
+| Demo | Components | Cost with key |
+|---|---|---|
+| [Local NLP Mega-Demo](local_nlp.md) | 9 truly-local NLP components + 4 OpenAI-using ones (`schema_fit`, `precision_match`, `ticket_classifier`, `sql_generator`) — optional | ~$0.05 (shared gpt-4o-mini calls) |
+| [Content Moderation](content_moderation.md) | `moderation_scorer` (local) + optional `text_moderator` (OpenAI /moderations) | $0 — OpenAI moderation endpoint is free |
+
+### AI / NLP — requires OpenAI key
+
+| Demo | Components | Why the key is required |
+|---|---|---|
+| [NLP Utilities](nlp_utilities.md) | 6 standalone transforms — `document_chunker`, `word_cloud`, `part_of_speech_tagger`, `topic_modeler`, `text_similarity` | The `synthetic_data` source uses gpt-4o-mini to generate test articles; the 6 utilities downstream are local |
 
 ### Cloud observability + enterprise SaaS
 

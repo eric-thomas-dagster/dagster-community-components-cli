@@ -52,7 +52,9 @@ support_tickets (synthetic_data_generator: 30 multilingual tickets)
 ## Run
 
 ```bash
-export OPENAI_API_KEY='sk-...'   # needed for 4 of 13 components
+# OPTIONAL — set only if you want the 4 LLM-touching components in the scaffold.
+# Without it, the 9 truly-local NLP components still scaffold and run end-to-end.
+export OPENAI_API_KEY='sk-...'
 
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_local_nlp_demo.sh | bash
 cd local-nlp-demo
@@ -65,5 +67,7 @@ takes a few minutes the first time).
 
 ## Cost
 
-~$0.05 — the 8 local components are free; the 4 LLM components share
-gpt-4o-mini calls (~30 rows × 4 calls = ~120 cheap completions).
+| Setup | Cost |
+|---|---|
+| Without `OPENAI_API_KEY` | **$0** — 9 truly-local NLP components only (`document_chunker`, `text_chunker`, `part_of_speech_tagger`, `topic_modeler`, `word_cloud`, `text_similarity`, `zero_shot_classifier`, `llm_output_parser`, `synthetic_data_generator`) |
+| With `OPENAI_API_KEY` | **~$0.05** — adds 4 LLM-touching components (`schema_fit`, `precision_match`, `ticket_classifier`, `sql_generator`) sharing gpt-4o-mini calls |

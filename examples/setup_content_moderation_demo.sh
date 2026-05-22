@@ -15,8 +15,10 @@
 #         ├── moderation_scorer    → rule-based risk/sentiment/decision per row
 #         └── text_moderator       → OpenAI policy-category scores per row
 #
-# REQUIRED ENV VARS
-#   OPENAI_API_KEY     OpenAI API key (used for the free /moderations endpoint)
+# OPTIONAL ENV VARS
+#   OPENAI_API_KEY     If set, the OpenAI /moderations pass is added alongside
+#                      the rule-based scorer. If unset, only the rule-based
+#                      pass runs (truly no auth).
 #
 # COST while running
 #   ~\$0 — OpenAI moderation calls are free; rule-based scorer is local.
@@ -25,8 +27,11 @@ set -euo pipefail
 PROJECT_DIR="${1:-content-moderation-demo}"
 
 if [ -z "${OPENAI_API_KEY:-}" ]; then
-  echo "ERROR: set OPENAI_API_KEY (the /moderations endpoint is free, but the SDK needs a key)"
-  exit 1
+  echo ">>> OPENAI_API_KEY not set — skipping the OpenAI /moderations pass."
+  echo ">>> Only the rule-based moderation_scorer will be scaffolded."
+  HAS_OPENAI=false
+else
+  HAS_OPENAI=true
 fi
 
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
@@ -34,7 +39,8 @@ uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 
-uv add -q pandas openai
+uv add -q pandas
+if $HAS_OPENAI; then uv add -q openai; fi
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 
@@ -42,7 +48,7 @@ CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing components"
 $CLI add moderation_scorer  --auto-install
-$CLI add text_moderator     --auto-install
+if $HAS_OPENAI; then $CLI add text_moderator --auto-install; fi
 
 echo ">>> Writing inline source data asset"
 mkdir -p "src/$PKG/defs/source_data"
@@ -116,6 +122,7 @@ attributes:
   group_name: moderation
 EOF
 
+if $HAS_OPENAI; then
 cat > "src/$PKG/defs/text_moderator/defs.yaml" <<EOF
 type: $PKG.components.text_moderator.component.TextModeratorComponent
 attributes:
@@ -131,6 +138,7 @@ attributes:
   flag_column: flagged
   group_name: moderation
 EOF
+fi
 
 cat <<MSG
 

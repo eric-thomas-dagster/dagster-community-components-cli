@@ -33,13 +33,18 @@ document_pairs (hand-crafted Q&A, 7 pairs)
 ~**$0.05** for 30 article generations against `gpt-4o-mini`.
 Everything else is local.
 
-## Required env var
+## Auth — OpenAI key required
+
+`OPENAI_API_KEY` is **required** for this walkthrough because the
+synthetic source asset uses gpt-4o-mini to generate the article corpus
+that the 5 downstream NLP utilities operate on. The utilities themselves
+are truly local (spaCy / scikit-learn / pandas / TF-IDF) — once you swap
+the source for a real article DataFrame (CSV / DB / API), no API key is
+needed.
 
 ```bash
 OPENAI_API_KEY=sk-...
 ```
-
-(only needed for `synthetic_data`; the other 5 components run offline)
 
 ## Run it
 

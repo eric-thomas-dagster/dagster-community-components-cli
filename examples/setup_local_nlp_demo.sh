@@ -19,17 +19,24 @@
 #         ├── ticket_classified       (ticket_classifier: LLM-mode classification) [needs key]
 #         └── tickets_sql_query       (sql_generator: LLM-generated SQL)         [needs key]
 #
-# REQUIRED ENV
-#   OPENAI_API_KEY    OpenAI key (for the 4 LLM-touching components only)
+# OPTIONAL ENV
+#   OPENAI_API_KEY    If set, 4 LLM-touching components (schema_fit,
+#                     precision_match, ticket_classifier, sql_generator)
+#                     are scaffolded. If unset, the other 9 fully-local
+#                     NLP components scaffold without OpenAI.
 #
-# COST  ~$0.05 — local NLP is free; the 4 LLM components share gpt-4o-mini calls.
+# COST  ~$0.05 with key (the 4 LLM components share gpt-4o-mini calls)
+#       $0    without key (9 truly-local NLP components only)
 
 set -euo pipefail
 PROJECT_DIR="${1:-local-nlp-demo}"
 
 if [ -z "${OPENAI_API_KEY:-}" ]; then
-  echo "ERROR: set OPENAI_API_KEY (needed for 4 of 13 components)"
-  exit 1
+  echo ">>> OPENAI_API_KEY not set — skipping 4 LLM-touching components."
+  echo ">>> The 9 truly-local NLP components will still scaffold."
+  HAS_OPENAI=false
+else
+  HAS_OPENAI=true
 fi
 
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
@@ -45,7 +52,7 @@ uv run python -m spacy download en_core_web_sm 2>/dev/null || true
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 13 NLP / AI components"
+echo ">>> Installing local-only NLP / AI components (9)"
 $CLI add synthetic_data_generator --auto-install
 $CLI add document_chunker         --auto-install
 $CLI add text_chunker             --auto-install
@@ -55,10 +62,13 @@ $CLI add word_cloud               --auto-install
 $CLI add text_similarity          --auto-install
 $CLI add zero_shot_classifier     --auto-install
 $CLI add llm_output_parser        --auto-install
-$CLI add schema_fit               --auto-install
-$CLI add precision_match          --auto-install
-$CLI add ticket_classifier        --auto-install
-$CLI add sql_generator            --auto-install
+if $HAS_OPENAI; then
+  echo ">>> Installing 4 OpenAI-using components"
+  $CLI add schema_fit               --auto-install
+  $CLI add precision_match          --auto-install
+  $CLI add ticket_classifier        --auto-install
+  $CLI add sql_generator            --auto-install
+fi
 
 echo ">>> Writing demo defs.yaml"
 
@@ -159,6 +169,7 @@ attributes:
   group_name: nlp_local
 EOF
 
+if $HAS_OPENAI; then
 cat > "src/$PKG/defs/schema_fit/defs.yaml" <<EOF
 type: $PKG.components.schema_fit.component.SchemaFitComponent
 attributes:
@@ -208,6 +219,7 @@ attributes:
   api_key_env_var: OPENAI_API_KEY
   group_name: nlp_llm
 EOF
+fi
 
 cat <<MSG
 
