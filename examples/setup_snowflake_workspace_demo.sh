@@ -1633,7 +1633,7 @@ if [ "$WANT_CORTEX" = "y" ] || [ "$WANT_CORTEX" = "Y" ]; then
   # Cortex's field naming convention prefixes auth fields with 'snowflake_'.
   # The trailing `s/^/  /` from the original was over-indenting (auth fields
   # ended up 4-space under `attributes:` instead of 2). Dropped.
-  CORTEX_AUTH_FIELDS=$(snow_auth_fields_envvar '  ' | sed 's/^  authenticator/  snowflake_authenticator/; s/^  private_key_file_env_var/  snowflake_private_key_file_env_var/; s/^  private_key_file_pwd_env_var/  snowflake_private_key_file_pwd_env_var/; s/^  password_env_var/  snowflake_password_env_var/')
+  CORTEX_AUTH_FIELDS=$(snow_auth_fields_envvar '  ' | sed 's/^  authenticator/  snowflake_authenticator/; s/^  private_key_file_env_var/  snowflake_private_key_file_env_var/; s/^  private_key_file_pwd_env_var/  snowflake_private_key_file_pwd_env_var/; s/^  password_env_var/  snowflake_password_env_var/; s/^  token_env_var/  snowflake_token_env_var/')
   write_yaml "cortex_demo" "type: $PKG.components.snowflake_cortex_asset.component.SnowflakeCortexAssetComponent
 attributes:
   asset_name: cortex_demo
