@@ -937,15 +937,32 @@ yn() {
   case "$ans" in y|Y|yes) echo "true" ;; *) echo "false" ;; esac
 }
 
-IMPORT_TASKS=$(yn          "Tasks (scheduled SQL routines)?               " "y")
-IMPORT_DYNAMIC_TABLES=$(yn "Dynamic Tables (materialized auto-refresh)?  " "y")
-IMPORT_STORED_PROCS=$(yn   "Stored Procedures?                             " "n")
-IMPORT_STREAMS=$(yn        "Streams (change data capture)?                 " "n")
-IMPORT_SNOWPIPES=$(yn      "Snowpipes (continuous ingestion)?              " "n")
-IMPORT_STAGES=$(yn         "Stages?                                        " "n")
-IMPORT_MAT_VIEWS=$(yn      "Materialized Views?                            " "n")
-IMPORT_EXT_TABLES=$(yn     "External Tables?                               " "n")
-IMPORT_ALERTS=$(yn         "Alerts?                                        " "n")
+# Entity-type prompts. When WANT_EVERYTHING=true, skip prompts and
+# auto-y everything — the booth demo should default to maximum discovery.
+if [ "${WANT_EVERYTHING:-}" = "true" ] || [ "${WANT_EVERYTHING:-}" = "1" ] || [ "${WANT_EVERYTHING:-}" = "y" ]; then
+  echo "  WANT_EVERYTHING=true — importing every entity type"
+  IMPORT_TASKS=true
+  IMPORT_DYNAMIC_TABLES=true
+  IMPORT_STORED_PROCS=true
+  IMPORT_STREAMS=true
+  IMPORT_SNOWPIPES=true
+  IMPORT_STAGES=true
+  IMPORT_MAT_VIEWS=true
+  IMPORT_EXT_TABLES=true
+  IMPORT_ALERTS=true
+else
+  # Per-type prompts — all default Y. Customers running interactively still
+  # see every type; they can type 'n' to skip individual ones.
+  IMPORT_TASKS=$(yn          "Tasks (scheduled SQL routines)?               " "y")
+  IMPORT_DYNAMIC_TABLES=$(yn "Dynamic Tables (materialized auto-refresh)?  " "y")
+  IMPORT_STORED_PROCS=$(yn   "Stored Procedures?                             " "y")
+  IMPORT_STREAMS=$(yn        "Streams (change data capture)?                 " "y")
+  IMPORT_SNOWPIPES=$(yn      "Snowpipes (continuous ingestion)?              " "y")
+  IMPORT_STAGES=$(yn         "Stages?                                        " "y")
+  IMPORT_MAT_VIEWS=$(yn      "Materialized Views?                            " "y")
+  IMPORT_EXT_TABLES=$(yn     "External Tables?                               " "y")
+  IMPORT_ALERTS=$(yn         "Alerts?                                        " "y")
+fi
 
 echo
 echo "Optional: include/exclude regex filters (applied to entity names)"
