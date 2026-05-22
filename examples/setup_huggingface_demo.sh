@@ -65,7 +65,11 @@ attributes:
   group_name: huggingface
   description: 'Live Hub metadata for the sentiment model used in the pipeline asset below.'"
 
-write_yaml "huggingface_pipeline_local" "type: $PKG.components.huggingface_pipeline.component.HuggingfacePipelineComponent
+# `dg add huggingface_pipeline` already installed a default defs.yaml at
+# src/$PKG/defs/huggingface_pipeline/. Overwrite it with the LOCAL variant
+# (asset_key hf/sentiment), and write the API variant into a SECOND
+# directory with a DIFFERENT asset_key (hf/quick_detect).
+write_yaml "huggingface_pipeline" "type: $PKG.components.huggingface_pipeline.component.HuggingfacePipelineComponent
 attributes:
   asset_key: hf/sentiment
   task: text-classification
@@ -79,7 +83,10 @@ attributes:
   deps:
     - hf/models/sentiment_model"
 
-write_yaml "huggingface_pipeline_api" "type: $PKG.components.huggingface_pipeline.component.HuggingfacePipelineComponent
+# Second instance of the same component, different asset_key + Inference API mode.
+mkdir -p "src/$PKG/defs/huggingface_pipeline_api"
+cat > "src/$PKG/defs/huggingface_pipeline_api/defs.yaml" <<EOF
+type: $PKG.components.huggingface_pipeline.component.HuggingfacePipelineComponent
 attributes:
   asset_key: hf/quick_detect
   task: object-detection
@@ -88,7 +95,8 @@ attributes:
   hf_token_env_var: HF_TOKEN
   inputs:
     - https://huggingface.co/datasets/mishig/sample_images/resolve/main/cats.jpg
-  group_name: huggingface"
+  group_name: huggingface
+EOF
 
 write_yaml "huggingface_inference_endpoint" "type: $PKG.components.huggingface_inference_endpoint.component.HuggingfaceInferenceEndpointComponent
 attributes:
