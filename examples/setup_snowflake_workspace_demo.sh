@@ -250,7 +250,7 @@ esac
 prompt_default "Warehouse" SNOW_WAREHOUSE "${SNOWFLAKE_WAREHOUSE:-COMPUTE_WH}"
 prompt_default "Database"  SNOW_DATABASE  "${SNOWFLAKE_DATABASE:-DAGSTER_DEMO}"
 prompt_default "Schema"    SNOW_SCHEMA    "${SNOWFLAKE_SCHEMA:-STAGING}"
-prompt_default "Role (leave blank for default)" SNOW_ROLE "${SNOWFLAKE_ROLE:-}"
+prompt_default "Role (leave blank for default)" SNOW_ROLE "${SNOWFLAKE_ROLE:-SYSADMIN}"
 
 if [ -z "$SNOW_ACCOUNT" ] || [ -z "$SNOW_USER" ] || [ -z "$SNOW_DATABASE" ]; then
   echo "  ⚠ account / user / database are required."
