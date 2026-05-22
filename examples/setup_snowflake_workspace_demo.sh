@@ -593,6 +593,180 @@ echo
 echo "  Will scaffold $((TOTAL_OPTIONAL - SKIP_COUNT)) of $TOTAL_OPTIONAL possible add-ons. $SKIP_COUNT silently skipped."
 echo "  (full table of skipped capabilities + how to unlock printed at end of run + saved to SECURITY_ASK.md)"
 
+# ── 4.6. Optional: Iceberg from scratch (auto-creates S3 + IAM + EXTERNAL VOLUME) ──
+# Triggered when no EXTERNAL VOLUME is detected. Uses aws CLI + snow CLI
+# to fully automate the cloud-side + Snowflake-side setup. Both CLIs are
+# auto-installed via Homebrew if missing (with user consent).
+_install_with_brew_if_missing() {
+  local cmd="$1"; local pkg="$2"
+  if command -v "$cmd" >/dev/null 2>&1; then return 0; fi
+  if ! command -v brew >/dev/null 2>&1; then
+    echo "    ⚠ Homebrew required to install $cmd. Install from https://brew.sh and re-run."
+    return 1
+  fi
+  echo "    Installing $cmd via Homebrew ($pkg) ..."
+  brew install "$pkg" >/dev/null 2>&1 || { echo "    ⚠ brew install $pkg failed."; return 1; }
+}
+
+_snow_cli_auth_args() {
+  # Translate the user's already-collected Snowflake auth into snow CLI flags.
+  case "$SNOW_AUTH_METHOD" in
+    pat)
+      echo "--account $SNOW_ACCOUNT --user $SNOW_USER --token $SNOW_PAT --authenticator PROGRAMMATIC_ACCESS_TOKEN --temporary-connection"
+      ;;
+    keypair)
+      local pwd_arg=""
+      [ -n "$SNOW_KEY_PWD" ] && pwd_arg="--private-key-file-pwd $SNOW_KEY_PWD"
+      echo "--account $SNOW_ACCOUNT --user $SNOW_USER --authenticator SNOWFLAKE_JWT --private-key-file $SNOW_KEY_FILE $pwd_arg --temporary-connection"
+      ;;
+    password)
+      echo "--account $SNOW_ACCOUNT --user $SNOW_USER --password $SNOW_PASS --temporary-connection"
+      ;;
+    *)
+      echo ""  # SSO + password_mfa aren't reliably scriptable from snow CLI
+      ;;
+  esac
+}
+
+setup_iceberg_from_scratch() {
+  local snow_args; snow_args=$(_snow_cli_auth_args)
+  if [ -z "$snow_args" ]; then
+    echo "  ⚠ snow CLI auto-auth doesn't yet support auth method '$SNOW_AUTH_METHOD'."
+    echo "    Skip the Iceberg setup, or re-run with PAT / keypair / password auth."
+    return 1
+  fi
+
+  echo "  Installing required CLIs (if missing) ..."
+  _install_with_brew_if_missing aws awscli || return 1
+  _install_with_brew_if_missing snow snowflake-cli || return 1
+
+  if ! aws sts get-caller-identity >/dev/null 2>&1; then
+    echo "    ⚠ aws CLI not authenticated. Run 'aws configure' and re-run this script."
+    return 1
+  fi
+  local aws_acct; aws_acct=$(aws sts get-caller-identity --query Account --output text)
+  local aws_region; aws_region=$(aws configure get region 2>/dev/null || echo "us-east-1")
+  echo "    ✓ AWS account: $aws_acct  region: $aws_region"
+
+  local suffix; suffix=$(date +%s | tail -c 6)
+  local bucket="dagster-iceberg-$(whoami | tr -d ' ' | tr '[:upper:]' '[:lower:]')-${suffix}"
+  local role_name="snowflake-iceberg-role-${suffix}"
+  local volume_name="DAGSTER_DEMO_VOLUME"
+  local external_id="dagster-iceberg-external-id"
+  local role_arn="arn:aws:iam::${aws_acct}:role/${role_name}"
+
+  echo "  >>> Creating S3 bucket s3://${bucket}/ ..."
+  if [ "$aws_region" = "us-east-1" ]; then
+    aws s3api create-bucket --bucket "$bucket" --region us-east-1 >/dev/null
+  else
+    aws s3api create-bucket --bucket "$bucket" --region "$aws_region" \
+      --create-bucket-configuration LocationConstraint="$aws_region" >/dev/null
+  fi
+
+  local trust_file; trust_file=$(mktemp -t sf_trust.XXXX).json
+  local policy_file; policy_file=$(mktemp -t sf_policy.XXXX).json
+  cat > "$trust_file" <<EOF
+{ "Version": "2012-10-17", "Statement": [{
+  "Effect": "Allow", "Principal": {"AWS": "arn:aws:iam::${aws_acct}:root"},
+  "Action": "sts:AssumeRole",
+  "Condition": {"StringEquals": {"sts:ExternalId": "${external_id}"}}
+}] }
+EOF
+  cat > "$policy_file" <<EOF
+{ "Version": "2012-10-17", "Statement": [
+  {"Effect": "Allow", "Action": ["s3:GetObject", "s3:GetObjectVersion", "s3:PutObject", "s3:DeleteObject"],
+   "Resource": "arn:aws:s3:::${bucket}/*"},
+  {"Effect": "Allow", "Action": ["s3:ListBucket", "s3:GetBucketLocation"],
+   "Resource": "arn:aws:s3:::${bucket}"}
+] }
+EOF
+  echo "  >>> Creating IAM role ${role_name} ..."
+  aws iam create-role --role-name "$role_name" \
+    --assume-role-policy-document file://"$trust_file" >/dev/null
+  aws iam put-role-policy --role-name "$role_name" \
+    --policy-name iceberg-s3-access --policy-document file://"$policy_file" >/dev/null
+
+  echo "  >>> Creating Snowflake EXTERNAL VOLUME via snow CLI ..."
+  snow sql $snow_args -q "USE ROLE ACCOUNTADMIN;
+CREATE OR REPLACE EXTERNAL VOLUME ${volume_name}
+  STORAGE_LOCATIONS = ((
+    NAME = 'dagster-iceberg'
+    STORAGE_PROVIDER = 'S3'
+    STORAGE_BASE_URL = 's3://${bucket}/'
+    STORAGE_AWS_ROLE_ARN = '${role_arn}'
+    STORAGE_AWS_EXTERNAL_ID = '${external_id}'
+  ));" >/dev/null || { echo "  ⚠ EXTERNAL VOLUME creation failed."; return 1; }
+
+  echo "  >>> Getting Snowflake principal from DESC ..."
+  local sf_principal
+  sf_principal=$(snow sql $snow_args -q "USE ROLE ACCOUNTADMIN; DESC EXTERNAL VOLUME ${volume_name};" --format json 2>/dev/null \
+    | python3 -c "
+import json, sys, re
+data = json.load(sys.stdin)
+rows = data if isinstance(data, list) else data.get('rows', [])
+for r in rows:
+    val = r.get('property_value') or r.get('PROPERTY_VALUE') or ''
+    m = re.search(r'STORAGE_AWS_IAM_USER_ARN[\"\\\'\\s:]+([\\w:./_-]+)', val)
+    if m:
+        print(m.group(1).strip().strip('\"\\''))
+        break
+")
+  if [ -z "$sf_principal" ]; then
+    echo "  ⚠ Could not parse STORAGE_AWS_IAM_USER_ARN from DESC output."
+    return 1
+  fi
+  echo "    ✓ Snowflake principal: $sf_principal"
+
+  echo "  >>> Updating IAM role trust policy with Snowflake principal ..."
+  cat > "$trust_file" <<EOF
+{ "Version": "2012-10-17", "Statement": [{
+  "Effect": "Allow", "Principal": {"AWS": "${sf_principal}"},
+  "Action": "sts:AssumeRole",
+  "Condition": {"StringEquals": {"sts:ExternalId": "${external_id}"}}
+}] }
+EOF
+  aws iam update-assume-role-policy --role-name "$role_name" \
+    --policy-document file://"$trust_file" >/dev/null
+
+  echo "  >>> Verifying (may take a few seconds for trust propagation) ..."
+  sleep 5
+  local verify_out
+  verify_out=$(snow sql $snow_args -q "SELECT SYSTEM\$VERIFY_EXTERNAL_VOLUME('${volume_name}');" --format json 2>/dev/null)
+  if echo "$verify_out" | grep -q '"success"\s*:\s*true'; then
+    echo "    ✓ External volume verified."
+  else
+    echo "    ⚠ Verification didn't return success — trust may still be propagating."
+    echo "      Retry: SELECT SYSTEM\$VERIFY_EXTERNAL_VOLUME('${volume_name}'); in Snowsight."
+  fi
+
+  # Update local flags so downstream Iceberg add-on scaffolds.
+  CAP_ICEBERG="yes"
+  ICEBERG_VOLS="$volume_name"
+  ICEBERG_FIRST_VOL="$volume_name"
+
+  echo
+  echo "  ✓ Iceberg setup complete:"
+  echo "      bucket:   s3://${bucket}/"
+  echo "      iam role: ${role_arn}"
+  echo "      volume:   ${volume_name}"
+  echo "  Demo will now scaffold snowflake_iceberg_table pointing at this volume."
+}
+
+if [ "$CAP_ICEBERG" = "no" ]; then
+  echo
+  echo "─────────────────────────────────────────────────────────────────────"
+  echo "  No EXTERNAL VOLUME detected — Iceberg add-on currently disabled."
+  echo "─────────────────────────────────────────────────────────────────────"
+  echo "Auto-setup an S3 bucket + IAM role + Snowflake EXTERNAL VOLUME now?"
+  echo "Requires aws + snow CLIs (installs via Homebrew with consent if missing)"
+  echo "and a Snowflake auth method snow CLI supports (PAT / keypair / password)."
+  read -r -p "Set up Iceberg from scratch? [y/N] " WANT_ICEBERG_SETUP
+  WANT_ICEBERG_SETUP="${WANT_ICEBERG_SETUP:-n}"
+  if [ "$WANT_ICEBERG_SETUP" = "y" ] || [ "$WANT_ICEBERG_SETUP" = "Y" ]; then
+    setup_iceberg_from_scratch || echo "  (continuing without Iceberg)"
+  fi
+fi
+
 # ── 5. Pick entity TYPES to import ─────────────────────────────────────
 echo
 echo "─────────────────────────────────────────────────────────────────────"
