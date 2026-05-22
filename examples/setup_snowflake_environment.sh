@@ -70,6 +70,14 @@ echo "────────────────────────�
 
 prompt_default() {
   local prompt="$1" var="$2" def="$3"
+  # When WANT_EVERYTHING=true, auto-accept prompts with sane defaults —
+  # booth-demo flow becomes "set env vars + walk away".
+  if [ -n "$def" ] && { [ "${WANT_EVERYTHING:-}" = "true" ] \
+                       || [ "${WANT_EVERYTHING:-}" = "1" ] \
+                       || [ "${WANT_EVERYTHING:-}" = "y" ]; }; then
+    eval "$var=\"$def\""
+    return 0
+  fi
   if [ -n "$def" ]; then
     read -r -p "$prompt [$def]: " val
     eval "$var=\"\${val:-$def}\""
