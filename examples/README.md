@@ -384,6 +384,7 @@ demos.
 | [Vector / RAG](vector_rag.md) | `embeddings_generator`, `vector_store_writer`, `vector_store_query`, `reranker`, `rag_pipeline`, `conversation_memory` | Vector store + embeddings model | usage-priced (~$0.0001/doc) |
 | [AI with LLMs](ai_with_llm.md) | `synthetic_data_generator`, `text_classifier`, `entity_extractor`, `sentiment_analyzer`, `document_summarizer`, `data_enricher` | OpenAI / Azure OpenAI key | usage-priced |
 | [Multi-modal AI](multimodal_ai.md) | `image_captioner`, `image_llm_extractor`, `litellm_embedding_batch` | OpenAI API key (vision-capable) | usage-priced |
+| [HuggingFace (full surface)](huggingface.md) | `huggingface_pipeline`, `huggingface_dataset_asset`, `huggingface_model_asset`, `huggingface_inference_endpoint`, `huggingface_space_status_sensor` | None for local mode + observation assets; `HF_TOKEN` for Inference API + dedicated endpoints | $0 local / usage-priced API / endpoint-hour billing for dedicated |
 
 ### Real-pipeline patterns (multi-component chains)
 
