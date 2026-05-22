@@ -220,6 +220,22 @@ INSERT INTO CUSTOMER_FEEDBACK VALUES
   (9,  'CUST000009', 4, 'Solid build quality. Took a while to arrive but worth the wait.'),
   (10, 'CUST000010', 5, 'Saved me hours of work. This product is genuinely game-changing.');
 
+-- ── 5.5. AI.CUSTOMER_FEEDBACK_SEARCH — Cortex Search service ───────────
+-- Indexes the COMMENT column of CUSTOMER_FEEDBACK so the
+-- snowflake_cortex_search component has a live service to query.
+-- Auto-refreshes every hour (TARGET_LAG). Idempotent via OR REPLACE.
+--
+-- Requires CREATE CORTEX SEARCH SERVICE privilege on the schema. If the
+-- account doesn't have Cortex Search available (region-gated), this DDL
+-- fails non-fatally and the rest of the seed continues — the workspace
+-- demo's capability scan will detect the absence and silently skip the
+-- Cortex Search add-on.
+CREATE OR REPLACE CORTEX SEARCH SERVICE CUSTOMER_FEEDBACK_SEARCH
+  ON COMMENT
+  TARGET_LAG = '1 hour'
+  WAREHOUSE = COMPUTE_WH
+  AS SELECT FEEDBACK_ID, CUSTOMER_ID, RATING, COMMENT FROM CUSTOMER_FEEDBACK;
+
 -- ===========================================================================
 -- STAGING — orchestratable entities
 -- ===========================================================================
