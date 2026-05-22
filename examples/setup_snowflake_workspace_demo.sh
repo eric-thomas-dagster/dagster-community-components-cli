@@ -856,17 +856,15 @@ for r in rows:
   fi
   local bucket=""
   if [ -n "$default_bucket" ]; then
-    read -r -p "  S3 bucket [$default_bucket]: " bucket
-    bucket="${bucket:-$default_bucket}"
+    prompt_default "  S3 bucket" bucket "$default_bucket"
   else
-    read -r -p "  S3 bucket name (the one for inbound files): " bucket
+    prompt_default "  S3 bucket name (the one for inbound files)" bucket ""
   fi
   if [ -z "$bucket" ]; then
     echo "    ⚠ No bucket provided. Skipping."
     return 1
   fi
-  read -r -p "  S3 prefix to watch (files dropped here auto-ingest) [inbound/]: " prefix
-  prefix="${prefix:-inbound/}"
+  prompt_default "  S3 prefix to watch (files dropped here auto-ingest)" prefix "inbound/"
 
   # Get the SQS ARN from DESC PIPE.
   echo "  >>> Getting NOTIFICATION_CHANNEL (SQS ARN) from $fq_pipe ..."
@@ -906,9 +904,14 @@ EOF
          echo "       queue policy allows s3.amazonaws.com to send messages."; return 1; }
   echo "    ✓ Done. AUTO_INGEST is now live."
 
-  # Optional smoke test: drop a CSV + wait for it to land.
-  read -r -p "  Drop a test CSV into s3://$bucket/$prefix to verify? [Y/n] " do_test
-  do_test="${do_test:-y}"
+  # Optional smoke test: drop a CSV + wait for it to land. Auto-yes
+  # under WANT_EVERYTHING so the full pipeline runs hands-off.
+  if [ "${WANT_EVERYTHING:-}" = "true" ] || [ "${WANT_EVERYTHING:-}" = "1" ] || [ "${WANT_EVERYTHING:-}" = "y" ]; then
+    do_test="y"
+  else
+    read -r -p "  Drop a test CSV into s3://$bucket/$prefix to verify? [Y/n] " do_test
+    do_test="${do_test:-y}"
+  fi
   if [ "$do_test" = "y" ] || [ "$do_test" = "Y" ]; then
     local test_file; test_file=$(mktemp -t autoingest_test.XXXX).csv
     cat > "$test_file" <<'EOF'
