@@ -260,7 +260,7 @@ The component family — `database_schema_inventory`, `database_migration_assess
 | [Prometheus](prometheus_demo.md) | `prometheus_push_gateway`, `prometheus_query_asset` | Push + pull patterns side by side |
 | [Enterprise SaaS Resources](enterprise_saas.md) | `workday_resource`, `marketo_resource`, `intercom_resource`, `plaid_resource` | Declare 4 SaaS APIs in one code location |
 | [SAP HANA via SQLAlchemy](sap_hana.md) | `dataframe_to_table` (mssql adapter pattern) | SAP HANA via SQLAlchemy |
-| [Precisely Connect ETL](precisely_validation.md) | `precisely_connect_run`, `precisely_data_integrity_run` | Validated against public Precisely docs (no live cluster needed) |
+| [Precisely Connect ETL](precisely_validation.md) | `precisely_job_sensor` | Sensor-only — Precisely owns the run, Dagster fires `RunRequest` on terminal SUCCESS via the documented Job Status endpoint |
 
 ## Azure (subscription required)
 

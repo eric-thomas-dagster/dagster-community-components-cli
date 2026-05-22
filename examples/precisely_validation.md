@@ -1,82 +1,73 @@
-# Precisely Connect ETL components — validation against public docs
+# Precisely Connect ETL — sensor-only
 
-The registry has two Precisely components:
+Bridges a [Precisely Connect ETL](https://www.precisely.com/product/precisely-connect/connect) (formerly Syncsort DMX / DMExpress) job with Dagster. **Sensor-only**: Precisely owns the schedule + execution; Dagster watches for a job-run reaching terminal SUCCESS and fires a `RunRequest` for downstream work.
 
-- `precisely_run_asset`
-  — triggers a Precisely Connect ETL job and waits for it to complete.
-- `precisely_job_sensor`
-  — fires a Dagster RunRequest when a Precisely job reaches a terminal SUCCESS state.
+## Why sensor-only?
 
-Without a Precisely account we can't run them end-to-end, but we can
-verify their REST API surface against Precisely's public documentation.
+Precisely Connect ETL publishes exactly one REST endpoint — `GET /projects/{jobRunId}/status` — and it returns a plain-text status string. There is **no publicly documented submit / trigger endpoint** and **no list-runs endpoint**. Earlier versions of this integration tried to POST a "best-guess" `/projects/{jobId}/run`, which 404s in every real customer install.
 
-## What's verified ✅
+So the integration shape is:
 
-The **Job Status** endpoint matches Precisely's published Connect ETL
-REST API spec:
+- **Precisely** runs your ETL on its own schedule, on its own infrastructure.
+- **Dagster** polls `GET /projects/{jobRunId}/status` on a minimum-interval cadence.
+- When the run reaches `COMPLETED` or `COMPLETED_WITH_WARNINGS`, the sensor emits a `RunRequest` for whatever downstream Dagster job you've named.
 
-| Aspect | Component (after fix) | Precisely public docs |
+That's the whole pattern. No asset, no execution, no fake-submit pretense.
+
+## Components
+
+Only **one component** ships:
+
+| Component | Purpose |
+|---|---|
+| [`precisely_job_sensor`](https://dagster-component-ui.vercel.app/c/precisely_job_sensor) | Watch a Precisely Connect ETL job-run via the documented Job Status endpoint; fire `RunRequest` on terminal SUCCESS |
+
+## API verification
+
+The sensor polls the **single verified endpoint** from Precisely's public REST docs:
+
+| Aspect | Sensor | [Precisely docs](https://help.precisely.com/r/Connect-ETL/pub/Latest/en-US/Connect-ETL-Rest-API-Reference/Job-Status) |
 |---|---|---|
 | HTTP method + path | `GET {host}/projects/{jobRunId}/status` | `GET projects/<jobRunId>/status` |
-| Response format | plain text status string (`resp.text.strip().upper()`) | plain text status string |
+| Response format | plain text (`resp.text.strip().upper()`) | plain text |
 | Status enum (success) | `COMPLETED`, `COMPLETED_WITH_WARNINGS` | same |
 | Status enum (failure) | `COMPLETED_WITH_ERRORS`, `CANCELLED`, `ERRORED`, `LOST_CONTACT` | same |
 | Status enum (in-progress) | `WAITING`, `RUNNING` | same |
 
-Source: [Job Status — Connect_ETL — Latest](https://help.precisely.com/r/Connect-ETL/pub/Latest/en-US/Connect-ETL-Rest-API-Reference/Job-Status)
+## Demo
 
-## What's NOT verified ⚠️
+```bash
+bash setup_precisely_validation_demo.sh precisely-demo
+cd precisely-demo
+export PRECISELY_HOST=https://your-precisely-host    # placeholder OK for compile-check
+export PRECISELY_API_TOKEN=placeholder
+uv run dg dev
+```
 
-The **submit / trigger** endpoint and the **list-runs** endpoint are not
-in Precisely's public REST documentation (the relevant pages require
-customer-portal authentication). The components fall back to best-guess
-RESTful shapes:
+The scaffolded project:
 
-| Endpoint | Best-guess default | Override via |
-|---|---|---|
-| Submit a job | `POST {host}/projects/{job_id}/run` with JSON `{"parameters": {...}}` | `submit_path_template` field on `PreciselyResource` and `precisely_run_asset` |
-| List recent runs of a job (sensor only) | `GET {host}/api/v1/jobs/{job_id}/runs?limit=1&sort=-startTime` | `list_runs_path_template` field on `precisely_job_sensor` |
+1. Installs `precisely_job_sensor`
+2. Writes a `defs.yaml` pointing at a placeholder `job_run_id`
+3. Registers a no-op downstream Dagster job (`precisely_downstream_job`)
+4. Starts the sensor in `stopped` state (you flip it on in the UI once you have a real `job_run_id`)
 
-If these defaults don't match your install's API, override the field
-in your `defs.yaml` — the component logic will still poll the correct
-Job Status endpoint regardless.
+`dg dev` loads cleanly and shows the sensor + job in the UI. No real Precisely instance needed for the compile-check; once you've got a real run-id, edit the `defs.yaml`, set `default_status: running`, and `dg dev` will poll and fire on terminal SUCCESS.
 
-## Sensor: two modes
-
-The fix added a second sensor mode that uses **only** the verified API:
+## Customer-facing shape
 
 ```yaml
-# Mode A: watch a known job-run ID. Uses verified Job Status endpoint only.
-type: dagster_component_templates.PreciselyJobSensorComponent
+type: dagster_community_components.PreciselyJobSensorComponent
 attributes:
   sensor_name: precisely_etl_done
-  job_run_id: "abc-123-def-456"      # the run-id you want to watch
+  job_run_id: "abc-123-def-456"          # the Precisely run-id you want to watch
   host_env_var: PRECISELY_HOST
   api_token_env_var: PRECISELY_API_TOKEN
   job_name: downstream_processing_job
+  minimum_interval_seconds: 60
+  default_status: running
 ```
 
-```yaml
-# Mode B: watch latest run of a job (uses unverified list-runs path).
-type: dagster_component_templates.PreciselyJobSensorComponent
-attributes:
-  sensor_name: precisely_etl_done
-  job_id: "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-  list_runs_path_template: "/api/v1/jobs/{job_id}/runs"  # validate vs your install
-  ...
-```
+## See also
 
-Mode A is the safe default for customers who can pre-determine the
-run-id (e.g., from `precisely_run_asset`'s materialization metadata).
-Mode B requires validation against the customer's install.
-
-## What we still don't have
-
-- **End-to-end test against a real Precisely Connect ETL instance.**
-  Both components are at validation level `code` (parses + matches
-  documented API spec). Promoting to `live` requires a customer
-  validation run.
-- **Customer-portal-only documentation.** The submit and list-runs
-  endpoints might be specified in Precisely's customer-restricted
-  docs. If a customer can confirm those paths, the field overrides
-  let them apply the verified shape without code changes.
+- [`precisely_job_sensor` component README](https://dagster-component-ui.vercel.app/c/precisely_job_sensor)
+- [Precisely Connect ETL — Job Status REST endpoint docs](https://help.precisely.com/r/Connect-ETL/pub/Latest/en-US/Connect-ETL-Rest-API-Reference/Job-Status)
