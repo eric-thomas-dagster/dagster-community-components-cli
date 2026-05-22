@@ -392,6 +392,12 @@ $$;
 -- AUTO_INGEST=FALSE so we don't need cloud event notifications for the
 -- demo. Workspace discovery still finds it; in Dagster, materializing the
 -- snowpipe asset triggers ALTER PIPE ... REFRESH.
+--
+-- CRITICAL: destination table MUST exist before the PIPE CREATE — the
+-- pipe references it in its COPY clause, and the COPY validates at
+-- CREATE time, not at first execution.
+CREATE OR REPLACE TABLE ORDERS_INGESTED LIKE DAGSTER_DEMO.RAW.ORDERS;
+
 CREATE OR REPLACE PIPE ORDERS_PIPE
   AUTO_INGEST = FALSE
   COMMENT = 'Manual-refresh pipe — copies CSVs landed in INTERNAL_STAGE into RAW.ORDERS_INGESTED'
@@ -400,9 +406,6 @@ COPY INTO DAGSTER_DEMO.STAGING.ORDERS_INGESTED
 FROM @DAGSTER_DEMO.STAGING.INTERNAL_STAGE
 FILE_FORMAT = (TYPE = CSV SKIP_HEADER = 1)
 ON_ERROR = 'CONTINUE';
-
--- The destination table for the pipe to write into.
-CREATE OR REPLACE TABLE ORDERS_INGESTED LIKE DAGSTER_DEMO.RAW.ORDERS;
 
 -- ── 12. TASKS (6) ──────────────────────────────────────────────────────
 -- TASKS are created SUSPENDED. The runner script resumes them at the end
@@ -468,6 +471,15 @@ AS
 
 -- Parent → child task chain (uses AFTER clause — discoverable by the
 -- workspace component as a dep edge).
+--
+-- CRITICAL: creating a task with AFTER requires the current role to hold
+-- EXECUTE TASK on the account. ACCOUNTADMIN has it implicitly but some
+-- accounts revoke this — the GRANT below makes it explicit + idempotent.
+USE ROLE ACCOUNTADMIN;
+GRANT EXECUTE TASK ON ACCOUNT TO ROLE SYSADMIN;
+USE ROLE SYSADMIN;
+USE SCHEMA DAGSTER_DEMO.STAGING;
+
 CREATE OR REPLACE TASK PARENT_ETL_TASK
   WAREHOUSE = COMPUTE_WH
   SCHEDULE = 'USING CRON 0 3 * * * UTC'
