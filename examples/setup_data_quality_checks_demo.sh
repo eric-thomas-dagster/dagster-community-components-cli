@@ -55,13 +55,14 @@ import pandera.pandas as pa
 orders_schema = pa.DataFrameSchema({
     "order_id":    pa.Column(str, nullable=False, unique=True),
     "customer_id": pa.Column(str, nullable=False),
-    "category":    pa.Column(str, pa.Check.isin(["Electronics", "Books", "Clothing", "Sports", "Toys", "Food", "Beauty"])),
+    "category":    pa.Column(str, pa.Check.isin(["electronics", "clothing", "books", "home", "sports", "toys", "beauty", "food"])),
     "num_items":   pa.Column(int, pa.Check.in_range(1, 100)),
     "subtotal":    pa.Column(float, pa.Check.greater_than(0)),
     "shipping":    pa.Column(float, pa.Check.greater_than_or_equal_to(0)),
     "tax":         pa.Column(float, pa.Check.greater_than_or_equal_to(0)),
     "total":       pa.Column(float, pa.Check.greater_than(0)),
-    "status":      pa.Column(str, pa.Check.isin(["pending", "shipped", "delivered", "cancelled"])),
+    "status":      pa.Column(str, pa.Check.isin(["pending", "paid", "shipped", "delivered", "cancelled"])),
+    "region":      pa.Column(str, pa.Check.isin(["NA", "EU", "APAC", "LATAM"])),
 })
 EOF
 

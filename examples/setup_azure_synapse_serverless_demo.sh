@@ -177,7 +177,7 @@ The demo will:
   1. Generate 100 synthetic orders
   2. Write them as parquet to synapsefs/dagster-test/orders.parquet
   3. Run OPENROWSET in Synapse Serverless to aggregate revenue by category
-     -> 7 rows × 3 columns ('Books', 'Clothing', 'Electronics', 'Food', 'Sports', 'Toys', + 1 misc)
+     -> 8 rows × 3 columns ('beauty', 'books', 'clothing', 'electronics', 'food', 'home', 'sports', 'toys')
 
 Teardown:
     az synapse workspace delete -g dagster-demo-rg -n <workspace> --yes
