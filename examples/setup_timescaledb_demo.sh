@@ -38,16 +38,17 @@ docker run -d --name "$TS_CONTAINER" \
   timescale/timescaledb:latest-pg16 >/dev/null
 
 echo ">>> Waiting for TimescaleDB to come up..."
-for i in $(seq 1 30); do
-  if docker exec "$TS_CONTAINER" pg_isready -U "$TS_USER" -d "$TS_DB" 2>/dev/null | grep -q "accepting connections"; then
+# TimescaleDB's official image auto-tunes on first launch, which means it
+# restarts once after pg_isready first reports green. We wait for the
+# extension-CREATE to actually succeed instead of trusting pg_isready alone.
+for i in $(seq 1 60); do
+  if docker exec "$TS_CONTAINER" psql -U "$TS_USER" -d "$TS_DB" \
+       -c "CREATE EXTENSION IF NOT EXISTS timescaledb" >/dev/null 2>&1; then
     echo "    ready after ${i}s"
     break
   fi
   sleep 1
 done
-
-# Enable the timescaledb extension on the demo database
-docker exec "$TS_CONTAINER" psql -U "$TS_USER" -d "$TS_DB" -c "CREATE EXTENSION IF NOT EXISTS timescaledb" >/dev/null
 
 # --- 2. Scaffold the Dagster project ---
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
