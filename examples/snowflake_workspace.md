@@ -1,6 +1,6 @@
-# Dagster + Snowflake — booth demo
+# Dagster + Snowflake — full-surface demo
 
-Two scripts. Five minutes. A fully-orchestrated Dagster project against Snowflake.
+A single bootstrap (**`seed.sh`** + **`bootstrap.sh`**) provisions a complete, always-running Snowflake data platform managed entirely from Dagster. Every Snowflake primitive — dynamic tables, tasks, stored procedures, streams, pipes, stages, materialized views, Iceberg tables, Cortex AI, Snowpark — appears as a first-class Dagster asset with real lineage, schedules, sensors, and event-driven automation. Push a button, see the whole graph light up.
 
 ## Quickstart
 
@@ -9,58 +9,191 @@ Two scripts. Five minutes. A fully-orchestrated Dagster project against Snowflak
 You need:
 
 1. A **Snowflake account** (any tier — Standard works, Enterprise+ unlocks more features)
-2. A **role** that can `CREATE DATABASE` (e.g. `ACCOUNTADMIN`, `SYSADMIN`) — or the seed silently falls back to "sandbox mode" inside an existing DB you own
+2. A **role** that can `CREATE DATABASE` (e.g. `ACCOUNTADMIN`, `SYSADMIN`) — or `seed.sh` falls back to "sandbox mode" inside an existing DB you own
 3. An **auth method** — keypair (best), PAT, SSO browser, password+MFA, or plain password
+4. (Optional) **AWS CLI authenticated** — if so, `seed.sh` auto-provisions an Iceberg external volume + S3-backed Snowpipe auto-ingest path
 
-### Step 1 — Seed Snowflake with realistic stuff to orchestrate
+### Step 1 — Provision Snowflake (and optionally AWS)
 
-Creates a `DAGSTER_DEMO` database with ~30 entities across `RAW` / `STAGING` / `ANALYTICS` / `AI` schemas:
+`seed.sh` is interactive. It prompts for credentials, runs Day-0 governance probes (account network policy, default warehouse), detects object-name collisions, and then provisions everything. Writes `.env` for Step 2 to consume.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_environment.sh -o setup_snowflake_environment.sh
-chmod +x setup_snowflake_environment.sh
-./setup_snowflake_environment.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/seed.sh -o seed.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/seed.sql -o seed.sql
+chmod +x seed.sh
+./seed.sh
 ```
 
-Tasks, dynamic tables, stored procedures (incl. Snowpark Python), streams, snowpipes, alerts, materialized view, Cortex Search service, Hybrid table, views, UDFs, tags, resource monitor — every Snowflake primitive that can be created via SQL. Idempotent. Takes 2-3 minutes.
+What it creates (full inventory in the [What this demo shows](#what-this-demo-shows) section):
+
+- A `DAGSTER_DEMO` database with `RAW` / `STAGING` / `ANALYTICS` / `AI` schemas
+- ~30 Snowflake-native entities: 5 dynamic tables (mixed `TARGET_LAG`), 6 tasks (incl. a parent→child chain + a config-schema launchpad task + a stream-consumer task), 3 stored procs (SQL + Snowpark Python), 2 CDC streams, 1 materialized view, 2 stages, 2 snowpipes (manual + auto-ingest), 1 alert, plus views/UDFs/tags/resource monitors
+- A scoped `DAGSTER_RUNNER` role with only the grants Dagster needs (least-privilege runtime)
+- (Optional, if AWS CLI is authed) S3 bucket + IAM role with the full Snowflake trust-policy dance, Iceberg `EXTERNAL VOLUME`, `STORAGE INTEGRATION`, and S3 PUT event notifications wired to the auto-ingest pipe's SQS queue
+
+Idempotent. Takes 2–3 minutes. Re-runs with `--reset` if you want a clean slate.
 
 ### Step 2 — Scaffold the Dagster project
 
-Auto-detects what's available on your account (Iceberg volumes, Cortex services, account edition) and only scaffolds components that can actually materialize:
+`bootstrap.sh` reads the `.env` written by `seed.sh`, creates a fresh project via `uvx create-dagster`, installs the community components, and writes `defs.yaml` files with cross-component dependencies wired in.
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_workspace_demo.sh -o setup_snowflake_workspace_demo.sh
-chmod +x setup_snowflake_workspace_demo.sh
-
-export WANT_EVERYTHING=true   # auto-accept all add-on prompts
-./setup_snowflake_workspace_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/bootstrap.sh -o bootstrap.sh
+chmod +x bootstrap.sh
+./bootstrap.sh                              # comprehensive (default)
+# OR ./bootstrap.sh --lean                  # minimum spine only
+# OR ./bootstrap.sh --no-cortex --no-snowpark  # comprehensive minus AI bits
 ```
+
+**Default is comprehensive** — every Snowflake capability the demo can exercise is on. Use `--lean` to strip back to just `snowflake_workspace` + Python ingest + Iceberg + freshness (the connected backbone), or `--no-<capability>` to turn individual add-ons off.
+
+| Default on (turn off with `--no-*`) | Off by default (turn on with `--with-*`) |
+|---|---|
+| `--no-cortex` — `snowflake_cortex_asset` (SUMMARIZE on `AI.CUSTOMER_FEEDBACK`) | `--with-dbt` — official `dagster-dbt` integration (needs `dbt-snowflake` config) |
+| `--no-snowpark` — `snowpark_pipeline` (Python in Snowflake) | |
+| `--no-warehouse-pipeline` — Dagster-managed multi-step SQL | |
+| `--no-observer` — `snowflake_table_observation_sensor` | |
 
 ### Step 3 — Run it
 
 ```bash
-cd snowflake-dagster
-source .env.demo
-uv run dg dev
+cd snowflake-demo
+uv run dg dev                # auto-loads .env + .env.secrets from the project dir
 ```
 
-Opens the UI at <http://localhost:3000>. You'll see an asset graph spanning the imported Snowflake entities + Dagster's orchestration overlay (warehouse pipelines, Snowpark pipelines, Cortex assets, partitioned chains, the new Snowpipe load sensor, time-travel queries, Iceberg, dbt, etc).
+Opens the UI at <http://localhost:3000>. You'll see ~30 assets in one connected lineage graph: RAW → DTs → tasks → marts → Iceberg/Cortex/Snowpark/warehouse_pipeline.
 
-### After it works — what to try
+**Within ~5 minutes** of opening the page, schedules fire on their own — Dagster Python generators land orders/events into RAW, dynamic tables auto-refresh on `TARGET_LAG`, the DT-refresh sensor catches the row-count delta, `AutomationCondition.eager()` cascades downstream, S3 PUTs trigger Snowpipe loads, the observation sensor catches `COPY_HISTORY` rows and lights up the snowpipe asset. Nothing has to be clicked.
 
-1. **Click an imported task** and materialize it — runs `EXECUTE TASK` server-side
-2. **Click `regional_top_paid_pipeline`** — multi-step SQL pipeline running joins + commission calc + multi-sink, all pushed down to Snowflake
-3. **Click `cortex_demo`** — calls `SNOWFLAKE.CORTEX.COMPLETE` and lands the LLM output as an asset
-4. **Click `cortex_search_results`** — queries your seeded Cortex Search Service
-5. **Click `python_daily_events` → backfill 30 days** — partitioned Python → Snowflake landing chain, replays in parallel
+## What this demo shows
 
-If any of this breaks, [Troubleshooting](#troubleshooting) is at the bottom of this doc.
+### What `seed.sh` creates in Snowflake
+
+A database `DAGSTER_DEMO` with four schemas:
+
+- **`RAW`** — source tables, populated by Dagster Python generators
+  - `ORDERS`, `CUSTOMERS`, `PRODUCTS`, `EVENTS` (seeded empty, then continuously fed)
+- **`STAGING`** — orchestratable Snowflake entities
+  - **Stages**: `INTERNAL_STAGE` (internal), `LANDING_STAGE` (external on S3 with storage integration)
+  - **Streams (CDC)**: `ORDERS_CDC_STREAM`, `CUSTOMERS_CDC_STREAM`
+  - **Materialized view**: `CUSTOMER_LIFETIME_VALUE_MV` (pre-aggregated lifetime spend)
+  - **Dynamic tables**: `PAID_ORDERS_DT` (5 min lag), `CUSTOMER_360_DT` (15 min), `TOP_PRODUCTS_DT` (1 hr), `HOURLY_ACTIVITY_DT` (1 min), `EVENTS_CLEANED_DT` (15 min)
+  - **Snowpipes**: `ORDERS_MANUAL_INGEST_PIPE` (manual REFRESH), `ORDERS_AUTO_INGEST_PIPE` (AUTO_INGEST=TRUE, wired to SQS for S3 PUT events)
+  - **Tasks**: `DAILY_ORDERS_ROLLUP`, `NIGHTLY_TIER_UPDATE_TASK` (root), `NIGHTLY_EVENTS_PURGE_TASK` (child, accepts `days_old` config), `PROCESS_ORDER_CHANGES_TASK` (drains the CDC stream), plus a few others
+  - **Stored procedures**: `SP_RECOMPUTE_TIERS`, `SP_PURGE_OLD_EVENTS`, `SP_SNOWPARK_TOP_N` (Snowpark Python)
+  - **Target table**: `ORDERS_INGESTED` (Snowpipe drops files here)
+- **`ANALYTICS`** — downstream marts
+  - `DAILY_REVENUE` (rolled up by `DAILY_ORDERS_ROLLUP`), `TOP_REVENUE_DAYS`, `ORDERS_CHANGELOG` (drained from stream)
+- **`AI`** — Cortex source data
+  - `CUSTOMER_FEEDBACK` text table + `CUSTOMER_FEEDBACK_SEARCH` Cortex Search service
+
+**Outside Snowflake:** S3 bucket with IAM role + trust policy, storage integration, SQS notification wired into the bucket for the auto-ingest pipe, optional Iceberg external volume.
+
+### What `bootstrap.sh` creates in Dagster
+
+A `snowflake-demo` project that imports every Snowflake entity above as a Dagster asset, plus:
+
+- **Python generators** (`synthetic_data_generator`) — `python_daily_orders`, `python_daily_events`, `python_hourly_orders_for_pipe`
+- **Sinks**:
+  - `orders_to_snowflake`, `events_to_snowflake` (`dataframe_to_snowflake` → `write_pandas`)
+  - `orders_to_s3` (`dataframe_to_s3` → CSV with `{partition_key}-{run_id}` filenames so Snowpipe never dedupes)
+- **Workspace component** — imports all Snowflake entities, generates two sensors (`snowflake_workspace_observation_sensor` for tasks + pipes, `snowflake_workspace_dt_refresh_sensor` for DTs)
+- **Schedules** (`cron_schedule`):
+  - `daily_orders_schedule`, `daily_events_schedule` — daily partition-driven
+  - `hourly_orders_schedule` — hourly, drives the Snowpipe demo
+  - `warehouse_observation_schedule` — every 5 min, observes streams/stages/alerts/raw_sources
+- **Automation conditions** (`automation_condition_applicator`) — `eager` on tasks/procs/MVs/snowpipes/iceberg/warehouse_pipeline/snowpark/cortex; `on_cron` for root tasks and `cortex_feedback_summary`
+- **Iceberg sink** (`snowflake_iceberg_table`) — `iceberg_daily_revenue`
+- **Snowpark pipeline** — `snowpark_order_features`
+- **Warehouse pipeline** (`warehouse_pipeline`) — `revenue_top_states` (SQLAlchemy-driven multi-step SQL DAG)
+- **Cortex SUMMARIZE** — `cortex_feedback_summary`
+- **Freshness check** — `freshness_daily_revenue`
+- **Observation sensor** — `daily_revenue_observer` (table-watcher demo)
+- **Raw source observables** — `raw_orders`, `raw_customers`, `raw_products`, `raw_events`, `ai_customer_feedback` — `@observable_source_asset` each polls row count + `last_altered`, emits a stable `data_version` so quiet observation ticks don't cascade downstream
+
+### How data flows when it's running
+
+```
+                      ┌────────── Dagster schedules ──────────┐
+                      │                                       │
+   daily cron ──▶ python_daily_orders ──▶ orders_to_snowflake ──▶ RAW.ORDERS
+   daily cron ──▶ python_daily_events ──▶ events_to_snowflake ──▶ RAW.EVENTS
+   hourly cron ──▶ python_hourly_orders_for_pipe ──▶ orders_to_s3 ──▶ S3
+                                                                  │
+                                                                  ▼
+                                          [S3 PUT] ──▶ SQS ──▶ ORDERS_AUTO_INGEST_PIPE
+                                                                  │
+                                                                  ▼
+                                                       STAGING.ORDERS_INGESTED
+                                                                  │
+                                                       observation sensor catches
+                                                       COPY_HISTORY row, emits
+                                                       AssetMaterialization on
+                                                       snowpipe_orders_auto_ingest_pipe
+
+   RAW.ORDERS changes ──▶ PAID_ORDERS_DT, TOP_PRODUCTS_DT auto-refresh (TARGET_LAG)
+                          DT-refresh sensor detects (rows changed) → emits Materialization
+                                          │
+                                          ▼
+              eager AutomationCondition on task_daily_orders_rollup fires
+                                          │
+                                          ▼
+                   EXECUTE TASK ──▶ ANALYTICS.DAILY_REVENUE (DELETE+INSERT, idempotent)
+                                          │
+                                          ▼ (eager cascade)
+                                          │
+            ┌──────────────┬──────────────┼─────────────────┬─────────────────┐
+            ▼              ▼              ▼                 ▼                 ▼
+    iceberg_daily_     revenue_top_   snowpark_order_   snowpark_top{3,    task_monthly_
+       revenue           states          features        10,100}_           revenue_report
+                                                       revenue_days
+
+   RAW.CUSTOMERS changes ──▶ CUSTOMER_360_DT refreshes ──▶ HOURLY_CUSTOMER_METRICS,
+                                                            WEEKLY_CHURN_SCORE eager-fire
+
+   Stream observation: ORDERS_CDC_STREAM polled every 5 min, downstream
+   PROCESS_ORDER_CHANGES_TASK eager-fires when has_data flips → drains the stream
+   into ANALYTICS.ORDERS_CHANGELOG
+
+   Nightly chain (every hour for demo): NIGHTLY_TIER_UPDATE_TASK ──▶ SP_RECOMPUTE_TIERS
+                                                                    └──▶ NIGHTLY_EVENTS_PURGE_TASK
+                                                                         (config_schema: days_old)
+                                                                         └──▶ SP_PURGE_OLD_EVENTS
+
+   Cortex (every 15 min): AI.CUSTOMER_FEEDBACK ──▶ CORTEX SUMMARIZE ──▶ cortex_feedback_summary
+```
+
+Everything propagates via Dagster's declarative automation framework — no manual orchestration, no glue scripts. Sensors emit stable `data_version`s so eager downstream only fires when something *actually* changed; quiet ticks don't cascade.
+
+### Snowflake features showcased (booth checklist)
+
+- ✅ Dynamic tables (5 of them, mixed cadences, both AUTO and INCREMENTAL refresh modes)
+- ✅ Tasks (root + child chain, cron-driven, multi-statement with `BEGIN/END` blocks)
+- ✅ Stored procedures (SQL + Snowpark Python, with `USING CONFIG` for per-call params)
+- ✅ Streams (CDC capture + downstream consumer task pattern)
+- ✅ Snowpipes (both manual and auto-ingest with SQS notifications)
+- ✅ Stages (internal + external S3 with storage integration)
+- ✅ Materialized views
+- ✅ Iceberg tables (with external volume on S3)
+- ✅ Cortex SUMMARIZE (and optionally Cortex Search)
+- ✅ Snowpark Python procedures
+- ✅ `PROGRAMMATIC_ACCESS_TOKEN` auth (PAT)
+- ✅ Alerts (modeled as observable source asset)
+- ✅ Multi-statement task bodies (Snowflake Scripting)
+- ✅ Task config (`EXECUTE TASK ... USING CONFIG`, surfaced as a Dagster Config form in the launchpad)
+
+### What a booth visitor sees
+
+1. **Lineage diagram** — one connected DAG spanning RAW sources → DTs → tasks → marts → Iceberg/Cortex/Snowpark/warehouse_pipeline. Every node is real, every edge is real.
+2. **Live animation** — within 5 minutes of opening the page, multiple assets refresh on their own as schedules fire, S3 files land, Snowpipe loads, DTs catch up, eager cascades trigger downstream. Nothing has to be clicked.
+3. **Click any Snowflake asset** — see its native Snowflake metadata (`target_lag`, refresh mode, last `query_id`, row count, bytes, schedule, condition, etc.) populated from `SHOW` / `INFORMATION_SCHEMA` queries.
+4. **Materialize the `nightly_events_purge_task` asset** — Dagster pops a typed form with `days_old: 90` defaulted; visitor can override to 7 or 365 and watch it execute with `USING CONFIG = '{"days_old": 7}'` against Snowflake.
+5. **Drop a CSV in S3 manually** (or just wait for the hourly schedule) — within ~60 seconds, the Snowpipe sensor catches the COPY and `snowpipe_orders_auto_ingest_pipe` lights up green with file-level metadata in the materialization details.
+6. **Failure stories work too** — kill a Snowflake task mid-run, the observation sensor records the failure state; rotate the PAT, materializations show the auth error in the UI without crashing the code location (bootstrap.sh sets safe env-var defaults).
 
 ## Why Dagster on top of Snowflake?
 
 Two different conversations depending on the stack. Pick the one that fits.
-
----
 
 ### If you're a pure-Snowflake shop
 
@@ -94,8 +227,6 @@ Plus the things that aren't trigger-shaped but still help even in a pure-Snowfla
 
 **When to walk away from this conversation:** if the team's trigger needs really are just "nightly cron + AFTER chains + Snowpipe on file land" *and* there's no near-term partition-replay, webhook-trigger, or external-event story — native scheduling is fine. Save the migration energy.
 
----
-
 ### If you're a heterogeneous stack (most teams)
 
 Snowflake is one node in your data graph. You also have Fivetran / Airbyte / Sling for ingest, dbt for transforms, BI tools like Tableau / Power BI / Looker reading downstream, maybe a reverse-ETL step pushing data to Salesforce / HubSpot, ML models scoring upstream of all of it, and Python jobs gluing the edges. The pitch is straightforward: **one asset graph for the whole flow.**
@@ -112,8 +243,6 @@ Snowflake is one node in your data graph. You also have Fivetran / Airbyte / Sli
 
 The reactive-pattern table from the pure-Snowflake section still applies here — and gets *more* valuable, because the upstream signal often lives outside Snowflake (a Kafka topic, an S3 drop, a SaaS webhook). Dagster collapses both the cross-tool and the in-Snowflake reactive cases into the same primitive: `AutomationCondition`.
 
----
-
 ### When Dagster is genuinely overkill
 
 For either audience, Dagster adds moving parts you don't need if:
@@ -125,375 +254,152 @@ For either audience, Dagster adds moving parts you don't need if:
 
 Most teams find at least one of these breaks within a quarter or two. But if all four hold for you, native Snowflake scheduling is the right answer and a worth-it cost in saved complexity.
 
-## Don't have a populated Snowflake account yet?
-
-There's a companion seed script that creates a realistic "before" state — a `DAGSTER_DEMO` database with `RAW.{ORDERS,CUSTOMERS,PRODUCTS,EVENTS}` (seeded with synthetic data) and a `STAGING` schema populated with **6 tasks**, **4 dynamic tables**, **3 stored procedures** (including one Snowpark Python proc), **2 streams**, **1 materialized view**, **2 stages**, **1 snowpipe**, and **1 alert**. Idempotent. Run it once on a demo account, then point the workspace setup at `DAGSTER_DEMO.STAGING` for a discovery output that's genuinely impressive:
+## `seed.sh` flags
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_environment.sh -o setup_snowflake_environment.sh
-chmod +x setup_snowflake_environment.sh
-./setup_snowflake_environment.sh
+./seed.sh                          # defaults: interactive, Iceberg auto-on if AWS authed
+./seed.sh --demo-account           # auto-fix Day-0 governance gaps (only against your own demo account)
+./seed.sh --with-iceberg=false     # skip Iceberg even if AWS CLI is authed
+./seed.sh --with-iceberg           # require Iceberg (fail if AWS CLI missing)
+./seed.sh --target-db MY_DEMO      # use a different database name (default: DAGSTER_DEMO)
+./seed.sh --reset                  # drop and recreate target database
+./seed.sh --no-dagster-runner      # skip creating the scoped DAGSTER_RUNNER role
+./seed.sh --runner-role MY_ROLE    # use a different name for the scoped role
+./seed.sh --bucket my-iceberg-bkt  # override S3 bucket name
+./seed.sh --iam-role my-sf-role    # override IAM role name
+./seed.sh --volume-name MY_VOL     # override Snowflake external volume name
+./seed.sh --help                   # full help
 ```
 
-Teardown with [`teardown_snowflake_environment.sql`](teardown_snowflake_environment.sql) — drops the whole `DAGSTER_DEMO` database.
+## `bootstrap.sh` flags
 
-**Safety guards before the seed runs anything:**
+```bash
+./bootstrap.sh                                          # comprehensive demo (default)
+./bootstrap.sh --lean                                   # minimum connected spine only
+./bootstrap.sh --no-cortex --no-snowpark                # comprehensive minus AI bits
+./bootstrap.sh --name my-snow-demo                      # name the project (default: prompts)
+./bootstrap.sh --env-file ./.env.demo                   # use a specific env file
+./bootstrap.sh --with-dbt                               # include the dagster-dbt integration
+./bootstrap.sh --help                                   # full help
+```
 
-The bash wrapper does three pre-flight checks against your account *before* any DDL fires:
+The default produces ~30 assets. `--lean` strips back to: `python_daily_events` → `events_to_snowflake` → `snowflake_workspace` imports → `iceberg_daily_revenue` (if Iceberg available) → `freshness_daily_revenue`. Useful for a quick check that the end-to-end wiring works before turning on all the add-ons.
 
-1. **Role + warehouse exist** and are visible to the connected user. If `SHOW ROLES LIKE '<role>'` or `SHOW WAREHOUSES LIKE '<wh>'` returns nothing, it aborts with a clear error instead of failing opaquely on the first `USE` statement.
-2. **Target database name is configurable** — prompted at startup (default `DAGSTER_DEMO`, override with the `SNOWFLAKE_TARGET_DATABASE` env var). The bash wrapper string-substitutes that name into all 32 SQL references before executing, so you can stage the seed into an isolated `DAGSTER_DEMO_$(whoami)` if you're sharing the account.
-3. **Object-level collision inventory** — if the target database already exists, the wrapper queries `INFORMATION_SCHEMA.{TABLES, TASKS, DYNAMIC_TABLES, PROCEDURES, VIEWS}` + `SHOW {STREAMS, PIPES, STAGES, ALERTS}` for every name the seed is about to `CREATE OR REPLACE`. Prints a manifest of any overlap and asks: **[r]euse and overwrite** / **[d]rop database first and recreate** / **[c]hange to a different name** / **[q]uit**.
+## A note on OpenFlow
 
-Net effect: you can't accidentally clobber production work by running this on the wrong account. If anything's off, the wrapper surfaces it before issuing any DDL.
+**Dagster can orchestrate OpenFlow. `seed.sh` cannot pre-build OpenFlow flows for you.**
 
-### A note on OpenFlow
-
-**Dagster can orchestrate OpenFlow. We can't pre-build OpenFlow flows in this seed script.**
-
-OpenFlow (Snowflake's NiFi-based data integration service) is a different kind of object from Tasks / Dynamic Tables / Procedures: it isn't created with a SQL DDL statement, there's no `snowflake_openflow_flow` Terraform resource yet, and the BYOC runtime itself is a non-trivial EKS-cluster-in-your-cloud deployment. The IaC story for OpenFlow flows today is *"design in the UI → export as a JSON process-group bundle → commit to Git → import via the NiFi REST API."* That's real, but bootstrapping a runnable OpenFlow runtime + importing the JSON is heavier than a one-script demo can do.
+OpenFlow (Snowflake's NiFi-based data integration service) is a different kind of object from Tasks / Dynamic Tables / Procedures: it isn't created with a SQL DDL statement, there's no `snowflake_openflow_flow` Terraform resource yet, and the BYOC runtime itself is a non-trivial EKS-cluster-in-your-cloud deployment. The IaC story for OpenFlow flows today is *"design in the UI → export as a JSON process-group bundle → commit to Git → import via the NiFi REST API."* That's real, but bootstrapping a runnable OpenFlow runtime + importing the JSON is heavier than `seed.sh` can do.
 
 **What that means for live demos:**
 
-- If you're showing this against a Snowflake account that already has OpenFlow flows configured, set `import_openflow_flows: true` in the workspace `defs.yaml`. The workspace component discovers them via the existing OpenFlow telemetry surface and they show up as observable Dagster assets — same as tasks / dynamic tables / streams. **Dagster orchestrates them; lineage extends through them.**
-- If you don't have OpenFlow set up yet and want to show the integration on stage, pre-build one flow in the UI ahead of time and have it live in the demo account. The seed script populates the *other* nine entity types so the discovery story still lands.
-- If you want to skip OpenFlow on stage, set `import_openflow_flows: false` (the demo's default) and the absence of flows in `dg dev` will be invisible.
+- If you're showing this against a Snowflake account that already has OpenFlow flows configured, set `import_openflow_flows: true` in the workspace `defs.yaml`. The workspace component discovers them via the existing OpenFlow telemetry surface and they show up as observable Dagster assets — same as tasks / dynamic tables / streams.
+- If you don't have OpenFlow set up yet and want to show the integration on stage, pre-build one flow in the UI ahead of time and have it live in the demo account. `seed.sh` populates the *other* nine entity types so the discovery story still lands.
+- If you want to skip OpenFlow on stage, leave `import_openflow_flows: false` (the demo's default) and the absence is invisible.
 
-### Setting up an OpenFlow flow before your demo (~15 min)
-
-If you want the OpenFlow part of the story to land on stage, the only path today is to pre-build a flow in your demo account *before* the talk. Here's the shortest path:
-
-**1. Verify the runtime exists.** OpenFlow is **BYOC** (deployed in your own cloud) and gated per Snowflake account. Sign in to **Snowsight → Data → Integrations → OpenFlow**. If you see a "Deploy runtime" button instead of a list of runtimes, the BYOC deployment hasn't been run yet and you'll need to coordinate with whoever runs cloud infra (it provisions an EKS cluster in your AWS account — a several-hour task, not a 15-minute one). If you see at least one runtime listed, you're good to proceed.
-
-**2. Pick a pre-built connector instead of designing from scratch.** Snowflake ships ~12 connectors as one-click installs from a marketplace-like UI:
-   - **Database CDC** — Postgres, MySQL, MSSQL, MongoDB, SQL Server (CDC)
-   - **SaaS** — Salesforce, Box, Slack, SharePoint, Google Drive, Workday
-   - **Messaging** — Kafka, Kinesis
-
-   For a quick demo, **Postgres CDC** is the cleanest story (you can use a free-tier Supabase or RDS as the source) — it lands a stream of changes into Snowflake tables in real time. **Slack** is the second-easiest (no source DB needed, but requires a Slack workspace + bot token).
-
-**3. Install the connector.** In Snowsight: **Data → Integrations → OpenFlow → Connectors → Add Connector**. Click your chosen connector → "Install". Snowflake handles the runtime side; you fill in:
-   - Source credentials (Postgres connection string / Slack bot token / etc.)
-   - Snowflake target — database, schema, warehouse, role
-   - Sync mode — full refresh / incremental / CDC
-   - Schedule (some connectors are continuous, some scheduled)
-
-**4. Set up a Snowflake Service User for the connector.** OpenFlow connectors authenticate to Snowflake as a service user, not as your interactive user. From a worksheet:
-   ```sql
-   CREATE USER IF NOT EXISTS OPENFLOW_SERVICE_USER
-     TYPE = SERVICE
-     DEFAULT_ROLE = OPENFLOW_LOADER
-     DEFAULT_WAREHOUSE = COMPUTE_WH;
-
-   CREATE ROLE IF NOT EXISTS OPENFLOW_LOADER;
-   GRANT USAGE ON DATABASE DAGSTER_DEMO TO ROLE OPENFLOW_LOADER;
-   GRANT USAGE ON SCHEMA DAGSTER_DEMO.RAW TO ROLE OPENFLOW_LOADER;
-   GRANT CREATE TABLE, MODIFY ON SCHEMA DAGSTER_DEMO.RAW TO ROLE OPENFLOW_LOADER;
-   GRANT ROLE OPENFLOW_LOADER TO USER OPENFLOW_SERVICE_USER;
-
-   -- Register an RSA public key on the service user (run from a key you generated):
-   ALTER USER OPENFLOW_SERVICE_USER SET RSA_PUBLIC_KEY = '<pubkey contents>';
-   ```
-   Service users **must** use keypair auth — passwords aren't allowed. Paste the matching private key into the connector's credential field when you install it.
-
-**5. Run a sync.** The connector UI has a "Run" button — click it. After a minute, you should see new tables under `DAGSTER_DEMO.RAW` (or wherever you pointed it). If it errors, the UI shows the NiFi processor that failed with a stack trace; usually it's a missing grant on the target schema.
-
-**6. Re-run the Dagster workspace setup with OpenFlow on.** Edit the workspace `defs.yaml` (or re-run the script and `[r]euse`-overwrite):
-   ```yaml
-   attributes:
-     # ... existing fields ...
-     import_openflow_flows: true
-   ```
-   Then `uv run dg check defs` followed by `uv run dg dev`. Your OpenFlow flow shows up in Dagster's asset graph alongside tasks / dynamic tables / procs / etc. — Dagster materializes via `EXECUTE FLOW`, lineage flows through, run history streams in.
-
-**For a really compelling demo:** wire one of your imported `RAW.*` tables (the one OpenFlow lands into) as the upstream of the `warehouse_pipeline` add-on. Now the story is end-to-end: OpenFlow ingests CDC from Postgres → lands in `RAW.ORDERS` → Dagster sees the row-count change → triggers `warehouse_pipeline` via `AutomationCondition.eager()` → joins + commission + multi-sink, all in Snowflake compute. One asset graph, every Snowflake-native primitive doing its best job.
-
-**If you can't get OpenFlow set up in time**, drop it. The seed script's tasks + dynamic tables + procs + streams + pipes + alerts cover 90% of the "Dagster orchestrates everything Snowflake-native" story; OpenFlow is the cherry, not the cake.
+The companion doc [snowflake_demo_account_requirements.md](snowflake_demo_account_requirements.md) covers everything else your account needs (or doesn't) to light up the full demo.
 
 ## Running this against a corporate Snowflake account (the SE reality)
 
-If you're a Dagster SE — or any data-engineer running this against a shared corporate Snowflake — your role is almost certainly some flavor of `SANDBOX_WRITER` / `DEVELOPER` / per-team writer, **not** `ACCOUNTADMIN` / `SECURITYADMIN` / `USERADMIN`. That makes the "default" auth choice surprising. Here's the quick triage:
+If you're a Dagster SE — or any data engineer running this against a shared corporate Snowflake — your role is almost certainly some flavor of `SANDBOX_WRITER` / `DEVELOPER` / per-team writer, **not** `ACCOUNTADMIN` / `SECURITYADMIN` / `USERADMIN`. That makes the "default" auth choice surprising. Here's the quick triage:
 
 | Your permissions | Easiest auth | Why |
 |---|---|---|
-| **Can run `ALTER USER … SET RSA_PUBLIC_KEY=…` on yourself** (rare — needs OWNERSHIP on your user) | **Keypair** | Headless, works with the Dagster daemon, no browser. The script's default. |
+| **Can run `ALTER USER … SET RSA_PUBLIC_KEY=…` on yourself** (rare — needs OWNERSHIP on your user) | **Keypair** | Headless, works with the Dagster daemon, no browser. `seed.sh`'s default. |
 | **Can create a PAT *and* there's already a permissive network policy attached to your user** | **PAT** | Headless. But: PATs require an associated network policy, which usually only `SECURITYADMIN` can create/attach. If your account doesn't already have one, you'll hit `Programmatic access token failed authentication. No active network policy found …` and need to fall back. |
-| **None of the above** (the common case for SEs) | **SSO (externalbrowser)** | Works on any account that allows SSO. Browser tab pops once per session and the token is cached in your OS keychain via `keyring`. **Caveat:** sensors + scheduled runs (the Dagster daemon) can't open a browser, so the row-count observation sensor add-on won't fire its checks until you re-auth. For a stage demo / `dg dev` exploration this is fine. |
+| **None of the above** (the common case for SEs) | **SSO (externalbrowser)** | Works on any account that allows SSO. Browser tab pops once per session and the token is cached in your OS keychain via `keyring`. **Caveat:** sensors + scheduled runs (the Dagster daemon) can't open a browser, so `bootstrap.sh`'s schedules won't fire on the daemon until you re-auth. For a stage demo / `dg dev` exploration this is fine. |
 | **No keypair, no PAT, no SSO** | **Password** | If your account still allows it. Most don't. |
 
-**The honest path for most SEs is SSO + sandbox mode** — read the next subsection.
+**The honest path for most SEs is SSO + sandbox mode** — see the next subsection.
 
 ### What "sandbox mode" means
 
-The companion `setup_snowflake_environment.sh` seed script (the one that creates `DAGSTER_DEMO` with tasks / dynamic tables / procs / etc.) auto-detects when the target database **already exists and you don't own it** and **strips the DDL it can't run as your role**:
+`seed.sh` auto-detects when the target database **already exists and you don't own it** and **strips the DDL it can't run as your role**:
 
-- `CREATE DATABASE` → skipped (you don't have CREATE DATABASE)
+- `CREATE DATABASE` → skipped (you don't have it)
 - `USE ROLE SYSADMIN` → skipped (you can't switch to roles you don't have)
 - `RAW` / `STAGING` / `ANALYTICS` / `AI` schemas → renamed to `DAGSTER_DEMO_RAW` / `_STAGING` / `_ANALYTICS` / `_AI` (so the seed doesn't collide if 14 other people are also running this against the shared `SANDBOX`)
 - `COMPUTE_WH` → string-substituted with whatever warehouse you actually have USAGE on
 
-The end state is identical (tasks, DTs, procs, streams, pipes, alerts) — just scoped to schemas your role *owns* in a database you already control. Run the seed, then point the workspace setup at `SANDBOX.DAGSTER_DEMO_STAGING` and you get the full discovery story without ever needing `ACCOUNTADMIN`.
-
-### A worked SE example
-
-Assume your role is `SANDBOX_WRITER`, you own the `SANDBOX` database, you've got `PURINA_WAREHOUSE_USER` (or some named warehouse), and your account only allows SSO + password (no keypair registration, no PAT).
-
-```bash
-# 1. Seed: SANDBOX exists → sandbox mode auto-engages, schemas renamed
-export SNOWFLAKE_TARGET_DATABASE=SANDBOX
-export SNOWFLAKE_WAREHOUSE=PURINA_WAREHOUSE_USER
-export SNOWFLAKE_ROLE=SANDBOX_WRITER
-./setup_snowflake_environment.sh             # answer SSO, browser pops once
-
-# 2. Workspace + every add-on (no per-prompt grinding)
-export WANT_EVERYTHING=true                  # auto-y every optional add-on
-./setup_snowflake_workspace_demo.sh
-#   Point database = SANDBOX
-#   Point schema   = DAGSTER_DEMO_STAGING
-#   Auth choice    = 2 (SSO)
-```
-
-What you get: a fully scaffolded Dagster project — workspace import + `warehouse_pipeline` + `snowpark_pipeline` + Cortex + observation sensor + AutomationCondition + partitioned heterogeneous chain + freshness check + external table + dbt + 7 define-as-code DDL components — running against your SANDBOX schemas in 90 seconds, no admin help needed.
+The end state is identical (tasks, DTs, procs, streams, pipes, alerts) — just scoped to schemas your role *owns* in a database you already control. Run `seed.sh`, then point `bootstrap.sh` at `SANDBOX.DAGSTER_DEMO_STAGING` and you get the full discovery story without ever needing `ACCOUNTADMIN`.
 
 ### What you **won't** be able to do as a sandboxed role
 
 Be honest with the customer about these — they're real limits of running stage demos against a shared corporate account, not Dagster limits:
 
-- **`ALTER TASK … RESUME`** needs `EXECUTE TASK` on the account. Most sandboxed roles don't have it, so tasks materialize as suspended. Tasks can still be run on demand from Dagster's UI (click-to-materialize calls `EXECUTE TASK <name>` which is permitted) — but they won't auto-fire on their cron schedule.
-- **Materialized views** require Snowflake Enterprise edition; Standard accounts will fail the 1 MV creation in the seed. Non-blocking — the seed continues and 49/50 statements still land.
-- **Snowpipe auto-ingest** needs a stage with a notification integration, which is usually `ACCOUNTADMIN`-only to create. The seed creates the pipe in `MANUAL` mode (PUT-then-COPY); auto-ingest from S3 / GCS / Azure needs your account admin to wire up the integration.
+- **`ALTER TASK … RESUME`** needs `EXECUTE TASK` on the account. Most sandboxed roles don't have it, so tasks materialize as suspended. Tasks can still be run on demand from Dagster's UI (click-to-materialize calls `EXECUTE TASK <name>`) — but they won't auto-fire on their cron schedule.
+- **Materialized views** require Snowflake Enterprise edition; Standard accounts fail the MV creation in `seed.sql`. Non-blocking — the seed continues and 49/50 statements still land.
+- **Snowpipe auto-ingest** needs a stage with a notification integration, which is usually `ACCOUNTADMIN`-only to create. `seed.sh` creates the pipe in `MANUAL` mode (PUT-then-COPY); the auto-ingest path runs only when AWS is authenticated AND your role can `CREATE STORAGE INTEGRATION`.
+- **Iceberg `EXTERNAL VOLUME`** needs `ACCOUNTADMIN`. If you can't reach that role, pass `--with-iceberg=false` and the demo runs without it.
+- **`CREATE EXTERNAL VOLUME` / `CREATE NOTIFICATION INTEGRATION` / `CREATE CORTEX SEARCH SERVICE`** all gate on `ACCOUNTADMIN` or specific privilege grants — full table in [snowflake_demo_account_requirements.md](snowflake_demo_account_requirements.md).
 
 For a customer demo on a customer-owned account, none of these apply — they'll run as a powerful enough role to use everything. The above is purely about doing dry-runs on your own employer's locked-down account.
-
----
-
-## Run it
-
-```bash
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_workspace_demo.sh -o setup_snowflake_workspace_demo.sh
-chmod +x setup_snowflake_workspace_demo.sh
-./setup_snowflake_workspace_demo.sh
-```
-
-Auto-installs `uv` if missing (with consent). Refuses piped invocation — it's interactive. Defaults read from `$SNOWFLAKE_ACCOUNT` / `$SNOWFLAKE_USER` / `$SNOWFLAKE_PASSWORD` / `$SNOWFLAKE_WAREHOUSE` / `$SNOWFLAKE_DATABASE` / `$SNOWFLAKE_ROLE` if you've already exported them.
-
-### "Give me everything" mode (skip the y/N grinding)
-
-Set `WANT_EVERYTHING=true` and every optional add-on auto-enables AND the cross-entity dep prompt is skipped (since that's the one most likely to stall on a typo). You still get the credential + auth-method + entity-type prompts — just none of the add-on selection prompts.
-
-```bash
-export WANT_EVERYTHING=true
-./setup_snowflake_workspace_demo.sh
-```
-
-Individual `WANT_*` env vars still take precedence — useful for "everything except dbt":
-
-```bash
-export WANT_EVERYTHING=true
-export WANT_DBT=n
-./setup_snowflake_workspace_demo.sh
-```
-
-The full list of env vars (each takes `y` or `n`). **Defaults are `y` (opt-out)** for every add-on prompt — the script's purpose is showing the full Snowflake surface, so pressing Enter at each prompt gives you the full demo. Type `n` to opt out of a specific add-on. The only prompt that defaults `n` is the cross-entity dep wiring (`WANT_DEPS`) — that one's an opt-in because typing entity names is finicky.
-
-Available env vars: `WANT_DEPS` `WANT_PIPELINE` `WANT_AUTOCOND` `WANT_CORTEX` `WANT_OBSERVER` `WANT_HET` `WANT_FRESH` `WANT_SNOWPARK` `WANT_EXTERNAL` `WANT_DBT` `WANT_DDL_SHOWCASE`.
-
-## What it asks
-
-1. **Project name.** Default `snowflake-dagster`. If the directory already exists, the script offers three fast paths so re-runs don't fail:
-   - **[r]euse** — keeps the existing venv + installed components, *overwrites* `src/<pkg>/defs/` and `dbt/` and `.env.demo` with this run's choices. Fastest path for stage iteration ("I want to re-run with the Cortex add-on this time").
-   - **[d]elete** — `rm -rf` and rebuild from scratch (incl. fresh venv + component installs).
-   - **[c]hange** — pick a different project name.
-2. **Credentials.** account / user / **auth method** / warehouse / database / schema / role. Verified by running `SELECT CURRENT_VERSION()` against your account before going further; offers a "continue anyway" if the verify fails (useful when you're testing scaffolding offline).
-
-   **Auth method prompt** — pick the one your Snowflake account allows (see the *"Running this against a corporate Snowflake account"* section above for the SE-specific triage):
-   - **[1] Keypair** (RSA private key file) — **the default**, and the right choice for production. Works headless (Dagster's daemon for sensors + schedules doesn't need a browser); generated `.env.demo` exports `SNOWFLAKE_PRIVATE_KEY_FILE` (+ `_PWD` if your key is encrypted); every emitted `defs.yaml` uses `authenticator: SNOWFLAKE_JWT` + `private_key_file: …`. Most enterprise accounts disable password auth — keypair is what you'll actually use **if you have OWNERSHIP on your user** (most SEs running stage demos against a corporate account don't, and need to fall back to SSO).
-   - **[2] SSO** (externalbrowser) — fine for laptop `dg dev` only. A browser tab pops the first time per session; the token is cached in your OS keychain via `keyring` so subsequent `uv run` invocations don't re-prompt. **Doesn't work for the Dagster daemon** (sensors + scheduled runs can't open a browser), so if you pick this, the row-count observation sensor add-on won't be able to fire its checks until you re-auth. This is the **easiest-to-set-up choice for an SE on a locked-down corporate Snowflake**.
-   - **[3] Password** — preserved for accounts that still allow it. Same `.env.demo` shape as before.
-   - **[4] PAT** (Programmatic Access Token) — headless alternative to keypair when your user has OWNERSHIP isn't grantable but PATs are. **Caveat:** PATs require an attached network policy, which is `SECURITYADMIN`-only to create — if your account doesn't already have one for your user, you'll get `Programmatic access token failed authentication. No active network policy found …` and need to fall back.
-
-   The same auth choice flows through into every generated artifact: `snowflake_workspace`, `snowflake_table_observation_sensor`, `snowpark_pipeline`, `snowflake_cortex_asset`, `dataframe_to_snowflake`, the SQLAlchemy URL for `warehouse_pipeline`, AND `dbt/profiles.yml` (when you pick the dbt add-on). One choice; consistent config everywhere.
-3. **Discovery.** Queries `INFORMATION_SCHEMA.*` + `SHOW <kind>` for every entity type and prints counts:
-   ```
-   tasks                    12  daily_etl_orders, hourly_clickstream, monthly_revenue + 9 more
-   dynamic_tables            4  customer_360, paid_orders_dt + 2 more
-   stored_procedures         7  sp_seed_orders, sp_recalc + 5 more
-   streams                   2  orders_stream, customers_stream
-   snowpipes                 1  events_pipe
-   stages                    3  …
-   materialized_views        0  —
-   external_tables           1  s3_logs_external
-   alerts                    0  —
-   ```
-4. **Pick entity types.** `y/n` per type. Sensible defaults: tasks + dynamic_tables on; everything else off. Tighter scoping = less Snowflake metadata in your project and faster `dg dev` loads.
-5. **Optional pattern filters.** `filter_by_name_pattern` / `exclude_name_pattern` (regex). E.g. only import names matching `HOURLY_*` and skip anything matching `_TEMP$`.
-6. **Optional cross-entity deps.** Same flow as `databricks_workspace.md`: shows your imports numbered, asks "what does this depend on" for each, wires `assets_by_name` with `deps:` overrides under the hood.
-7. **Optional add-ons** — each prompted separately so you can stage exactly the demo you want. Every one of these corresponds to a specific row in the *"Why Dagster?"* table above:
-   - **Multi-step `warehouse_pipeline`** — pick two of your tables, get a generated multi-step asset that joins them, adds a commission column via `op: sql`, groups by region, and writes two output tables (one per sink). All compute pushed to Snowflake.
-   - **`snowflake_cortex_asset`** — picks `summarize` / `sentiment` / `complete` and an input string. Cortex LLM runs server-side, no extra API key.
-   - **`snowflake_table_observation_sensor`** — watches a chosen table for row-count changes (default: `RAW.ORDERS`). Materializes a downstream asset directly when changes are detected. Demonstrates the *"react to table mutation beyond what Snowpipe expresses"* pattern.
-   - **`AutomationCondition.eager()` on the pipeline** — only offered if you selected the multi-step pipeline above. Wires the pipeline asset to auto-fire the moment any of its imported upstreams change. Demonstrates *"fire when upstreams finish"* declarative chaining (vs. cron + AFTER).
-   - **Partitioned Python → Snowflake landing chain** — scaffolds a daily-partitioned `synthetic_data_generator` (Python) feeding `dataframe_to_snowflake`. Two claims in one: cross-engine lineage (Python on the left, Snowflake on the right) AND first-class partition replay — backfill 30 days from the `dg dev` UI with concurrency control.
-   - **`freshness_check` asset check** — attaches a fail-if-not-updated-within-N-hours check to one of the imported entities. Demonstrates per-asset data quality with native pass/fail surfacing.
-   - **`snowpark_pipeline` (DataFrame parallel to `warehouse_pipeline`)** — same multi-step shape (`steps` / `ref` / `op: sql` / multi-sink), but compiles to a single Snowflake SQL statement *via Snowpark's lazy DataFrame API* instead of CTE-CTAS. Including both in the same demo shows Dagster works equally well with either Snowflake compute paradigm.
-   - **`external_snowflake_table`** — declare-only asset for a table managed by someone else (different team, replicated in via an external tool, etc.). Dagster's graph sees it as an upstream / sibling and reasons about lineage without taking ownership. Common enterprise pattern.
-   - **Official `dagster-dbt` integration** — scaffolds a tiny dbt project under `./dbt/` (2 staging models + 1 mart, building on `RAW.ORDERS` + `RAW.CUSTOMERS`) and imports every dbt model as a Dagster asset via `DbtProjectComponent`. Lineage spans `RAW.*` (sources) → staging views → mart table, all in one graph alongside the workspace's tasks/DTs/procs.
 
 ## What gets generated
 
 ```
-snowflake-dagster/
-├── .env.demo                              # mode 600, gitignored, contains your password
-├── pyproject.toml                         # snowflake-connector-python pinned
-├── dbt/                                   # (if you picked the dbt add-on)
-│   ├── dbt_project.yml
-│   ├── profiles.yml                       # uses $SNOWFLAKE_* env vars
-│   └── models/
-│       ├── staging/{stg_orders.sql, stg_customers.sql, sources.yml}
-│       └── marts/customer_revenue.sql
-└── src/snowflake_dagster/
-    ├── components/                        # community component sources scaffolded
+snowflake-demo/
+├── .env -> ../.env                           # symlinked to seed.sh's output
+├── .env.secrets                              # mode 600, gitignored, holds secrets
+├── pyproject.toml                            # snowflake-connector-python pinned + extras
+└── src/snowflake_demo/
+    ├── components/                           # community component sources installed by bootstrap.sh
     │   ├── snowflake_workspace/
-    │   ├── warehouse_pipeline/             (if pipeline add-on)
-    │   ├── snowflake_cortex_asset/         (if Cortex add-on)
-    │   ├── snowflake_table_observation_sensor/  (if observation add-on)
-    │   ├── synthetic_data_generator/        (if partitioned-heterogeneous add-on)
-    │   ├── dataframe_to_snowflake/          (if partitioned-heterogeneous add-on)
-    │   ├── freshness_check/                 (if freshness add-on)
-    │   ├── snowpark_pipeline/               (if snowpark add-on)
-    │   └── external_snowflake_table/        (if external-table add-on)
+    │   ├── synthetic_data_generator/
+    │   ├── dataframe_to_snowflake/
+    │   ├── dataframe_to_s3/                   (if S3_STAGING_BUCKET set by seed.sh)
+    │   ├── snowflake_iceberg_table/           (if Iceberg available)
+    │   ├── snowflake_cortex_asset/            (--with-cortex / default on)
+    │   ├── snowpark_pipeline/                 (--with-snowpark / default on)
+    │   ├── warehouse_pipeline/                (--with-warehouse-pipeline / default on)
+    │   ├── snowflake_table_observation_sensor/(--with-observer / default on)
+    │   ├── freshness_check/
+    │   ├── cron_schedule/
+    │   └── automation_condition_applicator/
+    ├── definitions.py                        # wires automation_condition_applicator + safe env defaults
     └── defs/
-        ├── snowflake_workspace/             # imports entities + assets_by_name deps
-        ├── regional_top_paid_pipeline/      (optional — warehouse_pipeline)
-        ├── snowpark_pipeline_demo/          (optional — snowpark_pipeline)
-        ├── cortex_demo/                     (optional — Cortex)
-        ├── row_count_observer/              (optional — observation sensor)
-        ├── python_daily_events/             (optional — partitioned heterogeneous)
-        ├── python_daily_events_to_snowflake/(optional — partitioned heterogeneous)
-        ├── freshness_check_demo/            (optional — freshness)
-        ├── external_table_demo/             (optional — external_snowflake_table)
-        └── dbt_project/                     (optional — dbt)
+        ├── raw_sources/                      # @observable_source_asset for RAW.*/AI.*
+        ├── python_daily_orders/              # synthetic_data_generator (orders)
+        ├── orders_to_snowflake/              # dataframe_to_snowflake → RAW.ORDERS
+        ├── python_daily_events/              # synthetic_data_generator (events)
+        ├── events_to_snowflake/              # dataframe_to_snowflake → RAW.EVENTS
+        ├── python_hourly_orders_for_pipe/    # hourly orders generator (Snowpipe demo)
+        ├── orders_to_s3/                     # dataframe_to_s3 → triggers ORDERS_AUTO_INGEST_PIPE
+        ├── snowflake_workspace/              # imports all 30+ entities + assets_by_name deps
+        ├── iceberg_daily_revenue/            # snowflake_iceberg_table sink
+        ├── cortex_feedback_summary/          # SUMMARIZE on AI.CUSTOMER_FEEDBACK
+        ├── snowpark_order_features/          # Snowpark Python in Snowflake
+        ├── revenue_top_states/               # warehouse_pipeline multi-step SQL DAG
+        ├── daily_revenue_observer/           # observation sensor demo
+        ├── freshness_daily_revenue/          # freshness_check
+        ├── daily_orders_schedule/            # cron_schedule
+        ├── daily_events_schedule/
+        ├── hourly_orders_schedule/
+        ├── warehouse_observation_schedule/
+        └── automation_conditions/            # automation_condition_applicator rules
 ```
 
-### `defs/snowflake_workspace/defs.yaml`
+## Switching auth post-bootstrap
 
-```yaml
-type: snowflake_dagster.components.snowflake_workspace.component.SnowflakeWorkspaceComponent
-attributes:
-  account:  "{{ env('SNOWFLAKE_ACCOUNT') }}"
-  user:     "{{ env('SNOWFLAKE_USER') }}"
-  password: "{{ env('SNOWFLAKE_PASSWORD') }}"
-  warehouse: COMPUTE_WH
-  database:  ANALYTICS
-  schema:    STAGING
-  role: TRANSFORMER
-  import_tasks: true
-  import_dynamic_tables: true
-  import_stored_procedures: false
-  # ... per-type toggles ...
-  filter_by_name_pattern: "HOURLY_.*"
-  assets_by_name:
-    HOURLY_REVENUE_AGG:
-      deps:
-        - tasks/hourly_clickstream
-        - dynamic_tables/customer_360
-```
+The `.env` written by `seed.sh` carries one auth method. To switch, edit `.env` (or `.env.secrets` for the actual secret value), then re-run `bootstrap.sh` (or just `uv run dg dev` if the YAML field shape is the same). Each component's `defs.yaml` references env vars via the `_env_var` convention, so swapping the env value is enough.
 
-`assets_by_name` mirrors `DatabricksWorkspaceComponent.assets_by_task_key` exactly. Per-entity keys (all optional):
+For PAT → keypair (or vice versa), you may need to edit the `authenticator:` field in `snowflake_workspace/defs.yaml` and friends — `bootstrap.sh` picks one shape based on `SNOWFLAKE_AUTH_METHOD` at scaffold time.
 
-| Key | Effect |
-|---|---|
-| `key` | Renames the Dagster asset key (slash-separated `→ AssetKey`) |
-| `group_name` | Override the group |
-| `description` | Override the description |
-| `deps` | List of upstream asset keys. **Merged** with whatever the component auto-discovers from Snowflake's task dependency metadata. |
-| `metadata` | Dict merged into the auto-emitted metadata |
-| `tags` | Dict merged into asset tags |
-| `kinds` | List of kind strings (overrides inference) |
-| `owners` | List of owners |
+## Teardown
 
-### `defs/regional_top_paid_pipeline/defs.yaml` (optional)
-
-```yaml
-type: snowflake_dagster.components.warehouse_pipeline.component.WarehousePipelineComponent
-attributes:
-  asset_name: regional_top_paid_pipeline
-  dialect: snowflake
-  database_url_env_var: SNOWFLAKE_URL
-  steps:
-    - id: delivered_orders
-      source: {kind: table, table: RAW.ORDERS}
-      operations:
-        - {op: filter, predicate: "STATUS = 'delivered'"}
-
-    - id: vip_customers
-      source: {kind: table, table: RAW.CUSTOMERS}
-      operations:
-        - {op: filter, predicate: "LIFETIME_VALUE > 3000"}
-
-    - id: enriched
-      source: {kind: ref, ref: delivered_orders}
-      operations:
-        - {op: join, right: {ref: vip_customers}, on_columns: [CUSTOMER_ID], how: inner}
-        - op: sql                          # ← escape hatch for anything the DSL can't model
-          sql: |
-            SELECT *, TOTAL * 0.15 AS COMMISSION
-            FROM <<self>>
-        - op: group_by
-          group_by: [STATE]
-          aggregations:
-            REVENUE:          {col: TOTAL,      agg: sum}
-            TOTAL_COMMISSION: {col: COMMISSION, agg: sum}
-
-    - id: top_states
-      source: {kind: ref, ref: enriched}
-      operations:
-        - {op: top_n, sort_by: REVENUE, n: 3, ascending: false}
-
-  sinks:
-    - {from: enriched,   table: ANALYTICS.STATE_ENRICHED, mode: replace}
-    - {from: top_states, table: ANALYTICS.TOP_3_STATES,   mode: replace}
-```
-
-Each sink compiles to its own `CREATE OR REPLACE TABLE … AS WITH …` statement; the WITH clause carries every step's CTE so Snowflake's optimizer sees the entire graph.
-
-## What you get in `dg dev`
+To rebuild from scratch:
 
 ```bash
-cd snowflake-dagster
-source .env.demo
-uv run dg check defs        # validate every defs.yaml
-uv run dg dev               # opens UI at http://localhost:3000
+./seed.sh --reset                  # drops + recreates DAGSTER_DEMO in Snowflake
 ```
 
-- **Asset graph** — your tasks, dynamic tables, stored procs, streams, etc. as nodes, with cross-entity edges from `assets_by_name.deps` (and Snowflake's own task-dependency graph, auto-discovered)
-- **Click-to-materialize** — triggers the actual Snowflake task / refreshes the dynamic table / calls the stored procedure / etc. Run status streams into Dagster's timeline
-- **Lineage that crosses tools** — Dagster sees: your Snowflake-side pipeline ← raw tables ← (optionally) other Dagster ingestion components landing data INTO Snowflake (via `dataframe_to_snowflake`, `dataframe_to_snowflake_bulk`, `external_snowflake_table`). One graph for the whole flow.
+Iceberg-related AWS resources (S3 bucket, IAM role) are NOT auto-deleted by `--reset` — they're idempotent and cheap to keep around. To delete:
 
-## Switching auth (password → PAT / key-pair / SSO)
-
-The `snowflake_workspace` component accepts any field's `<field>_env_var` alternate AND `password`, `authenticator`, `private_key`, `token`. Edit the workspace `defs.yaml`:
-
-```yaml
-# Programmatic Access Token (newer alternative to passwords):
-attributes:
-  account: "{{ env('SNOWFLAKE_ACCOUNT') }}"
-  user:    "{{ env('SNOWFLAKE_USER') }}"
-  token:   "{{ env('SNOWFLAKE_PAT') }}"
-  authenticator: "PROGRAMMATIC_ACCESS_TOKEN"
-
-# Key-pair JWT:
-attributes:
-  account: "{{ env('SNOWFLAKE_ACCOUNT') }}"
-  user:    "{{ env('SNOWFLAKE_USER') }}"
-  private_key: "{{ env('SNOWFLAKE_PRIVATE_KEY') }}"
-  authenticator: "SNOWFLAKE_JWT"
-
-# Browser-based SSO (good for local dev):
-attributes:
-  account: "{{ env('SNOWFLAKE_ACCOUNT') }}"
-  user:    "{{ env('SNOWFLAKE_USER') }}"
-  authenticator: "externalbrowser"
+```bash
+aws s3 rm s3://<bucket>/ --recursive
+aws s3api delete-bucket --bucket <bucket>
+aws iam delete-role-policy --role-name <role> --policy-name iceberg-s3-access
+aws iam delete-role --role-name <role>
 ```
 
 ## Layer in more Snowflake components
@@ -502,7 +408,7 @@ The community registry ships a wide Snowflake surface. Compose them as needed:
 
 | Component | What it does |
 |---|---|
-| `dataframe_to_snowflake` | Write a pandas/polars DataFrame to a Snowflake table |
+| `dataframe_to_snowflake` | Write a pandas/polars DataFrame to a Snowflake table (`write_pandas`) |
 | `dataframe_to_snowflake_bulk` | Bulk-load (PUT + COPY INTO) for large frames |
 | `external_snowflake_table` | Declare-only asset (lineage without management) |
 | `snowflake_resource` | Shared connection resource for hand-written assets |
@@ -512,8 +418,9 @@ The community registry ships a wide Snowflake surface. Compose them as needed:
 | `snowflake_table_observation_sensor` | Watch a table for new rows / row count changes |
 | `snowflake_access_history_ingestion` | Pull `ACCOUNT_USAGE.ACCESS_HISTORY` into Dagster |
 | `snowflake_cortex_asset` | Call Snowflake Cortex LLMs as a Dagster asset |
-| `warehouse_pipeline` | Multi-step CTE pipeline (Snowflake dialect supported — same shape as the optional add-on above) |
+| `warehouse_pipeline` | Multi-step CTE pipeline (Snowflake dialect supported) |
 | `snowpark_pipeline` | Snowpark DataFrame multi-step pipeline |
+| `snowflake_iceberg_table` | Iceberg table on external volume |
 
 Add any of them with:
 
@@ -521,31 +428,23 @@ Add any of them with:
 uvx --from dagster-community-components-cli dagster-component add <name>
 ```
 
-## Deploying to production
-
-| Path | Commands | Docs |
-|---|---|---|
-| **Dagster+ Serverless** (push from laptop) | `uv add --dev dagster-cloud-cli && uv run dg plus deploy` | [Serverless quickstart](https://docs.dagster.io/dagster-plus/deployment/serverless) |
-| **Dagster+ Hybrid** (CI/CD via GitHub Actions) | `uv run dagster-cloud ci init` → commit → add `DAGSTER_CLOUD_API_TOKEN` secret | [Code locations](https://docs.dagster.io/dagster-plus/deployment/code-locations) |
-| **Self-hosted Dagster OSS** | Build your image; deploy as a gRPC code location | [Deployment](https://docs.dagster.io/deployment) |
-
-**Credentials in production:**
-- `.env.demo` is mode 600 + gitignored — don't commit it
-- In Dagster+ UI: **Deployment → Environment variables** → add `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD` (or `SNOWFLAKE_PAT` if you switched to PAT)
-- Use a **service-account user** with a tightly-scoped role (read on the imported entities; usage on the warehouse) — not your personal account
-
 ## Troubleshooting
 
 | Symptom | Fix |
 |---|---|
-| `Could not verify connection` | Check account format (`org-acct` or `xy12345.us-east-1`). Confirm warehouse + database + role exist and you have access. |
-| Discovery prints `(skipped: …)` for a type | Your role lacks `USAGE` on the relevant `INFORMATION_SCHEMA` / `SHOW` view. Per-type skip is non-fatal — re-run with a stronger role for full coverage. |
-| `dg check defs` fails on the workspace asset | Run `dg check defs --verbose` — most errors are `assets_by_name` typos. Each entity name in `assets_by_name` must match a real entity discovered at runtime. |
-| Cortex asset errors `function COMPLETE does not exist` | Your account region doesn't expose Cortex yet. See [Cortex availability](https://docs.snowflake.com/en/user-guide/snowflake-cortex/llm-functions#availability). Drop the Cortex asset for now. |
-| Multi-step pipeline asset fails with `<<self>>` parser error | Means you're on an older `warehouse_pipeline` (pre-chevron-syntax). Re-run setup; `dagster-component add --auto-install` pulls the latest. |
+| `seed.sh` aborts at "Role 'X' isn't visible" | Your user can't see that role. Re-run and pick a visible one from the list. |
+| `seed.sh` says warehouse missing → offers to create | Pick `c` to create it (XSMALL, AUTO_SUSPEND=60s, AUTO_RESUME=TRUE — effectively free when idle). |
+| `bootstrap.sh` says "expected seed objects not found" | Run `seed.sh` first against the same account/database. |
+| `uv run dg dev` startup logs warn about unset SNOWFLAKE_PAT / PASSWORD | The project loads anyway (UI renders). Materializations fail until you export the var or add it to `.env.secrets`. |
+| `dg check defs` fails on `warehouse_pipeline` with `SNOWFLAKE_URL` unset | `bootstrap.sh`'s `definitions.py` builds `SNOWFLAKE_URL` from `SNOWFLAKE_PAT` + account + user + db. If PAT isn't set, the URL won't build. |
+| Iceberg verification fails after 80s of retries | IAM trust-policy propagation can occasionally take longer. AWS resources are intact — re-verify manually: `USE ROLE ACCOUNTADMIN; SELECT SYSTEM$VERIFY_EXTERNAL_VOLUME('DAGSTER_DEMO_VOLUME');` |
+| Snowpipe doesn't fire on S3 PUT | Verify the S3 bucket notification config — `aws s3api get-bucket-notification-configuration --bucket <bucket>` should show a `QueueConfigurations` entry pointing at the pipe's SQS ARN. |
+| `EVENTS_CLEANED_DT` shows `invalid type for dimension "timestamp"` | Old issue from pre-v0.10.2 setups — re-seed; `seed.sql`'s current shape casts the column to `TIMESTAMP_NTZ` before any hypertable / DT logic depends on it. |
 
 ## See also
 
-- [`databricks_workspace.md`](databricks_workspace.md) — same pattern, Databricks side
-- [`warehouse_native_pipeline.md`](warehouse_native_pipeline.md) — every `warehouse_*` component, full reference, including the new multi-step `warehouse_pipeline` shape
+- [`snowflake_demo_account_requirements.md`](snowflake_demo_account_requirements.md) — full account-permission + product-tier matrix, plus a paste-ready ask for your Snowflake partnership contact
+- [`snowflake_single_entity.md`](snowflake_single_entity.md) — minimal companion walkthrough: one entity, one asset, no add-ons
+- [`snowflake_iceberg_databricks.md`](snowflake_iceberg_databricks.md) — same Iceberg story, but read from Databricks instead of Snowflake
+- [`snowpark_pipeline.md`](snowpark_pipeline.md) — Snowpark-specific walkthrough
 - Per-component READMEs in the [templates repo](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets) for every Snowflake component listed above

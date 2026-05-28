@@ -86,31 +86,10 @@ CREATE OR REPLACE TABLE ORDERS (
   REGION       VARCHAR
 );
 
-INSERT INTO ORDERS
-SELECT
-  'ORD' || LPAD(SEQ4(), 8, '0')                                  AS ORDER_ID,
-  'CUST' || LPAD(UNIFORM(1, 1000, RANDOM()), 6, '0')             AS CUSTOMER_ID,
-  DATEADD('second', -UNIFORM(0, 365*86400, RANDOM()), CURRENT_TIMESTAMP())
-                                                                 AS ORDER_DATE,
-  DECODE(UNIFORM(1, 6, RANDOM()),
-         1, 'electronics', 2, 'apparel', 3, 'home',
-         4, 'grocery',     5, 'beauty',  6, 'sports')            AS CATEGORY,
-  UNIFORM(1, 8, RANDOM())                                        AS NUM_ITEMS,
-  ROUND(UNIFORM(10, 2000, RANDOM()) + UNIFORM(0, 100, RANDOM()) / 100, 2) AS SUBTOTAL,
-  ROUND(UNIFORM(5, 25, RANDOM()),  2)                            AS SHIPPING,
-  0                                                              AS TAX,
-  0                                                              AS TOTAL,
-  DECODE(UNIFORM(1, 4, RANDOM()),
-         1, 'pending', 2, 'paid', 3, 'delivered', 4, 'cancelled') AS STATUS,
-  DECODE(UNIFORM(1, 5, RANDOM()),
-         1, 'us-east', 2, 'us-west', 3, 'us-central',
-         4, 'emea',    5, 'apac')                                AS REGION
-FROM TABLE(GENERATOR(ROWCOUNT => 10000));
-
--- Fix derived columns (TAX = 8% subtotal, TOTAL = subtotal + shipping + tax).
-UPDATE ORDERS SET
-  TAX   = ROUND(SUBTOTAL * 0.08, 2),
-  TOTAL = ROUND(SUBTOTAL * 1.08 + SHIPPING, 2);
+-- RAW.ORDERS is intentionally seeded EMPTY. Dagster's python_daily_orders
+-- + orders_to_snowflake (dataframe_to_snowflake component) populate it
+-- daily via write_pandas. Schema above matches the synthetic_data_generator's
+-- `orders` schema_type one-to-one.
 
 -- ── 2. RAW.CUSTOMERS — 1000 rows ───────────────────────────────────────
 CREATE OR REPLACE TABLE CUSTOMERS (
@@ -173,30 +152,22 @@ SELECT
   UNIFORM(0, 10, RANDOM()) > 1                                    AS IN_STOCK
 FROM TABLE(GENERATOR(ROWCOUNT => 200));
 
--- ── 4. RAW.EVENTS — 50000 clickstream rows ─────────────────────────────
+-- ── 4. RAW.EVENTS — destination for Dagster's Python events ingest ─────
+-- Schema matches the columns produced by synthetic_data_generator's
+-- `schema_type: events` so write_pandas can append cleanly. The seed
+-- creates the table empty; Dagster's python_daily_events + events_to_snowflake
+-- populate it daily.
 CREATE OR REPLACE TABLE EVENTS (
-  EVENT_ID     VARCHAR,
-  CUSTOMER_ID  VARCHAR,
-  EVENT_TYPE   VARCHAR,
-  EVENT_TS     TIMESTAMP_NTZ,
-  PAGE_URL     VARCHAR,
-  REFERRER     VARCHAR
+  EVENT_ID         VARCHAR,
+  USER_ID          VARCHAR,
+  SESSION_ID       VARCHAR,
+  TIMESTAMP        VARCHAR,         -- generator emits 'YYYY-MM-DD HH:MM:SS' string; cast in DT
+  EVENT_TYPE       VARCHAR,
+  PAGE             VARCHAR,
+  DURATION_SECONDS NUMBER,
+  DEVICE           VARCHAR,
+  BROWSER          VARCHAR
 );
-
-INSERT INTO EVENTS
-SELECT
-  'EVT' || LPAD(SEQ4(), 10, '0')                                  AS EVENT_ID,
-  'CUST' || LPAD(UNIFORM(1, 1000, RANDOM()), 6, '0')              AS CUSTOMER_ID,
-  DECODE(UNIFORM(1, 5, RANDOM()),
-         1, 'pageview', 2, 'click', 3, 'add_to_cart',
-         4, 'checkout', 5, 'purchase')                            AS EVENT_TYPE,
-  DATEADD('second', -UNIFORM(0, 30*86400, RANDOM()), CURRENT_TIMESTAMP())
-                                                                  AS EVENT_TS,
-  '/product/' || UNIFORM(1, 200, RANDOM())                        AS PAGE_URL,
-  DECODE(UNIFORM(1, 4, RANDOM()),
-         1, 'google',  2, 'direct',
-         3, 'twitter', 4, 'newsletter')                           AS REFERRER
-FROM TABLE(GENERATOR(ROWCOUNT => 50000));
 
 -- ── 5. AI.CUSTOMER_FEEDBACK — small text table for Cortex demos ────────
 USE SCHEMA AI;
@@ -245,18 +216,24 @@ USE SCHEMA STAGING;
 CREATE OR REPLACE STAGE INTERNAL_STAGE
   COMMENT = 'Internal stage for snowpipe ingestion + ad-hoc PUTs';
 
--- A second stage so the workspace discovery finds more than one
+-- LANDING_STAGE — created as INTERNAL here so the seed succeeds without AWS.
+-- When seed.sh's Snowpipe block runs (AWS path), it DROPs and re-creates this
+-- as an EXTERNAL stage on s3://<iceberg-bucket>/orders/ with a storage
+-- integration, and re-creates ORDERS_AUTO_INGEST_PIPE against it so S3 PUT
+-- events drive the auto-ingest. Non-AWS runs leave it internal; the pipe
+-- exists but doesn't auto-fire.
 CREATE OR REPLACE STAGE LANDING_STAGE
-  COMMENT = 'Landing zone for batch file drops';
+  COMMENT = 'Landing zone for batch file drops. seed.sh upgrades to EXTERNAL stage on S3 when AWS is configured.';
 
 -- ── 7. STREAMS — CDC on ORDERS + CUSTOMERS (2) ─────────────────────────
-CREATE OR REPLACE STREAM ORDERS_STREAM
+-- Names suffixed with _CDC_STREAM so the purpose is obvious in the UI.
+CREATE OR REPLACE STREAM ORDERS_CDC_STREAM
   ON TABLE DAGSTER_DEMO.RAW.ORDERS
-  COMMENT = 'Captures row-level changes to RAW.ORDERS';
+  COMMENT = 'CDC stream over RAW.ORDERS. Drained by PROCESS_ORDER_CHANGES_TASK every 15 minutes.';
 
-CREATE OR REPLACE STREAM CUSTOMERS_STREAM
+CREATE OR REPLACE STREAM CUSTOMERS_CDC_STREAM
   ON TABLE DAGSTER_DEMO.RAW.CUSTOMERS
-  COMMENT = 'Captures row-level changes to RAW.CUSTOMERS';
+  COMMENT = 'CDC stream over RAW.CUSTOMERS. Captures tier-recomputation changes from NIGHTLY_TIER_UPDATE_TASK.';
 
 -- ── 8. MATERIALIZED VIEW (1) ───────────────────────────────────────────
 CREATE OR REPLACE MATERIALIZED VIEW CUSTOMER_LIFETIME_VALUE_MV
@@ -321,12 +298,34 @@ CREATE OR REPLACE DYNAMIC TABLE HOURLY_ACTIVITY_DT
   COMMENT = 'Recent clickstream activity, bucketed hourly. Refreshes every minute.'
 AS
 SELECT
-  DATE_TRUNC('hour', EVENT_TS) AS EVENT_HOUR,
-  EVENT_TYPE,
-  COUNT(*) AS EVENT_COUNT
+  DATE_TRUNC('hour', TRY_TO_TIMESTAMP_NTZ(TIMESTAMP)) AS EVENT_HOUR,
+  LOWER(EVENT_TYPE)                                  AS EVENT_TYPE,
+  COUNT(*)                                           AS EVENT_COUNT
 FROM DAGSTER_DEMO.RAW.EVENTS
-WHERE EVENT_TS >= DATEADD('day', -7, CURRENT_TIMESTAMP())
+WHERE TRY_TO_TIMESTAMP_NTZ(TIMESTAMP) >= DATEADD('day', -7, CURRENT_TIMESTAMP())
 GROUP BY 1, 2;
+
+-- ── EVENTS_CLEANED_DT — the connective tissue ───────────────────────────
+-- Sits between Dagster's Python events ingest (which writes RAW.EVENTS) and
+-- the downstream analytics layer. DAILY_ORDERS_ROLLUP joins from it.
+CREATE OR REPLACE DYNAMIC TABLE EVENTS_CLEANED_DT
+  TARGET_LAG = '15 minutes'
+  WAREHOUSE = COMPUTE_WH
+  INITIALIZE = ON_SCHEDULE
+  COMMENT = 'Cleaned, typed clickstream events from RAW.EVENTS (Python-ingested).'
+AS
+SELECT
+  EVENT_ID,
+  USER_ID,
+  SESSION_ID,
+  TRY_TO_TIMESTAMP_NTZ(TIMESTAMP) AS EVENT_TS,
+  LOWER(EVENT_TYPE)               AS EVENT_TYPE,
+  PAGE,
+  DURATION_SECONDS,
+  DEVICE,
+  BROWSER
+FROM DAGSTER_DEMO.RAW.EVENTS
+WHERE EVENT_TYPE IS NOT NULL;
 
 -- ── 10. STORED PROCEDURES — pure SQL + Snowpark Python (3) ─────────────
 
@@ -359,8 +358,13 @@ $$
 DECLARE
   ROWS_DELETED NUMBER;
 BEGIN
+  -- RAW.EVENTS stores the event time as a VARCHAR `TIMESTAMP` column
+  -- (it's the shape the Python synthetic_data_generator emits). The
+  -- typed `EVENT_TS` column only exists on STAGING.EVENTS_CLEANED_DT,
+  -- so cast inline here. TRY_TO_TIMESTAMP_NTZ returns NULL on garbage,
+  -- which the comparison naturally filters out (no NULL < <date>).
   DELETE FROM DAGSTER_DEMO.RAW.EVENTS
-  WHERE EVENT_TS < DATEADD('day', -:DAYS_OLD, CURRENT_TIMESTAMP());
+  WHERE TRY_TO_TIMESTAMP_NTZ(TIMESTAMP) < DATEADD('day', -:DAYS_OLD, CURRENT_TIMESTAMP());
   ROWS_DELETED := SQLROWCOUNT;
   RETURN 'Purged ' || ROWS_DELETED || ' events older than ' || :DAYS_OLD || ' days';
 END;
@@ -398,9 +402,12 @@ $$;
 -- CREATE time, not at first execution.
 CREATE OR REPLACE TABLE ORDERS_INGESTED LIKE DAGSTER_DEMO.RAW.ORDERS;
 
-CREATE OR REPLACE PIPE ORDERS_PIPE
+-- Two pipes, each fed by its own stage — INTERNAL_STAGE for the
+-- manual-refresh pipe, LANDING_STAGE for the auto-ingest pipe. Names
+-- describe the ingest mode so the lineage graph reads cleanly.
+CREATE OR REPLACE PIPE ORDERS_MANUAL_INGEST_PIPE
   AUTO_INGEST = FALSE
-  COMMENT = 'Manual-refresh pipe — copies CSVs landed in INTERNAL_STAGE into RAW.ORDERS_INGESTED'
+  COMMENT = 'Manual-refresh pipe — copies CSVs landed in INTERNAL_STAGE into STAGING.ORDERS_INGESTED. Trigger with ALTER PIPE ... REFRESH.'
 AS
 COPY INTO DAGSTER_DEMO.STAGING.ORDERS_INGESTED
 FROM @DAGSTER_DEMO.STAGING.INTERNAL_STAGE
@@ -411,14 +418,14 @@ ON_ERROR = 'CONTINUE';
 -- For AWS this works WITHOUT a notification integration resource.
 -- To make this actually fire on S3 PUTs, configure the S3 bucket event
 -- notifications to publish to the SQS queue ARN returned by
---   DESC PIPE ORDERS_AUTO_PIPE;
+--   DESC PIPE ORDERS_AUTO_INGEST_PIPE;
 -- (look for NOTIFICATION_CHANNEL in the output)
-CREATE OR REPLACE PIPE ORDERS_AUTO_PIPE
+CREATE OR REPLACE PIPE ORDERS_AUTO_INGEST_PIPE
   AUTO_INGEST = TRUE
-  COMMENT = 'AUTO_INGEST pipe — uses Snowflake-managed SQS queue. Wire S3 events to NOTIFICATION_CHANNEL ARN to enable live ingest.'
+  COMMENT = 'AUTO_INGEST pipe — wired to LANDING_STAGE. Snowflake-managed SQS queue; configure S3 PUT events on the bucket to NOTIFICATION_CHANNEL ARN to enable live ingest.'
 AS
 COPY INTO DAGSTER_DEMO.STAGING.ORDERS_INGESTED
-FROM @DAGSTER_DEMO.STAGING.INTERNAL_STAGE
+FROM @DAGSTER_DEMO.STAGING.LANDING_STAGE
 FILE_FORMAT = (TYPE = CSV SKIP_HEADER = 1)
 ON_ERROR = 'CONTINUE';
 
@@ -428,21 +435,49 @@ ON_ERROR = 'CONTINUE';
 -- snowflake_workspace component discovers tasks regardless of state, and
 -- materializing the asset runs EXECUTE TASK directly).
 
+-- Idempotent: DELETE+INSERT scoped to yesterday's date inside a single
+-- Snowflake Scripting block. Eager downstream fires this whenever a
+-- parent DT refreshes (which happens every TARGET_LAG), so the task
+-- body MUST be safe to re-run any number of times without duplicating
+-- rows. A bare `INSERT INTO ...` would append fresh rows on every fire
+-- — visible at the booth as DAILY_REVENUE row counts climbing over an
+-- hour even though only yesterday is being rolled up.
 CREATE OR REPLACE TASK DAILY_ORDERS_ROLLUP
   WAREHOUSE = COMPUTE_WH
   SCHEDULE = 'USING CRON 0 2 * * * UTC'
-  COMMENT = 'Roll up yesterday''s orders into ANALYTICS.DAILY_REVENUE.'
+  COMMENT = 'Roll up yesterday''s orders into ANALYTICS.DAILY_REVENUE, enriched with event counts from EVENTS_CLEANED_DT (Python-ingested clickstream). Idempotent: DELETE+INSERT for yesterday''s date.'
 AS
-  INSERT INTO DAGSTER_DEMO.ANALYTICS.DAILY_REVENUE
-  SELECT
-    DATE(ORDER_DATE)              AS REVENUE_DATE,
-    REGION,
-    COUNT(*)                       AS ORDER_COUNT,
-    SUM(TOTAL)                     AS REVENUE
-  FROM DAGSTER_DEMO.RAW.ORDERS
-  WHERE DATE(ORDER_DATE) = DATEADD('day', -1, CURRENT_DATE())
-    AND STATUS IN ('paid', 'delivered')
-  GROUP BY 1, 2;
+  BEGIN
+    DELETE FROM DAGSTER_DEMO.ANALYTICS.DAILY_REVENUE
+    WHERE REVENUE_DATE = DATEADD('day', -1, CURRENT_DATE());
+
+    INSERT INTO DAGSTER_DEMO.ANALYTICS.DAILY_REVENUE
+    WITH events_by_day AS (
+      SELECT DATE(EVENT_TS) AS EVENT_DATE, COUNT(*) AS EVENT_COUNT
+      FROM DAGSTER_DEMO.STAGING.EVENTS_CLEANED_DT
+      WHERE EVENT_TS IS NOT NULL
+      GROUP BY 1
+    ),
+    orders_by_day AS (
+      SELECT
+        DATE(ORDER_DATE)              AS REVENUE_DATE,
+        REGION,
+        COUNT(*)                       AS ORDER_COUNT,
+        SUM(TOTAL)                     AS REVENUE
+      FROM DAGSTER_DEMO.RAW.ORDERS
+      WHERE DATE(ORDER_DATE) = DATEADD('day', -1, CURRENT_DATE())
+        AND STATUS IN ('paid', 'delivered')
+      GROUP BY 1, 2
+    )
+    SELECT
+      o.REVENUE_DATE,
+      o.REGION,
+      o.ORDER_COUNT,
+      o.REVENUE,
+      COALESCE(e.EVENT_COUNT, 0) AS EVENT_COUNT
+    FROM orders_by_day o
+    LEFT JOIN events_by_day e ON o.REVENUE_DATE = e.EVENT_DATE;
+  END;
 
 CREATE OR REPLACE TASK HOURLY_CUSTOMER_METRICS
   WAREHOUSE = COMPUTE_WH
@@ -495,26 +530,71 @@ GRANT EXECUTE TASK ON ACCOUNT TO ROLE SYSADMIN;
 USE ROLE SYSADMIN;
 USE SCHEMA DAGSTER_DEMO.STAGING;
 
-CREATE OR REPLACE TASK PARENT_ETL_TASK
+-- ── 12b. Task DAG — nightly maintenance chain ──────────────────────────
+-- Two-task Snowflake task chain (root + AFTER child) — renamed from the
+-- generic PARENT/CHILD_ETL_TASK names so the UI shows what each step does.
+CREATE OR REPLACE TASK NIGHTLY_TIER_UPDATE_TASK
   WAREHOUSE = COMPUTE_WH
   SCHEDULE = 'USING CRON 0 3 * * * UTC'
-  COMMENT = 'Parent task in a 2-step chain. Triggers child via AFTER.'
+  COMMENT = 'Root of the nightly maintenance task DAG. Calls SP_RECOMPUTE_TIERS to refresh customer tiers.'
 AS
   CALL DAGSTER_DEMO.STAGING.SP_RECOMPUTE_TIERS();
 
-CREATE OR REPLACE TASK CHILD_ETL_TASK
+CREATE OR REPLACE TASK NIGHTLY_EVENTS_PURGE_TASK
   WAREHOUSE = COMPUTE_WH
-  COMMENT = 'Child task — runs after PARENT_ETL_TASK completes successfully.'
-  AFTER DAGSTER_DEMO.STAGING.PARENT_ETL_TASK
+  COMMENT = 'Second step of the nightly maintenance chain — runs AFTER NIGHTLY_TIER_UPDATE_TASK. Reads `days_old` from task config via SYSTEM$GET_TASK_GRAPH_CONFIG; falls back to 90 on its schedule.'
+  AFTER DAGSTER_DEMO.STAGING.NIGHTLY_TIER_UPDATE_TASK
 AS
-  CALL DAGSTER_DEMO.STAGING.SP_PURGE_OLD_EVENTS(90);
+  -- Parameterized via task CONFIG. When invoked as
+  --   EXECUTE TASK NIGHTLY_EVENTS_PURGE_TASK WITH CONFIG => '{"days_old": 30}';
+  -- the proc runs with days_old=30. On the cron schedule (no CONFIG passed),
+  -- SYSTEM$GET_TASK_GRAPH_CONFIG returns NULL and COALESCE falls back to 90.
+  CALL DAGSTER_DEMO.STAGING.SP_PURGE_OLD_EVENTS(
+    COALESCE(SYSTEM$GET_TASK_GRAPH_CONFIG('days_old')::NUMBER, 90)
+  );
+
+-- ── 12c. Stream-consumer task — drains ORDERS_CDC_STREAM ───────────────
+-- Demonstrates the full Snowflake CDC pattern: stream captures changes,
+-- a scheduled task drains the stream into a changelog table. Without this
+-- task, the stream is just an observer with no downstream consumer.
+CREATE TABLE IF NOT EXISTS DAGSTER_DEMO.ANALYTICS.ORDERS_CHANGELOG (
+  ORDER_ID            VARCHAR,
+  CUSTOMER_ID         VARCHAR,
+  ORDER_DATE          TIMESTAMP_NTZ,
+  CATEGORY            VARCHAR,
+  NUM_ITEMS           INT,
+  SUBTOTAL            NUMBER(18,2),
+  SHIPPING            NUMBER(10,2),
+  TAX                 NUMBER(10,2),
+  TOTAL               NUMBER(18,2),
+  STATUS              VARCHAR,
+  REGION              VARCHAR,
+  METADATA$ACTION     VARCHAR,
+  METADATA$ISUPDATE   BOOLEAN,
+  METADATA$ROW_ID     VARCHAR,
+  CAPTURED_AT         TIMESTAMP_NTZ
+);
+
+CREATE OR REPLACE TASK PROCESS_ORDER_CHANGES_TASK
+  WAREHOUSE = COMPUTE_WH
+  SCHEDULE = '15 minute'
+  COMMENT = 'Drains ORDERS_CDC_STREAM into ANALYTICS.ORDERS_CHANGELOG every 15 minutes. Demonstrates the stream → consumer-task → changelog-sink CDC pattern.'
+AS
+  INSERT INTO DAGSTER_DEMO.ANALYTICS.ORDERS_CHANGELOG
+  SELECT
+    ORDER_ID, CUSTOMER_ID, ORDER_DATE, CATEGORY, NUM_ITEMS,
+    SUBTOTAL, SHIPPING, TAX, TOTAL, STATUS, REGION,
+    METADATA$ACTION, METADATA$ISUPDATE, METADATA$ROW_ID,
+    CURRENT_TIMESTAMP() AS CAPTURED_AT
+  FROM DAGSTER_DEMO.STAGING.ORDERS_CDC_STREAM;
 
 -- Destination tables for the tasks above (so they don't fail at first run).
 CREATE TABLE IF NOT EXISTS DAGSTER_DEMO.ANALYTICS.DAILY_REVENUE (
   REVENUE_DATE  DATE,
   REGION        VARCHAR,
   ORDER_COUNT   NUMBER,
-  REVENUE       NUMBER(18,2)
+  REVENUE       NUMBER(18,2),
+  EVENT_COUNT   NUMBER          -- fan-in from STAGING.EVENTS_CLEANED_DT
 );
 
 -- ── 13. ALERT (1) ──────────────────────────────────────────────────────
@@ -544,8 +624,9 @@ ALTER TASK HOURLY_CUSTOMER_METRICS    RESUME;
 ALTER TASK WEEKLY_CHURN_SCORE         RESUME;
 ALTER TASK MONTHLY_REVENUE_REPORT     RESUME;
 -- Child task must be resumed BEFORE parent so the AFTER chain works.
-ALTER TASK CHILD_ETL_TASK             RESUME;
-ALTER TASK PARENT_ETL_TASK            RESUME;
+ALTER TASK NIGHTLY_EVENTS_PURGE_TASK  RESUME;
+ALTER TASK NIGHTLY_TIER_UPDATE_TASK   RESUME;
+ALTER TASK PROCESS_ORDER_CHANGES_TASK RESUME;
 
 -- ===========================================================================
 -- BREADTH-OF-SURFACE ADDITIONS — everything below is best-effort and fails

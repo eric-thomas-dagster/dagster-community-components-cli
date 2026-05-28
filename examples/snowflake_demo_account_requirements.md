@@ -1,6 +1,6 @@
 # Snowflake account requirements for the full Dagster demo
 
-This doc captures everything the [Snowflake workspace demo](snowflake_workspace.md) (and its companion [environment seed](setup_snowflake_environment.sh)) can exercise, and what permissions / product tiers each capability needs.
+This doc captures everything the [Snowflake workspace demo](snowflake_workspace.md) (and its companion [environment seed](seed.sh)) can exercise, and what permissions / product tiers each capability needs.
 
 It exists because **a sandboxed Snowflake account will hit walls the demo gracefully degrades around** — and you want your Snowflake partnership contact to know exactly what to grant if they want all features to light up live.
 
@@ -106,5 +106,5 @@ When at least one capability is skipped, the script also writes a `SECURITY_ASK.
 ## See also
 
 - [Snowflake workspace walkthrough](snowflake_workspace.md) — the full walkthrough with auth options + add-on details
-- [`setup_snowflake_environment.sh`](setup_snowflake_environment.sh) — the seed script (sandbox-mode aware)
-- [`setup_snowflake_workspace_demo.sh`](setup_snowflake_workspace_demo.sh) — the workspace + add-on scaffolder
+- [`seed.sh`](seed.sh) + [`seed.sql`](seed.sql) — provisioner (Snowflake + optional AWS/Iceberg/Snowpipe). Writes `.env`.
+- [`bootstrap.sh`](bootstrap.sh) — Dagster project scaffolder. Reads `.env` from `seed.sh`.
