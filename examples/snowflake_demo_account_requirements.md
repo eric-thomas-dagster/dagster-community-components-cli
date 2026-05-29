@@ -2,23 +2,23 @@
 
 This doc captures everything the [Snowflake workspace demo](snowflake_workspace.md) (and its companion [environment seed](seed.sh)) can exercise, and what permissions / product tiers each capability needs.
 
-It exists because **a sandboxed Snowflake account will hit walls the demo gracefully degrades around** — and you want your Snowflake partnership contact to know exactly what to grant if they want all features to light up live.
+It exists because **a restricted-role Snowflake account will hit walls the demo gracefully degrades around** — and you want your Snowflake admin to know exactly what to grant if you want all features to light up live.
 
 ## Why this doc exists
 
 The setup script runs **scaffold-time capability probes** against your account. Components your role + tier can actually materialize are scaffolded into the project. Capabilities you don't have access to are **silently skipped** — they don't end up as broken / red assets in `dg dev`.
 
-When the script finishes, if any capabilities were skipped it prints a security-ask table and writes the same content to `<project>/SECURITY_ASK.md`. Send that file to your security / partnership contact and they'll know exactly what to grant. Re-run the script after the grants land — the missing components automatically scaffold into the project.
+When the script finishes, if any capabilities were skipped it prints a security-ask table and writes the same content to `<project>/SECURITY_ASK.md`. Send that file to your Snowflake admin and they'll know exactly what to grant. Re-run the script after the grants land — the missing components automatically scaffold into the project.
 
 This means:
 
-- **Your sandbox demo always runs end-to-end** (only includes what works in your account — every asset is green)
-- **Your customer's account scaffolds more components** when they have higher privileges
-- **The same script powers both cases** — no separate "demo for sandboxed SE" vs "demo for full ACCOUNTADMIN" paths
+- **Your restricted-role account always runs end-to-end** (only includes what works for your role — every asset is green)
+- **A more privileged account scaffolds more components** automatically — no script changes needed
+- **The same script powers both cases** — no separate "restricted role" vs "full ACCOUNTADMIN" code paths
 
 ## Blocked capabilities — permissions
 
-If your demo account has restricted roles (e.g. `SANDBOX_WRITER`-equivalent — a common SE situation), the following capabilities silently degrade unless your admin grants the listed privilege:
+If your account has restricted roles (e.g. `SANDBOX_WRITER`-equivalent — common on shared / corporate Snowflake accounts), the following capabilities silently degrade unless your admin grants the listed privilege:
 
 | Capability | What breaks without the grant | Privilege needed | Who can grant |
 |---|---|---|---|
@@ -49,11 +49,11 @@ These aren't permission issues — they're features your account doesn't have en
 | **Dynamic Data Masking + Row Access Policies** (governance demo) | Requires Enterprise edition | Upgrade to Enterprise edition |
 | **Account Usage views** (`SNOWFLAKE.ACCOUNT_USAGE.*`) | Requires `SNOWFLAKE` database imported share granted to the role | `IMPORT SHARE` on `SNOWFLAKE` database — usually `ACCOUNTADMIN`-only |
 
-## The single ask for a partnership contact
+## The single ask for your Snowflake admin
 
 If you want one paragraph to paste into Slack / email / a ticket:
 
-> Hey — I'm building a public Dagster + Snowflake demo against our partnership account. For the demo to exercise the full Snowflake surface (Iceberg, Cortex Search, Cortex LLM, Unistore / Hybrid Tables, Materialized Views, OpenFlow, Snowpipe auto-ingest, Resource Monitors), can you:
+> Hey — I'm setting up a Dagster + Snowflake project against our account. For it to exercise the full Snowflake surface (Iceberg, Cortex Search, Cortex LLM, Unistore / Hybrid Tables, Materialized Views, OpenFlow, Snowpipe auto-ingest, Resource Monitors), can you:
 >
 > 1. Move the demo database — or a dedicated `DAGSTER_DEMO` database — onto **Enterprise** edition (Business Critical if we want to show replication too)
 > 2. Grant me `ACCOUNTADMIN` on that database scope, OR create a service role with: `CREATE EXTERNAL VOLUME`, `CREATE NOTIFICATION INTEGRATION`, `EXECUTE TASK`, `CREATE OPENFLOW DEPLOYMENT`, `CREATE OPENFLOW RUNTIME`, `CREATE CORTEX SEARCH SERVICE`, `CREATE RESOURCE MONITOR`, and `CREATE SHARE`
