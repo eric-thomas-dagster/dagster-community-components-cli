@@ -262,7 +262,7 @@ CREATE OR REPLACE DYNAMIC TABLE CUSTOMER_360_DT
   TARGET_LAG = '15 minutes'
   WAREHOUSE = COMPUTE_WH
   INITIALIZE = ON_SCHEDULE
-  COMMENT = 'Customers joined with their order rollup. Refreshes every 15 min.'
+  COMMENT = 'Customers joined with their order rollup (count, revenue, last-order date). One row per customer.'
 AS
 SELECT
   c.CUSTOMER_ID,
@@ -270,8 +270,9 @@ SELECT
   c.LAST_NAME,
   c.TIER,
   c.LIFETIME_VALUE,
-  COUNT(o.ORDER_ID) AS ORDER_COUNT,
-  COALESCE(SUM(o.TOTAL), 0) AS REVENUE
+  COUNT(o.ORDER_ID)                AS ORDER_COUNT,
+  COALESCE(SUM(o.TOTAL), 0)        AS REVENUE,
+  MAX(o.ORDER_DATE)                AS LAST_ORDER_DATE
 FROM DAGSTER_DEMO.RAW.CUSTOMERS c
 LEFT JOIN DAGSTER_DEMO.RAW.ORDERS o ON c.CUSTOMER_ID = o.CUSTOMER_ID
 GROUP BY 1, 2, 3, 4, 5;
@@ -330,12 +331,23 @@ WHERE EVENT_TYPE IS NOT NULL;
 -- ── 10. STORED PROCEDURES — pure SQL + Snowpark Python (3) ─────────────
 
 -- (a) Pure SQL stored proc
+-- Conditional UPDATE: only touches rows whose TIER would actually
+-- change. A bare `UPDATE ... SET TIER = ...` rewrites every micro-
+-- partition every run even when no values move, which makes
+-- CUSTOMER_360_DT (which depends on RAW.CUSTOMERS) see a fresh
+-- upstream version every hour and refresh unnecessarily. Adding
+-- the WHERE clause means: stable input → no rows changed → no
+-- micro-partition rewrite → DT only refreshes when ORDERS actually
+-- changes (daily). Idempotent: re-running the proc on a stable
+-- system is a true no-op.
 CREATE OR REPLACE PROCEDURE STAGING.SP_RECOMPUTE_TIERS()
   RETURNS VARCHAR
   LANGUAGE SQL
-  COMMENT = 'Recompute customer tier based on current lifetime_value.'
+  COMMENT = 'Recompute customer tier based on current lifetime_value. Idempotent — only updates rows where TIER would change.'
 AS
 $$
+DECLARE
+  ROWS_CHANGED NUMBER;
 BEGIN
   UPDATE DAGSTER_DEMO.RAW.CUSTOMERS
   SET TIER = CASE
@@ -343,8 +355,15 @@ BEGIN
     WHEN LIFETIME_VALUE > 2000 THEN 'gold'
     WHEN LIFETIME_VALUE > 500  THEN 'silver'
     ELSE 'bronze'
+  END
+  WHERE TIER IS DISTINCT FROM CASE
+    WHEN LIFETIME_VALUE > 5000 THEN 'platinum'
+    WHEN LIFETIME_VALUE > 2000 THEN 'gold'
+    WHEN LIFETIME_VALUE > 500  THEN 'silver'
+    ELSE 'bronze'
   END;
-  RETURN 'Tiers recomputed for ' || (SELECT COUNT(*) FROM DAGSTER_DEMO.RAW.CUSTOMERS) || ' customers';
+  ROWS_CHANGED := SQLROWCOUNT;
+  RETURN 'Recomputed ' || ROWS_CHANGED || ' customer tier(s)';
 END;
 $$;
 
@@ -479,44 +498,68 @@ AS
     LEFT JOIN events_by_day e ON o.REVENUE_DATE = e.EVENT_DATE;
   END;
 
+-- HOURLY_CUSTOMER_METRICS consumes CUSTOMER_360_DT and produces a
+-- tier-level rollup table. Earlier version of this task was just
+-- `ALTER DT REFRESH` — that combined with the workspace's eager
+-- automation condition (kind:task → eager) created a feedback loop:
+-- DT refresh → eager fires task → task forces another DT refresh →
+-- infinite churn. Reading FROM the DT (instead of refreshing it)
+-- breaks the loop and makes the task earn its "metrics" name.
 CREATE OR REPLACE TASK HOURLY_CUSTOMER_METRICS
   WAREHOUSE = COMPUTE_WH
   SCHEDULE = '60 minute'
-  COMMENT = 'Refresh CUSTOMER_360_DT (forced refresh — DT auto-refreshes too).'
+  COMMENT = 'Hourly customer metrics — rolls CUSTOMER_360_DT up to tier-level summary in ANALYTICS.HOURLY_CUSTOMER_METRICS.'
 AS
-  ALTER DYNAMIC TABLE DAGSTER_DEMO.STAGING.CUSTOMER_360_DT REFRESH;
+  CREATE OR REPLACE TABLE DAGSTER_DEMO.ANALYTICS.HOURLY_CUSTOMER_METRICS AS
+  SELECT
+    TIER,
+    COUNT(*)                       AS CUSTOMER_COUNT,
+    AVG(LIFETIME_VALUE)            AS AVG_LIFETIME_VALUE,
+    SUM(ORDER_COUNT)               AS TOTAL_ORDERS,
+    SUM(REVENUE)                   AS TOTAL_REVENUE,
+    AVG(REVENUE)                   AS AVG_REVENUE_PER_CUSTOMER
+  FROM DAGSTER_DEMO.STAGING.CUSTOMER_360_DT
+  GROUP BY TIER;
 
+-- Reads from CUSTOMER_360_DT (already has per-customer LAST_ORDER_DATE
+-- + TIER + revenue rollup) instead of re-joining RAW.CUSTOMERS x
+-- RAW.ORDERS from scratch. Matches the declared Dagster dep on
+-- dynamic_table_customer_360_dt — task body and lineage diagram agree.
 CREATE OR REPLACE TASK WEEKLY_CHURN_SCORE
   WAREHOUSE = COMPUTE_WH
   SCHEDULE = 'USING CRON 0 0 * * 0 UTC'
-  COMMENT = 'Weekly churn-score recompute (Sunday midnight UTC).'
+  COMMENT = 'Weekly churn-score recompute (Sunday midnight UTC). Reads CUSTOMER_360_DT.'
 AS
   CREATE OR REPLACE TABLE DAGSTER_DEMO.ANALYTICS.CHURN_SCORES AS
   SELECT
-    c.CUSTOMER_ID,
-    c.TIER,
-    DATEDIFF('day', MAX(o.ORDER_DATE), CURRENT_DATE()) AS DAYS_SINCE_LAST_ORDER,
+    CUSTOMER_ID,
+    TIER,
+    DATEDIFF('day', LAST_ORDER_DATE, CURRENT_DATE()) AS DAYS_SINCE_LAST_ORDER,
     CASE
-      WHEN DATEDIFF('day', MAX(o.ORDER_DATE), CURRENT_DATE()) > 90 THEN 0.8
-      WHEN DATEDIFF('day', MAX(o.ORDER_DATE), CURRENT_DATE()) > 30 THEN 0.4
-      ELSE 0.1
+      WHEN LAST_ORDER_DATE IS NULL                                      THEN 0.95
+      WHEN DATEDIFF('day', LAST_ORDER_DATE, CURRENT_DATE()) > 90        THEN 0.8
+      WHEN DATEDIFF('day', LAST_ORDER_DATE, CURRENT_DATE()) > 30        THEN 0.4
+      ELSE                                                                   0.1
     END AS CHURN_PROBABILITY
-  FROM DAGSTER_DEMO.RAW.CUSTOMERS c
-  LEFT JOIN DAGSTER_DEMO.RAW.ORDERS o ON c.CUSTOMER_ID = o.CUSTOMER_ID
-  GROUP BY 1, 2;
+  FROM DAGSTER_DEMO.STAGING.CUSTOMER_360_DT;
 
+-- Reads from ANALYTICS.DAILY_REVENUE (the daily rollup produced by
+-- DAILY_ORDERS_ROLLUP) instead of RAW.ORDERS. Matches the declared
+-- Dagster dep on task_daily_orders_rollup — task body and lineage
+-- diagram agree. Aggregates by REGION (the dimension DAILY_REVENUE
+-- carries) instead of CATEGORY.
 CREATE OR REPLACE TASK MONTHLY_REVENUE_REPORT
   WAREHOUSE = COMPUTE_WH
   SCHEDULE = 'USING CRON 0 0 1 * * UTC'
-  COMMENT = 'Monthly revenue snapshot (1st of month, midnight UTC).'
+  COMMENT = 'Monthly revenue snapshot (1st of month, midnight UTC). Aggregates ANALYTICS.DAILY_REVENUE up to monthly per region.'
 AS
   CREATE OR REPLACE TABLE DAGSTER_DEMO.ANALYTICS.MONTHLY_REVENUE AS
   SELECT
-    DATE_TRUNC('month', ORDER_DATE) AS MONTH,
-    CATEGORY,
-    SUM(TOTAL) AS REVENUE
-  FROM DAGSTER_DEMO.RAW.ORDERS
-  WHERE STATUS IN ('paid', 'delivered')
+    DATE_TRUNC('month', REVENUE_DATE) AS MONTH,
+    REGION,
+    SUM(REVENUE)                      AS REVENUE,
+    SUM(ORDER_COUNT)                  AS TOTAL_ORDERS
+  FROM DAGSTER_DEMO.ANALYTICS.DAILY_REVENUE
   GROUP BY 1, 2;
 
 -- Parent → child task chain (uses AFTER clause — discoverable by the

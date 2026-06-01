@@ -109,7 +109,7 @@ A `snowflake-demo` project that imports every Snowflake entity above as a Dagste
 - **Cortex SUMMARIZE** — `cortex_feedback_summary`
 - **Freshness check** — `freshness_daily_revenue`
 - **Observation sensor** — `daily_revenue_observer` (table-watcher demo)
-- **Raw source observables** — `raw_orders`, `raw_customers`, `raw_products`, `raw_events`, `ai_customer_feedback` — `@observable_source_asset` each polls row count + `last_altered`, emits a stable `data_version` so quiet observation ticks don't cascade downstream
+- **Raw source observables** — `raw_orders`, `raw_customers`, `raw_products`, `raw_events`, `ai_customer_feedback`, `staging_orders_ingested` — `@observable_source_asset` each polls row count + `last_altered`, emits a stable `data_version` so quiet observation ticks don't cascade downstream. `staging_orders_ingested` is the Snowpipe target table — its row count grows visibly on every successful auto-ingest.
 
 ### How data flows when it's running
 

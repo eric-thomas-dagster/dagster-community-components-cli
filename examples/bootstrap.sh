@@ -350,20 +350,42 @@ _logger = logging.getLogger(__name__)
 #   - Quickest (current shell):   `export SNOWFLAKE_PAT=<token>`
 #   - Persistent (gitignored):    add to .env.secrets in the repo root,
 #                                 which dg dev auto-loads alongside .env.
-_SECRET_ENV_VARS = ("SNOWFLAKE_PAT", "SNOWFLAKE_PASSWORD")
+# Every env var referenced by `{{ env('X') }}` in any defs.yaml needs at
+# least an empty-string default at definitions-load time — otherwise the
+# jinja resolver throws and the whole code location fails to load. Most
+# painful in Dagster Cloud where you only find out post-deploy. Default
+# everything to empty; missing-but-defaulted means "project loads, UI
+# renders, materializations fail with proper auth/connection errors
+# instead of a startup crash."
+_DEFENSIVE_ENV_VARS = (
+    "SNOWFLAKE_PAT",
+    "SNOWFLAKE_PASSWORD",
+    "SNOWFLAKE_ACCOUNT",
+    "SNOWFLAKE_USER",
+    "SNOWFLAKE_WAREHOUSE",
+    "SNOWFLAKE_DATABASE",
+    "SNOWFLAKE_SCHEMA",
+    "SNOWFLAKE_ROLE",
+    "ICEBERG_EXTERNAL_VOLUME",
+    "ICEBERG_S3_BUCKET",
+    "ICEBERG_ROLE_ARN",
+    "S3_STAGING_BUCKET",
+    "S3_STAGING_PREFIX",
+    "SNOWPIPE_STORAGE_INTEGRATION",
+)
 _missing = []
-for _var in _SECRET_ENV_VARS:
+for _var in _DEFENSIVE_ENV_VARS:
     if not os.environ.get(_var):
         os.environ.setdefault(_var, "")
         _missing.append(_var)
 
 if _missing:
     _logger.warning(
-        "⚠ Snowflake secret(s) not set: %s. The project will LOAD (so the "
-        "UI renders), but materializations against Snowflake will fail. "
-        "Set them via `export %s=<value>` or add to .env.secrets.",
+        "⚠ Env var(s) not set: %s. The project will LOAD (so the UI "
+        "renders), but materializations against Snowflake / AWS will fail. "
+        "In Dagster Cloud: Deployment → Settings → Environment Variables. "
+        "Locally: add to .env or .env.secrets.",
         ", ".join(_missing),
-        _missing[0],
     )
 
 # warehouse_pipeline wants a single SQLAlchemy connection string
@@ -478,13 +500,11 @@ for c in $COMPONENTS_TO_INSTALL; do
 done
 
 # dbt component is from dagster_dbt (built-in), not the community CLI.
+# It's pinned + installed alongside the other runtime deps below so the
+# version solver sees the dbt constraints (which transitively pin
+# snowflake-connector-python<4) at the same time as the core deps.
 if [ "$WITH_DBT" = "true" ]; then
-  echo "  · dbt_project_component (built-in)"
-  uv add dagster-dbt dbt-snowflake >/dev/null 2>&1 || {
-    echo "    ⚠ uv add dagster-dbt dbt-snowflake failed:"
-    uv add dagster-dbt dbt-snowflake
-    exit 1
-  }
+  echo "  · dbt_project_component (built-in, deps added with runtime block)"
 fi
 echo "  ✓ Components installed."
 
@@ -502,7 +522,15 @@ echo ">>> Adding runtime Python dependencies to pyproject.toml ..."
 # write_pandas() to work. The bare install doesn't activate pandas integration
 # even when pandas is also installed. Bracket extras are safe unquoted because
 # nothing matches the glob '[pandas]' in this directory.
-RUNTIME_DEPS="pandas snowflake-connector-python[pandas] snowflake-sqlalchemy"
+# dbt-snowflake (1.8/1.9) pins snowflake-connector-python<4, so we cap
+# the core connector when dbt is on. dagster-dbt 0.29.6 matches dagster
+# 1.13.x. dbt-core/dbt-snowflake 1.8/1.9 are the current stable line.
+if [ "$WITH_DBT" = "true" ]; then
+  CONNECTOR_PIN='snowflake-connector-python[pandas]>=3.17,<4'
+else
+  CONNECTOR_PIN='snowflake-connector-python[pandas]'
+fi
+RUNTIME_DEPS="pandas $CONNECTOR_PIN snowflake-sqlalchemy"
 
 [ "$WITH_SNOWPARK" = "true" ]           && RUNTIME_DEPS="$RUNTIME_DEPS snowflake-snowpark-python"
 [ "$WITH_WAREHOUSE_PIPELINE" = "true" ] && RUNTIME_DEPS="$RUNTIME_DEPS sqlglot"
@@ -511,6 +539,7 @@ RUNTIME_DEPS="pandas snowflake-connector-python[pandas] snowflake-sqlalchemy"
 [ -n "${S3_STAGING_BUCKET:-}" ]         && RUNTIME_DEPS="$RUNTIME_DEPS boto3 s3fs pyarrow"
 # Cortex uses snowflake-connector-python (already in core). No extra dep.
 # Observer also uses snowflake-connector-python (already in core).
+[ "$WITH_DBT" = "true" ] && RUNTIME_DEPS="$RUNTIME_DEPS dagster-dbt==0.29.6 dbt-core>=1.8,<1.10 dbt-snowflake>=1.8,<1.10"
 
 echo "    deps: $RUNTIME_DEPS"
 if ! uv add $RUNTIME_DEPS >/tmp/bootstrap_uv_add.log 2>&1; then
@@ -717,6 +746,14 @@ defs = Definitions(
             "hourly_activity_dt, sp_purge_old_events.",
         ),
         _make(
+            "staging_orders_ingested", "DAGSTER_DEMO", "STAGING", "ORDERS_INGESTED",
+            "Snowflake STAGING.ORDERS_INGESTED — Snowpipe target table. Receives "
+            "CSV files from S3 via ORDERS_AUTO_INGEST_PIPE on every hourly "
+            "orders_to_s3 materialization. Observed every 5 min so the row "
+            "count is visible as Snowpipe loads files; the data_version "
+            "(row_count, last_altered) advances only on real ingest activity.",
+        ),
+        _make(
             "ai_customer_feedback", "DAGSTER_DEMO", "AI", "CUSTOMER_FEEDBACK",
             "Snowflake AI.CUSTOMER_FEEDBACK — text source for the Cortex SUMMARIZE demo.",
         ),
@@ -896,6 +933,9 @@ attributes:
     - raw_products
     - raw_events
     - ai_customer_feedback
+    # STAGING.ORDERS_INGESTED grows hourly via Snowpipe — visible
+    # row_count progression makes the auto-ingest pipe demo tangible.
+    - staging_orders_ingested
   cron_expression: \"*/5 * * * *\"
   default_status: RUNNING
   tags:
@@ -1241,11 +1281,318 @@ attributes:
       selection: \"kind:task or kind:stored_procedure or kind:materialized_view or kind:snowpipe\"
       preset: eager
     # Dagster-managed downstream (Iceberg sink, warehouse pipeline,
-    # Snowpark features, Cortex enrichment). Each materializes off
-    # whichever upstream — task, DT, raw table — most recently changed.
+    # Snowpark features, Cortex enrichment, dbt staging + marts). Each
+    # materializes off whichever upstream — task, DT, raw table — most
+    # recently changed. The dbt models are in this rule so they react to
+    # CUSTOMER_360_DT refreshes and DAILY_ORDERS_ROLLUP task completion;
+    # dbt build runs all 4 models in dependency order in one tick.
     - name: dagster_downstream_eager
-      selection: \"group:iceberg_lake or group:warehouse_pipeline or group:snowpark_features or group:ai_enrichment\"
+      selection: \"group:iceberg_lake or group:warehouse_pipeline or group:snowpark_features or group:ai_enrichment or group:dbt_staging or group:dbt_marts\"
       preset: eager"
+
+# ─── 6.6 dbt project scaffold + DbtProjectComponent defs ──────────────────
+# DbtProjectComponent points at a real dbt project on disk. The component
+# itself ships with dagster_dbt, but nothing scaffolds the dbt project
+# files — so we write a small focused project here that reads from the
+# already-built Snowflake objects (CUSTOMER_360_DT, DAILY_REVENUE) and
+# materializes two marts. dbt sources use meta.dagster.asset_key to
+# unify with the snowflake_workspace asset keys, keeping lineage one
+# connected DAG (no orphan source nodes in the UI).
+if [ "$WITH_DBT" = "true" ]; then
+  echo
+  echo ">>> Scaffolding dbt project under src/$PKG/dbt_project/ ..."
+  # dbt project lives INSIDE the python package so it ships in the wheel
+  # built by hatch. dagster-cloud serverless deploy-python-executable
+  # only includes files inside the package (or via force-include); files
+  # at the repo root are NOT in the pex bundle, so Cloud fails the
+  # "profiles dir does not exist" check at code-location load.
+  DBT_DIR="src/$PKG/dbt_project"
+  mkdir -p "$DBT_DIR/models/staging" "$DBT_DIR/models/marts"
+
+  cat > "$DBT_DIR/dbt_project.yml" <<'DBTEOF'
+name: 'dagster_demo'
+version: '1.0.0'
+config-version: 2
+
+profile: 'dagster_demo'
+
+model-paths: ["models"]
+analysis-paths: ["analyses"]
+test-paths: ["tests"]
+seed-paths: ["seeds"]
+macro-paths: ["macros"]
+snapshot-paths: ["snapshots"]
+
+target-path: "target"
+clean-targets:
+  - "target"
+  - "dbt_packages"
+
+models:
+  dagster_demo:
+    staging:
+      +materialized: view
+      +tags: ["staging"]
+      # meta.dagster.group lands the asset in a Dagster group via the dbt
+      # translator's default_group_from_dbt_resource_props. Keeps the dbt
+      # sub-DAG out of the catch-all "default" group in the UI.
+      +meta:
+        dagster:
+          group: dbt_staging
+    marts:
+      +materialized: table
+      +tags: ["marts"]
+      +meta:
+        dagster:
+          group: dbt_marts
+DBTEOF
+
+  cat > "$DBT_DIR/profiles.yml" <<'DBTEOF'
+dagster_demo:
+  target: prod
+  outputs:
+    prod:
+      type: snowflake
+      account: "{{ env_var('SNOWFLAKE_ACCOUNT') }}"
+      user: "{{ env_var('SNOWFLAKE_USER') }}"
+      # PATs are passed as `password` — Snowflake recognizes the PAT
+      # shape and switches auth modes transparently. `authenticator=oauth`
+      # would require a real OAuth bearer from an external IdP, not a PAT.
+      password: "{{ env_var('SNOWFLAKE_PAT') }}"
+      role: "{{ env_var('SNOWFLAKE_ROLE', 'ACCOUNTADMIN') }}"
+      database: "{{ env_var('SNOWFLAKE_DATABASE', 'DAGSTER_DEMO') }}"
+      warehouse: "{{ env_var('SNOWFLAKE_WAREHOUSE', 'DEMO_WH') }}"
+      schema: ANALYTICS
+      threads: 4
+      client_session_keep_alive: false
+DBTEOF
+
+  cat > "$DBT_DIR/models/sources.yml" <<'DBTEOF'
+version: 2
+
+# meta.dagster.asset_key aligns dbt sources with the asset keys produced
+# by the upstream snowflake_workspace component, so lineage is one
+# connected DAG instead of orphan source nodes in the UI.
+
+sources:
+  - name: staging
+    database: DAGSTER_DEMO
+    schema: STAGING
+    description: "Snowflake-managed staging objects (dynamic tables + task outputs)"
+    tables:
+      - name: customer_360_dt
+        description: "Per-customer 360 view (dynamic table). Refreshed by Snowflake."
+        meta:
+          dagster:
+            asset_key: ["dynamic_table_customer_360_dt"]
+        columns:
+          - name: customer_id
+            tests:
+              - unique
+              - not_null
+      - name: orders_ingested
+        description: "Snowpipe-ingested orders from S3 (event-driven)."
+        meta:
+          dagster:
+            asset_key: ["staging_orders_ingested"]
+
+  - name: analytics
+    database: DAGSTER_DEMO
+    schema: ANALYTICS
+    description: "Business-facing rollups built by orchestrated tasks"
+    tables:
+      - name: daily_revenue
+        description: "Daily revenue rollup populated by DAILY_ORDERS_ROLLUP task."
+        meta:
+          dagster:
+            asset_key: ["task_daily_orders_rollup"]
+DBTEOF
+
+  cat > "$DBT_DIR/models/schema.yml" <<'DBTEOF'
+version: 2
+
+models:
+  - name: stg_customer_360
+    description: "Light pass-through of STAGING.CUSTOMER_360_DT — column rename layer."
+    columns:
+      - name: customer_id
+        description: "Surrogate key from RAW.CUSTOMERS."
+        tests:
+          - unique
+          - not_null
+
+  - name: stg_daily_revenue
+    description: "Light pass-through of ANALYTICS.DAILY_REVENUE."
+
+  - name: dim_customer_segments
+    description: "One row per customer with LTV segment and recency segment labels."
+    columns:
+      - name: customer_id
+        tests:
+          - unique
+          - not_null
+      - name: ltv_segment
+        tests:
+          - accepted_values:
+              values: ['PLATINUM', 'GOLD', 'SILVER', 'BRONZE']
+      - name: recency_segment
+        tests:
+          - accepted_values:
+              values: ['ACTIVE', 'AT_RISK', 'DORMANT', 'NEVER_ORDERED']
+
+  - name: fct_segment_revenue
+    description: "Revenue, customer counts, and order totals aggregated by LTV x recency segment."
+DBTEOF
+
+  cat > "$DBT_DIR/models/staging/stg_customer_360.sql" <<'DBTEOF'
+with src as (
+    select * from {{ source('staging', 'customer_360_dt') }}
+)
+
+select
+    customer_id,
+    first_name,
+    last_name,
+    tier,
+    lifetime_value,
+    order_count,
+    revenue,
+    last_order_date
+from src
+DBTEOF
+
+  cat > "$DBT_DIR/models/staging/stg_daily_revenue.sql" <<'DBTEOF'
+with src as (
+    select * from {{ source('analytics', 'daily_revenue') }}
+)
+
+select
+    revenue_date,
+    region,
+    order_count,
+    revenue,
+    event_count
+from src
+DBTEOF
+
+  cat > "$DBT_DIR/models/marts/dim_customer_segments.sql" <<'DBTEOF'
+with customers as (
+    select * from {{ ref('stg_customer_360') }}
+)
+
+select
+    customer_id,
+    first_name,
+    last_name,
+    tier,
+    lifetime_value,
+    order_count,
+    last_order_date,
+    case
+        when lifetime_value >= 10000 then 'PLATINUM'
+        when lifetime_value >= 5000  then 'GOLD'
+        when lifetime_value >= 1000  then 'SILVER'
+        else 'BRONZE'
+    end as ltv_segment,
+    case
+        when last_order_date is null then 'NEVER_ORDERED'
+        when last_order_date >= dateadd('day', -30,  current_date()) then 'ACTIVE'
+        when last_order_date >= dateadd('day', -90,  current_date()) then 'AT_RISK'
+        else 'DORMANT'
+    end as recency_segment
+from customers
+DBTEOF
+
+  cat > "$DBT_DIR/models/marts/fct_segment_revenue.sql" <<'DBTEOF'
+with segments as (
+    select * from {{ ref('dim_customer_segments') }}
+)
+
+select
+    ltv_segment,
+    recency_segment,
+    count(*)                 as customer_count,
+    sum(lifetime_value)      as segment_revenue,
+    avg(lifetime_value)      as avg_lifetime_value,
+    sum(order_count)         as total_orders
+from segments
+group by 1, 2
+order by segment_revenue desc
+DBTEOF
+
+  echo "  ✓ dbt project scaffolded ($DBT_DIR/)."
+
+  # Pre-generate the dbt manifest. dagster_dbt's DbtProjectComponent has
+  # prepare_if_dev=True by default, which would re-run `dbt parse` in
+  # `dg dev` anyway — but Cloud serverless does NOT prep, so the bundled
+  # manifest.json is what Cloud reads at code-location load. Without
+  # this, the first Cloud deploy fails with a manifest-not-found error.
+  echo ">>> Pre-generating dbt manifest ..."
+  if (cd "$DBT_DIR" && uv run dbt parse --profiles-dir . >/tmp/bootstrap_dbt_parse.log 2>&1); then
+    echo "  ✓ dbt manifest generated."
+  else
+    echo "  ⚠ dbt parse failed (see /tmp/bootstrap_dbt_parse.log):"
+    tail -20 /tmp/bootstrap_dbt_parse.log
+    echo "  (continuing — \`dg dev\` will retry the prep on its own)"
+  fi
+
+  # project_dir is resolve_source_relative_path'd against this defs.yaml.
+  # The defs.yaml lives at src/<pkg>/defs/dbt_project/defs.yaml; dbt_project
+  # is at src/<pkg>/dbt_project — relative path "../../dbt_project" resolves
+  # correctly in both dev and Cloud (Cloud installs the package layout
+  # under <site-packages>/<pkg>/, so the same relative offset holds).
+  # profiles_dir is omitted: dagster_dbt defaults it to project_dir when
+  # None, and profiles_dir does NOT get the same path resolution.
+  write_defs dbt_project "type: dagster_dbt.DbtProjectComponent
+attributes:
+  project:
+    project_dir: \"../../dbt_project\"
+    target: prod
+  # \`dbt build\` runs models AND tests in dependency order. dbt tests
+  # surface as Dagster asset checks via the translator.
+  cli_args: [\"build\"]
+  # Adds row counts to each materialization's metadata in the UI.
+  include_metadata: [\"row_count\"]"
+
+  # Ensure the dbt project files end up in the wheel built by hatch.
+  # By default hatch's wheel target only picks up *.py inside the package;
+  # without force-include the SQL/YML/manifest stay out of the pex and
+  # Cloud fails at code-location load. Rewrites the wheel-target section
+  # to the table-of-tables form so multiple force-include entries are
+  # representable (an inline table {} can't span lines safely).
+  uv run python - "$PKG" <<'PYEOF'
+import re, sys, pathlib
+pkg = sys.argv[1]
+p = pathlib.Path("pyproject.toml")
+src = p.read_text()
+# Two force-include entries are needed for DbtProjectComponent in Cloud:
+#  1. dbt_project/  — the source files (sql, yml) so dbt knows the project layout
+#  2. defs/.local_defs_state/  — where dagster_dbt's StateBackedComponent
+#     looks for target/manifest.json at code-location load time. This dir
+#     is populated by `dg dev` / `dg check defs` via prepare_if_dev=True;
+#     the root .gitignore excludes target/ globally, so we have to
+#     force-include the state dir to override that exclusion.
+block = f'''[tool.hatch.build.targets.wheel]
+
+[tool.hatch.build.targets.wheel.force-include]
+"pyproject.toml" = "pyproject.toml"
+"src/{pkg}/dbt_project" = "{pkg}/dbt_project"
+"src/{pkg}/defs/.local_defs_state" = "{pkg}/defs/.local_defs_state"
+'''
+# Strip any existing [tool.hatch.build.targets.wheel] (and any nested
+# subsection like .force-include) by matching the section header through
+# the next top-level [section] header or EOF.
+src = re.sub(
+    r"\[tool\.hatch\.build\.targets\.wheel(?:\.[^\]]*)?\][^\[]*",
+    "",
+    src,
+    flags=re.DOTALL,
+)
+src = src.rstrip() + "\n\n" + block
+p.write_text(src)
+PYEOF
+  echo "  ✓ pyproject.toml force-include updated for dbt_project bundling."
+fi
 
 # ─── 7. Validate with dg check defs ───────────────────────────────────────
 echo
