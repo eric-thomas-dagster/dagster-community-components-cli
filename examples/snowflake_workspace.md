@@ -49,7 +49,7 @@ chmod +x bootstrap.sh
 
 | Default on (turn off with `--no-*`) | Off by default (turn on with `--with-*`) |
 |---|---|
-| `--no-cortex` — `snowflake_cortex_asset` (SUMMARIZE on `AI.CUSTOMER_FEEDBACK`) | `--with-dbt` — official `dagster-dbt` integration (needs `dbt-snowflake` config) |
+| `--no-cortex` — `snowflake_cortex_asset` (SUMMARIZE on `AI.CUSTOMER_FEEDBACK`) | `--with-dbt` — scaffolds a real dbt project + 4 models + sources → dagster_dbt's `DbtProjectComponent` ([details below](#with-dbt)) |
 | `--no-snowpark` — `snowpark_pipeline` (Python in Snowflake) | |
 | `--no-warehouse-pipeline` — Dagster-managed multi-step SQL | |
 | `--no-observer` — `snowflake_table_observation_sensor` | |
@@ -273,6 +273,24 @@ The reactive-pattern table from the pure-Snowflake section still applies here �
 ```
 
 The default produces ~30 assets. `--lean` strips back to: `python_daily_events` → `events_to_snowflake` → `snowflake_workspace` imports → `iceberg_daily_revenue` (if Iceberg available) → `freshness_daily_revenue`. Useful for a quick check that the end-to-end wiring works before turning on all the add-ons.
+
+### `--with-dbt`
+
+Off by default. When enabled, `bootstrap.sh` scaffolds a complete working dbt project — not just `uv add dagster-dbt`:
+
+- **`src/<pkg>/dbt_project/dbt_project.yml`** — dbt project config with `dbt_staging` / `dbt_marts` groups (via `meta.dagster.group`) so the models land in their own Dagster groups
+- **`src/<pkg>/dbt_project/profiles.yml`** — Snowflake profile bound to the same `SNOWFLAKE_*` env vars the rest of the project uses; PAT or password auth honored
+- **4 models + a `schema.yml`**:
+  - `staging/stg_orders.sql`, `staging/stg_customers.sql` (views over RAW.*)
+  - `marts/customer_revenue.sql`, `marts/customer_tier_summary.sql` (tables)
+  - `sources.yml` with `meta.dagster.asset_key` set on `raw_orders` + `raw_customers` so dbt sources resolve to the same asset keys the `raw_sources/` observable assets produce — one lineage graph, not two parallel ones
+- **Pre-generated manifest** via `dbt parse` so dagster_dbt's `DbtProjectComponent` doesn't re-parse on every code-location reload (production-safe — `prepare_if_dev=True` is fine to leave on for local dev)
+- **`defs/dbt_project/defs.yaml`** with `type: dagster_dbt.DbtProjectComponent` pointed at the project dir
+- **pyproject.toml `force-include`** so the dbt project files (and the StateBackedComponent's local-defs state dir) ship in the wheel — `dg plus deploy` works without any extra packaging glue
+
+Eager AutomationCondition is wired against `group:dbt_staging or group:dbt_marts` alongside the other downstream groups, so a real upstream change (RAW.ORDERS new rows from Dagster's Python ingest) cascades through `stg_orders` → `customer_revenue` → `customer_tier_summary` in one dbt build call.
+
+**Dep versions:** when `--with-dbt` is on, `bootstrap.sh` also pins `snowflake-connector-python[pandas]>=3.17,<4` (dbt-snowflake transitively requires `<4`), `dagster-dbt==0.29.6`, `dbt-core>=1.8,<1.10`, `dbt-snowflake>=1.8,<1.10`. The version solver sees all of these at once so the install resolves cleanly. Without `--with-dbt`, the snowflake-connector pin is dropped.
 
 ## A note on OpenFlow
 
