@@ -280,6 +280,7 @@ These demos run **without** `OPENAI_API_KEY` set (skipping the OpenAI-touching c
 | [Enterprise SaaS Resources](enterprise_saas.md) | `workday_resource`, `marketo_resource`, `intercom_resource`, `plaid_resource` | Declare 4 SaaS APIs in one code location |
 | [SAP HANA via SQLAlchemy](sap_hana.md) | `dataframe_to_table` (mssql adapter pattern) | SAP HANA via SQLAlchemy |
 | [Precisely Connect ETL](precisely_validation.md) | `precisely_job_sensor` | Sensor-only — Precisely owns the run, Dagster fires `RunRequest` on terminal SUCCESS via the documented Job Status endpoint |
+| [Compute Log Managers — Splunk + OTel](compute_log_managers.md) | `SplunkComputeLogManager`, `OtlpComputeLogManager`, `TeeComputeLogManager` | **Instance-level** infra (`dagster.yaml`) — not a defs.yaml component. Routes op stdout/stderr to Splunk HEC + OTel Collector in parallel via Tee. Live-validated: 22 events on each path. |
 
 ## Azure (subscription required)
 
