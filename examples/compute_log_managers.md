@@ -136,6 +136,25 @@ compute_logs:
 
 For a Dagster+ customer the equivalent is the same `Tee` wrapper, with `dagster_cloud.storage.compute_logs.CloudComputeLogManager` in place of one of the inner CLMs.
 
+### About `local_dir`
+
+`local_dir` is where Dagster captures op stdout/stderr to disk *during* execution — the CLMs read from this path at step finish and ship to each destination. After upload the local file isn't load-bearing; the destinations (Splunk, OTel Collector → Splunk, Dagster+, …) are the systems of record.
+
+The demo sets `local_dir: /tmp/clm-demo-local` explicitly because the demo runs on a host machine (not a container) and the teardown script wants a predictable path to `rm -rf`. **You don't have to set it that way in production.**
+
+If you omit `local_dir`, every CLM falls back to the system temp directory (`/tmp` on Linux containers). That default works fine for:
+
+| Deployment | Need to set `local_dir`? |
+|---|---|
+| Dagster+ Serverless | No — ephemeral container's `/tmp` lives long enough for capture → upload |
+| Dagster+ Hybrid | No — same: user-code container's `/tmp` |
+| OSS in K8s (default `emptyDir`) | No — `/tmp` is on the `emptyDir` already |
+| Local `dg dev` | No — `/tmp` on macOS / Linux |
+| OSS where you want captures to survive a mid-step container restart | Yes — point at a mounted persistent volume |
+| Audit / cleanup policy reasons | Yes — separate compute logs from generic `/tmp` |
+
+For Tee specifically: the value is shared with every inner manager (Tee patches each inner's `_local_manager` at construction). The demo's inner managers each set `local_dir: /tmp/clm-demo-local` for visual consistency, but Tee overrides them anyway — only the Tee-level value matters.
+
 ## Variations
 
 ### Only Splunk (no OTel Collector)
