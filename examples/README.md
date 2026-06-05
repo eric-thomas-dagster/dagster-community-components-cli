@@ -401,6 +401,7 @@ demos.
 | [Gemini LLM](gemini_llm.md) | `synthetic_data_generator`, `gemini_llm` | Gemini API key, billing enabled | $0 free tier / usage |
 | [LiteLLM Multi-Provider](litellm_multi_provider.md) | `litellm_inference_asset`, `synthetic_data_generator`, `dataframe_to_csv`, `dataframe_join` | API key for at least one provider | usage-priced |
 | [LLM Execution Mega-Demo](llm_execution.md) | 13 LLM components — OpenAI / LiteLLM / prompt-executor / batch / etc. | OpenAI API key | usage-priced |
+| [LiteLLM Agent + MCP](litellm_agent.md) | `litellm_agent` with the official `@modelcontextprotocol/server-filesystem` server as tool layer | OpenAI API key + `npx` | ~$0.0005/run |
 | [Vector / RAG](vector_rag.md) | `embeddings_generator`, `vector_store_writer`, `vector_store_query`, `reranker`, `rag_pipeline`, `conversation_memory` | Vector store + embeddings model | usage-priced (~$0.0001/doc) |
 | [AI with LLMs](ai_with_llm.md) | `synthetic_data_generator`, `text_classifier`, `entity_extractor`, `sentiment_analyzer`, `document_summarizer`, `data_enricher` | OpenAI / Azure OpenAI key | usage-priced |
 | [Multi-modal AI](multimodal_ai.md) | `image_captioner`, `image_llm_extractor`, `litellm_embedding_batch` | OpenAI API key (vision-capable) | usage-priced |
