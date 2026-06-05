@@ -44,7 +44,9 @@ If the agent hits a recoverable tool error (e.g. permission denied because the m
 
 - **`model`**: any LiteLLM-supported model. `gpt-4o-mini`, `claude-haiku-4-5-20251001`, `gemini/gemini-2.5-flash`, `groq/llama-3.3-70b-versatile`, `openrouter/anthropic/claude-3.5-sonnet`, … just change `model` + `api_key_env_var`.
 - **`max_iterations`**: hard cap on the loop (default 10). Set higher for multi-step chains, lower if you want to force the model to answer in one round.
-- **`mcp_servers`**: list of `{name, type, command|url}` entries. `type` is `stdio` (subprocess) or `sse` (HTTP). Tool names are auto-prefixed by `name` so multiple servers can be mixed without collisions.
+- **`mcp_servers`**: list of `{name, type, command|url}` entries. `type` is `stdio` (subprocess), `http` (streamable-HTTP — modern transport, what `claude mcp add --transport http` uses), or `sse`. Tool names are auto-prefixed by `name` so multiple servers can be mixed without collisions.
+- **Partitions**: `partition_type: daily` + `partition_start: 2026-06-01` make the agent partition-scheduled. `{partition_key}` in the prompt gets templated at materialization time.
+- **Freshness / retry / kinds**: standard Dagster knobs supported across all four agent components.
 
 ## Validated end-to-end
 
@@ -55,6 +57,34 @@ If the agent hits a recoverable tool error (e.g. permission denied because the m
 | Tool calls | 3 (one error recovery + two successful list calls) |
 | Final answer | JSON list of the 3 largest files with correct `size_bytes` |
 | Materialization metadata | `final_answer` rendered as markdown, `iterations`, `tool_calls_made`, full `tool_calls` JSON |
+
+## Connecting to remote MCP servers (HTTP + auth headers)
+
+The component supports the streamable-HTTP transport with custom headers. The Dagster+ MCP server at `mcp.agent.dagster.cloud/mcp/` is a real-world target — it exposes 34 tools for runs, assets, deployments, alerts, issues, and metrics.
+
+```yaml
+type: dagster_component_templates.LiteLLMAgentComponent
+attributes:
+  asset_name: dagster_plus_daily_summary
+  prompt: "Summarize what happened on {partition_key} in the prod deployment in 3 sentences."
+  system_prompt: "You are a Dagster Cloud operator. Today's analysis is for {partition_key}."
+  model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
+  max_iterations: 6
+  mcp_servers:
+    - name: dgp
+      type: http
+      url: https://mcp.agent.dagster.cloud/mcp/
+      headers:
+        Dagster-Cloud-Organization: my-org
+      headers_env:
+        Authorization: DAGSTER_PLUS_BEARER     # env var must hold "Bearer <token>"
+  partition_type: daily
+  partition_start: "2026-06-01"
+  group_name: ai
+```
+
+Live-validated against `mcp.agent.dagster.cloud` partitioned daily — 3 iterations, 4 tool calls including parallel `list_runs` / `list_issues` / `list_alert_policies` on iteration 2.
 
 ## Output dict shape
 
@@ -118,5 +148,7 @@ Full registry: [github.com/modelcontextprotocol/servers](https://github.com/mode
 | Per-row DataFrame enrichment via chat completion | `litellm_inference_asset` (or vendor natives `openai_llm`, `anthropic_llm`, `gemini_llm`) |
 | Per-row structured-output extraction (Pydantic schema) | `litellm_structured_output` |
 | Per-row single tool/function call (no loop) | `litellm_function_calling` |
+| Deterministic single-shot MCP tool call (no LLM) | `mcp_tool_call` |
 | Embed a corpus + retrieve + generate | `rag_pipeline` |
+| Vendor-only agent (skip the LiteLLM dep) | `openai_agent` / `anthropic_agent` / `gemini_agent` |
 | Run an agent **per row** of a DataFrame | not yet — could extend `litellm_agent` with an `upstream_asset_key` shape later |
