@@ -8,9 +8,10 @@ CLAUDE_MD = """\
 # Dagster community components
 
 This project can pull from the Dagster community components registry —
-**~750 reusable components** covering integrations, sensors, IO managers,
-transforms, sinks, sources, AI / NLP, analytics, lakehouse, observability,
-and more. About two-thirds are validated end-to-end against real systems.
+**~850 reusable components** covering integrations, sensors, IO managers,
+transforms, sinks, sources, AI / NLP / agents (with MCP tool support),
+analytics, lakehouse, observability, and more. About 60% are validated
+end-to-end against real systems.
 
 - **Registry UI:** <https://dagster-component-ui.vercel.app/>
 - **CLI:** `dagster-component` (install via `pip install dagster-community-components-cli` or run with `uvx`)
@@ -25,8 +26,8 @@ and official `dagster-<vendor>` integrations (dbt / Fivetran / Sling /
 Snowflake / Databricks / etc.). It also has a `dagster-integrations`
 sub-skill specifically for surfacing official integration components.
 
-**This document covers the community registry** — the long tail of ~750
-components beyond official integrations (and the ~100 end-to-end walkthroughs
+**This document covers the community registry** — the long tail of ~850
+components beyond official integrations (and ~215 end-to-end walkthroughs
 in `examples/`). Use the two together:
 
 - **General Dagster question** (assets, automation, dg, project layout):
@@ -75,7 +76,7 @@ The CLI repo ships a large `examples/` folder of end-to-end walkthroughs.
 Each pattern has a `.md` walkthrough + a `setup_<topic>_demo.sh` script
 that scaffolds a working Dagster project in one command:
 
-- **Walkthrough index (TOC of ~100 demos):**
+- **Walkthrough index (TOC of ~215 demos):**
   <https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples/README.md>
 - **Per-topic walkthroughs** — direct GitHub raw URLs follow the pattern:
   `https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/<topic>.md`
@@ -101,6 +102,12 @@ When a user asks an integration question, recommend the matching walkthrough
 | Prometheus push + query | `examples/prometheus_demo.md` |
 | Docker container as asset | `examples/docker_container.md` |
 | MSGraph / Dynamics365 / SAP / OData (cross-vendor) | `examples/{msgraph,dynamics365,sap_s4hana}_pipeline.md` |
+| Recurring SQL→SQL replication (Postgres → DuckDB, Docker) | `examples/replication.md` |
+| Warehouse migration (inventory + migration + rebuild plan, Docker) | `examples/warehouse_migration.md` |
+| Catalog lineage sync — multi-target | `examples/lineage_catalogs.md` |
+| Lineage → DataHub (Docker quickstart) | `examples/lineage_to_datahub.md` |
+| LiteLLM agent + MCP (filesystem MCP, Dagster+ MCP) | `examples/litellm_agent.md` |
+| Agent family — `mcp_tool_call` + `openai_agent` + `llm_evaluator` | `examples/agent_family.md` |
 
 For anything else, browse the walkthrough TOC linked above.
 
@@ -114,7 +121,7 @@ Each manifest entry carries a `validation` field — use it to set user expectat
 | `code` | YAML loads cleanly + `dg check defs` passes, but no live materialization run |
 | `infra` | Component depends on paid / proprietary infra; level depends on the user's environment |
 
-About 480 of ~750 components are `live`. The `validation.evidence` field
+About 510 of ~850 components are `live`. The `validation.evidence` field
 points at the walkthrough that validated it.
 
 ## Where `add` installs
@@ -317,7 +324,7 @@ tooling can detect drift between pinned and latest.
 
 `resource`, `io_manager`, `sensor`, `observation`, `external`, `integration`,
 `check`, `transformation`, `ingestion`, `ai`, `analytics`, `infrastructure`,
-`source`, `sink`, `dbt`.
+`source`, `sink`, `jobs`, `data-warehouse`, `dbt`.
 
 Filter with `--category`: `dagster-component search "" --category io_manager`.
 
@@ -340,9 +347,54 @@ Filter with `--category`: `dagster-component search "" --category io_manager`.
 | Materialize a Jupyter notebook as an asset | `jupyter_notebook_asset` (papermill) |
 | Run a container as an asset | `docker_container_asset` |
 | Push metrics to Prometheus / query Prometheus | `dataframe_to_prometheus` / `dataframe_from_prometheus` |
+| Push Dagster run lifecycle to StatsD / DogStatsD / Datadog Agent | `dagster_runs_to_statsd_sensor` |
+| Push Dagster run lifecycle as OTel **metrics** (Datadog OTel ingest, Grafana OTel, Honeycomb metrics) | `dagster_runs_to_otlp_metrics_sensor` |
+| Push Dagster run lifecycle as OTel **logs** (Splunk OTC, Honeycomb logs, Loki via OTC) | `dagster_runs_to_otlp_sensor` |
 | Synthetic data for demos (orders / events / customers / etc.) | `synthetic_data_generator` (many `schema_type` values) |
+| **Run an LLM agent with MCP tool support (single-shot loop)** | `litellm_agent` (multi-vendor) / `openai_agent` / `anthropic_agent` / `gemini_agent` / `snowflake_cortex_agent` |
+| **Deterministic single MCP tool call (no LLM)** | `mcp_tool_call` — scheduled query to any MCP server with `{partition_key}` templating |
+| **Score an LLM/agent output (LLM-as-judge)** | `llm_evaluator` — answer_relevance / groundedness / harmfulness / helpfulness / coherence |
+| **NL → SQL → result via Databricks Genie** | `databricks_genie_query` (single-question or per-row) |
+| **Push Dagster asset lineage to a data catalog** | `lineage_graph_extractor` + `lineage_to_datahub` / `lineage_to_openmetadata` / `lineage_to_purview` / `lineage_to_alation` / `lineage_to_collibra` / `lineage_to_file` / `lineage_to_webhook` |
+| **One-time warehouse migration** (Oracle / Db2 / MSSQL / Postgres → Snowflake / BigQuery / DuckDB) | `database_schema_inventory` + `database_migration_assessment` + `database_tables_migration` + `database_constraints_migration` + `database_replication` + `database_views_migration` |
+| **Recurring DB → warehouse replication** | `database_replication` (Sling-backed) |
 
 When in doubt: `dagster-component search <keyword>` — almost always a hit.
+
+---
+
+## Recent additions worth knowing (2026-06)
+
+The agent stack and observability sensors are recent — AI assistants
+following older guidance may have missed them:
+
+- **MCP agent family** (`litellm_agent` + native `openai_agent` /
+  `anthropic_agent` / `gemini_agent` / `snowflake_cortex_agent`).
+  Single-shot LLM agent with Model Context Protocol tool support.
+  Supports stdio / streamable-HTTP / SSE transports; HTTP carries
+  literal + env-backed headers so customers can wire the Dagster+ MCP
+  server at `mcp.agent.dagster.cloud/mcp/` (34 tools) without leaking
+  bearer tokens to YAML. Each agent supports the full Dagster pattern
+  (partitions with `{partition_key}` templated into prompts, kinds,
+  FreshnessPolicy via `cron`/`time_window` factories, RetryPolicy).
+- **`mcp_tool_call`** — deterministic single-shot tool call against any
+  MCP server. No LLM in the loop. Same partition/templating pattern.
+- **`llm_evaluator`** — LLM-as-judge scoring for agent outputs. Curated
+  prompts per metric, OpenAI/Claude/Gemini judges via LiteLLM, drop-in
+  downstream of any `*_agent` (matches the agent output dict shape).
+- **Run-event sensors**: `dagster_runs_to_statsd_sensor` (DogStatsD UDP),
+  `dagster_runs_to_otlp_metrics_sensor` (distinct from the existing
+  OTel-logs sensor). Both no-deps / no-auth where possible.
+- **Lineage family**: `lineage_graph_extractor` → `lineage_to_<catalog>`
+  fan-out across DataHub / OpenMetadata / Purview / Alation / Collibra /
+  file / webhook with per-sink change-detection skip via payload hashing.
+- **Warehouse migration**: 6-component playbook that handles the bulk
+  of an Oracle / Db2 / MSSQL → Snowflake / BigQuery migration with
+  dry-run assessment + per-object status DataFrame.
+
+See `examples/agent_family.md`, `examples/litellm_agent.md`,
+`examples/lineage_to_datahub.md`, `examples/lineage_catalogs.md`, and
+`examples/warehouse_migration.md` for end-to-end walkthroughs of each.
 """
 
 
