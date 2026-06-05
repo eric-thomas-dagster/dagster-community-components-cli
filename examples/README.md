@@ -492,7 +492,8 @@ Multi-step Snowpark DataFrame chain compiled to ONE Snowflake SQL statement. Who
 
 | Demo | Components used | Highlights |
 |---|---|---|
-| [Catalog Lineage Sync](lineage_catalogs.md) | `lineage_graph_extractor` (source) → `lineage_to_file` (sink) — swap in `lineage_to_purview`, `lineage_to_datahub`, `lineage_to_alation`, `lineage_to_collibra`, `lineage_to_openlineage`, `lineage_to_webhook` for real catalogs | Lock-step fan-out across N catalogs; per-sink change-detection skip via payload hashing. Validated locally end-to-end with file sink. |
+| [Catalog Lineage Sync](lineage_catalogs.md) | `lineage_graph_extractor` (source) → `lineage_to_file` (sink) — swap in `lineage_to_purview`, `lineage_to_datahub`, `lineage_to_openmetadata`, `lineage_to_alation`, `lineage_to_collibra`, `lineage_to_webhook` for real catalogs | Lock-step fan-out across N catalogs; per-sink change-detection skip via payload hashing. Validated locally end-to-end with file sink. |
+| [Lineage → DataHub (Docker)](lineage_to_datahub.md) | `lineage_graph_extractor` (source) → `lineage_to_datahub` (sink) — DataHub OSS in Docker | End-to-end validated against DataHub v1.3.0 quickstart. 8 datasets ingested + lineage edges confirmed via GraphQL. |
 
 ---
 

@@ -26,8 +26,8 @@ dataframe_to_csv          → orders_csv ─┘   (the asset graph being tracked
 | `lineage_to_file` | sink | Writes JSON locally — for demos / debugging / audit trails |
 | `lineage_to_alation` | sink | Alation Data Catalog REST API |
 | `lineage_to_collibra` | sink | Collibra Import API |
-| `lineage_to_datahub` | sink | DataHub Rest.li ingestProposal |
-| `lineage_to_openlineage` | sink | Marquez, Atlan, Astronomer Observe (OL spec) |
+| `lineage_to_datahub` | sink | DataHub Rest.li ingestProposal (see [lineage_to_datahub.md](lineage_to_datahub.md) for an end-to-end Docker walkthrough) |
+| `lineage_to_openmetadata` | sink | OpenMetadata REST (service → database → schema → table hierarchy + lineage edges) |
 | `lineage_to_purview` | sink | Microsoft Purview Data Map (Apache Atlas v2 entity bulk) |
 | `lineage_to_webhook` | sink | Generic POST to any HTTP endpoint |
 
@@ -206,32 +206,31 @@ relations.
 **What lands:** Assets in the configured community. Lineage relations
 viewable via Collibra's Lineage Explorer.
 
-### OpenLineage (Marquez, Atlan, Astronomer Observe, etc.)
+### OpenMetadata
 
 ```yaml
-# defs/lineage_to_openlineage/defs.yaml
-type: dagster_component_templates.LineageToOpenLineageComponent
+# defs/lineage_to_openmetadata/defs.yaml
+type: dagster_component_templates.LineageToOpenMetadataComponent
 attributes:
-  asset_name: lineage_in_marquez
+  asset_name: lineage_in_openmetadata
   upstream_asset_key: lineage_graph
-  catalog_url: https://marquez.example.com
-  api_token_env: OPENLINEAGE_API_TOKEN     # optional — leave empty if your backend allows anonymous
+  catalog_url: https://openmetadata.example.com
+  api_token_env: OPENMETADATA_API_TOKEN
+  service_name: dagster
+  database_name: default
 ```
 
-**Auth:** Optional `Bearer <token>` if your OL backend requires it.
-Marquez open-source default has no auth; Astronomer Observe + Atlan
-require Bearer tokens.
+**Auth:** `Authorization: Bearer <JWT>`. OpenMetadata bot/user tokens
+work; mint via the Settings → Bots section in the UI.
 
-**API:** `POST /api/v1/lineage` with one `RunEvent` per push. Each
-asset becomes an `inputDataset` with a `dagster_metadata` facet (group,
-kinds, freshness policy) and a `schema` facet derived from asset
-metadata. The run also carries a `dagster_lineage` facet listing all
-edges + counts.
+**API:** Hierarchy upserts (`PUT /api/v1/services/databaseServices`,
+`/api/v1/databases`, `/api/v1/databaseSchemas`, `/api/v1/tables`) then
+lineage edges via `PUT /api/v1/lineage`.
 
-**What lands:** A single completed RunEvent for the
-`dagster_lineage_sync` job. Datasets appear under
-`namespace=dagster://<org>/<deployment>`. Click-through to the run
-shows all edges in the facet.
+**What lands:** Service → Database → Schema (one per Dagster group) →
+Tables (one per Dagster asset). Each lineage edge maps a Dagster
+upstream → downstream into an OpenMetadata lineage relation. Columns
+land on the table when asset metadata exposes them.
 
 ### Generic HTTP webhook
 
