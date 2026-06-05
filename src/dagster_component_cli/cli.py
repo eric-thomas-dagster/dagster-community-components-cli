@@ -862,5 +862,75 @@ def _inject_schema_comment(
     yaml_path.write_text(header + text)
 
 
+@main.command(name="alteryx-import")
+@click.argument("yxmd_path", type=click.Path(exists=True, dir_okay=False))
+@click.option(
+    "--out-dir",
+    required=True,
+    type=click.Path(file_okay=False),
+    help="Output directory — typically the root of a freshly-scaffolded create-dagster project.",
+)
+@click.option(
+    "--pkg",
+    required=True,
+    help="Python package name under src/ (matches your create-dagster project's pkg name).",
+)
+@click.option(
+    "--install",
+    is_flag=True,
+    help="After emitting defs.yaml files, run `dagster-component add <id>` for each component the importer used.",
+)
+@click.pass_context
+def alteryx_import_cmd(
+    ctx: click.Context,
+    yxmd_path: str,
+    out_dir: str,
+    pkg: str,
+    install: bool,
+) -> None:
+    """Import an Alteryx workflow (.yxmd / .yxmz) as a Dagster project.
+
+    Each Alteryx tool becomes a Dagster asset wired into a chain via `deps`,
+    using registry components for the transform vocabulary (filter, summarize,
+    join, formula, etc.). Tools without a 1:1 mapping land in MIGRATION.md
+    for manual review.
+    """
+    from .alteryx_importer import import_workflow
+
+    click.echo(f"Importing {yxmd_path} → {out_dir} (pkg={pkg})")
+    result = import_workflow(yxmd_path=yxmd_path, out_dir=out_dir, pkg=pkg)
+
+    click.echo(f"  ✓ mapped tools:    {result['mapped_count']}")
+    click.echo(f"  ✓ unmapped tools:  {result['unmapped_count']}")
+    click.echo(f"  ✓ components used: {', '.join(result['component_ids']) or '(none)'}")
+    click.echo(f"  ✓ migration report: {result['migration_report']}")
+
+    if install and result["component_ids"]:
+        click.echo("")
+        click.echo("Installing components into the project...")
+        out_path = Path(out_dir).resolve()
+        for cid in result["component_ids"]:
+            click.echo(f"  → add {cid}")
+            ctx.invoke(add, component_id=cid, auto_install=True)
+            # `add` drops a starter defs.yaml at src/<pkg>/defs/<cid>/defs.yaml
+            # that references the registry component's example asset names —
+            # those will conflict with the importer's emitted defs.yamls, so
+            # remove them. The component code under src/<pkg>/components/<cid>/
+            # is what we actually need; that's left alone.
+            starter_defs_dir = out_path / "src" / pkg / "defs" / cid
+            starter_defs_yaml = starter_defs_dir / "defs.yaml"
+            if starter_defs_yaml.exists():
+                starter_defs_yaml.unlink()
+                try:
+                    starter_defs_dir.rmdir()
+                except OSError:
+                    pass  # not empty — leave it
+    elif result["component_ids"]:
+        click.echo("")
+        click.echo("Next:")
+        for cid in result["component_ids"]:
+            click.echo(f"  dagster-component add {cid} --auto-install")
+
+
 if __name__ == "__main__":
     main()
