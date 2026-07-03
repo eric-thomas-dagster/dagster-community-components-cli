@@ -26,7 +26,9 @@ The demos are grouped by what they need to run.
   - [Industry data standards](#industry-data-standards)
   - [Media transforms](#media-transforms)
   - [AI / NLP (no auth required)](#ai--nlp-no-auth-required)
+  - [AI / NLP — via Vercel AI Gateway (one key, any provider)](#ai--nlp--via-vercel-ai-gateway-one-key-any-provider)
   - [Cloud observability + enterprise SaaS](#cloud-observability--enterprise-saas)
+  - [Durable workflow orchestration (Temporal)](#durable-workflow-orchestration-temporal)
 - [Azure (subscription required)](#azure-subscription-required)
   - [Storage + lakehouse](#storage--lakehouse)
   - [Databases](#databases)
@@ -268,6 +270,13 @@ These demos run **without** `OPENAI_API_KEY` set (skipping the OpenAI-touching c
 | Demo | Components | Why the key is required |
 |---|---|---|
 | [NLP Utilities](nlp_utilities.md) | 6 standalone transforms — `document_chunker`, `word_cloud`, `part_of_speech_tagger`, `topic_modeler`, `text_similarity` | The `synthetic_data` source uses gpt-4o-mini to generate test articles; the 6 utilities downstream are local |
+| [LangGraph Agent](langgraph_agent.md) | `langgraph_agent` | Multi-step LangGraph `StateGraph` (plan → research → critique → synthesize) as a single Dagster asset. Each step is a real OpenAI call; supports conditional routing via `condition_regex`. Live-validated 2026-07-02. |
+
+### AI / NLP — via Vercel AI Gateway (one key, any provider)
+
+| Demo | Components | Requires |
+|---|---|---|
+| [Vercel AI Gateway Agent](vercel_ai_gateway_agent.md) | `vercel_ai_gateway_agent` | AI-Gateway–scoped Vercel key (`vck_...`) — routes to OpenAI/Anthropic/Google/xAI/Groq/etc. via `<provider>/<model>` strings, with optional fallback chain. Live-validated across three providers. |
 
 ### Cloud observability + enterprise SaaS
 
@@ -281,6 +290,16 @@ These demos run **without** `OPENAI_API_KEY` set (skipping the OpenAI-touching c
 | [SAP HANA via SQLAlchemy](sap_hana.md) | `dataframe_to_table` (mssql adapter pattern) | SAP HANA via SQLAlchemy |
 | [Precisely Connect ETL](precisely_validation.md) | `precisely_job_sensor` | Sensor-only — Precisely owns the run, Dagster fires `RunRequest` on terminal SUCCESS via the documented Job Status endpoint |
 | [Compute Log Managers — Splunk + OTel](compute_log_managers.md) | `SplunkComputeLogManager`, `OtlpComputeLogManager`, `TeeComputeLogManager` | **Instance-level** infra (`dagster.yaml`) — not a defs.yaml component. Routes op stdout/stderr to Splunk HEC + OTel Collector in parallel via Tee. Live-validated: 22 events on each path. |
+| [Vercel Deployment](vercel_deployment.md) | `vercel_deployment_sensor`, `external_vercel_deployment` | Poll Vercel `/v6/deployments` for terminal READY, emit `AssetObservation` with commit SHA / branch / URL. Downstream Dagster assets gate on production being live. Live-validated. |
+
+### Durable workflow orchestration (Temporal)
+
+Dagster observes and interacts with Temporal — a durable-execution engine built for long-running workflows. Four modes covered:
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [Temporal Workflow (trio: trigger + external + sensor)](temporal_workflow.md) | `temporal_workflow_trigger`, `external_temporal_workflow`, `temporal_workflow_sensor` | Full E2E via local `temporal server start-dev` + a real Python worker. Dagster asset starts a Temporal workflow that fetches a Star Wars planet from swapi.dev via a Temporal activity; sensor observes the completed workflow. Live-validated. |
+| [Temporal Signal + Query](temporal_signal_query.md) | `temporal_signal_asset`, `temporal_query_asset` | Push state INTO / pull state OUT of a long-lived running workflow. Scripted `query → signal add → query → signal flush → query` sequence against an `OrderBatchWorkflow` with `@signal` + `@query` handlers. Live-validated 2026-07-02. Completes the four-mode Dagster ↔ Temporal integration alongside the trio. |
 
 ## Azure (subscription required)
 
