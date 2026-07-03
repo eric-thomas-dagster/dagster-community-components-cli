@@ -9,7 +9,7 @@
 **Duration:** ~15 seconds cold-to-green
 **Validated:** 2026-07-02 — full push+pull sequence executed against a live long-lived `OrderBatchWorkflow`.
 
-## The story (blog post material)
+## The full four-mode integration
 
 The existing Temporal trio — [trigger](./temporal_workflow.md), [external](./temporal_workflow.md), [sensor](./temporal_workflow.md) — covers **start** and **observe terminal state**. That's fine for one-shot workflows.
 
