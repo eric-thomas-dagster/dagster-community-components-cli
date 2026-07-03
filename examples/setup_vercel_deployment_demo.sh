@@ -62,7 +62,7 @@ if [ -n "${DCC_SRC:-}" ] && [ -d "$DCC_SRC" ]; then
   info "Using local DCC source: $DCC_SRC"
   uv add --quiet "dagster-community-components @ ${DCC_SRC}" 'requests>=2.28' || fail "uv add failed"
 else
-  uv add --quiet 'dagster-community-components>=0.10.0' 'requests>=2.28' || fail "uv add failed"
+  uv add --quiet 'dagster-community-components @ git+https://github.com/eric-thomas-dagster/dagster-component-templates.git' 'requests>=2.28' || fail "uv add failed"
 fi
 ok "Dependencies installed"
 

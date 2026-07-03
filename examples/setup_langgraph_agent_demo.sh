@@ -58,8 +58,9 @@ cd "$PROJECT_DIR"
 
 info "Installing dependencies (dagster-community-components + langgraph + langchain-openai)…"
 # DCC_SRC lets a dev point at a local source checkout of
-# dagster-community-components (useful when a component is unreleased). Falls
-# back to PyPI otherwise.
+# dagster-community-components (useful when iterating locally). Otherwise
+# we install from git main — PyPI lags behind the registry, so pinning
+# to main is the way to get the freshest components today.
 if [ -n "${DCC_SRC:-}" ] && [ -d "$DCC_SRC" ]; then
   info "Using local DCC source: $DCC_SRC"
   uv add --quiet \
@@ -68,7 +69,7 @@ if [ -n "${DCC_SRC:-}" ] && [ -d "$DCC_SRC" ]; then
     || fail "uv add failed"
 else
   uv add --quiet \
-    'dagster-community-components>=0.10.0' \
+    'dagster-community-components @ git+https://github.com/eric-thomas-dagster/dagster-component-templates.git' \
     'langgraph>=0.2.0' 'langchain-core>=0.3.0' 'langchain-openai>=0.2.0' \
     || fail "uv add failed"
 fi
