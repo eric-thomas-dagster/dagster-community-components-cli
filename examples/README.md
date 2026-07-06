@@ -9,6 +9,25 @@ Each demo:
 
 The demos are grouped by what they need to run.
 
+## Start here
+
+The ten demos that best answer *"why Dagster on top of my existing stack?"*. Each has been live-validated end-to-end. Skim these first; the depth tables below hold the long tail (~200 more).
+
+| Demo | Why | Cost |
+|---|---|---|
+| **[dbt + ML + dbt (mid-DAG Python)](dbt_ml_pipeline.md)** | The flagship "why Dagster over Airflow" — a Python ML asset sitting between two sets of dbt models, all in one lineage graph. Airflow can't do this. | $0 |
+| **[dbt + LLM + dbt (mid-DAG generative)](dbt_llm_pipeline.md)** | Same shape, LLM in the middle. LangChain generates personalized retention emails between dbt models. | ~$0.01 |
+| **[Cube semantic layer + LLM](cube_query.md)** | Cube as the LLM safety layer — LLM never touches raw SQL, gets governed metrics from Cube instead. | $0 simple, ~$0.01 LLM |
+| **[CRM reconciliation (HubSpot + Salesforce)](crm_reconciliation.md)** | Every RevOps team's "we have both HubSpot and Salesforce" problem. Outer-join contacts across both, get HS-only + SF-only + both. Synth data locally; swap for real ingestion in prod. | $0 |
+| **[Temporal — full four-mode integration](temporal_workflow.md)** | Dagster ↔ Temporal: start, observe, push (signals), pull (queries). Real dev-server + Python worker + SWAPI activity. | $0 |
+| **[Temporal signal + query (long-lived workflows)](temporal_signal_query.md)** | Push state INTO / pull state OUT of a running Temporal workflow from Dagster assets. | $0 |
+| **[Vercel — deployment observation](vercel_deployment.md)** | Dagster observes Vercel deploys; downstream data assets gate on production going live. | $0 |
+| **[Vercel AI Gateway agent (multi-provider LLM)](vercel_ai_gateway_agent.md)** | One Vercel key routes to any provider (OpenAI / Anthropic / Google / xAI) with automatic fallback. | ~$0.005 |
+| **[LangGraph agent (multi-step reasoning)](langgraph_agent.md)** | Multi-step LangGraph `StateGraph` (plan / research / critique / synthesize) as one Dagster asset. | ~$0.005 |
+| **[Agent + MCP tool loop (three-component family)](agent_family.md)** | Real MCP filesystem tools driven by an OpenAI agent, with an LLM judge grading the trajectory. The template for any tool-using agent. | ~$0.005 |
+
+The full depth catalog by what-it-needs-to-run follows.
+
 ## Table of contents
 
 - [No auth required (synthetic or public data)](#no-auth-required-synthetic-or-public-data)
@@ -134,6 +153,7 @@ The component family — `database_schema_inventory`, `database_migration_assess
 
 | Demo | Components | Highlights |
 |---|---|---|
+| [CRM Reconciliation (HubSpot + Salesforce)](crm_reconciliation.md) | `hubspot_ingestion`, `salesforce_ingestion`, `dataframe_join`, `synthetic_data_generator` | The "we have both CRMs" problem — outer-join on email → HubSpot-only + Salesforce-only + both. Synth data locally, swap ingestion type for production. Live-validated. |
 | [SaaS Metrics (synthetic Stripe)](saas_metrics.md) | `synthetic_data_generator`, `subscription_metrics`, `dataframe_to_csv` | MRR / ARR / churn / LTV / ARPU |
 | [Revenue Attribution](revenue_attribution.md) | `file_ingestion`, `synthetic_data_generator`, `revenue_attribution`, `dataframe_to_csv` | Linear attribution across marketing channels |
 | [Retail LTV (CDP)](retail_ltv.md) | `file_ingestion`, `data_cleansing`, `formula`, `ltv_prediction`, `dataframe_to_csv` | LTV on 542k real transactions |
@@ -279,6 +299,15 @@ These demos run **without** `OPENAI_API_KEY` set (skipping the OpenAI-touching c
 | Demo | Components | Requires |
 |---|---|---|
 | [Vercel AI Gateway Agent](vercel_ai_gateway_agent.md) | `vercel_ai_gateway_agent` | AI-Gateway–scoped Vercel key (`vck_...`) — routes to OpenAI/Anthropic/Google/xAI/Groq/etc. via `<provider>/<model>` strings, with optional fallback chain. Live-validated across three providers. |
+
+### Semantic layer (Cube)
+
+Governed metrics as first-class Dagster assets, plus the "Cube as LLM safety layer" pattern.
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [Cube — simple query](cube_query.md) | `cube_query_asset`, `external_cube_metric` | Docker-local Cube dev server with a sample `Orders` cube; two `CubeQueryAssetComponent` queries (summary + by-status) materialize as Dagster DataFrames. **$0, no keys.** Live-validated 2026-07-06. |
+| [Cube + LLM (semantic layer for AI)](cube_query.md) | `cube_query_asset`, `langchain_chain_asset` | Cube gives the LLM a governed, typed interface — no raw SQL, no hallucinated columns. Query customer totals via Cube, then gpt-4o-mini narrates each row in natural language. **Requires OPENAI_API_KEY.** Live-validated. |
 
 ### Cloud observability + enterprise SaaS
 
