@@ -252,6 +252,7 @@ These demos run end-to-end with **no API keys** — just `pip install` of local 
 
 | Demo | Components | Highlights |
 |---|---|---|
+| [dbt + ML + dbt (mid-DAG Python)](dbt_ml_pipeline.md) | `dagster_dbt.DbtProjectComponent` (×2 with `op.name` split), `churn_prediction`, `duckdb_pandas_io_manager` | **Flagship "why Dagster over Airflow" demo.** A Python ML asset sitting between two sets of dbt models, all in ONE lineage graph. Airflow can't do this — dbt is one opaque operator. Dagster treats every dbt model as an asset, so a Python asset drops in. DuckDB + local sklearn heuristic scorer, $0, no API keys. |
 | [AI without LLMs](ai_no_llm.md) | `synthetic_data_generator`, `keyword_extractor`, `language_detector`, `pii_detector`, `pii_redactor`, `embeddings_generator` | Rule-based + local-model AI — no API keys needed |
 | [Ollama (local LLM)](ollama.md) | `synthetic_data_generator`, `ollama_inference_asset` | Local Llama / Mistral / etc. via Ollama (free, runs in your laptop) — requires `ollama serve` running |
 | [Text Extraction](text_extraction.md) | `json_flatten`, `json_path_extractor`, `nested_field_extractor`, `xml_parser`, `html_parser`, `regex_parser` | Pull structured fields from semi-structured columns |
@@ -271,6 +272,7 @@ These demos run **without** `OPENAI_API_KEY` set (skipping the OpenAI-touching c
 |---|---|---|
 | [NLP Utilities](nlp_utilities.md) | 6 standalone transforms — `document_chunker`, `word_cloud`, `part_of_speech_tagger`, `topic_modeler`, `text_similarity` | The `synthetic_data` source uses gpt-4o-mini to generate test articles; the 6 utilities downstream are local |
 | [LangGraph Agent](langgraph_agent.md) | `langgraph_agent` | Multi-step LangGraph `StateGraph` (plan → research → critique → synthesize) as a single Dagster asset. Each step is a real OpenAI call; supports conditional routing via `condition_regex`. Live-validated 2026-07-02. |
+| [dbt + LLM + dbt (mid-DAG generative AI)](dbt_llm_pipeline.md) | `dagster_dbt.DbtProjectComponent` (×2 with `op.name` split), `langchain_chain_asset`, `duckdb_pandas_io_manager` | LLM version of the [dbt + ML pipeline](dbt_ml_pipeline.md) — a LangChain asset generates personalized retention emails between the dbt models. `parse_json: true` expands the structured LLM output into DataFrame columns the marts model can select by name. ~$0.01/run on gpt-4o-mini. |
 
 ### AI / NLP — via Vercel AI Gateway (one key, any provider)
 
