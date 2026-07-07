@@ -1,20 +1,15 @@
 #!/usr/bin/env bash
-# setup_iterative_catalog_agent_demo.sh
+# setup_catalog_agent_demo.sh
 #
-# Iterative Catalog Agent — the most sophisticated agentic primitive.
-# Fusion of iterative-step-per-materialization + live-manifest catalog.
-# At each step, the planner sees the ACTUAL columns from the prior step's
-# real materialized output — so the agent handles data with unknown schemas.
+# Catalog Agent — the most sophisticated agentic primitive.
+# Per-step planner picks REAL components from the LIVE 900-component
+# manifest. At each step, the planner sees the ACTUAL columns from the
+# prior step's real materialized output — so the agent handles data with
+# schemas unknown at pipeline-write time.
 #
-# What's different from component_catalog_agent:
-#   • Single-shot catalog: planner picks all steps upfront (no schema info
-#     for downstream picks — has to guess column names).
-#   • Iterative catalog (this): planner picks step 1, executes, sees REAL
-#     columns, then picks step 2 with knowledge of the real schema.
-#
-# What's different from iterative_supervisor_agent:
+# How this differs from iterative_supervisor_agent:
 #   • Supervisor tools are LLM personas (hand-authored, roleplay).
-#   • Iterative catalog tools are REAL Dagster components from the 900-
+#   • Catalog Agent tools are REAL Dagster components from the 900-
 #     component manifest, executed via reflection + in-process materialize.
 #
 # Pipeline:
@@ -32,11 +27,11 @@
 #
 # USAGE
 #   export OPENAI_API_KEY=sk-...
-#   ./setup_iterative_catalog_agent_demo.sh          # → iterative_catalog_agent_demo/
+#   ./setup_catalog_agent_demo.sh          # → catalog_agent_demo/
 
 set -eo pipefail
 
-PROJECT_NAME="${1:-iterative_catalog_agent_demo}"
+PROJECT_NAME="${1:-catalog_agent_demo}"
 BASE_DIR="$(pwd)"
 PROJECT_DIR="${BASE_DIR}/${PROJECT_NAME}"
 
@@ -84,7 +79,7 @@ PY
 mkdir -p "src/${PROJECT_NAME}/defs/agent"
 
 cat > "src/${PROJECT_NAME}/defs/agent/defs.yaml" <<'YAML'
-type: dagster_community_components.IterativeCatalogAgentComponent
+type: dagster_community_components.CatalogAgentComponent
 attributes:
   step_asset_prefix: catalog_step
   synthesis_asset_name: catalog_final_answer
@@ -109,20 +104,20 @@ attributes:
     - summarize
     - dataframe_describe
   max_iterations: 5
-  group_name: iterative_catalog_demo
+  group_name: catalog_agent_demo
 YAML
 
 ok "Wrote defs.yaml"
 
 DM="${PROJECT_NAME}.definitions"
-info "Running iterative catalog agent (5 steps + synthesis)…"
+info "Running catalog agent (5 steps + synthesis)…"
 uv run dagster asset materialize --select '*' -m "$DM" 2>&1 | tail -3 || fail "run failed"
 
 echo
 ok "Demo complete."
 echo
 cat <<EOF
-The iterative catalog agent just ran:
+The catalog agent just ran:
   1. Step 1: planner fetched the manifest, filtered to your include_ids,
      picked ONE real component + config. Executor materialized it in-process.
   2. Step 2: planner saw step 1's REAL output columns + preview, then picked

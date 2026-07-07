@@ -1,20 +1,19 @@
-# Iterative Catalog Agent — schema-discovering chained pipeline over 900 real components
+# Catalog Agent — schema-discovering chained pipeline over 900 real components
 
-**Component (new):** `IterativeCatalogAgentComponent` — fusion of `iterative_supervisor_agent` (per-step planner, N assets, short-circuit) + `component_catalog_agent` (live manifest, reflection, real materialization). At each step the planner sees the ACTUAL columns of prior step outputs, so it can plan against data with unknown schemas.
+**Component (new):** `CatalogAgentComponent` — the most sophisticated agentic primitive in the registry. Per-step planner picks REAL components from the live 900-component manifest, executes them via reflection + in-process materialization, and sees the ACTUAL columns of each step's output before planning the next — so it can plan against data with unknown schemas.
 
-**Script:** [`setup_iterative_catalog_agent_demo.sh`](./setup_iterative_catalog_agent_demo.sh)
+**Script:** [`setup_catalog_agent_demo.sh`](./setup_catalog_agent_demo.sh)
 **Cost:** ~$0.02 per run (N planner calls + 1 synthesis, all gpt-4o-mini)
 **Validated:** 2026-07-07 — 3-step real chained pipeline built via schema discovery. Task did NOT tell the agent what columns exist; the agent discovered `is_active`, `city`, `state`, `lifetime_value` from step 1's actual output.
 
 ## Why this is the strongest agentic shape
 
-Every earlier agentic demo has a schema-knowledge gap:
+Every earlier agentic demo has one of two gaps:
 
-- [Supervisor Agent](./supervisor_agent.md) — planner picks tools upfront, no output introspection.
-- [Iterative Supervisor Agent](./iterative_supervisor_agent.md) — iterative, but tools are LLM personas (roleplay), no real column info.
-- [Component Catalog Agent](./component_catalog_agent.md) — real components, but single-shot planning; downstream picks have to GUESS the upstream column names (had to spell them out in the task).
+- [Supervisor Agent](./supervisor_agent.md) / [Iterative Supervisor Agent](./iterative_supervisor_agent.md) — tools are LLM personas (roleplay). No REAL execution.
+- Any hand-authored tool list — doesn't scale to 900 components in the registry.
 
-Iterative Catalog Agent solves the schema problem. The planner at step 2+ sees:
+Catalog Agent closes both gaps. The tools are the ENTIRE registry (filtered). Every pick is a REAL component materialization. The planner at step 2+ sees:
 
 ```
 Prior steps:
@@ -63,9 +62,9 @@ When a step's picked component uses `upstream_asset_key`:
 
 ```bash
 export OPENAI_API_KEY=sk-...
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_iterative_catalog_agent_demo.sh -o setup_iterative_catalog_agent_demo.sh
-chmod +x setup_iterative_catalog_agent_demo.sh
-./setup_iterative_catalog_agent_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_catalog_agent_demo.sh -o setup_catalog_agent_demo.sh
+chmod +x setup_catalog_agent_demo.sh
+./setup_catalog_agent_demo.sh
 ```
 
 ## Validated run output (2026-07-07)
@@ -120,7 +119,7 @@ step 5: short-circuit (prior step done)
 
 ## The full agentic-pipeline family
 
-Iterative Catalog Agent is #9 — the current apex.
+Catalog Agent is the current apex.
 
 1. [Data Doctor](./data_doctor.md) — pick column REMEDIATIONS
 2. [Adaptive Triage Router](./adaptive_triage.md) — pick per-row DOWNSTREAM ROUTE
@@ -129,13 +128,11 @@ Iterative Catalog Agent is #9 — the current apex.
 5. [MCP Tool Picker](./mcp_tool_picker.md) — pick WHICH MCP TOOLS
 6. [Adaptive Research Brief](./adaptive_research_brief.md) — pick HOW MANY items
 7. [Iterative Supervisor Agent](./iterative_supervisor_agent.md) — pick tools ITERATIVELY (chained, LLM personas)
-8. [Component Catalog Agent](./component_catalog_agent.md) — pick from LIVE REGISTRY, execute REAL (single-shot)
-9. **Iterative Catalog Agent** *(this demo)* — pick from LIVE REGISTRY, execute REAL, WITH schema discovery (iterative)
+8. **Catalog Agent** *(this demo)* — pick from the LIVE REGISTRY, execute REAL, iteratively, with schema discovery
 
-The progression: hand-authored → catalog-driven → real invocation → iterative → schema-aware. Each step handles a real limitation of the prior shape.
+The progression: hand-authored → catalog-driven → real invocation → iterative → schema-aware. Each step handles a real limitation of the prior shape. Catalog Agent is the strongest shape — everything below it is a special case (set `max_iterations: 1` for single-shot, filter `include_ids` tight for a small tool set, etc.).
 
 ## Related
 
-- [Component Catalog Agent](./component_catalog_agent.md) — single-shot version. Simpler; use when you know upstream schemas.
-- [Iterative Supervisor Agent](./iterative_supervisor_agent.md) — same iterative shape but LLM-persona tools.
+- [Iterative Supervisor Agent](./iterative_supervisor_agent.md) — same iterative shape but hand-authored LLM-persona tools instead of the live catalog.
 - [MCP Tool Picker](./mcp_tool_picker.md) — MCP-backed real tools; single-shot.
