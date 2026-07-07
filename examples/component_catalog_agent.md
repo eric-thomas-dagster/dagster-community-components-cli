@@ -4,7 +4,12 @@
 
 **Script:** [`setup_component_catalog_agent_demo.sh`](./setup_component_catalog_agent_demo.sh)
 **Cost:** ~$0.02 per run (planner + synthesis on gpt-4o-mini; the actual component executions are free — real Dagster asset materializations)
-**Validated:** 2026-07-07 — RUN_SUCCESS end-to-end. Planner picked 2 real `synthetic_data_generator` invocations with the correct field names (thanks to runtime Pydantic introspection); both actually materialized real DataFrames (customers + products); synthesizer wrote a grounded description citing actual field names from the materialized data.
+**Validated:** 2026-07-07 — real 4-component chained pipeline. Planner picked `synthetic_data_generator` → `filter` → `summarize` → `dataframe_to_csv` in order, chained via `upstream_asset_key`, and the executor materialized the whole graph in-process. All 4 succeeded; a real CSV landed on disk with the actual aggregated data:
+```
+type,row_count,total_amount
+deposit,6,4709.12
+refund,6,4351.64
+```
 
 ## Why this exists
 
@@ -17,9 +22,15 @@ Even better: since all component classes are already importable from `dagster_co
 ## Pipeline
 
 ```
-catalog_plan       (planner: fetch manifest → filter → introspect fields → pick {id, config})
+catalog_plan       (planner: fetch manifest → filter → introspect Pydantic fields
+                    with TYPES → pick ORDERED list of {id, config} with upstream_asset_key
+                    chaining)
        ↓
-catalog_execution  (for each pick: import class → instantiate → build_defs → materialize)
+catalog_execution  (Phase 1: import + instantiate every pick; collect ALL assets
+                    across ALL picks into one graph. Phase 2: dg.materialize()
+                    runs the whole graph, Dagster resolves cross-pick dependencies
+                    via asset_key ↔ upstream_asset_key matching. Phase 3: report
+                    per-pick status + real output preview.)
        ↓
 catalog_answer     (synthesizer: grounded final answer citing real outputs)
 ```
@@ -65,39 +76,39 @@ chmod +x setup_component_catalog_agent_demo.sh
 ./setup_component_catalog_agent_demo.sh
 ```
 
-## Validated run output (2026-07-07)
+## Validated run output (2026-07-07) — 4-component chained pipeline
 
-**Planner's picks:**
+**Task:** *"Build a mini analytics pipeline: generate 100 transactions → filter to amount>500 → summarize by type → write CSV."*
 
-```
-id                        config                                                       reason
-synthetic_data_generator  {"asset_name": "customers_dataset", "schema_type": "customers", "row_count": 10}  Generate customers dataset for testing
-synthetic_data_generator  {"asset_name": "products_dataset",  "schema_type": "products",  "row_count": 10}  Generate products dataset for testing
-```
-
-**Real execution outputs (excerpt):**
+**Planner's picks — 4 different components, ordered + chained via `upstream_asset_key`:**
 
 ```
-customer_id  first_name  last_name  email                          city         signup_date  lifetime_value  is_active
-CUST000001   John        Rodriguez  john.rodriguez372@example.com  Los Angeles  2026-06-20   327.92          True
-CUST000002   Emma        Smith      emma.smith468@example.com      Los Angeles  2025-11-09   3070.46         False
-...
-
-product_id   name              category     price   cost    margin_pct  stock_quantity  rating  is_available
-PROD000001   Premium Bundle    Food         447.28  207.54  53.6        230             4.7     True
-PROD000002   Classic Set       Food         205.13  101.93  50.3        150             3.2     False
-...
+1. synthetic_data_generator  {asset_name: synthetic_transactions,  schema_type: transactions, row_count: 100}
+2. filter                    {asset_name: filtered_transactions,   upstream_asset_key: synthetic_transactions, condition: "amount > 500"}
+3. summarize                 {asset_name: transaction_summary,     upstream_asset_key: filtered_transactions, group_by: ["type"], aggregations: {row_count: {col:amount,agg:count}, total_amount: {col:amount,agg:sum}}}
+4. dataframe_to_csv          {asset_name: transaction_summary_csv, upstream_asset_key: transaction_summary,   file_path: "/tmp/catalog_agent_demo_summary.csv"}
 ```
 
-**Synthesizer's answer (grounded in real data):**
+**Real execution — Dagster materialized the whole graph in one pass:**
 
-> Two synthetic datasets have been successfully generated: one for customers and another for products.
->
-> The **customers dataset** contains: `customer_id`, `first_name`, `last_name`, `email`, `phone`, `city`, `state`, `signup_date`, `lifetime_value`, `is_active`. 10 rows of customer information with personal contact, location, signup date, lifetime value, and active status.
->
-> The **products dataset** contains: `product_id`, `name`, `category`, `price`, `cost`, `margin_pct`, `stock_quantity`, `rating`, `num_reviews`, `is_available`. 10 rows detailing product identifiers, categories, pricing, stock levels, ratings, and availability.
+```
+transaction_summary output (real DataFrame):
+| type    |   row_count |   total_amount |
+|---------|-------------|----------------|
+| deposit |           6 |        4709.12 |
+| refund  |           6 |        4351.64 |
+```
 
-The synthesizer cites REAL field names from the REAL materialized DataFrames.
+**Real CSV written to disk:**
+
+```
+$ cat /tmp/catalog_agent_demo_summary.csv
+type,row_count,total_amount
+deposit,6,4709.12
+refund,6,4351.639999999999
+```
+
+That's a real 4-step Dagster asset pipeline, discovered from the live 900-component manifest, chained via `upstream_asset_key`, materialized end-to-end. No hand-authored tool list — the manifest IS the tool set.
 
 ## Bounding the catalog
 
@@ -119,9 +130,9 @@ include_tags: [transform, filter]
 
 ## Limitations (v1)
 
-- **Source-style components work best.** The planner should pick components with no external upstream deps (`synthetic_data_generator`, `text_embedding_asset`, `langchain_chain_asset` with a static task, etc.). Components expecting `upstream_asset_key` have no upstream at runtime.
-- **Resource-requiring components fail gracefully.** Snowflake / S3 / Slack / etc. components can't run without their resources. `fail_on_execution_error: false` (default) logs and continues. Set to `true` for strict mode.
-- **Multi-asset components get one output captured.** Fine for `synthetic_data_generator` (1 asset). For components like `supervisor_agent` (N assets), the executor grabs the last one — imperfect but works for the demo.
+- **Static schema knowledge only.** The planner sees the Pydantic field TYPES (accurate — Pydantic is source of truth) but doesn't know the actual COLUMNS of DataFrames flowing between picks. For synthetic data with well-known schemas, we currently spell the columns out in the task string. For customer-built data (e.g. a Snowflake table you own), the natural v2 is an **iterative catalog agent** — planner picks step 1 → executor runs it → agent inspects the real output columns → planner replans step 2 with the actual schema.
+- **Resource-requiring components fail gracefully.** Snowflake / S3 / Slack / etc. components can't run without their resources wired at runtime. `fail_on_execution_error: false` (default) logs the failure and lets sibling picks continue. Set `true` for strict mode.
+- **Multi-asset components get one output captured.** Fine for source-style components (1 asset). For fan-out components like `supervisor_agent` (N assets), the executor captures the first output — imperfect but works for the demo.
 
 ## Extension patterns
 

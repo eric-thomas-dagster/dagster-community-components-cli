@@ -87,15 +87,32 @@ attributes:
   plan_asset_name: catalog_plan
   execution_asset_name: catalog_execution
   synthesis_asset_name: catalog_answer
+  # A multi-step task that forces chaining across multiple components:
   task: |
-    Generate two small synthetic datasets — one of customers (10 rows) and
-    one of products (10 rows). Then describe in one paragraph what fields
-    each dataset contains, using the actual field names.
+    Build a mini analytics pipeline:
+      Step 1: Generate 100 synthetic transactions (schema_type=transactions).
+              This produces columns: transaction_id, account_id, timestamp,
+              type, amount, merchant, category, status.
+      Step 2: Filter to transactions with amount > 500.
+      Step 3: Summarize the filtered set by `type` — count of transactions
+              per type, and total amount per type. For SummarizeComponent,
+              aggregations is a dict mapping OUTPUT column name to a spec
+              like: {"row_count": {"col": "amount", "agg": "count"},
+                     "total_amount": {"col": "amount", "agg": "sum"}}.
+      Step 4: Write the summary to a CSV file at /tmp/catalog_agent_demo_summary.csv.
+    Chain these steps: each downstream pick must reference the previous
+    pick's asset_name via upstream_asset_key.
   model: gpt-4o-mini
   api_key_env_var: OPENAI_API_KEY
-  # The manifest is the catalog. Filter narrow for a safe demo:
-  include_ids: [synthetic_data_generator]
-  max_picks: 3
+  # A curated slice of the 900-component registry — planner picks from
+  # these and chains them together. Each is a REAL component that
+  # will be instantiated + materialized for real.
+  include_ids:
+    - synthetic_data_generator
+    - filter
+    - summarize
+    - dataframe_to_csv
+  max_picks: 6
   group_name: catalog_agent_demo
 YAML
 
