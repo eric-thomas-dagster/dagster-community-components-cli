@@ -76,13 +76,13 @@ def defs():
     )
 PY
 
-mkdir -p "src/${PROJECT_NAME}/defs/agent"
-
-cat > "src/${PROJECT_NAME}/defs/agent/defs.yaml" <<'YAML'
+# === DEMO 1: simple schema-discovery pipeline (single source) ============
+mkdir -p "src/${PROJECT_NAME}/defs/simple_agent"
+cat > "src/${PROJECT_NAME}/defs/simple_agent/defs.yaml" <<'YAML'
 type: dagster_community_components.CatalogAgentComponent
 attributes:
-  step_asset_prefix: catalog_step
-  synthesis_asset_name: catalog_final_answer
+  step_asset_prefix: simple_step
+  synthesis_asset_name: simple_final_answer
   # Task deliberately does NOT tell the agent what columns exist —
   # it must discover them from step 1's real output.
   task: |
@@ -98,44 +98,88 @@ attributes:
     Then declare done. Chain each step using upstream_asset_key.
   model: gpt-4o-mini
   api_key_env_var: OPENAI_API_KEY
-  include_ids:
-    - synthetic_data_generator
-    - filter
-    - summarize
-    - dataframe_describe
+  include_ids: [synthetic_data_generator, filter, summarize, dataframe_describe]
   max_iterations: 5
-  group_name: catalog_agent_demo
+  group_name: catalog_simple_demo
 YAML
 
-ok "Wrote defs.yaml"
+# === DEMO 2: multi-source join pipeline (two sources → join → aggregate → CSV) ===
+mkdir -p "src/${PROJECT_NAME}/defs/join_agent"
+cat > "src/${PROJECT_NAME}/defs/join_agent/defs.yaml" <<'YAML'
+type: dagster_community_components.CatalogAgentComponent
+attributes:
+  step_asset_prefix: join_step
+  synthesis_asset_name: join_final_answer
+  # Task forces a real JOIN — output requires customer NAMES + EMAIL,
+  # which only exist on the customers side of the join.
+  task: |
+    Build this analytics pipeline:
+      Step 1: Generate 300 synthetic orders (schema_type=orders).
+      Step 2: Generate 30 synthetic customers (schema_type=customers).
+      Step 3: Inner-join orders with customers on customer_id
+              (wire dataframe_join's left_asset_key + right_asset_key
+              to the prior source asset_names).
+      Step 4: Derive a `month` column from order_date via formula.
+      Step 5: Aggregate by (first_name, email, month) — sum total,
+              count orders. first_name + email come from customers,
+              so you MUST have joined by then.
+      Step 6: Write /tmp/orders_by_customer_month.csv.
+    Then declare done.
+  model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
+  include_ids: [synthetic_data_generator, dataframe_join, formula, summarize, dataframe_to_csv]
+  max_iterations: 8
+  group_name: catalog_join_demo
+YAML
+
+ok "Wrote 2 defs.yaml files (simple + join)"
 
 DM="${PROJECT_NAME}.definitions"
-info "Running catalog agent (5 steps + synthesis)…"
-uv run dagster asset materialize --select '*' -m "$DM" 2>&1 | tail -3 || fail "run failed"
+
+info "Running DEMO 1 — simple schema-discovery pipeline…"
+uv run dagster asset materialize --select 'simple_step_1+' -m "$DM" 2>&1 | tail -3 || fail "simple demo failed"
+
+info "Running DEMO 2 — multi-source join pipeline…"
+uv run dagster asset materialize --select 'join_step_1+' -m "$DM" 2>&1 | tail -3 || fail "join demo failed"
 
 echo
-ok "Demo complete."
+ok "Both demos complete."
 echo
 cat <<EOF
-The catalog agent just ran:
-  1. Step 1: planner fetched the manifest, filtered to your include_ids,
-     picked ONE real component + config. Executor materialized it in-process.
-  2. Step 2: planner saw step 1's REAL output columns + preview, then picked
-     the next component with knowledge of the actual schema. Executor
-     ran it, wiring the upstream via a source asset seeded with step 1's
-     DataFrame.
-  3. Continued until planner declared done. Later steps short-circuit.
-  4. Synthesizer wrote the final answer citing each step.
+DEMO 1 (simple_step_* + simple_final_answer): schema discovery.
+  1. Planner picked a schema_type (customers/orders/etc.)
+  2. Executor materialized synthetic_data — real columns discovered
+  3. Planner filtered using a real column name from step 1
+  4. Planner summarized using real column names from step 2
+  5. Declared done; later steps short-circuit
 
-Inspect the trajectory:
+DEMO 2 (join_step_* + join_final_answer): multi-source join with self-correction.
+  If the planner references an upstream that doesn't exist yet (e.g. tries
+  to join orders before generating them), the validator catches it,
+  surfaces the error to the NEXT step's planner, and the planner
+  course-corrects. Typical successful trajectory:
+    step 1: generate customers  ← or orders (agent picks either first)
+    step 2: dataframe_join      ← may fail if planner forward-references
+    step 3: generate the OTHER source  ← course-correct!
+    step 4: dataframe_join      ← now succeeds with BOTH upstreams wired
+    step 5: formula (month from order_date)
+    step 6: summarize by (first_name, email, month)
+    step 7: dataframe_to_csv → /tmp/orders_by_customer_month.csv
+    step 8: DONE
+
+Inspect the CSV DEMO 2 produced:
+  cat /tmp/orders_by_customer_month.csv
+
+Inspect both trajectories:
   cd $PROJECT_NAME
   uv run dg dev
-    → asset graph: catalog_step_1 → catalog_step_2 → … → catalog_final_answer
-    → click each step to see the planner's pick + reason + REAL output columns
-    → click catalog_final_answer to see the synthesized description
+    → asset graph shows BOTH pipelines side by side
+    → simple_step_1..5 + simple_final_answer  (schema-discovery demo)
+    → join_step_1..8 + join_final_answer      (multi-source join demo)
+    → click any step to see the planner's pick + reason + REAL output columns
 
 This works for customer-built data because the planner learns the schema
 FROM the actual materialized output. Point step 1 at a Snowflake table,
-S3 CSV, or any DataFrame source — the agent discovers the columns and
+S3 CSV, or any real DataFrame source — the agent discovers columns and
 plans the rest of the pipeline accordingly.
 EOF
