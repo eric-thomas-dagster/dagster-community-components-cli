@@ -110,21 +110,14 @@ type: dagster_community_components.CatalogAgentComponent
 attributes:
   step_asset_prefix: join_step
   synthesis_asset_name: join_final_answer
-  # Task forces a real JOIN — output requires customer NAMES + EMAIL,
-  # which only exist on the customers side of the join.
+  # Deliberately vague / user-natural phrasing — no explicit steps,
+  # no field-name hints, no wiring instructions. The agent has to
+  # figure out the pipeline shape (gen sources → join → derive
+  # month → aggregate → CSV) from the intent alone.
   task: |
-    Build this analytics pipeline:
-      Step 1: Generate 300 synthetic orders (schema_type=orders).
-      Step 2: Generate 30 synthetic customers (schema_type=customers).
-      Step 3: Inner-join orders with customers on customer_id
-              (wire dataframe_join's left_asset_key + right_asset_key
-              to the prior source asset_names).
-      Step 4: Derive a `month` column from order_date via formula.
-      Step 5: Aggregate by (first_name, email, month) — sum total,
-              count orders. first_name + email come from customers,
-              so you MUST have joined by then.
-      Step 6: Write /tmp/orders_by_customer_month.csv.
-    Then declare done.
+    Generate synthetic orders and synthetic customers, join them,
+    group by first name, email, and month, sum total and count of
+    orders, and store to a csv at /tmp/orders_by_customer_month.csv.
   model: gpt-4o-mini
   api_key_env_var: OPENAI_API_KEY
   include_ids: [synthetic_data_generator, dataframe_join, formula, summarize, dataframe_to_csv]

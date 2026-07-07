@@ -89,7 +89,7 @@ step 4: DONE
 
 ### Multi-source join task with self-correction
 
-**Task:** *"Generate 300 orders + 30 customers. Join them. Derive month. Aggregate by (first_name, email, month). Write CSV."*
+**Task (as a real user would write it, no step-by-step):** *"Generate synthetic orders and synthetic customers, join them, group by first name, email, and month, sum total and count of orders, and store to a csv."*
 
 Notice the planner made a mistake and self-corrected:
 
