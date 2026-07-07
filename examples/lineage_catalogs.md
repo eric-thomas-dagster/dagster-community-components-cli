@@ -51,7 +51,7 @@ asset pipeline:
 ## Run the demo
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_lineage_demo.sh | bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_lineage_catalogs_demo.sh | bash
 cd lineage-demo
 
 # Persistent DAGSTER_HOME is required for change-detection to span runs

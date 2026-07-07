@@ -74,5 +74,5 @@ attributes:
 Both NR and Dynatrace also accept OTLP/HTTP — you can use the
 universal `dataframe_to_otlp_logs` / `dataframe_to_otlp_metrics` sinks
 instead, with the appropriate OTLP endpoint + bearer token. See
-[opentelemetry_demo.md](opentelemetry_demo.md). One sink per signal,
+[opentelemetry.md](opentelemetry.md). One sink per signal,
 many backends.

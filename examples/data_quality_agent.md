@@ -2,7 +2,7 @@
 
 **Components:** `synthetic_data_generator`, `anomaly_detection`, `filter`, `langchain_chain_asset` — all existing, composed via YAML.
 
-**Script:** [`setup_dq_agent_demo.sh`](./setup_dq_agent_demo.sh)
+**Script:** [`setup_data_quality_agent_demo.sh`](./setup_data_quality_agent_demo.sh)
 **Cost:** ~$0.005 per run (~50 LLM calls on gpt-4o-mini)
 **Validated:** 2026-07-07 — 50 anomalies flagged from 500 synthetic transactions, LLM wrote plausible_reason + followup_check per row.
 
@@ -27,9 +27,9 @@ transactions (500 rows)  →  anomalies (z_score > 1.5 flag)  →  anomalies_onl
 
 ```bash
 export OPENAI_API_KEY=sk-...
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_dq_agent_demo.sh -o setup_dq_agent_demo.sh
-chmod +x setup_dq_agent_demo.sh
-./setup_dq_agent_demo.sh
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_data_quality_agent_demo.sh -o setup_data_quality_agent_demo.sh
+chmod +x setup_data_quality_agent_demo.sh
+./setup_data_quality_agent_demo.sh
 ```
 
 ## Validated run samples (2026-07-07)

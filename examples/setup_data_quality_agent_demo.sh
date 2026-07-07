@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# setup_dq_agent_demo.sh
+# setup_data_quality_agent_demo.sh
 #
 # Data quality with LLM explanations. Every DQ pipeline says "row 42 is
 # anomalous, z-score 4.2" — but no one has time to figure out WHY. This
@@ -24,11 +24,11 @@
 #
 # Usage
 #   export OPENAI_API_KEY=sk-...
-#   ./setup_dq_agent_demo.sh                             # → dq_agent_demo/
+#   ./setup_data_quality_agent_demo.sh                   # → data_quality_agent_demo/
 
 set -eo pipefail
 
-PROJECT_NAME="${1:-dq_agent_demo}"
+PROJECT_NAME="${1:-data_quality_agent_demo}"
 BASE_DIR="$(pwd)"
 PROJECT_DIR="${BASE_DIR}/${PROJECT_NAME}"
 

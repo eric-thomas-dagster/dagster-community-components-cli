@@ -233,6 +233,7 @@ The component family — `database_schema_inventory`, `database_migration_assess
 | [Document Extractors](document_extractors.md) | 13 document-source components — PDF / Word / HTML / RST / Markdown / etc. | Mega-demo: every shipped document-extraction component |
 | [S3 Dynamic-Partition Pipeline](s3_pipeline.md) | `s3_monitor` (dynamic_partition mode), `file_ingestion` (partitioned), `summarize`, `dataframe_to_parquet` | Sensor-driven round-trip on **local Minio S3** (Docker). Each detected file becomes a tracked dynamic partition → processed → parquet back to S3. Real S3 / GCS / ADLS by swapping the URI scheme. |
 | [Kafka End-to-End](kafka.md) | `external_kafka_asset`, `kafka_resource`, `kafka_to_database_asset`, `kafka_monitor`, `kafka_observation_sensor` | Full Kafka family against a **local KRaft broker** (Docker, no Zookeeper). Topic → SQLite via SQLAlchemy + sensor + observation. Retargets at MSK / Confluent Cloud / self-hosted by swapping `bootstrap_servers`. |
+| [Apache Pulsar End-to-End](pulsar.md) | `pulsar_to_database_asset`, `pulsar_monitor`, `pulsar_observation_sensor`, `python_callable_job` | Full Pulsar family against a **local `apachepulsar/pulsar:latest` standalone** container. Topic → SQLite + monitor sensor + observation. Retargets at StreamNative Cloud unchanged. |
 | [Docker Container Asset](docker_container.md) | `docker_container_asset` | Run any container image as a Dagster asset via `dagster-docker`. Image / command / env / network all declarative; logs stream into the Dagster run log. Demo runs `alpine` + `python:3.11-slim` end-to-end. |
 | [MongoDB End-to-End](mongodb.md) | `mongodb_resource`, `mongodb_reader`, `mongodb_writer`, `synthetic_data_generator` | Read / write MongoDB against a **local mongo:7 container**. Query + projection + sort on the reader, append/replace/upsert on the writer. Retargets at Atlas / self-hosted replica set by swapping `connection_string_env_var`. |
 | [Redis End-to-End](redis.md) | `redis_resource`, `redis_streams_monitor`, `redis_stream_observation_sensor`, `cache_invalidation_job`, `python_callable_job` | Streams + cache invalidation against a **local redis:7-alpine container**. Cache flush by glob pattern (`session:*`), stream-sensor target job, observation sensor for freshness. Retargets at ElastiCache / Redis Cloud unchanged. |
@@ -245,6 +246,8 @@ The component family — `database_schema_inventory`, `database_migration_assess
 | [Trino](trino.md) | `trino_resource`, `trino_io_manager` | Trino coordinator (memory catalog) in **local trinodb/trino container**. `dg check defs` passes + connectivity verified; full materialization requires a DELETE-supporting catalog (Iceberg / Delta / Postgres). |
 | [Oracle Database](oracle.md) | `oracle_resource`, `dataframe_to_table`, `synthetic_data_generator`, `local_parquet_io_manager` | Oracle Database Free in **local Docker container** — no license, no Instant Client. Retargets at Oracle Autonomous DB / Enterprise / OCI by changing host + service_name only. |
 | [IBM Db2](db2.md) | `db2_resource`, `dataframe_to_table`, `synthetic_data_generator`, `local_parquet_io_manager` | Db2 Community Edition in **local Docker container** (free, non-production). Retargets at Db2 on Cloud / Db2 Warehouse by changing host + port + ssl. |
+| [IBM Db2 for i (AS/400 / iSeries)](db2_iseries.md) | `db2_resource` + downstream components | Meta-walkthrough for pointing existing Db2 components at a real AS/400 — no Docker image exists for IBM i (proprietary hardware). Covers what changes vs. Db2 LUW + which catalog queries work on i. |
+| [Applying Automation Conditions broadly](automation_condition_pipeline.md) | `automation_condition_applicator` | Set Dagster `AutomationCondition`s across many assets at once without editing every `defs.yaml` — fall-through priority, preserve-existing, auto-derive from upstream cadences. Validated against a 4-asset test project. |
 
 ---
 
@@ -313,7 +316,7 @@ Governed metrics as first-class Dagster assets, plus the "Cube as LLM safety lay
 | Demo | Components | Highlights |
 |---|---|---|
 | [Cube — simple query](cube_query.md) | `cube_query_asset`, `external_cube_metric` | Docker-local Cube dev server with a sample `Orders` cube; two `CubeQueryAssetComponent` queries (summary + by-status) materialize as Dagster DataFrames. **$0, no keys.** Live-validated 2026-07-06. |
-| [Cube + LLM (semantic layer for AI)](cube_query.md) | `cube_query_asset`, `langchain_chain_asset` | Cube gives the LLM a governed, typed interface — no raw SQL, no hallucinated columns. Query customer totals via Cube, then gpt-4o-mini narrates each row in natural language. **Requires OPENAI_API_KEY.** Live-validated. |
+| [Cube + LLM (semantic layer for AI)](cube_llm.md) | `cube_query_asset`, `langchain_chain_asset` | Cube gives the LLM a governed, typed interface — no raw SQL, no hallucinated columns. Query customer totals via Cube, then gpt-4o-mini narrates each row in natural language. **Requires OPENAI_API_KEY.** Live-validated. |
 
 ### Cloud observability + enterprise SaaS
 
@@ -321,8 +324,8 @@ Governed metrics as first-class Dagster assets, plus the "Cube as LLM safety lay
 |---|---|---|
 | [AWS CloudWatch](aws_cloudwatch.md) | `cloudwatch_metrics_query`, `cloudwatch_logs_insights` | Pull metrics + Logs Insights query results into a DataFrame |
 | [New Relic + Dynatrace](newrelic_dynatrace.md) | `newrelic_event_sink`, `dynatrace_metric_sink` | Emit pipeline-row events to APM SaaS |
-| [OpenTelemetry Full-Stack](opentelemetry_demo.md) | `otel_metrics_emitter`, `otel_logs_emitter`, `otel_traces_emitter` | Metrics + logs + traces in one demo |
-| [Prometheus](prometheus_demo.md) | `prometheus_push_gateway`, `prometheus_query_asset` | Push + pull patterns side by side |
+| [OpenTelemetry Full-Stack](opentelemetry.md) | `otel_metrics_emitter`, `otel_logs_emitter`, `otel_traces_emitter` | Metrics + logs + traces in one demo |
+| [Prometheus](prometheus.md) | `prometheus_push_gateway`, `prometheus_query_asset` | Push + pull patterns side by side |
 | [Enterprise SaaS Resources](enterprise_saas.md) | `workday_resource`, `marketo_resource`, `intercom_resource`, `plaid_resource` | Declare 4 SaaS APIs in one code location |
 | [SAP HANA via SQLAlchemy](sap_hana.md) | `dataframe_to_table` (mssql adapter pattern) | SAP HANA via SQLAlchemy |
 | [Precisely Connect ETL](precisely_validation.md) | `precisely_job_sensor` | Sensor-only — Precisely owns the run, Dagster fires `RunRequest` on terminal SUCCESS via the documented Job Status endpoint |
@@ -456,6 +459,7 @@ demos.
 | [Anthropic Claude](anthropic.md) | `synthetic_data_generator`, `anthropic_llm` | Anthropic API key | usage-priced |
 | [Gemini LLM](gemini_llm.md) | `synthetic_data_generator`, `gemini_llm` | Gemini API key, billing enabled | $0 free tier / usage |
 | [LiteLLM Multi-Provider](litellm_multi_provider.md) | `litellm_inference_asset`, `synthetic_data_generator`, `dataframe_to_csv`, `dataframe_join` | API key for at least one provider | usage-priced |
+| [Image Generation (LiteLLM-routed)](image_generation.md) | `synthetic_data_generator` (image_prompts) → `litellm_image_generation` | DALL-E 3 via OpenAI (default) — swaps to Stability / Imagen / Replicate / Bedrock / Nano Banana via one YAML change | ~$0.12 (3× 1024×1024 DALL-E 3) |
 | [LLM Execution Mega-Demo](llm_execution.md) | 13 LLM components — OpenAI / LiteLLM / prompt-executor / batch / etc. | OpenAI API key | usage-priced |
 | [LiteLLM Agent + MCP](litellm_agent.md) | `litellm_agent` with the official `@modelcontextprotocol/server-filesystem` server as tool layer | OpenAI API key + `npx` | ~$0.0005/run |
 | [Agent family (3 shapes of MCP use)](agent_family.md) | `mcp_tool_call` + `openai_agent` + `llm_evaluator` — deterministic, agentic, and evaluated, all on the same MCP server | OpenAI API key + `npx` | ~$0.0005/run |
@@ -543,6 +547,7 @@ Multi-step Snowpark DataFrame chain compiled to ONE Snowflake SQL statement. Who
 | Demo | Pipeline | Highlights |
 |---|---|---|
 | [Dagster+ Audit → Security Lake](dagster_plus_security_lake.md) | `dagster_plus_audit_log_ingestion` → `ocsf_normalizer` → `ocsf_validator` → Parquet | Asset pipeline with full lineage; local Parquet by default. Validated with 176 real entries. |
+| [Deploying any demo to Dagster+](deploy_to_dagster_plus.md) | Meta-walkthrough | How to take any of the demos in this repo and deploy them to Dagster+ (Serverless or Hybrid). Covers project structure, deployment, secrets, and schedules. |
 
 ---
 
