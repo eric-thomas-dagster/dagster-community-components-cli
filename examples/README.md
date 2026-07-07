@@ -25,6 +25,7 @@ The ten demos that best answer *"why Dagster on top of my existing stack?"*. Eac
 | **[Vercel AI Gateway agent (multi-provider LLM)](vercel_ai_gateway_agent.md)** | One Vercel key routes to any provider (OpenAI / Anthropic / Google / xAI) with automatic fallback. | ~$0.005 |
 | **[LangGraph agent (multi-step reasoning)](langgraph_agent.md)** | Multi-step LangGraph `StateGraph` (plan / research / critique / synthesize) as one Dagster asset. | ~$0.005 |
 | **[Agent + MCP tool loop (three-component family)](agent_family.md)** | Real MCP filesystem tools driven by an OpenAI agent, with an LLM judge grading the trajectory. The template for any tool-using agent. | ~$0.005 |
+| **[Supabase pgvector RAG (real vector search + grounding)](supabase_rag.md)** | The RAG demo everyone is building right now — real 1536-d OpenAI embeddings + Supabase pgvector RPC + LLM grounded on retrieval. Local Supabase via CLI. | ~$0.01 |
 
 The full depth catalog by what-it-needs-to-run follows.
 
