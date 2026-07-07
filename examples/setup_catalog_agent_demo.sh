@@ -98,6 +98,14 @@ attributes:
     Then declare done. Chain each step using upstream_asset_key.
   model: gpt-4o-mini
   api_key_env_var: OPENAI_API_KEY
+  # We narrow to a handful of components so the demo runs reliably
+  # on a small OpenAI account. To broaden:
+  #   • use `include_categories: [ai, transformation]` (~237 components)
+  #     and switch `model: gpt-4o` — smarter planner, but the planner
+  #     prompt at 200+ entries can hit TPM rate limits on hobby accounts.
+  #   • or use `include_tags: [dataframe, synthetic]` for a middle ground.
+  # The mechanic is the same either way — the AGENT is picking; the
+  # filter is just the scoping mechanism.
   include_ids: [synthetic_data_generator, filter, summarize, dataframe_describe]
   max_iterations: 5
   group_name: catalog_simple_demo
@@ -120,6 +128,16 @@ attributes:
     orders, and store to a csv at /tmp/orders_by_customer_month.csv.
   model: gpt-4o-mini
   api_key_env_var: OPENAI_API_KEY
+  # We narrow to a handful of components so the demo runs reliably
+  # on a small OpenAI account. To broaden:
+  #   • use `include_categories: [ai, transformation, sink]` (~305 components)
+  #     and switch `model: gpt-4o` — smarter planner, but the prompt at
+  #     that scale can hit TPM rate limits on hobby accounts (30K TPM).
+  #   • or use `include_tags: [dataframe, synthetic, transformation]` (~119)
+  #     as a middle ground.
+  # The mechanic is the same either way — the AGENT is picking from the
+  # LIVE registry; the filter is just the scoping (and cost/rate-limit)
+  # control.
   include_ids: [synthetic_data_generator, dataframe_join, formula, summarize, dataframe_to_csv]
   max_iterations: 8
   group_name: catalog_join_demo
