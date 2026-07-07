@@ -1,33 +1,33 @@
 #!/usr/bin/env bash
 # setup_supervisor_per_tool_model_demo.sh
 #
-# Supervisor Agent with per-tool model routing.
+# Supervisor Agent with per-tool model routing — real-world use case: pick
+# the RIGHT model per tool for cost/capability.
 #
-# Every earlier Supervisor demo used ONE model for all tools. That's fine
-# for math + simple text, but tools like `web_search` HALLUCINATE — a plain
-# gpt-4o-mini call can't actually browse the web, so it fabricates snippets.
+# The problem this solves: previously the SupervisorAgent used ONE model
+# across all tools. That means either everything is on cheap gpt-4o-mini
+# (fine for math, but adversarial critic-style tools are weaker) OR
+# everything runs on gpt-4o (more expensive than needed for simple tasks).
 #
-# This demo fixes that: each tool can specify its OWN model + api_base. In
-# particular, we route `web_search` to a search-capable model (Perplexity's
-# sonar-pro via Vercel AI Gateway) while keeping cheap gpt-4o-mini for math.
+# The fix: each tool can override the component-level model. Use gpt-4o
+# where you need stronger reasoning; use gpt-4o-mini where cheap is enough.
 #
-# Pipeline:
+# Pipeline (same as previous supervisor demos, just with per-tool models):
 #   supervisor_plan     (planner LLM picks tools + inputs)
 #         ↓
-#   ├── web_search_result   ← perplexity/sonar-pro (REAL web search)
-#   └── math_expert_result  ← openai/gpt-4o-mini (arithmetic)
+#   ├── critic_result           ← gpt-4o             (stronger reasoning)
+#   ├── math_expert_result      ← gpt-4o-mini        (cheap arithmetic)
+#   └── translator_result       ← gpt-4o-mini        (cheap translation)
 #         ↓
-#   final_answer        (synthesizer LLM combines with source-cited answer)
+#   final_answer         (synthesizer LLM combines)
 #
-# COST: ~$0.02-$0.05 (planner + tool calls; Perplexity is a bit pricier)
+# COST: ~$0.03 per run — driven mostly by the gpt-4o critic call.
 #
 # REQUIREMENTS
-#   • uv, VERCEL_AI_TOKEN (Vercel AI Gateway key, vck_...)
-#     Create at your Vercel dashboard → AI Gateway → API Keys.
-#     Account needs a positive credit balance.
+#   • uv, OPENAI_API_KEY (that's it — no third-party gateway)
 #
 # USAGE
-#   export VERCEL_AI_TOKEN=vck_...
+#   export OPENAI_API_KEY=sk-...
 #   ./setup_supervisor_per_tool_model_demo.sh          # → supervisor_per_tool_model_demo/
 
 set -eo pipefail
@@ -41,7 +41,7 @@ info()  { echo -e "${C_BLUE}▸${C_NC} $*"; }
 ok()    { echo -e "${C_GREEN}✓${C_NC} $*"; }
 fail()  { echo -e "${C_RED}✗${C_NC} $*"; exit 1; }
 
-[ -z "${VERCEL_AI_TOKEN:-}" ] && fail "VERCEL_AI_TOKEN not set (need a Vercel AI Gateway key)."
+[ -z "${OPENAI_API_KEY:-}" ] && fail "OPENAI_API_KEY not set."
 command -v uvx >/dev/null 2>&1 || fail "uvx not found."
 [ -d "$PROJECT_DIR" ] && fail "Directory exists: $PROJECT_DIR"
 
@@ -62,9 +62,6 @@ else
     || fail "uv add failed"
 fi
 ok "Deps installed"
-
-# Export the base URL so the components can find it.
-export VERCEL_AI_GATEWAY_URL="https://ai-gateway.vercel.sh/v1"
 
 mkdir -p "$PROJECT_DIR/.dagster_storage"
 cat > "src/${PROJECT_NAME}/definitions.py" <<'PY'
@@ -88,62 +85,77 @@ attributes:
   plan_asset_name: supervisor_plan
   synthesis_asset_name: final_answer
   task: |
-    Answer two questions in one response:
-    1. Who currently leads Anthropic (the AI company)?
-    2. What is 4217 multiplied by 89?
-    Cite sources for factual claims.
+    A customer wrote in French: "Est-ce que 4217 * 89 = 375013 est correct?"
+    (Is 4217 * 89 = 375013 correct?)
+    Please: (1) do the arithmetic to verify, (2) translate the customer's
+    question and the correct answer into English, and (3) have a critic
+    review the drafted response for any subtle errors before we send it.
   # Component-level defaults — used for planner + synthesizer + any tool
-  # that doesn't override.
-  model: openai/gpt-4o-mini
-  api_key_env_var: VERCEL_AI_TOKEN
-  api_base_env_var: VERCEL_AI_GATEWAY_URL
+  # that doesn't override. Just plain OpenAI, no gateway.
+  model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
   temperature: 0.1
-  max_picks: 3
+  max_picks: 4
   tools:
-    - name: web_search
-      description: "Search the current web for factual info with source citations."
-      # Per-tool override: real search-capable model instead of gpt-4o-mini.
-      model: perplexity/sonar-pro
-      # Inherits api_key + api_base from component-level (Vercel AI Gateway).
-      system_message: |
-        You are a web search agent. Given a question, search the web and
-        return a concise factual answer with source URLs. If you cannot
-        verify the information, say so explicitly.
-
     - name: math_expert
       description: "Do arithmetic on a math expression."
-      # No per-tool overrides — inherits component-level (openai/gpt-4o-mini via Vercel).
+      # No override — inherits gpt-4o-mini. Math is cheap.
       system_message: |
         You are a calculator. Given a math expression, return the exact
-        number and a one-line explanation of the calculation.
+        number and a one-line explanation.
+
+    - name: translator
+      description: "Translate text between languages."
+      # No override — inherits gpt-4o-mini. Translation is fine on cheap.
+      system_message: |
+        You are a translator. Given a JSON object with `text` and `target_language`,
+        return ONLY the translated text.
+
+    - name: critic
+      description: "Adversarial review — catch subtle errors, unit confusion, wrong assumptions."
+      # PER-TOOL OVERRIDE — critique benefits from stronger reasoning.
+      model: gpt-4o
+      # api_key_env_var / api_base_env_var inherited from component-level.
+      system_message: |
+        You are an adversarial critic. Given a drafted response, point out
+        any potential issues: arithmetic errors, translation nuances,
+        implicit assumptions, tone problems. Be terse but specific.
   group_name: per_tool_demo
 YAML
 
 ok "Wrote defs.yaml"
 
 DM="${PROJECT_NAME}.definitions"
-info "Running supervisor with per-tool model routing (web_search → perplexity/sonar-pro; math → gpt-4o-mini)…"
+info "Running supervisor with per-tool model routing (critic → gpt-4o; others → gpt-4o-mini)…"
 uv run dagster asset materialize --select '*' -m "$DM" 2>&1 | tail -3 || fail "run failed"
 
 echo
 ok "Demo complete."
 echo
 cat <<EOF
-The supervisor just ran with MIXED MODEL ROUTING:
-  1. Planner LLM (openai/gpt-4o-mini via Vercel) picked tools + inputs
-  2. web_search tool ran against perplexity/sonar-pro (REAL web search)
-  3. math_expert tool ran against openai/gpt-4o-mini (arithmetic)
-  4. Synthesizer LLM (openai/gpt-4o-mini) combined with cited sources
+The supervisor ran with per-tool model routing:
+  planner       → gpt-4o-mini (cheap, picks tools)
+  math_expert   → gpt-4o-mini (cheap, arithmetic is fine)
+  translator    → gpt-4o-mini (cheap, works on translation)
+  critic        → gpt-4o      (STRONGER — catches subtle errors)
+  synthesizer   → gpt-4o-mini (cheap, just weaves the parts)
 
 Inspect:
   cd $PROJECT_NAME
   uv run dg dev
-    → asset graph: supervisor_plan → web_search_result + math_expert_result → final_answer
-    → click web_search_result to see REAL search snippets with URLs
-    → click final_answer for the sourced synthesis
+    → click each *_result asset — asset metadata shows which model ran
+    → critic_result should be a more careful review than gpt-4o-mini would give
 
-This is the pattern that gives you the flexibility of chained LLM tools
-WITHOUT the hallucination problem — each tool uses the RIGHT model for
-its job. Search-heavy tools use search-capable models; cheap tools use
-cheap models.
+If you want to swap any tool to a REAL search-capable model (Perplexity,
+OpenAI Responses API, xAI Grok, etc.), just override that tool's fields:
+
+  tools:
+    - name: web_search
+      description: "Search the web for citations."
+      model: sonar-pro                          # or another search-native model
+      api_key_env_var: PERPLEXITY_API_KEY       # provider-specific key
+      api_base_env_var: PERPLEXITY_BASE_URL     # base URL (OpenAI-compatible)
+      system_message: "..."
+
+The mechanic is generic — any OpenAI-compatible endpoint works.
 EOF
