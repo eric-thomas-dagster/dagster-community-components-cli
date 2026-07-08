@@ -4,7 +4,7 @@
 
 **Script:** [`setup_planned_catalog_agent_demo.sh`](./setup_planned_catalog_agent_demo.sh)
 **Cost:** ~$0.02 for the ONE trajectory. Every subsequent run is free.
-**Validated:** 2026-07-08 — 6-step pipeline planned once, real assets materialized from cache in ~10s with **751 real rows written to disk** (not empty output).
+**Validated:** 2026-07-08 — 6-step orders/customers pipeline (~10s cached materialize, 751 rows) AND a 12-step Titanic ML pipeline (ingest CSV → dedup → cleanse → outlier-clip → impute → coerce → bin → one-hot → logreg → branched summarize + filter → 3 CSV sinks) — 14/14 clean picks on gpt-4o, 988 predictions + 439 survivors + 3 EDA rows on disk. See [Titanic case study](#titanic-case-study-larger-natural-language-pipeline) below.
 
 ## Why this exists
 
@@ -133,6 +133,85 @@ John,john.rodriguez857@example.com,7,639.17,1
 ```
 
 The planner spent ~2 min on the trajectory ONCE. Every subsequent materialization runs the real component pipeline in ~10s with no LLM cost. Ship it.
+
+## Titanic case study — larger natural-language pipeline
+
+Same component, task 4× larger. This is the [Titanic complete demo](./titanic_complete.md) pipeline (12 components + 3 branched outputs) built entirely from natural language.
+
+```yaml
+type: dagster_community_components.PlannedCatalogAgentComponent
+attributes:
+  task: |
+    Build a data-science pipeline on the Titanic passenger dataset at
+    https://raw.githubusercontent.com/mostly-ai/public-demo-data/dev/titanic/titanic-with-labels.csv
+    which has 1309 rows with columns: Port, Gender, Age, Ticket, Fare,
+    Siblings/Spouses, Parents/Children, Survived (Yes/No).
+
+    Do all of the following, in order:
+      1. Ingest that CSV from the URL.
+      2. Drop duplicate rows.
+      3. Cleanse text columns (trim + lowercase Port, Gender, Ticket).
+      4. Clip outliers on Age and Fare using IQR.
+      5. Impute missing Age and Fare with median.
+      6. Coerce Age and Fare to float.
+      7. Bin Age into 4 tiles named child / young_adult / adult / senior.
+      8. One-hot encode Port and Gender (drop_first=true).
+      9. Fit a logistic regression predicting Survived from encoded features.
+     10. Also produce a summary of mean Age, mean Fare, count grouped by Port.
+     11. Also produce a survivors-only subset (Survived == 'Yes').
+     12. Write THREE CSVs to disk (predictions / eda / survivors).
+  include_categories: [ingestion, transformation, analytics, sink]
+  llm_model: gpt-4o          # gpt-4o-mini won't handle the branching decision
+  api_key_env_var: OPENAI_API_KEY
+  max_iterations: 20
+  defs_state: { management_type: LOCAL_FILESYSTEM, refresh_if_dev: false }
+```
+
+### Trajectory (14/14 clean, one-shot)
+
+```
+ 1. file_ingestion            → titanic_data_ingestion
+ 2. unique_dedup               → titanic_data_no_duplicates
+ 3. data_cleansing             → titanic_data_cleansed
+ 4. outlier_clipper            → titanic_data_no_outliers
+ 5. imputation                 → titanic_data_imputed
+ 6. type_coercer               → titanic_data_coerced       ← branch point
+ 7. tile_binning               → titanic_data_with_age_band
+ 8. one_hot_encoding           → titanic_data_encoded
+ 9. logistic_regression_model  → titanic_predictions        (up=encoded)
+10. summarize                  → titanic_eda                (up=coerced ← BRANCHED)
+11. filter                     → titanic_survivors          (up=coerced ← BRANCHED)
+12. dataframe_to_csv           → predictions_csv → /tmp/titanic_predictions.csv
+13. dataframe_to_csv           → eda_csv         → /tmp/titanic_eda.csv
+14. dataframe_to_csv           → survivors_csv   → /tmp/titanic_survivors.csv
+```
+
+Prepare took ~14 min on gpt-4o (LLM planning + 14 real in-process materializations). Cache-hit materialize ran the whole 12-asset DAG in **18 seconds** — no LLM.
+
+Real output:
+```
+$ head -3 /tmp/titanic_eda.csv
+Port,mean_age,mean_fare,count
+cherbourg,32.05,45.40,238
+queenstown,29.21,16.35,63
+
+$ wc -l /tmp/titanic_*.csv
+       4 /tmp/titanic_eda.csv         (3 groups)
+     989 /tmp/titanic_predictions.csv (988 test-set predictions + probabilities)
+     440 /tmp/titanic_survivors.csv   (439 real survivors after cleansing)
+```
+
+### What made it work
+
+The 12-step task hit every hard case at once:
+- **Branching:** three parallel outputs (predictions, EDA, survivors) from the same lineage — LLM must pick the right upstream for each (the branch point is `type_coercer`, BEFORE one-hot encoding drops the raw Port/Gender columns).
+- **Column side-effects:** `one_hot_encoding` renames `Port` → `Port_cherbourg / Port_queenstown / Port_southampton`, so downstream `summarize(group_by=['Port'])` on the encoded upstream fails with `KeyError`.
+- **Enum values:** `outlier_clipper.strategy` accepts `iqr|zscore|percentile` (not `clip`); `tile_binning.method` accepts `equal_width|equal_freq|custom` (not `quantile`).
+- **Case sensitivity:** `data_cleansing` with `normalize_case: lower` lowercases values — downstream `filter("Survived == 'Yes'")` matches 0 rows unless the LLM either lists columns explicitly OR uses `'yes'`.
+- **Sinks required:** LLM must not declare done before writing all three CSVs.
+- **Model choice matters:** gpt-4o-mini couldn't reason through the branching decision (kept picking encoded data as summarize upstream despite the KeyError); gpt-4o got it right on the first try. Cost is ~$0.60 for the one-shot plan, then cached free forever.
+
+The `agent_hints` structured metadata on each component drives most of this. Each of the 12 titanic components declares `inputs`, `outputs`, `side_effects`, `anti_uses`, and `chains_with` — the planner reads these instead of relying on prose descriptions alone. That's what lets a natural-language task like "one-hot encode Port and Gender, then summarize by Port" resolve correctly: the planner sees `one_hot_encoding.side_effects: "REMOVES the source columns and adds MANY new <col>_<value> columns"` and picks an earlier upstream for summarize.
 
 ## How `refresh_if_dev` controls when the LLM runs
 
