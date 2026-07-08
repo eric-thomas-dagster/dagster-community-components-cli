@@ -44,3 +44,37 @@ Validates two specific bugs the component had at first ship:
 2. The expired-version branch dropped `effective_from`, breaking the historical timeline.
 
 Both fixed. The demo guarantees they stay fixed.
+
+---
+
+## Also: build this from natural language
+
+The [`planned_catalog_agent`](./planned_catalog_agent.md) component can plan and cache this pipeline from a natural-language task — no defs.yaml per component needed. Drop the following into a single defs.yaml, run `dg utils refresh-defs-state` once, and the real component assets appear in your graph.
+
+```yaml
+type: dagster_community_components.PlannedCatalogAgentComponent
+attributes:
+  task: |
+    Generate two versions of a customer dimension (schema_type: customers):
+      - existing: 200 rows, random_state 1  (this is the current dimension)
+      - incoming: 250 rows, random_state 1  (this is the new incoming batch)
+    Use scd_type_2 with customer_id as the natural key to merge the incoming
+    batch into the existing dimension — new customer_ids get inserted with
+    is_current=true; existing customer_ids whose columns changed get closed out
+    (effective_to filled) and a new row added.
+    Write the resulting dimension history to /tmp/customers_history.csv.
+  include_ids: ['synthetic_data_generator']
+  llm_model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
+  prefilter_llm: true
+  prefilter_max_entries: 40
+  max_iterations: 20
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: false
+```
+
+Live-validated on gpt-4o-mini: **4/4 clean picks in 9s, ~$0.0037 total cost.** Outputs written: `/tmp/customers_history.csv`.
+
+
+After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.

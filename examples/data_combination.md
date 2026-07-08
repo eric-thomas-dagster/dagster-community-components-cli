@@ -50,3 +50,36 @@ which causes a "True was unexpected" pydantic error. Always quote it:
 
 Same applies to `off`, `yes`, `no` — quote them when used as field
 names. The example.yaml in this demo demonstrates the safe form.
+
+---
+
+## Also: build this from natural language
+
+The [`planned_catalog_agent`](./planned_catalog_agent.md) component can plan and cache this pipeline from a natural-language task — no defs.yaml per component needed. Drop the following into a single defs.yaml, run `dg utils refresh-defs-state` once, and the real component assets appear in your graph.
+
+```yaml
+type: dagster_community_components.PlannedCatalogAgentComponent
+attributes:
+  task: |
+    Generate synthetic orders (400 rows, schema_type: orders) and synthetic
+    customers (250 rows, schema_type: customers). Join them on customer_id
+    (inner join). Then extract the month from order_date via a formula.
+    Also coerce total to float. Then group by first_name, email, and month —
+    computing sum of total (call it total_spend) and count of orders. Filter
+    to customers whose total_spend across all months exceeds 1000. Write
+    the result to /tmp/high_value_customers_by_month.csv.
+  include_ids: ['synthetic_data_generator']
+  llm_model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
+  prefilter_llm: true
+  prefilter_max_entries: 40
+  max_iterations: 20
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: false
+```
+
+Live-validated on gpt-4o-mini: **8/9 clean picks in 22s, ~$0.0065 total cost.** Outputs written: `/tmp/high_value_customers_by_month.csv`.
+
+
+After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.

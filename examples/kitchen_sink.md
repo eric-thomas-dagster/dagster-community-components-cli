@@ -92,3 +92,46 @@ head /tmp/kitchen_sink_rfm.csv
 Most demos focus on one technique (forecasting, ML, geospatial, etc.).
 This one is the breadth showcase — proof that the registry components
 compose like Lego blocks, regardless of how many you stack.
+
+---
+
+## Also: build this from natural language
+
+The [`planned_catalog_agent`](./planned_catalog_agent.md) component can plan and cache this pipeline from a natural-language task — no defs.yaml per component needed. Drop the following into a single defs.yaml, run `dg utils refresh-defs-state` once, and the real component assets appear in your graph.
+
+```yaml
+type: dagster_community_components.PlannedCatalogAgentComponent
+attributes:
+  task: |
+    Build an e-commerce intelligence pipeline:
+      1. Generate 2000 synthetic orders, 600 synthetic customers, and
+         200 synthetic products (schema_types: orders, customers, products).
+      2. Drop duplicate orders on order_id.
+      3. Coerce total, subtotal, num_items to numeric.
+      4. Clip outliers on the total column using IQR.
+      5. Cleanse customer text columns (trim + lowercase first_name, last_name, city, state).
+      6. Join the deduped/coerced/clipped orders with the cleansed customers on customer_id.
+      7. From the joined data, produce these branched outputs:
+           A. Filter to delivered (status=='paid') orders → /tmp/ks_delivered.csv
+           B. Summarize by category: sum(total), count → /tmp/ks_revenue_by_category.csv
+           C. Summarize by city and state: sum(total), count → /tmp/ks_revenue_by_city.csv
+           D. Rank the top 5 categories by revenue → /tmp/ks_top_categories.csv
+           E. Select reporting columns [customer_id, first_name, email, city, state, order_date, total],
+              then sort by order_date descending → /tmp/ks_recent_orders.csv
+           F. Run rfm_segmentation on orders (customer_id + order_date + total) → /tmp/ks_rfm.csv
+  include_ids: ['synthetic_data_generator', 'rfm_segmentation']
+  llm_model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
+  prefilter_llm: true
+  prefilter_max_entries: 40
+  max_iterations: 20
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: false
+```
+
+Live-validated on gpt-4o-mini: **16/22 clean picks in 43s, ~$0.016 total cost.** Outputs written: `/tmp/ks_delivered.csv`, `/tmp/ks_revenue_by_category.csv`, `/tmp/ks_revenue_by_city.csv`, `/tmp/ks_recent_orders.csv`, `/tmp/ks_rfm.csv`.
+
+> **Note:** Kitchen Sink is at the edge of what gpt-4o-mini handles reliably. 5 of the 6 requested CSVs land end-to-end; the 6th (rank by revenue → top-categories.csv) is where mini occasionally stops early. Upgrade to gpt-4o for full coverage.
+
+After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.

@@ -96,3 +96,37 @@ The graph is a strict linear DAG, so you can swap any transform for an alternati
 - Replace `field_mapper` with a dict literal in a downstream transform
 - Replace `data_masking` with `pii_redactor` for regex-based detection
 - Replace `count_records` with `aggregate` for sum / mean / median per group
+
+---
+
+## Also: build this from natural language
+
+The [`planned_catalog_agent`](./planned_catalog_agent.md) component can plan and cache this pipeline from a natural-language task — no defs.yaml per component needed. Drop the following into a single defs.yaml, run `dg utils refresh-defs-state` once, and the real component assets appear in your graph.
+
+```yaml
+type: dagster_community_components.PlannedCatalogAgentComponent
+attributes:
+  task: |
+    Build a data-quality / hygiene pipeline:
+      1. Generate 300 synthetic customer rows (schema_type: customers).
+      2. Add audit columns (created_at, updated_at) to every row.
+      3. Mask/redact the email column so raw addresses are not stored.
+      4. Add a hash column derived from customer_id + email to serve as a stable fingerprint.
+      5. Add a surrogate key column (deterministic integer id).
+      6. Add a total record count as metadata (or a count row).
+      7. Write the hygienic result to /tmp/customers_clean.csv.
+  include_ids: ['synthetic_data_generator']
+  llm_model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
+  prefilter_llm: true
+  prefilter_max_entries: 40
+  max_iterations: 20
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: false
+```
+
+Live-validated on gpt-4o-mini: **7/7 clean picks in 39s, ~$0.0055 total cost.** Outputs written: `/tmp/customers_clean.csv`.
+
+
+After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
