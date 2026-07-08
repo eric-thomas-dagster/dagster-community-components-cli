@@ -44,3 +44,36 @@ tag_name             published_dt              html_url
 - Parquet preserves tz-aware datetimes natively (unlike Excel) — round-trips
   cleanly into pandas with the original timezone.
 - Six components composed via `Definitions.merge` with no glue code.
+
+---
+
+## Also: build this from natural language
+
+The [`planned_catalog_agent`](./planned_catalog_agent.md) component can plan and cache this pipeline from a natural-language task — no defs.yaml per component needed. Drop the following into a single defs.yaml, run `dg utils refresh-defs-state` once, and the real component assets appear in your graph.
+
+```yaml
+type: dagster_community_components.PlannedCatalogAgentComponent
+attributes:
+  task: |
+    Fetch the latest 50 releases from
+    https://api.github.com/repos/dagster-io/dagster/releases?per_page=50
+    (no auth needed for public repos). Keep only these columns:
+    name, tag_name, published_at, prerelease, html_url.
+    Coerce published_at to a datetime dtype.
+    Filter out any release where prerelease == true.
+    Sort by published_at descending.
+    Write the result to /tmp/dagster_releases.csv.
+  include_ids: ['rest_api_fetcher']
+  llm_model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
+  prefilter_llm: true
+  prefilter_max_entries: 40
+  max_iterations: 20
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: false
+```
+
+Live-validated on gpt-4o-mini: **5/5 clean picks in 11s, ~$0.0033 total cost.** Outputs written: `/tmp/dagster_releases.csv`.
+
+After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.

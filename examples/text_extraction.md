@@ -60,3 +60,38 @@ a downstream transformation or sink.
   raw text, or with explicit `tags: [h1, p]` to grab specific elements.
 - **Regex capture groups** → `regex_parser` with `mode: extract` and
   `output_columns: [...]` mapping each group to a named column.
+
+---
+
+## Also: build this from natural language
+
+The [`planned_catalog_agent`](./planned_catalog_agent.md) component can plan and cache this pipeline from a natural-language task — no defs.yaml per component needed. Drop the following into a single defs.yaml, run `dg utils refresh-defs-state` once, and the real component assets appear in your graph.
+
+```yaml
+type: dagster_community_components.PlannedCatalogAgentComponent
+attributes:
+  task: |
+    Take the JSONPlaceholder posts API at
+    https://jsonplaceholder.typicode.com/posts — it returns an array of 100
+    posts with fields (userId, id, title, body). Ingest that endpoint, then:
+      1. Flatten any nested JSON fields (in this case the top level is flat but
+         demonstrate the transform anyway).
+      2. Use a regex parser to extract the FIRST sentence from the body column
+         into a new column called first_sentence.
+      3. Also extract the number of words in each post's body into a column
+         called word_count (use formula: body.str.split().str.len()).
+    Write the enriched posts to /tmp/posts_enriched.csv.
+  include_ids: ['rest_api_fetcher', 'file_ingestion', 'json_flatten', 'regex_parser', 'formula', 'dataframe_to_csv']
+  llm_model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
+  prefilter_llm: true
+  prefilter_max_entries: 40
+  max_iterations: 20
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: false
+```
+
+Live-validated on gpt-4o-mini: **3/4 clean picks in 10s, ~$0.0028 total cost.** Outputs written: `/tmp/posts_enriched.csv`.
+
+After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
