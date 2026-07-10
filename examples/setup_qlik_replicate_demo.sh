@@ -213,13 +213,14 @@ cd "$PROJECT_DIR"
 PKG="$(ls src/ | head -1)"
 uv add --dev -q dagster-dg-cli dagster-webserver
 
-# --- 4. Install the four Qlik Replicate components ------------------------
+# --- 4. Install the five Qlik Replicate components -----------------------
 echo ">>> Installing qlik_replicate components"
 CLI="uvx --from dagster-community-components-cli dagster-component"
-$CLI add qlik_replicate_resource --auto-install >/dev/null 2>&1
-$CLI add qlik_replicate_task_trigger_job --auto-install >/dev/null 2>&1
-$CLI add qlik_replicate_task_status_sensor --auto-install >/dev/null 2>&1
-$CLI add qlik_replicate_task_metrics_ingestion --auto-install >/dev/null 2>&1
+$CLI --refresh add qlik_replicate_resource --auto-install
+$CLI add qlik_replicate_task_trigger_job --auto-install
+$CLI add qlik_replicate_task_status_sensor --auto-install
+$CLI add qlik_replicate_task_metrics_ingestion --auto-install
+$CLI add qlik_replicate_workspace --auto-install
 
 # --- 5. Configure defs.yaml for each component ---------------------------
 echo ">>> Wiring defs.yaml files against the mock EM"
@@ -273,6 +274,25 @@ attributes:
   resource_key: qlik_replicate_resource
 YAML
 
+# Workspace — StateBackedComponent, auto-emits one asset per task.
+cat > "src/$PKG/defs/qlik_replicate_workspace/defs.yaml" <<YAML
+type: dagster_community_components.QlikReplicateWorkspaceComponent
+attributes:
+  base_url_env_var: QLIK_EM_URL
+  username_env_var: QLIK_EM_USER
+  password_env_var: QLIK_EM_PASSWORD
+  verify_ssl: false
+  servers: [prod-replicate-01]
+  group_name: qlik_workspace
+  action: reload
+  wait_for_completion: true
+  poll_interval_seconds: 2
+  timeout_seconds: 60
+  defs_state:
+    management_type: LOCAL_FILESYSTEM
+    refresh_if_dev: true
+YAML
+
 # --- 6. Wire env vars into pyproject.toml ---------------------------------
 # Dagster runs on the host (not inside a container), and the mock's port is
 # host-published, so localhost is correct on both macOS and Linux.
@@ -288,20 +308,32 @@ ENVEOF
 
 # --- 7. Validate: dg check + trigger the job + materialize metrics -------
 echo ">>> Validating defs (dg check)"
-uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/0885d867.zip" dg check defs || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg check defs || {
   echo "    ✗ dg check failed"
   exit 1
 }
 
 echo ">>> Running the reload_orders_cdc job (mock will move STARTING → RUNNING → STOPPED)"
-uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/0885d867.zip" dg launch --job reload_orders_cdc || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg launch --job reload_orders_cdc || {
   echo "    ✗ trigger job failed"
   exit 1
 }
 
 echo ">>> Materializing qlik_task_metrics"
-uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/0885d867.zip" dg launch --assets qlik_task_metrics || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg launch --assets qlik_task_metrics || {
   echo "    ✗ metrics materialization failed"
+  exit 1
+}
+
+echo ">>> Refreshing workspace state (StateBackedComponent write_state_to_path)"
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg utils refresh-defs-state || {
+  echo "    ✗ refresh-defs-state failed"
+  exit 1
+}
+
+echo ">>> Materializing a workspace-emitted asset (per-task asset auto-generated)"
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg launch --assets 'qlik_replicate/prod-replicate-01/orders_sqlserver_to_snowflake' || {
+  echo "    ✗ workspace asset materialization failed"
   exit 1
 }
 
@@ -319,7 +351,7 @@ Env vars to load in this shell:
 
 Next:
   cd $PROJECT_DIR
-  uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/0885d867.zip" dg dev
+  uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg dev
   # → http://localhost:3000
   # → click "Materialize" on qlik_task_metrics
   # → toggle orders_reload_done sensor ON

@@ -7,6 +7,7 @@
 - [`qlik_replicate_task_trigger_job`](../../dagster-component-templates/tree/main/jobs/qlik_replicate_task_trigger_job) — start / stop / reload a task
 - [`qlik_replicate_task_status_sensor`](../../dagster-component-templates/tree/main/sensors/qlik_replicate_task_status_sensor) — event-drive on task state
 - [`qlik_replicate_task_metrics_ingestion`](../../dagster-component-templates/tree/main/assets/ingestion/qlik_replicate_task_metrics_ingestion) — per-task CDC metrics DataFrame
+- [`qlik_replicate_workspace`](../../dagster-component-templates/tree/main/integrations/qlik_replicate_workspace) — **StateBackedComponent** — auto-emit one Dagster asset per task by enumerating the workspace; one YAML instead of one-per-task
 
 ## One-command demo
 
