@@ -283,6 +283,8 @@ attributes:
   password_env_var: QLIK_EM_PASSWORD
   verify_ssl: false
   servers: [prod-replicate-01]
+  task_selector:
+    by_name: [orders_sqlserver_to_snowflake, customers_db2_to_snowflake]
   group_name: qlik_workspace
   action: reload
   wait_for_completion: true
@@ -308,31 +310,31 @@ ENVEOF
 
 # --- 7. Validate: dg check + trigger the job + materialize metrics -------
 echo ">>> Validating defs (dg check)"
-uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg check defs || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/c5b8f4e4.zip" dg check defs || {
   echo "    ✗ dg check failed"
   exit 1
 }
 
 echo ">>> Running the reload_orders_cdc job (mock will move STARTING → RUNNING → STOPPED)"
-uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg launch --job reload_orders_cdc || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/c5b8f4e4.zip" dg launch --job reload_orders_cdc || {
   echo "    ✗ trigger job failed"
   exit 1
 }
 
 echo ">>> Materializing qlik_task_metrics"
-uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg launch --assets qlik_task_metrics || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/c5b8f4e4.zip" dg launch --assets qlik_task_metrics || {
   echo "    ✗ metrics materialization failed"
   exit 1
 }
 
 echo ">>> Refreshing workspace state (StateBackedComponent write_state_to_path)"
-uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg utils refresh-defs-state || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/c5b8f4e4.zip" dg utils refresh-defs-state || {
   echo "    ✗ refresh-defs-state failed"
   exit 1
 }
 
 echo ">>> Materializing a workspace-emitted asset (per-task asset auto-generated)"
-uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg launch --assets 'qlik_replicate/prod-replicate-01/orders_sqlserver_to_snowflake' || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/c5b8f4e4.zip" dg launch --assets 'qlik_replicate/prod-replicate-01/orders_sqlserver_to_snowflake' || {
   echo "    ✗ workspace asset materialization failed"
   exit 1
 }
@@ -351,7 +353,7 @@ Env vars to load in this shell:
 
 Next:
   cd $PROJECT_DIR
-  uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/918f5066.zip" dg dev
+  uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/c5b8f4e4.zip" dg dev
   # → http://localhost:3000
   # → click "Materialize" on qlik_task_metrics
   # → toggle orders_reload_done sensor ON
