@@ -274,15 +274,11 @@ attributes:
 YAML
 
 # --- 6. Wire env vars into pyproject.toml ---------------------------------
-# The Dagster project sees these via the shell before `dg dev`.
-export QLIK_EM_URL="http://host.docker.internal:$QLIK_EM_PORT"
+# Dagster runs on the host (not inside a container), and the mock's port is
+# host-published, so localhost is correct on both macOS and Linux.
+export QLIK_EM_URL="http://localhost:$QLIK_EM_PORT"
 export QLIK_EM_USER="demo"
 export QLIK_EM_PASSWORD="demo"
-
-# On Linux, host.docker.internal doesn't resolve — use localhost instead.
-if [ "$(uname)" = "Linux" ]; then
-  export QLIK_EM_URL="http://localhost:$QLIK_EM_PORT"
-fi
 
 cat > ".env" <<ENVEOF
 QLIK_EM_URL=$QLIK_EM_URL
@@ -292,19 +288,19 @@ ENVEOF
 
 # --- 7. Validate: dg check + trigger the job + materialize metrics -------
 echo ">>> Validating defs (dg check)"
-uv run --with dagster-community-components dg check defs || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/0885d867.zip" dg check defs || {
   echo "    ✗ dg check failed"
   exit 1
 }
 
 echo ">>> Running the reload_orders_cdc job (mock will move STARTING → RUNNING → STOPPED)"
-uv run --with dagster-community-components dg launch --job reload_orders_cdc || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/0885d867.zip" dg launch --job reload_orders_cdc || {
   echo "    ✗ trigger job failed"
   exit 1
 }
 
 echo ">>> Materializing qlik_task_metrics"
-uv run --with dagster-community-components dg launch --assets qlik_task_metrics || {
+uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/0885d867.zip" dg launch --assets qlik_task_metrics || {
   echo "    ✗ metrics materialization failed"
   exit 1
 }
@@ -323,7 +319,7 @@ Env vars to load in this shell:
 
 Next:
   cd $PROJECT_DIR
-  uv run --with dagster-community-components dg dev
+  uv run --with "dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/0885d867.zip" dg dev
   # → http://localhost:3000
   # → click "Materialize" on qlik_task_metrics
   # → toggle orders_reload_done sensor ON
