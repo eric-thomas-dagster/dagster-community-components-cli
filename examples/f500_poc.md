@@ -76,7 +76,7 @@ Failed checks block downstream materializations (`asset_check_severity: ERROR`) 
 
 ### 5. Orchestration: dbt on BigQuery (via GKE), cross-project deps
 
-**Use the official `dagster-dbt` integration + `k8s_job_asset` for GKE execution.**
+**Deploy the Dagster+ Hybrid agent on GKE — dbt-on-BigQuery execution then happens on GKE by default.** No extra components needed for the compute target; the agent's pod scheduler places the run wherever the agent is deployed.
 
 ```yaml
 # code-location A: sales/dbt/
@@ -86,16 +86,15 @@ attributes:
   select: "tag:sales"
 ```
 
-Cross-project dependency shape — the sales project's `raw_orders` asset shows up in the marketing project's dbt DAG via:
+Cross-project dependency shape — the sales project's `dim_customer` asset shows up in the marketing project's dbt DAG via a cross-code-location `AssetSpec`:
 
 ```yaml
 # code-location B: marketing/
 external_assets:
-  - key: [sales, dim_customer]     # from code-location A
-    dagster+_lineage: cross-location
+  - key: [sales, dim_customer]     # references the asset from code-location A
 ```
 
-Both `dbt_assets` blocks execute via `k8s_job_asset` targeting your GKE cluster.
+Dagster+ renders the cross-code-location edge in the asset graph, so the marketing team sees where their upstream came from without either team needing to import the other's code.
 
 ### 6. Orchestration: DataIngest ETL — PySpark on Kubernetes + GKE
 
@@ -160,11 +159,12 @@ Runs on the Dagster agent host (bare-metal in your case). Environment vars, work
 
 **Not a demo asset — evaluate these in the POC by using the platform:**
 
-- **`dg` CLI**: `dg check defs`, `dg dev`, `dg launch --assets '*'`. One command scaffolds a full project.
-- **Dagster Designer UI**: point-and-click component editing. Every ingestion component surfaces in the Add Data dialog (thanks to `category: "ingestion"` on 24 workspaces + 100+ ingestion assets).
-- **`dagster-community-components-cli`**: `dagster-component search foo`, `dagster-component add foo`. 900+ components installable with one command.
-- **Component schema-driven forms**: enum dropdowns, cron widgets, column pickers auto-render from `schema.json` `x-dagster-widget` + `enum` hints.
-- **Live UI development**: `refresh_if_dev: true` on StateBackedComponents auto-re-enumerates workspaces during `dg dev`. Change a schema, see it in the UI without restart.
+- **`dg` CLI** — `dg check defs` validates every YAML against its schema, `dg dev` launches the local UI, `dg launch --assets '*'` runs headless for CI. `uvx create-dagster@latest project <name>` scaffolds a full project in one command.
+- **Dagster UI** (OSS + Dagster+) — asset graph browser, materialization history, lineage view, backfill launcher, sensor / schedule dashboard. Point-and-click **materialize / retry / partition selection**, not point-and-click component *authoring*.
+- **`dagster-community-components-cli`** — `dagster-component search foo` finds components in the community registry, `dagster-component add foo` installs one into a project (drops files under `src/<pkg>/defs/`, generates the `defs.yaml`, and installs pip deps). 900+ components indexed.
+- **YAML defs + schema validation** — every community component ships a `schema.json` alongside `defs.yaml`. `dg check` validates the YAML against the schema before runtime. Enum + required-field violations surface at check time, not at materialization.
+- **Dagster+ Insights** — per-asset cost, latency, bytes-processed for BigQuery / Snowflake / Databricks runs, all auto-instrumented. No manual metrics wiring.
+- **StateBackedComponent refresh flow** — for workspaces (Salesforce / HubSpot / Cognos / etc.), `refresh_if_dev: true` re-enumerates the vendor catalog on next `dg dev` restart; `dg utils refresh-defs-state` refreshes on demand. Discovery is cached so cold starts are fast even with hundreds of assets.
 
 ---
 
