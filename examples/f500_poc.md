@@ -168,6 +168,117 @@ Runs on the Dagster agent host (bare-metal in your case). Environment vars, work
 
 ---
 
+## Architecture
+
+```
+─── SOURCES ─────────────────────────────────────────────────────────────────
+
+┌─────────┐  ┌─────────┐  ┌──────────┐  ┌─────────┐  ┌──────────┐  ┌────────┐
+│  MinIO  │  │  Trino  │  │  MSSQL / │  │ Cognos  │  │ BigQuery │  │  GCS   │
+│ (S3-API)│  │  (SQL)  │  │  Oracle  │  │ reports │  │ (cloud)  │  │ (cloud)│
+└────┬────┘  └────┬────┘  └────┬─────┘  └────┬────┘  └────┬─────┘  └────┬───┘
+     │            │            │             │             │             │
+     └────────────┴────────────┴─────────────┴─────────────┴─────────────┘
+                                        │
+                                        ▼
+─── INGESTION (community components) ────────────────────────────────────────
+
+     s3_to_database_asset    trino_io_manager    mssql_ingestion
+     minio_resource          cognos_workspace    bigquery_query_asset
+                                                 gcs_monitor
+
+                                        │
+                                        ▼
+─── ORCHESTRATION (Dagster+ Hybrid — agents where the data is) ─────────────
+
+┌───────────────────────────────────────────────────────────────────────────┐
+│  agent: on-prem k8s        agent: GKE                agent: bare-metal    │
+│  (Spark ETL, dbt)          (dbt on BigQuery,          (shell_command,     │
+│                             MLOps PySpark)             legacy jobs)       │
+└─────────────┬───────────────────────┬───────────────────────┬─────────────┘
+              │                       │                       │
+              ▼                       ▼                       ▼
+    ┌──────────────────┐    ┌──────────────────┐    ┌──────────────────┐
+    │  sales/          │    │  marketing/      │    │  finance/        │
+    │  code-location   │    │  code-location   │    │  code-location   │
+    │  (dbt + DV2.0)   │    │  (dbt + Looker)  │    │  (Cognos + SOX)  │
+    └────────┬─────────┘    └────────┬─────────┘    └────────┬─────────┘
+             │                       │                       │
+             └───────────────────────┼───────────────────────┘
+                                     │  (cross-code-location AssetSpec)
+                                     ▼
+                        ┌────────────────────────┐
+                        │  Data Vault 2.0 layer  │
+                        │  raw ─▶ hub / link /   │
+                        │  sat (SDA per layer)   │
+                        └───────────┬────────────┘
+                                    ▼
+                        ┌────────────────────────┐
+                        │  dbt marts on BigQuery │
+                        │  + PySpark ML features │
+                        └───────────┬────────────┘
+                                    │
+        ┌───────────────────────────┼───────────────────────────┐
+        ▼                           ▼                           ▼
+┌──────────────────┐    ┌──────────────────┐         ┌──────────────────┐
+│  Cognos + Power  │    │     Looker       │         │  Power BI Fabric │
+│  BI (on-prem)    │    │  (LookML views)  │         │  (cloud)         │
+└──────────────────┘    └──────────────────┘         └──────────────────┘
+
+
+─── GOVERNANCE + OBSERVABILITY (auto-instrumented, every asset) ────────────
+
+┌──────────────────┐    ┌──────────────────┐    ┌──────────────────────┐
+│    Collibra      │    │  Elasticsearch   │    │  Dagster+ Insights   │
+│  (lineage_to_    │    │  (compute logs   │    │  (BigQuery cost,     │
+│   collibra sink) │    │   via OTLP CLM)  │    │   slot-hours,        │
+│                  │    │                  │    │   asset SLAs)        │
+└──────────────────┘    └──────────────────┘    └──────────────────────┘
+```
+
+## Data mesh — three code-locations with cross-domain deps
+
+```
+    ┌──────────────────────────────────────────────────────────────────┐
+    │                     Dagster+ Control Plane                        │
+    │           (unified asset graph across all three domains)          │
+    └──────────────────────────────────────────────────────────────────┘
+        │                          │                            │
+   ─────┼──────────────────────────┼────────────────────────────┼──────
+        ▼                          ▼                            ▼
+   ┌───────────┐              ┌───────────┐               ┌───────────┐
+   │  sales/   │              │ marketing/│               │  finance/ │
+   │           │              │           │               │           │
+   │ owner:    │              │ owner:    │               │ owner:    │
+   │  sales-eng│              │  mktg-eng │               │  fin-eng  │
+   │           │              │           │               │           │
+   │  raw_     │              │  raw_     │               │  raw_gl   │
+   │  orders   │              │  campaigns│               │           │
+   │    │      │              │    │      │               │    │      │
+   │    ▼      │              │    ▼      │               │    ▼      │
+   │  customer_│──[cross-loc]─▶ campaign_ │               │  gl_close │
+   │  hub      │              │  attrib   │               │           │
+   │  customer_│              │           │               │           │
+   │  sat      │              │           │               │           │
+   │    │      │              │    │      │               │    │      │
+   │    ▼      │              │    ▼      │               │    ▼      │
+   │ orders_   │──[cross-loc]─▶ mkt_      │──[cross-loc]─▶│ p&l_      │
+   │ mart      │              │ effective │               │ statement │
+   │           │              │ ness      │               │           │
+   └───────────┘              └───────────┘               └───────────┘
+
+    Cross-loc edges = AssetSpec(key=...) references across code locations.
+    Rendered in the Dagster+ UI as a unified graph; each team owns its
+    own code + deploy cadence but sees upstream/downstream automatically.
+
+    Asset checks that span domains:
+      finance/p&l_statement:
+        checks:
+          - freshness:                     sales/orders_mart < 3h
+          - row_count_within:              marketing/mkt_effectiveness ± 5%
+      → cross-domain quality gate, ONE alert if either upstream drifts
+```
+
 ## Ready-to-run POC scaffold
 
 Coming in a follow-up commit (this walkthrough is the map; the setup script is Phase 6b). For now, use it as the checklist to build up your POC project piece by piece — each POC eval item names the concrete community components + Dagster+ features to demo.
