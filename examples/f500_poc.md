@@ -279,9 +279,69 @@ Runs on the Dagster agent host (bare-metal in your case). Environment vars, work
       → cross-domain quality gate, ONE alert if either upstream drifts
 ```
 
-## Ready-to-run POC scaffold
+## Ready-to-run POC scaffold — two modes
 
-Coming in a follow-up commit (this walkthrough is the map; the setup script is Phase 6b). For now, use it as the checklist to build up your POC project piece by piece — each POC eval item names the concrete community components + Dagster+ features to demo.
+The demo ships in **two modes** so you can start without any cloud creds and then swap components once your GCP tenancy is ready.
+
+### Mode A: Local (no credentials, Docker only) — recommended for first-run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_f500_poc_local_demo.sh \
+  -o setup_f500_poc_local_demo.sh
+bash setup_f500_poc_local_demo.sh
+```
+
+**What runs:**
+
+| Piece | Local mode | GCP mode |
+|---|---|---|
+| Legacy source DBs (sales / marketing / finance) | Postgres in Docker | Same (or on-prem SQL Server / Oracle) |
+| Landing zone (parquet) | MinIO in Docker (S3-API) | GCS |
+| SQL query engine (federated reads) | Trino in Docker | Trino + BigQuery federated queries |
+| Warehouse | DuckDB (in-process, no server) | BigQuery |
+| Central log platform | Elasticsearch in Docker | Same or GCP Logging |
+| Dagster orchestration | Dagster OSS via `dg dev` | Dagster+ Hybrid agent on GKE |
+| BI (Cognos / Power BI / Looker) | Assets emit — BI layer stubbed | Real vendors (see per-vendor walkthroughs to wire) |
+
+**Pre-reqs (Mode A):** Docker, `uv`. No credentials needed. Cost: $0. Time: ~10 min for first run (image pulls), ~2 min thereafter.
+
+### Mode B: GCP (real cloud, real credentials)
+
+```bash
+# Set required env vars first
+export GOOGLE_APPLICATION_CREDENTIALS=~/.config/gcloud/application_default_credentials.json
+export GCP_PROJECT=your-gcp-project
+export GCP_REGION=us-central1
+export BQ_DATASET=f500_poc
+
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_f500_poc_gcp_demo.sh \
+  -o setup_f500_poc_gcp_demo.sh
+bash setup_f500_poc_gcp_demo.sh
+```
+
+**Pre-reqs (Mode B):**
+
+| Requirement | Why | How |
+|---|---|---|
+| **GCP project** with billing enabled | Runs against BigQuery + GCS | `gcloud projects create <id>` + link a billing account |
+| **BigQuery API enabled** | Warehouse layer | https://console.cloud.google.com/apis/library/bigquery.googleapis.com |
+| **GCS API enabled** | Landing zone | https://console.cloud.google.com/apis/library/storage.googleapis.com |
+| **Application Default Credentials** | Auth from local dev | `gcloud auth application-default login` |
+| **`roles/bigquery.dataEditor`, `roles/storage.objectAdmin`** on the caller | Read/write | `gcloud projects add-iam-policy-binding ...` |
+| **A GCS bucket** for the landing zone | Source parquet files | `gcloud storage buckets create gs://<yourname>-f500-landing` |
+| Optional: **Cognos SaaS trial**, **Looker instance**, **Collibra sandbox** | Real BI + governance | Set the vendor-specific env vars from each per-vendor walkthrough |
+
+The GCP-mode setup script is a superset of local mode — it uses the same 3 code-locations + DV2.0 modeling + cross-domain checks, but swaps MinIO→GCS, DuckDB→BigQuery, and adds live BI connections if the vendor credentials are present.
+
+### What each mode demonstrates (identical between A and B)
+
+- **Data mesh** — 3 code-locations (sales, marketing, finance) with cross-code-location asset deps
+- **SDA + DV2.0** — `data_vault_hub_link_satellite` emits hub / link / sat as independently-materializable assets
+- **Cross-domain asset check** — `finance/p&l_statement` blocks on freshness of upstream assets from other domains
+- **Legacy shell orchestration** — `shell_command_asset` runs a bash script as a Dagster asset
+- **k8s job stub** — `k8s_job_asset` YAML loads and validates via `dg check` (won't execute without a real cluster)
+
+Local mode uses synthetic seed data; the shape + graph + checks + lineage are identical to what you'd see against real vendors.
 
 ## Component coverage summary
 
