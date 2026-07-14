@@ -15,6 +15,7 @@ The ten demos that best answer *"why Dagster on top of my existing stack?"*. Eac
 
 | Demo | Why | Cost |
 |---|---|---|
+| **[Message-driven dbt](dbt_queue_driven.md)** | External-queue orchestration of dbt — sensor picks up "build model X with these vars" or "build all", subclasses the official dbt component for runtime vars, publishes success back to a queue as an asset. | $0 |
 | **[dbt + ML + dbt (mid-DAG Python)](dbt_ml_pipeline.md)** | The flagship "why Dagster over Airflow" — a Python ML asset sitting between two sets of dbt models, all in one lineage graph. Airflow can't do this. | $0 |
 | **[dbt + LLM + dbt (mid-DAG generative)](dbt_llm_pipeline.md)** | Same shape, LLM in the middle. LangChain generates personalized retention emails between dbt models. | ~$0.01 |
 | **[Cube semantic layer + LLM](cube_query.md)** | Cube as the LLM safety layer — LLM never touches raw SQL, gets governed metrics from Cube instead. | $0 simple, ~$0.01 LLM |
@@ -294,6 +295,7 @@ These demos run end-to-end with **no API keys** — just `pip install` of local 
 
 | Demo | Components | Highlights |
 |---|---|---|
+| [Message-driven dbt](dbt_queue_driven.md) | `dagster_dbt.DbtProjectComponent` (subclassed for runtime `--vars`), user-written `@job` ×2, `@sensor`, `@asset` write-back | External-queue orchestration pattern. A sensor picks up messages ("build model X with vars", "build all"), routes to one of two jobs, dbt injects the vars per run, then a `queue_completion` asset writes success back to `output_queue.jsonl`. Sensor simulates queue reads with weighted random (80% single / 15% skip / 5% run-all) so the demo runs with just `dg dev`. Teaches how to customize the official dbt integration via subclassing. Live-validated end-to-end. |
 | [dbt + ML + dbt (mid-DAG Python)](dbt_ml_pipeline.md) | `dagster_dbt.DbtProjectComponent` (×2 with `op.name` split), `churn_prediction`, `duckdb_pandas_io_manager` | **Flagship "why Dagster over Airflow" demo.** A Python ML asset sitting between two sets of dbt models, all in ONE lineage graph. Airflow can't do this — dbt is one opaque operator. Dagster treats every dbt model as an asset, so a Python asset drops in. DuckDB + local sklearn heuristic scorer, $0, no API keys. |
 | [AI without LLMs](ai_no_llm.md) | `synthetic_data_generator`, `keyword_extractor`, `language_detector`, `pii_detector`, `pii_redactor`, `embeddings_generator` | Rule-based + local-model AI — no API keys needed |
 | [Ollama (local LLM)](ollama.md) | `synthetic_data_generator`, `ollama_inference_asset` | Local Llama / Mistral / etc. via Ollama (free, runs in your laptop) — requires `ollama serve` running |
