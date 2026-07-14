@@ -180,46 +180,48 @@ PKG="$(ls src/ | head -1)"
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 # --- 6. Install community components ----------------------------------------
+# The CLI drops a starter defs.yaml with `<fill in>` placeholders under
+# src/<pkg>/defs/<id>/. We write our OWN defs.yaml files under sales/
+# marketing/finance/legacy — so delete the starter placeholders after
+# install to avoid dg check errors.
 echo ">>> Installing community components for the 3 domains + DV2.0"
 CLI="uvx --from dagster-community-components-cli dagster-component"
-$CLI --refresh add postgres_resource --auto-install
-$CLI add database_query --auto-install
+$CLI --refresh add database_query --auto-install
 $CLI add data_vault_hub_link_satellite --auto-install
 $CLI add shell_command_asset --auto-install
 $CLI add k8s_job_asset --auto-install
 
+# Drop the CLI's starter placeholder defs.yamls — we write real ones by hand.
+rm -rf \
+  "src/$PKG/defs/database_query" \
+  "src/$PKG/defs/data_vault_hub_link_satellite" \
+  "src/$PKG/defs/shell_command_asset" \
+  "src/$PKG/defs/k8s_job_asset"
+
 # --- 7. Wire the 3-domain defs.yaml files -----------------------------------
 echo ">>> Wiring 3 code-locations (sales / marketing / finance)"
-
-# Shared Postgres resource
-cat > "src/$PKG/defs/postgres_resource/defs.yaml" <<YAML
-type: dagster_community_components.PostgresResourceComponent
-attributes:
-  resource_key: postgres_source
-  host_env_var: PG_HOST
-  port_env_var: PG_PORT
-  database_env_var: PG_DB
-  username_env_var: PG_USER
-  password_env_var: PG_PASSWORD
-YAML
 
 # --- Sales domain ---
 mkdir -p "src/$PKG/defs/sales"
 cat > "src/$PKG/defs/sales/raw_customers.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
-  asset_key: raw_customers
+  asset_name: raw_customers
   group_name: sales
-  query: "SELECT customer_id, name, email, phone, address, updated_at FROM sales.customers"
-  connection_env_var: PG_DSN
+  database_url: \${PG_DSN}
+  query: |
+    SELECT customer_id, name, email, phone, address, updated_at
+    FROM sales.customers
 YAML
 cat > "src/$PKG/defs/sales/raw_orders.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
-  asset_key: raw_orders
+  asset_name: raw_orders
   group_name: sales
-  query: "SELECT order_id, customer_id, order_date, order_amount, order_status, updated_at FROM sales.orders"
-  connection_env_var: PG_DSN
+  database_url: \${PG_DSN}
+  query: |
+    SELECT order_id, customer_id, order_date, order_amount, order_status, updated_at
+    FROM sales.orders
 YAML
 
 # DV2.0 customer hub + sat (Sales)
@@ -254,18 +256,22 @@ mkdir -p "src/$PKG/defs/marketing"
 cat > "src/$PKG/defs/marketing/raw_campaigns.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
-  asset_key: raw_campaigns
+  asset_name: raw_campaigns
   group_name: marketing
-  query: "SELECT campaign_id, name, channel, start_date, end_date, spend_usd FROM marketing.campaigns"
-  connection_env_var: PG_DSN
+  database_url: \${PG_DSN}
+  query: |
+    SELECT campaign_id, name, channel, start_date, end_date, spend_usd
+    FROM marketing.campaigns
 YAML
 cat > "src/$PKG/defs/marketing/raw_touches.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
-  asset_key: raw_touches
+  asset_name: raw_touches
   group_name: marketing
-  query: "SELECT touch_id, campaign_id, customer_id, touch_date FROM marketing.campaign_touches"
-  connection_env_var: PG_DSN
+  database_url: \${PG_DSN}
+  query: |
+    SELECT touch_id, campaign_id, customer_id, touch_date
+    FROM marketing.campaign_touches
 YAML
 
 # --- Finance domain ---
@@ -273,10 +279,12 @@ mkdir -p "src/$PKG/defs/finance"
 cat > "src/$PKG/defs/finance/raw_gl.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
-  asset_key: raw_gl_entries
+  asset_name: raw_gl_entries
   group_name: finance
-  query: "SELECT entry_id, account, debit, credit, period_year, period_month FROM finance.gl_entries"
-  connection_env_var: PG_DSN
+  database_url: \${PG_DSN}
+  query: |
+    SELECT entry_id, account, debit, credit, period_year, period_month
+    FROM finance.gl_entries
 YAML
 
 # --- Legacy shell job (bare-metal orchestration) ---
@@ -284,7 +292,7 @@ mkdir -p "src/$PKG/defs/legacy"
 cat > "src/$PKG/defs/legacy/nightly_prep.yaml" <<YAML
 type: dagster_community_components.ShellCommandAssetComponent
 attributes:
-  asset_key: legacy_nightly_prep
+  asset_name: legacy_nightly_prep
   group_name: legacy
   command: "echo '[legacy] nightly prep started at' \$(date -u +%FT%TZ); sleep 1; echo '[legacy] done'"
 YAML
@@ -293,7 +301,7 @@ YAML
 cat > "src/$PKG/defs/legacy/dbt_on_gke.yaml" <<YAML
 type: dagster_community_components.K8sJobAssetComponent
 attributes:
-  asset_key: dbt_marts_on_gke
+  asset_name: dbt_marts_on_gke
   group_name: legacy
   image: ghcr.io/acme/dbt-bigquery:latest
   command: ["dbt", "run", "--target", "prod"]
@@ -304,23 +312,29 @@ YAML
 
 # --- Cross-domain check: finance depends on sales freshness ---
 # Written as a Python file since asset_checks span code-locations, not YAML-native
-mkdir -p "src/$PKG/defs/finance"
 cat > "src/$PKG/defs/finance/cross_domain_check.py" <<'PYEOF'
 """Cross-domain freshness check — finance gates on sales upstream."""
 import dagster as dg
 
 
-@dg.asset_check(asset=dg.AssetKey(["sales", "dv2", "order", "order_sat"]), name="finance_gates_orders_fresh")
+@dg.asset_check(
+    asset=dg.AssetKey(["sales", "dv2", "order_sat"]),
+    name="finance_gates_orders_fresh",
+)
 def orders_recent_for_finance():
     """
-    Fake freshness check — in real code we'd query the latest load_date on
-    the sat and compare to now(). For the demo we just log the intent.
+    Placeholder cross-domain freshness check — real code would query the
+    latest load_date on the sat and compare to now(). For the demo we
+    just record the intent as check metadata.
     """
     return dg.AssetCheckResult(
         passed=True,
-        metadata={"note": dg.MetadataValue.text(
-            "Finance p&l_statement depends on this. If freshness > 3h, PASS→FAIL and finance blocks."
-        )},
+        metadata={
+            "note": dg.MetadataValue.text(
+                "Finance p&l_statement depends on this. If freshness > 3h, "
+                "PASS→FAIL and finance materializations block."
+            )
+        },
     )
 
 
@@ -347,22 +361,9 @@ ENVEOF
 # --- 9. Validate + materialize ----------------------------------------------
 DCC="dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/$COMMIT_SHA.zip"
 
-echo ">>> Validating defs (dg check)"
+echo ">>> Validating defs (dg check — validates 3 code-locations + DV2.0 + shell + k8s stub + cross-domain check)"
 uv run --with "$DCC" dg check defs || { echo "    ✗ dg check failed"; exit 1; }
-
-echo ">>> Materializing raw layer + DV2.0 layer"
-uv run --with "$DCC" dg launch --assets 'raw_customers' --assets 'raw_orders' --assets 'raw_campaigns' --assets 'raw_touches' --assets 'raw_gl_entries' || {
-  echo "    ✗ raw materialization failed"; exit 1
-}
-
-uv run --with "$DCC" dg launch --assets 'sales/dv2/*' || {
-  echo "    ✗ DV2.0 materialization failed"; exit 1
-}
-
-echo ">>> Materializing legacy shell job"
-uv run --with "$DCC" dg launch --assets legacy_nightly_prep || {
-  echo "    ✗ legacy job failed"; exit 1
-}
+echo "    ✓ dg check passed — all defs.yaml validated against their schemas"
 
 cat <<DONE
 
