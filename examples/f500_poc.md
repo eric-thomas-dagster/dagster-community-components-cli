@@ -2,17 +2,131 @@
 
 **Goal:** demonstrate that Dagster can orchestrate the full data stack of a large, brick-and-mortar Fortune 500 company — on-prem sources + cloud warehouse + BI + governance + MLOps + legacy scheduling.
 
-**Typical stack this walkthrough addresses:**
+**Typical stack shape this walkthrough addresses** — specific vendor names below are *representative examples* of the common F500 pattern; swap in your actual stack:
 
-- **On-prem BI**: IBM Cognos, Power BI on-prem, Power BI Fabric
-- **On-prem data**: MinIO, Trino, dbt (on GKE)
-- **On-prem processing**: PySpark jobs on Kubernetes, shell scripts on bare-metal
-- **Cloud**: BigQuery, GCS, dbt Cloud
-- **BI**: Looker
-- **Data governance / catalog**: Collibra (via lineage export)
-- **Central log platform**: Elasticsearch
-- **Legacy schedulers being retired**: Prefect (MLOps), Autosys (legacy jobs), DolphinScheduler
-- **Compute targets**: on-prem k8s, GKE, Cloud Run, bare-metal
+- **On-prem BI** *(e.g. IBM Cognos, Power BI on-prem, Power BI Fabric)*
+- **On-prem data + query engine** *(e.g. MinIO S3-compatible object store, Trino / Presto for federated SQL, dbt for transformations)*
+- **On-prem processing** *(e.g. PySpark on Kubernetes, shell scripts on bare-metal)*
+- **Cloud warehouse + storage** *(e.g. BigQuery + GCS, Snowflake + S3, Databricks + ADLS)*
+- **Cloud BI** *(e.g. Looker, Power BI Fabric, Tableau Cloud)*
+- **Data governance / catalog** *(e.g. Collibra, Alation, Atlan — Dagster pushes lineage out)*
+- **Central log platform** *(e.g. Elasticsearch, Splunk, Datadog)*
+- **Three legacy schedulers being retired** — see next section (centralized batch + per-domain DAG + Python-flow tool)
+- **Compute targets**: on-prem k8s, cloud k8s (GKE / EKS / AKS), serverless containers, bare-metal
+
+---
+
+## The three-scheduler problem Dagster replaces
+
+The typical F500 stack carries **three schedulers** with distinct pain, each solving a different piece and none of them talking to the others:
+
+- **A centralized legacy job-scheduler** (representative: AutoSys / Control-M / Tivoli Workload Scheduler) — bare-metal / mixed workloads. Dependencies are **scheduling-based, not data-aware**: "app A finished → *assume* the table is filled → run app B." No lineage, no asset guarantees, no way to answer "why did today's number look weird?"
+- **A per-domain DAG scheduler** (representative: DolphinScheduler / Airflow-per-team / vendor-specific tools) — YAML-defined DAGs scoped to a single domain project, but **no cross-project asset linking**. Each domain becomes an island; cross-domain deps are duct-taped with time-based waits.
+- **A Python-flow tool for MLOps / data-science** (representative: Prefect / vanilla Airflow / bespoke Python) — often deployed per-team and hitting scale ceilings. Per-team instances can't interconnect, so ML features derived from central marts either duplicate the upstream logic or fall out of sync.
+
+Dagster+ replaces all three with one asset graph, one control plane, one alert path. What replaces what depends on the specific tools in play — the community components cover the common shapes:
+
+| Pattern in the legacy stack | Dagster shape |
+|---|---|
+| Time-based "next job" dependency | Asset dependency (declared, typed, data-aware) |
+| Per-domain YAML DAG | Per-code-location `defs.yaml` + cross-loc `AssetSpec` |
+| Python-flow @task | `@asset` or in-op logic |
+| Bare-metal / shell-orchestrated batch | `shell_command_asset`, `docker_container_asset` |
+| K8s Spark submission | `spark_k8s_operator_asset`, `k8s_job_asset` |
+| MLOps pipelines | `pyspark_pipeline`, `jupyter_notebook_asset`, `mlflow_*` |
+
+The team's ops toil around "which of the 3 UIs do I check?" collapses to one. Dagster+ ships bridge components (e.g. `autosys_asset`) for mid-migration parallel-run periods so you don't have to cut over all workloads simultaneously.
+
+## Cross-cloud, cross-domain, cross-project chain
+
+The POC needs to demo a single lineage chain that crosses ownership boundaries: `on-prem MinIO → Trino federated read → domain A dbt on GKE → BigQuery mart → domain B PySpark ML feature → Looker`. Three properties fall out of Dagster+ multi-code-location:
+
+1. **Every hop is one asset** — no glue scripts. Each hop's compute target (on-prem k8s / GKE / Cloud Run / BQ query) is a per-asset config, not a per-orchestrator boundary.
+2. **The cross-loc edge is declarative** — `AssetSpec(key=["sales", "dim_customer"])` in domain B references domain A's asset. Dagster+ renders the edge without either team importing the other's code.
+3. **Failures in the upstream domain surface in the downstream domain** — the marketing team's on-call sees "upstream `sales/dim_customer` failed" before they even realize their run started.
+
+## Agent topology decision — one per cluster vs one per domain
+
+For a 56-node k8s cluster hosting 16 domains, two patterns:
+
+| Pattern | Agent count | Deploy cadence | Right when |
+|---|---|---|---|
+| **One agent per cluster** | 1 on-prem + 1 GKE + 1 bare-metal + 1 Cloud Run = 4 | Central platform team owns agent config | Small platform team, uniform runtime deps |
+| **One agent per domain** | Up to 16 | Each domain team owns their agent | Domains have divergent runtimes (custom Docker images, GPU nodes, region-locality) |
+
+**Recommendation for the POC**: start with **one agent per cluster** (4 total). Split per-domain only if a specific domain hits agent-level conflicts. Domain isolation for the *asset graph* is already handled by code-locations — the agent boundary is a runtime concern, not a governance one.
+
+## RBAC — 4 practical roles
+
+Dagster+ Teams supports arbitrary role granularity. For the F500 POC, the 4 roles that actually matter:
+
+| Role | Can materialize? | Can edit code? | Can view all domains? | Can launch backfills? |
+|---|---|---|---|---|
+| **Platform admin** | ✅ all | ✅ all | ✅ | ✅ |
+| **Domain engineer** | ✅ own domain | ✅ own domain repo | ✅ (read-only cross-domain) | ✅ own domain |
+| **Business analyst** | ❌ | ❌ | ✅ (read-only) | ❌ |
+| **On-call responder** | ✅ retry only | ❌ | ✅ | ❌ |
+
+Set via code-location-scoped Teams: `sales-team` has `Editor` on `sales/`, `Viewer` on everything else. Cross-domain reads work because the UI is unified; cross-domain writes are blocked because the team scope only extends to their own code-location.
+
+## Self-service project creation — the two-PR pattern
+
+Once the platform is stood up, adding a new domain shouldn't require a platform-team ticket. The pattern:
+
+1. **PR #1 — new repo** — domain team runs `uvx create-dagster@latest project <domain-name>` locally, adds their `defs.yaml` files with community components, opens a PR against a template repo.
+2. **PR #2 — register the code-location** — platform team merges a one-line entry into the Dagster+ workspace config pointing at the new repo. Cross-loc AssetSpec references become live once both PRs are merged.
+
+Total platform-team touch: ~5 minutes reviewing PR #2. The domain team is autonomous for their own asset graph.
+
+## Failure behavior at scale
+
+At 56 nodes × 16 domains × three integration types (Spark / dbt / Python), failures happen constantly. What matters is:
+
+- **Isolation** — a failing sales-domain asset doesn't block marketing-domain materializations. Dagster's asset graph is dep-driven, not run-driven; unrelated assets keep flowing.
+- **Automatic retry** — `RetryPolicy(max_retries=3, delay=30)` on every ingestion asset absorbs transient network/vendor blips without paging anyone.
+- **Blast-radius asset checks** — a check on a shared dim table (`check dim_customer.pk_unique`) blocks downstream materializations across ALL domains that depend on it. One check, many domains protected.
+- **On-call routing via Dagster+ alerts** — email / Slack / PagerDuty per code-location. Sales-domain failures page sales-eng on-call, not the platform team.
+
+## Data quality tracking + alerting
+
+Every `@asset` can attach `@asset_check`s. Results plot over time in the UI — quality trends per domain are visible to business stakeholders without a separate BI dashboard. For the F500 POC:
+
+- **Schema drift** — `pandera_asset_check` on every ingestion asset; fails if a column type changes upstream.
+- **Row-count sanity** — `row_count_within` bounds; fails if a batch is 3σ outside historical mean.
+- **Freshness** — `bigquery_table_freshness_check` on every mart; fails if the underlying table hasn't updated in N hours.
+- **Cross-domain gates** — see item 2 (data mesh) — a finance asset can block on a sales asset's freshness check.
+
+Failed checks → Dagster+ alert → PagerDuty. No separate GreatExpectations deployment needed; the check runs inside the same asset materialization.
+
+## Cost visibility
+
+**Dagster+ Insights for BigQuery** — see item 4. Per-asset slot-hours, bytes-processed, and dollar cost, auto-instrumented on every BQ materialization. No manual metrics wiring, no separate BQ billing export pipeline. See [Dagster+ Insights for BigQuery](https://docs.dagster.io/guides/observe/insights/google-bigquery).
+
+Also covered: Snowflake credits, Databricks DBUs, Fivetran MAR. All native to Dagster+, not community components.
+
+## BI layer — how each tool appears in the asset graph
+
+Different BI tools plug in through different components. For the typical F500 stack shape:
+
+| BI tool | Component to use | Why this one |
+|---|---|---|
+| **Looker** | Official [`dagster-looker`](https://docs.dagster.io/integrations/libraries/looker/dagster-looker) — a **workspace** (single component, one config, auto-emits an asset per LookML view / explore / dashboard) | Officially maintained by Dagster Labs; keeps LookML lineage in sync with the actual Looker instance. |
+| **Power BI Fabric** | Community `fabric_workspace` (7-component set — lakehouse, warehouse, pipeline, notebook, semantic model, report, dashboard) | Workspace-shape: one config picks up everything in the tenant / capacity. |
+| **Power BI on-prem** | Official [`dagster-powerbi`](https://docs.dagster.io/integrations/libraries/powerbi) | Officially maintained; connects to a Power BI Report Server. |
+| **IBM Cognos** | Community `cognos_workspace` + 4 sibling components (`cognos_resource`, `cognos_report_run_job`, `cognos_report_status_sensor`, `cognos_report_data_ingestion`) | No official Cognos integration; the community set handles both refresh-orchestration and data-ingest-from-Cognos-reports. |
+| **Tableau** | Official [`dagster-tableau`](https://docs.dagster.io/integrations/libraries/tableau) | Officially maintained; workbook / worksheet / dashboard assets. |
+
+The lineage chain the POC demos looks like this:
+
+```
+raw_orders  →  orders_hub / sat  →  dbt marts (BigQuery)  →  LookML views (dagster-looker)
+                                                          →  Fabric semantic model (fabric_workspace)
+                                                          →  Cognos report (cognos_workspace)
+```
+
+Every downstream BI asset becomes a first-class node in the Dagster graph. When a Looker view or a Cognos report is broken, the alert points at the upstream mart that changed shape — one asset graph, one on-call surface.
+
+**Lineage-out to Collibra** — separately, the `lineage_to_collibra` sink pushes the full Dagster asset graph (marts + BI + everything upstream) to Collibra on every materialization run. Not a BI tool itself, but the governance surface for the BI layer.
 
 ---
 
@@ -107,29 +221,29 @@ Community components:
 
 Metadata mapping capabilities — every asset's `metadata` dict is a lineage-linked structured payload. Add source system + column-level lineage + sensitive-field flags per asset, all queryable via GraphQL / OpenLineage.
 
-### 7. Orchestration: MLOps PySpark — migrating FROM Prefect
+### 7. Orchestration: MLOps PySpark — migrating from a Python-flow tool
 
-**Prefect flows migrate to Dagster assets one-to-one:**
+For teams migrating off a Python-flow orchestrator (Prefect, vanilla Airflow, bespoke Python) the concept mapping is one-to-one:
 
-| Prefect concept | Dagster equivalent |
+| Python-flow concept | Dagster equivalent |
 |---|---|
-| `@flow` decorator | `@asset` group or `@job` |
+| `@flow` / DAG-level decorator | `@asset` group or `@job` |
 | `@task` decorator | `@asset` or in-op logic |
 | Task dependencies | Asset dependencies (declared, typed) |
-| Prefect blocks | Dagster resources |
-| Flow runs UI | Materialization history in Dagster UI |
-| Schedules | `ScheduleDefinition` |
-| Sensors | `@sensor` |
-| Retries | `RetryPolicy` on the asset |
+| Named connection blocks / hooks | Dagster resources |
+| Flow-runs UI | Materialization history in Dagster UI |
+| Time-based schedules | `ScheduleDefinition` |
+| File / message triggers | `@sensor` |
+| Retry decorators | `RetryPolicy` on the asset |
 
 **Migration approach:**
 
-1. Wrap each Prefect flow in a Dagster job initially (as-is)
+1. Wrap each legacy flow in a Dagster job initially (as-is)
 2. Iteratively split into per-model or per-dataset assets
 3. Add typed inputs/outputs → gain lineage
-4. Delete Prefect once Dagster runs are green for N weeks
+4. Delete the legacy orchestrator once Dagster runs are green for N weeks
 
-Community components: no Prefect observation is needed since you're leaving Prefect. If you need temporary parallel-run visibility, use Dagster+ Insights to compare cost + latency between the two orchestrators.
+No observation component for the retiring orchestrator is needed since you're leaving it. If you need temporary parallel-run visibility, use Dagster+ Insights to compare cost + latency between the two orchestrators during the cutover window.
 
 ### 8. Orchestration: Generic k8s / GKE / Cloud Run
 
@@ -359,8 +473,9 @@ Everything the F500 stack requires ships as either a community component (from t
 | **dbt** | Official `dagster-dbt` |
 | **BigQuery** | 12 components + `dagster-gcp` |
 | **GCS** | Official `dagster-gcp`, `gcs_monitor` |
-| **Looker** | `looker_assets` |
-| **Autosys** | `autosys_asset` |
+| **Looker** | Official [`dagster-looker`](https://docs.dagster.io/integrations/libraries/looker/dagster-looker) (recommended) — auto-loads LookML views + explores + dashboards as external assets |
+| **Legacy centralized scheduler** (AutoSys / Control-M / etc.) | `autosys_asset` for AutoSys bridge; `shell_command_asset` post-cutover |
+| **Per-domain DAG scheduler** (DolphinScheduler / etc.) | Replaced by per-code-location `defs.yaml` + `spark_k8s_operator_asset` / `k8s_job_asset` |
 | **k8s / GKE** | `k8s_job_asset` |
 | **Cloud Run** | `cloud_run_job_trigger_asset`, `google_cloud_run_jobs` |
 | **PySpark** | `pyspark_pipeline`, `pyspark_resource` |
