@@ -43,12 +43,27 @@ class Registry:
                 return c
         return None
 
-    def search(self, query: str, *, category: Optional[str] = None) -> list[dict]:
-        """Return components whose id, name, description, or tags contain `query` (case-insensitive)."""
+    def search(
+        self,
+        query: str,
+        *,
+        category: Optional[str] = None,
+        produces: Optional[str] = None,
+    ) -> list[dict]:
+        """Return components whose id, name, description, or tags contain `query` (case-insensitive).
+
+        Filters:
+          category:  restrict to a given component family (see `categories()`).
+          produces:  restrict to components that emit the given Dagster primitive
+                     (asset | multi_asset | asset_check | job | schedule | sensor |
+                      resource | io_manager | partitions_def | other).
+        """
         q = query.lower()
         results = []
         for c in self.components:
             if category and c.get("category") != category:
+                continue
+            if produces and produces not in (c.get("produces") or []):
                 continue
             haystack = " ".join(
                 str(c.get(field, "")) for field in ("id", "name", "description")
@@ -64,6 +79,14 @@ class Registry:
         for c in self.components:
             cat = c.get("category", "unknown")
             counts[cat] = counts.get(cat, 0) + 1
+        return sorted(counts.items(), key=lambda x: -x[1])
+
+    def produces_index(self) -> list[tuple[str, int]]:
+        """Return [(primitive, count), ...] over the `produces` field, sorted by count desc."""
+        counts: dict[str, int] = {}
+        for c in self.components:
+            for p in c.get("produces") or []:
+                counts[p] = counts.get(p, 0) + 1
         return sorted(counts.items(), key=lambda x: -x[1])
 
     # ------------------------------------------------------------------ internal

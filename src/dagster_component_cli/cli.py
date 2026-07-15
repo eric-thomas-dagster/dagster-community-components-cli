@@ -241,28 +241,50 @@ def add(
 @main.command()
 @click.argument("query")
 @click.option("--category", help="Filter by category (e.g. resource, io_manager, sensor).")
+@click.option(
+    "--produces",
+    help=(
+        "Filter by the Dagster primitive the component emits: asset | multi_asset | "
+        "asset_check | job | schedule | sensor | resource | io_manager | partitions_def."
+    ),
+)
 @click.option("--limit", type=int, default=20, show_default=True)
 @click.pass_context
-def search(ctx: click.Context, query: str, category: Optional[str], limit: int) -> None:
+def search(
+    ctx: click.Context,
+    query: str,
+    category: Optional[str],
+    produces: Optional[str],
+    limit: int,
+) -> None:
     """Search the community registry by id, name, description, or tags.
 
     Example: dagster-component search snowflake
+    Example: dagster-component search "" --produces schedule
     """
     registry: Registry = ctx.obj["registry"]
-    results = registry.search(query, category=category)
+    results = registry.search(query, category=category, produces=produces)
     if not results:
-        console.print(f"No components match [bold]{query}[/bold].")
+        filters = []
+        if category:
+            filters.append(f"category={category}")
+        if produces:
+            filters.append(f"produces={produces}")
+        filter_str = f" ({', '.join(filters)})" if filters else ""
+        console.print(f"No components match [bold]{query or '*'}[/bold]{filter_str}.")
         sys.exit(0)
 
-    table = Table(title=f"{len(results)} match(es) for '{query}'", show_lines=False)
+    table = Table(title=f"{len(results)} match(es) for '{query or '*'}'", show_lines=False)
     table.add_column("ID", style="cyan", no_wrap=True)
     table.add_column("Category", style="magenta")
+    table.add_column("Produces", style="green")
     table.add_column("Description")
 
     for c in results[:limit]:
         table.add_row(
             c.get("id", "?"),
             c.get("category", "?"),
+            ",".join(c.get("produces") or []),
             (c.get("description") or "")[:80],
         )
     console.print(table)
