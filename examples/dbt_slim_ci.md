@@ -107,8 +107,6 @@ Either shape gives the same result: every dbt asset gets `code_version_changed()
 
 **When A alone isn't enough:** A is passive (waits for the next automation tick) and comparison-scoped-to-previous-materialization (not to prod). If you need immediate-post-deploy triggering OR a "vs prod" comparison surfaced elsewhere in Dagster, look at B or C below.
 
-*(If you happen to already use the community `AutomationConditionApplicatorComponent`, you can express the same rule declaratively via `selection: 'kind:dbt'` + `python: dagster.AutomationCondition.code_version_changed() | ...`. Optional — the two shapes above are pure-Dagster.)*
-
 ---
 
 ## Approach B — Asset-selection at CI time (stock component, no subclass)
