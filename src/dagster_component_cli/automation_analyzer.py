@@ -63,6 +63,7 @@ class AnalyzerResult:
     schedules_to_review: list[dict] = field(default_factory=list)
     jobs_manual_or_sensor: list[dict] = field(default_factory=list)
     unmapped_assets: list[str] = field(default_factory=list)
+    partitioned_notes: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     # Counts for the summary
     counts: dict = field(default_factory=dict)
@@ -102,9 +103,6 @@ def _run_worker(project_dir: Path) -> dict:
 
 
 # ─── Rule-generation heuristics ────────────────────────────────────────────
-
-
-_DOWNSTREAM_GROUPS = ("silver", "gold", "mart", "marts", "prod", "warehouse")
 
 
 def _selection_for_asset_keys(keys: list[str]) -> str:
@@ -210,45 +208,115 @@ def generate_rules(payload: dict) -> AnalyzerResult:
             ]
             continue
 
+        # Partition awareness: split the covered keys into partitioned vs.
+        # not. Partitioned assets can share the same `cron` rule (on_cron
+        # fires the LATEST partition per tick for time-window partitions),
+        # but STATIC-partitioned assets need a warning — cron doesn't map
+        # cleanly to enumerated partitions.
+        assets_by_key = {a["key"]: a for a in assets}
+        partitioned_static_keys = [
+            k for k in all_keys
+            if assets_by_key.get(k, {}).get("partitions_def_type") in (
+                "StaticPartitionsDefinition",
+                "MultiPartitionsDefinition",
+                "DynamicPartitionsDefinition",
+            )
+        ]
+        partitioned_time_keys = [
+            k for k in all_keys
+            if assets_by_key.get(k, {}).get("partitions_def_type") in (
+                "DailyPartitionsDefinition",
+                "HourlyPartitionsDefinition",
+                "MonthlyPartitionsDefinition",
+                "WeeklyPartitionsDefinition",
+                "TimeWindowPartitionsDefinition",
+            )
+        ]
+        was_partitioned_schedule = any(s.get("is_partitioned") for s in sched_group)
+
         rule_name = _friendly_cron_name(cron)
+        reason_parts = [f"replaces {len(sched_group)} schedule(s): {', '.join(source_names)}"]
+        if was_partitioned_schedule:
+            reason_parts.append("(source schedules were partition-aware)")
+        if partitioned_time_keys:
+            reason_parts.append(
+                f"time-partitioned assets included ({len(partitioned_time_keys)}) — on_cron "
+                "fires the LATEST partition per tick"
+            )
         rule = ProposedRule(
             name=rule_name,
             selection=_selection_for_asset_keys(all_keys),
             cron=cron,
-            reason=f"replaces {len(sched_group)} schedule(s): {', '.join(source_names)}",
+            reason=" · ".join(reason_parts),
         )
         result.rules.append(rule)
         covered.update(all_keys)
+
+        # Static/dynamic-partitioned assets need a separate warning
+        for k in partitioned_static_keys:
+            ptype = assets_by_key[k].get("partitions_def_type", "?")
+            result.partitioned_notes.append(
+                f"'{k}' ({ptype}): rule '{rule_name}' fires on cron but the asset has "
+                f"enumerated partitions — Dagster fires the LATEST partition per tick. "
+                f"If you want per-partition backfills, keep the original partitioned schedule "
+                f"OR add a per-partition sensor."
+            )
         # Backfill the replaced_by_rule field
         for d in result.schedules_to_disable:
             if d["name"] in source_names and d.get("replaced_by_rule") is None:
                 d["replaced_by_rule"] = rule_name
 
-    # ── Rule N+1: derive_from_upstreams for downstream groups ────────────
+    # ── Rule N+1: derive_from_upstreams for LINEAGE downstream assets ────
     #
-    # If we saw any assets in the "downstream" group names AND those aren't
-    # in the covered set, propose a derive_from_upstreams rule for them.
-    downstream_groups = sorted({
-        a.get("group") for a in assets
-        if a.get("group") and a["group"].lower() in _DOWNSTREAM_GROUPS
-        and a["key"] not in covered
-    })
-    if downstream_groups:
-        sel = " or ".join(f"group:{g}" for g in downstream_groups)
+    # Walk the actual asset graph. Any asset that has at least one in-project
+    # upstream dep AND isn't already covered by a cron rule should inherit
+    # cadence from its upstreams (strategy=most_frequent handles the multi-
+    # upstream case). No group-name assumptions — this works regardless of
+    # naming conventions.
+    in_project_keys = {a["key"] for a in assets}
+    downstream_uncovered = [
+        a for a in assets
+        if a["key"] not in covered
+        and not a.get("has_automation_condition")
+        and any(dep in in_project_keys for dep in (a.get("deps") or []))
+    ]
+    if downstream_uncovered:
+        keys = sorted(a["key"] for a in downstream_uncovered)
         result.rules.append(ProposedRule(
             name="derive_downstream_from_upstreams",
-            selection=sel,
+            selection=_selection_for_asset_keys(keys),
             derive_from_upstreams=True,
             strategy="most_frequent",
             reason=(
-                f"downstream groups ({', '.join(downstream_groups)}) inherit their cadence "
-                f"from upstreams — no explicit cron needed"
+                f"{len(keys)} lineage-downstream asset(s) (each has at least one in-project "
+                f"upstream) inherit cadence from those upstreams — strategy=most_frequent picks "
+                f"the shortest cadence when upstreams differ"
             ),
         ))
-        # Consider these covered (rule will apply to them).
-        for a in assets:
-            if a.get("group") in downstream_groups:
-                covered.add(a["key"])
+        covered.update(keys)
+
+    # ── Roots that aren't scheduled — flag for user review ───────────────
+    #
+    # Assets with no in-project upstream deps AND not covered by any schedule
+    # are typically SOURCE assets (external ingestion, manually-triggered).
+    # Emitting eager on them is usually wrong (would try to materialize on any
+    # tick). Warn the user instead of guessing.
+    root_uncovered = [
+        a for a in assets
+        if a["key"] not in covered
+        and not a.get("has_automation_condition")
+        and not any(dep in in_project_keys for dep in (a.get("deps") or []))
+    ]
+    if root_uncovered:
+        result.warnings.append(
+            f"{len(root_uncovered)} root asset(s) have no upstream deps and no schedule: "
+            f"{', '.join(a['key'] for a in root_uncovered[:5])}"
+            f"{'...' if len(root_uncovered) > 5 else ''}. These are typically external-source "
+            f"or sensor-triggered — decide manually whether to add a cron / eager / leave "
+            f"un-conditioned."
+        )
+        # Don't add them to `covered` — they intentionally fall through to whatever
+        # the user configures (they will otherwise hit the catchall below).
 
     # ── Rule N+2: eager catchall for anything else ───────────────────────
     unconditioned = [
@@ -380,6 +448,14 @@ def render_report(result: AnalyzerResult) -> str:
             lines.append(f"    • {k}")
         if len(result.unmapped_assets) > 20:
             lines.append(f"    … and {len(result.unmapped_assets) - 20} more")
+        lines.append("")
+
+    if result.partitioned_notes:
+        lines.append(f"⚠  Partition-aware notes ({len(result.partitioned_notes)}):")
+        for n in result.partitioned_notes[:10]:
+            lines.append(f"    • {n}")
+        if len(result.partitioned_notes) > 10:
+            lines.append(f"    … and {len(result.partitioned_notes) - 10} more")
         lines.append("")
 
     for w in result.warnings:

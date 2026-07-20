@@ -106,6 +106,11 @@ def introspect(project_dir: str = ".") -> dict:
             key_str = spec.key.to_user_string()
             deps = [dep.asset_key.to_user_string() for dep in (spec.deps or [])]
             has_condition = spec.automation_condition is not None
+            # Partition awareness — the automation-condition strategy differs for
+            # time-window (works with on_cron) vs static/multi (needs a sensor
+            # or explicit per-partition trigger).
+            pdef = getattr(spec, "partitions_def", None)
+            partitions_def_type = type(pdef).__name__ if pdef is not None else None
             assets.append({
                 "key": key_str,
                 "group": spec.group_name or "",
@@ -114,6 +119,8 @@ def introspect(project_dir: str = ".") -> dict:
                 "kinds": list(spec.kinds or []),
                 "has_automation_condition": has_condition,
                 "automation_condition_class": type(spec.automation_condition).__name__ if has_condition else None,
+                "is_partitioned": pdef is not None,
+                "partitions_def_type": partitions_def_type,
             })
         except Exception as e:
             assets.append({"key": "<unresolved>", "_error": str(e)})
@@ -127,11 +134,20 @@ def introspect(project_dir: str = ".") -> dict:
             job_name = getattr(s, "job_name", None) or ""
             cron = getattr(s, "cron_schedule", None) or ""
             status = getattr(s, "default_status", None)
+            # Partition-aware detection — build_schedule_from_partitioned_job
+            # produces a schedule whose type includes "Partition" in its name.
+            type_name = type(s).__name__
+            is_partitioned = (
+                "Partition" in type_name
+                or "partitioned" in type_name.lower()
+            )
             schedules.append({
                 "name": s.name,
                 "cron": cron,
                 "job_name": job_name,
                 "default_status": str(status) if status else None,
+                "type": type_name,
+                "is_partitioned": is_partitioned,
             })
     except Exception as e:
         schedules.append({"_error": f"schedules introspection failed: {e}"})

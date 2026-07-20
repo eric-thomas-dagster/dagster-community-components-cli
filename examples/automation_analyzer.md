@@ -91,8 +91,11 @@ Notice: **two schedules that fire the same cron get MERGED into one rule** (`dai
 
 - **Same-cron schedules → single rule.** If N schedules all fire `0 6 * * *`, their target-job asset selections union into one rule with `cron: "0 6 * * *"`.
 - **Cron name → human-friendly.** `0 * * * *` → `hourly_top_of_hour`; `0 6 * * *` → `daily_at_6am`; `*/15 * * * *` → `every_15_minutes`; falls back to `cron_<slug>` for exotic expressions.
-- **Downstream groups auto-derived.** Assets in groups named `silver`, `gold`, `mart`/`marts`, `prod`, `warehouse` (and not already covered by a cron rule) get a `derive_from_upstreams: true, strategy: most_frequent` rule — matching the common medallion pattern.
-- **Uncovered assets → eager catchall.** If any asset isn't matched by an explicit rule, an `eager_default` rule (`selection: "*"`, `preset: eager`) is appended so nothing gets left un-conditioned.
+- **Lineage-based downstream inference — no group-name assumptions.** The analyzer walks the actual asset graph. Any asset with at least one in-project upstream dep AND not already covered by a cron rule gets a `derive_from_upstreams: true, strategy: most_frequent` rule. Works regardless of group naming — bronze/silver/gold, raw/staging/marts, or completely custom conventions.
+- **Root assets without a schedule → flagged for review, not auto-conditioned.** An asset with no in-project deps and no schedule is typically a source (external ingestion, sensor-driven, or manually kicked off). The analyzer surfaces these in the report but doesn't guess an eager/cron condition — decision is yours.
+- **Partitioned schedules → detected + preserved.** `build_schedule_from_partitioned_job` results get pulled correctly; the equivalent `cron` rule fires the LATEST partition per tick (for time-window partitions, this is the intent).
+- **Static / dynamic partitions → warned.** Rules using `cron` don't fan out over enumerated partitions — you'll get a note recommending you either keep the original partitioned schedule OR add a per-partition sensor. The rule still fires the latest partition on the cron tick.
+- **Uncovered assets → eager catchall.** After all the above, any remaining uncovered asset picks up an `eager_default` rule (`selection: "*"`, `preset: eager`) as a safety net.
 - **`preserve_existing: true` by default.** Assets that already have an `automation_condition` set keep it. The applicator only fills in the gaps.
 
 ## Wiring the output into your project
@@ -140,8 +143,7 @@ Jobs called out as "keep manual/sensor-only" stay put — those aren't managed b
 ## Limitations
 
 - Only reads projects with a canonical `create-dagster` layout (`src/<pkg>/definitions.py` with `@definitions` factory named `defs`). Older / custom layouts may not introspect cleanly — file an issue with the project shape.
-- Doesn't yet handle **partitioned schedules** — those are flagged for manual review.
-- Downstream-group detection is name-based (`silver`, `gold`, `mart`, etc.). If your project uses different group names, the tool won't auto-generate the `derive_from_upstreams` rule — you can hand-add one.
+- **Static / dynamic partitioned assets** get flagged but not fully reshaped — the analyzer will still emit a cron rule if a schedule targets them, but you'll get a note that a cron+static-partitions combination fires only the "latest" partition per tick. Fan-out backfills need a per-partition sensor.
 - The applicator's `python:` escape hatch isn't proposed — the tool sticks to YAML-expressible rules.
 
 ## Related
