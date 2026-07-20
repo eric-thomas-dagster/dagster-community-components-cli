@@ -15,6 +15,7 @@ The ten demos that best answer *"why Dagster on top of my existing stack?"*. Eac
 
 | Demo | Why | Cost |
 |---|---|---|
+| **[MLflow pipeline (end-to-end MLOps)](mlflow_pipeline.md)** | Uses all 7 community MLflow components: workspace + experiment sensor + model sensor + version check + promotion + inference + resource. Trains → registers → promotes → scores, self-contained sqlite MLflow backend. Complementary to official `dagster-mlflow` (which handles the tracking-in-during-training side). | $0 |
 | **[Message-driven dbt](dbt_queue_driven.md)** | External-queue orchestration of dbt — sensor picks up "build model X with these vars" or "build all", subclasses the official dbt component for runtime vars, publishes success back to a queue as an asset. | $0 |
 | **[dbt + ML + dbt (mid-DAG Python)](dbt_ml_pipeline.md)** | The flagship "why Dagster over Airflow" — a Python ML asset sitting between two sets of dbt models, all in one lineage graph. Airflow can't do this. | $0 |
 | **[dbt + LLM + dbt (mid-DAG generative)](dbt_llm_pipeline.md)** | Same shape, LLM in the middle. LangChain generates personalized retention emails between dbt models. | ~$0.01 |
