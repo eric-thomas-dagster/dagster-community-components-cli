@@ -22,7 +22,7 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Optional
+from typing import Optional
 
 # The worker script lives next to this file. We locate it by absolute path
 # rather than importing it — the worker runs inside the TARGET project's venv,
@@ -425,7 +425,7 @@ def render_yaml(result: AnalyzerResult) -> str:
         if "preset" in d:
             lines.append(f"      preset: {d['preset']}")
         if "derive_from_upstreams" in d:
-            lines.append(f"      derive_from_upstreams: true")
+            lines.append("      derive_from_upstreams: true")
             if "strategy" in d:
                 lines.append(f"      strategy: {d['strategy']}")
         lines.append("")
