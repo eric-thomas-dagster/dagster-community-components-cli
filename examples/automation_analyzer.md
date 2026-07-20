@@ -94,7 +94,11 @@ Notice: **two schedules that fire the same cron get MERGED into one rule** (`dai
 - **Lineage-based downstream inference — no group-name assumptions.** The analyzer walks the actual asset graph. Any asset with at least one in-project upstream dep AND not already covered by a cron rule gets a `derive_from_upstreams: true, strategy: most_frequent` rule. Works regardless of group naming — bronze/silver/gold, raw/staging/marts, or completely custom conventions.
 - **Root assets without a schedule → flagged for review, not auto-conditioned.** An asset with no in-project deps and no schedule is typically a source (external ingestion, sensor-driven, or manually kicked off). The analyzer surfaces these in the report but doesn't guess an eager/cron condition — decision is yours.
 - **Partitioned schedules → detected + preserved.** `build_schedule_from_partitioned_job` results get pulled correctly; the equivalent `cron` rule fires the LATEST partition per tick (for time-window partitions, this is the intent).
-- **Static / dynamic partitions → warned.** Rules using `cron` don't fan out over enumerated partitions — you'll get a note recommending you either keep the original partitioned schedule OR add a per-partition sensor. The rule still fires the latest partition on the cron tick.
+- **Partitioned assets without a schedule → `preset: on_missing`.** For any partitioned asset that no schedule targets, the analyzer proposes `on_missing()` — automatically fills any partition that hasn't been materialized. Handles both cases well:
+  - **Roots:** backfills historical partitions on first activation
+  - **Downstream:** fills each partition once its upstream lands
+  Works for time-window, static, and dynamic partitions.
+- **Static / dynamic partitions covered by a cron rule → warned.** `on_cron` fires only the "latest" partition per tick — not every partition. If you need fan-out backfills across all partitions, keep the original partitioned schedule OR add a per-partition sensor.
 - **Uncovered assets → eager catchall.** After all the above, any remaining uncovered asset picks up an `eager_default` rule (`selection: "*"`, `preset: eager`) as a safety net.
 - **`preserve_existing: true` by default.** Assets that already have an `automation_condition` set keep it. The applicator only fills in the gaps.
 

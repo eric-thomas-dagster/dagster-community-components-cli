@@ -266,7 +266,38 @@ def generate_rules(payload: dict) -> AnalyzerResult:
             if d["name"] in source_names and d.get("replaced_by_rule") is None:
                 d["replaced_by_rule"] = rule_name
 
-    # ── Rule N+1: derive_from_upstreams for LINEAGE downstream assets ────
+    # ── Rule N+1: on_missing for partitioned assets without a cron rule ──
+    #
+    # For partitioned assets that no schedule targets, `on_missing()` is the
+    # right default — it fills any partition that hasn't been materialized,
+    # which handles both:
+    #   * Roots: backfill historical partitions on first run
+    #   * Downstream: fill each partition once its upstream is ready
+    #
+    # Rules fall through top-to-bottom "first match wins", so this specific
+    # rule must precede the broader downstream / catchall rules.
+    partitioned_uncovered = [
+        a for a in assets
+        if a.get("is_partitioned")
+        and a["key"] not in covered
+        and not a.get("has_automation_condition")
+    ]
+    if partitioned_uncovered:
+        keys = sorted(a["key"] for a in partitioned_uncovered)
+        result.rules.append(ProposedRule(
+            name="partitioned_backfill_missing",
+            selection=_selection_for_asset_keys(keys),
+            preset="on_missing",
+            reason=(
+                f"{len(keys)} partitioned asset(s) with no schedule — on_missing fires for "
+                f"any partition that hasn't been materialized yet (safe default for both "
+                f"roots and downstream partitioned assets; handles historical backfill "
+                f"automatically)"
+            ),
+        ))
+        covered.update(keys)
+
+    # ── Rule N+2: derive_from_upstreams for LINEAGE downstream assets ────
     #
     # Walk the actual asset graph. Any asset that has at least one in-project
     # upstream dep AND isn't already covered by a cron rule should inherit
