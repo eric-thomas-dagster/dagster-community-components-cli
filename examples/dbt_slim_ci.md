@@ -35,24 +35,72 @@ Examples below use option 2 (GH artifacts) because it's the easiest cross-cuttin
 
 **Why it's the safest pick:** zero CI plumbing, zero prior-manifest storage, zero cross-team coordination on artifact paths / adapter versions / dbt versions between the CI runner and the code-location image. The failure mode is just "the code location didn't reload" — which you'd see immediately in Dagster+ deploy logs anyway. Everything downstream is Dagster's automation-tick loop doing what it always does.
 
-Wire it via `AutomationConditionApplicatorComponent`:
+**Straight Dagster** — no community component required. Two equivalent shapes, pick whichever fits the project's style:
 
-```yaml
-# src/<pkg>/defs/dbt_automation/defs.yaml
-type: dagster_community_components.AutomationConditionApplicatorComponent
-attributes:
-  preserve_existing: true
-  rules:
-    # For every dbt asset — rebuild when SQL changes since last materialization.
-    # `on_missing()` handles the very first materialization (no prior code_version to compare).
-    - name: dbt_rebuild_on_code_change
-      selection: 'kind:dbt'
-      python: dagster.AutomationCondition.code_version_changed() | dagster.AutomationCondition.on_missing()
+### Shape 1 — translator override (~10 lines, ships as a Python file)
+
+Set the automation condition at the source, on every dbt asset spec, via a `DagsterDbtTranslator` subclass. **Same mechanism [Approach C](#approach-c--state-aware-translator-dbt-state-as-a-dagster-tag) uses** — if the customer later wants to add state-comparison tags, extending the translator to also do C's work is straightforward:
+
+```python
+# src/<pkg>/lib/dbt_translator.py
+from dagster import AutomationCondition
+from dagster_dbt import DagsterDbtTranslator
+
+
+class AutoRebuildOnCodeChangeTranslator(DagsterDbtTranslator):
+    def get_automation_condition(self, dbt_resource_props):
+        # code_version_changed() = "SQL changed since last materialization"
+        # on_missing()            = "asset has never materialized" (first-run case)
+        return (
+            AutomationCondition.code_version_changed()
+            | AutomationCondition.on_missing()
+        )
 ```
 
-Plus the `apply_rules(...)` wiring in `definitions.py` (see the applicator's README).
+Wire it into the stock component:
+
+```yaml
+# src/<pkg>/defs/dbt/defs.yaml
+type: dagster_dbt.DbtProjectComponent
+attributes:
+  project: "{{ project_root }}/dbt_project"
+  translation:
+    type: <pkg>.lib.dbt_translator.AutoRebuildOnCodeChangeTranslator
+```
+
+### Shape 2 — apply via `definitions.py` post-processing (no subclass, no extra file)
+
+If they'd rather not add a translator file at all, apply the condition post-hoc in `definitions.py`:
+
+```python
+# definitions.py
+from pathlib import Path
+from dagster import (
+    AssetSelection,
+    AutomationCondition,
+    definitions,
+    load_from_defs_folder,
+)
+
+
+@definitions
+def defs():
+    base = load_from_defs_folder(path_within_project=Path(__file__).parent)
+    condition = (
+        AutomationCondition.code_version_changed()
+        | AutomationCondition.on_missing()
+    )
+    return base.map_resolved_asset_specs(
+        lambda spec: spec.replace_attributes(automation_condition=condition),
+        selection=AssetSelection.kinds("dbt"),
+    )
+```
+
+Either shape gives the same result: every dbt asset gets `code_version_changed() | on_missing()` as its automation condition. Dagster's tick loop (Dagster+ Serverless: default 30s; Hybrid: configurable) evaluates the condition on each dbt asset; when a model's `code_version` differs from what was last materialized, it fires a run.
 
 **When A alone isn't enough:** A is passive (waits for the next automation tick) and comparison-scoped-to-previous-materialization (not to prod). If you need immediate-post-deploy triggering OR a "vs prod" comparison surfaced elsewhere in Dagster, look at B or C below.
+
+*(If you happen to already use the community `AutomationConditionApplicatorComponent`, you can express the same rule declaratively via `selection: 'kind:dbt'` + `python: dagster.AutomationCondition.code_version_changed() | ...`. Optional — the two shapes above are pure-Dagster.)*
 
 ---
 
