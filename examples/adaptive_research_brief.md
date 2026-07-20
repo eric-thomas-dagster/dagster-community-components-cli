@@ -78,18 +78,9 @@ Result: N separate materializations of the notes asset in `dg dev`, each indepen
 - **Multi-turn refinement.** After `research_brief`, add another planner that reads the brief + user feedback and picks a set of "improvements to research further." Chain another Adaptive Research Brief for that follow-up scope.
 - **Different sink.** Instead of a DataFrame-in-asset, write the brief to a Notion page (`notion_page_writer`), a Google Doc, or Slack (`slack_notification`).
 
-## The family of agentic-pipeline demos
+## Part of the agent-pipeline patterns family
 
-Adaptive Research Brief closes out the current family:
-
-1. [**Data Doctor**](./data_doctor.md) — agent picks column REMEDIATIONS from a bounded set.
-2. [**Adaptive Triage Router**](./adaptive_triage.md) — agent picks per-row DOWNSTREAM ROUTE.
-3. [**Adaptive Backfill Detective**](./adaptive_backfill.md) — agent picks per-partition FILL STRATEGY.
-4. [**Supervisor Agent**](./supervisor_agent.md) — agent picks WHICH SPECIALIST TOOLS to call.
-5. [**MCP Tool Picker**](./mcp_tool_picker.md) — agent picks WHICH MCP TOOLS to call.
-6. **Adaptive Research Brief** *(this demo)* — agent picks **HOW MANY** items to work on (runtime-decided N).
-
-Common pattern: **agent picks by name from a bounded, safe set. Dagster executes declaratively.** The bounded-ness is what keeps the pattern safe. The picking is what makes it adaptive.
+See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
 ## Related
 

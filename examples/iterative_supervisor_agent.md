@@ -97,19 +97,9 @@ Bump `max_iterations` up if tasks tend to need more turns; drop it down if the a
 - **Cost cap.** Bake a `max_total_tokens` field into the component; on exceed, force `done=True` in the next step.
 - **Reasoner + doer split.** Use a stronger model for the planner (gpt-4o) and cheaper for tools (gpt-4o-mini) — set different `model` fields per tool (would require component extension).
 
-## The family of agentic-pipeline demos
+## Part of the agent-pipeline patterns family
 
-Iterative Supervisor Agent is #7 in the arc — the chaining variant of Supervisor.
-
-1. [**Data Doctor**](./data_doctor.md) — agent picks column REMEDIATIONS from a bounded set.
-2. [**Adaptive Triage Router**](./adaptive_triage.md) — agent picks per-row DOWNSTREAM ROUTE.
-3. [**Adaptive Backfill Detective**](./adaptive_backfill.md) — agent picks per-partition FILL STRATEGY.
-4. [**Supervisor Agent**](./supervisor_agent.md) — agent picks WHICH SPECIALIST TOOLS to call (single-shot).
-5. [**MCP Tool Picker**](./mcp_tool_picker.md) — agent picks WHICH MCP TOOLS to call.
-6. [**Adaptive Research Brief**](./adaptive_research_brief.md) — agent picks HOW MANY items to work on.
-7. **Iterative Supervisor Agent** *(this demo)* — agent picks tools **iteratively** with visibility into prior step outputs (chaining).
-
-Common pattern: LLM picks by name from a bounded, safe set. Dagster executes declaratively. The bounded-ness keeps it safe. The picking is what makes it adaptive.
+See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
 ## Related
 

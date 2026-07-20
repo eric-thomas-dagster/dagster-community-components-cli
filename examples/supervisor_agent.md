@@ -110,18 +110,9 @@ The synthesizer inline-cites which tool provided each fact — full audit trail 
 - **Vercel AI Gateway.** Set `api_base_env_var` to point at Vercel — one key routes across OpenAI/Anthropic/Google/xAI, each tool can use a different model if you fork per-tool.
 - **Reasoner + doer split.** Use a stronger model (gpt-4o) for the planner + synthesizer and a cheaper one (gpt-4o-mini) for tool executions. Cost-optimal without losing planning quality.
 
-## The family of agentic-pipeline demos
+## Part of the agent-pipeline patterns family
 
-Supervisor Agent is one of an evolving family. The common pattern: **the LLM picks by name from a bounded, safe set. Dagster executes declaratively.**
-
-1. [**Data Doctor**](./data_doctor.md) — agent picks column REMEDIATIONS.
-2. [**Adaptive Triage Router**](./adaptive_triage.md) — agent picks per-row DOWNSTREAM ROUTE.
-3. [**Adaptive Backfill Detective**](./adaptive_backfill.md) — agent picks per-partition FILL STRATEGY.
-4. **Supervisor Agent** *(this demo)* — agent picks WHICH SPECIALIST TOOLS to call.
-5. **MCP Tool Picker** *(coming)* — same shape, but tools are MCP servers.
-6. **Adaptive Research Brief** *(coming)* — planner emits a variable-N list of sub-topics, each becomes a parallel research asset.
-
-Together, this covers most patterns customers ask for when they say "we want AI in our pipelines."
+See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
 ## Related
 

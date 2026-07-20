@@ -112,15 +112,9 @@ Compare to "LLM writes SQL" or "LLM emits Python": those have unbounded blast ra
 - **Bring your real data.** Replace `synthetic_data_generator` with `snowflake_query_asset` / `bigquery_query_asset` / your source of choice. The rest of the pipeline is source-agnostic.
 - **Sensor-driven.** Wrap the pipeline in a sensor: whenever the source table gets new data, evaluate DQ; if issues > threshold, trigger the remediation job. See the [Adaptive Backfill Detective](./adaptive_backfill.md) demo for the sensor shape.
 
-## The family of agentic-pipeline demos
+## Part of the agent-pipeline patterns family
 
-Data Doctor is the first of three that use the "agent picks from a bounded action space" pattern:
-
-1. **Data Doctor** *(this demo)* — agent picks DQ remediations per column.
-2. **Adaptive Triage Router** — agent classifies incoming rows and routes to a picked downstream sink (billing / bug / churn / etc.).
-3. **Adaptive Backfill Detective** — sensor + agent decides per-partition fill strategy when gaps appear (re-ingest / interpolate / skip / alert).
-
-The common pattern: **agent picks by name from a bounded, safe set. Dagster executes.** The pipeline stays declarative + auditable; the picks stay adaptive.
+See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
 ## Related
 

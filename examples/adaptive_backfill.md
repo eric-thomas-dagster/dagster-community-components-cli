@@ -98,15 +98,9 @@ Other extensions:
 - **Human-in-the-loop.** Add an `asset_check` on `backfill_plan` that fails if `escalate` count exceeds a threshold — force manual review before pipeline continues.
 - **Real data.** Replace `synthetic_data_generator` with a Timescale / InfluxDB / Snowflake / BigQuery query that returns rows-per-partition counts against your actual data lake.
 
-## The family of agentic-pipeline demos
+## Part of the agent-pipeline patterns family
 
-Adaptive Backfill Detective closes the three-demo arc:
-
-1. [**Data Doctor**](./data_doctor.md) — agent picks DQ **remediations** per column, executed by `data_remediation_asset`.
-2. [**Adaptive Triage Router**](./adaptive_triage.md) — agent picks the **downstream route** per row, executed by `router`.
-3. **Adaptive Backfill Detective** *(this demo)* — agent picks the **fill/response strategy** per partition, executed by `router` fan-out.
-
-The common pattern: **agent picks by name from a bounded, safe set**. Dagster's declarative machinery executes. AI decides *what*; Dagster runs *how*.
+See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
 ## Why this pattern beats "LLM writes code"
 

@@ -101,16 +101,9 @@ Each is a config swap — the component doesn't know the difference.
 - **Args validation.** Add a `filter` component between `mcp_plan` and each per-tool asset to catch obviously-bad args (wrong types, out-of-range paths). Prevents runtime MCP failures.
 - **Retry on isError.** Wire retries via each tool asset's `retry_policy` fields.
 
-## The family of agentic-pipeline demos
+## Part of the agent-pipeline patterns family
 
-MCP Tool Picker is one of a set. Common pattern: **agent picks by name from a bounded, safe set; Dagster executes declaratively.**
-
-1. [**Data Doctor**](./data_doctor.md) — agent picks column REMEDIATIONS.
-2. [**Adaptive Triage Router**](./adaptive_triage.md) — agent picks per-row DOWNSTREAM ROUTE.
-3. [**Adaptive Backfill Detective**](./adaptive_backfill.md) — agent picks per-partition FILL STRATEGY.
-4. [**Supervisor Agent**](./supervisor_agent.md) — agent picks WHICH SPECIALIST TOOLS to call (LLM-persona tools).
-5. **MCP Tool Picker** *(this demo)* — agent picks WHICH MCP TOOLS to call (real MCP servers).
-6. **Adaptive Research Brief** *(coming)* — planner emits variable-N sub-topic list; each becomes a parallel research asset.
+See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
 ## Related
 

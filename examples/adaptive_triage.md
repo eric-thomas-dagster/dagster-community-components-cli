@@ -98,15 +98,9 @@ Other extensions:
 - **Add a router for priority.** Chain a second `router` after `classified_tickets` that also splits by `priority == "urgent"` — 2D routing (route × priority).
 - **Real data upstream.** Replace `synthetic_data_generator` with a `zendesk_ingestion` / `intercom_ingestion` / `salesforce_case_ingestion` / IMAP source.
 
-## The family of agentic-pipeline demos
+## Part of the agent-pipeline patterns family
 
-Adaptive Triage Router is the second of three demos where the agent decides *what* the pipeline does, from a bounded action space:
-
-1. [**Data Doctor**](./data_doctor.md) — agent picks DQ **remediations** per column, executed by `data_remediation_asset`.
-2. **Adaptive Triage Router** *(this demo)* — agent picks the **downstream route** per row, executed by `router`.
-3. **Adaptive Backfill Detective** *(coming)* — agent picks per-partition **backfill strategies** when gaps appear, driven by a sensor.
-
-The common pattern: the LLM **picks by name from a bounded, safe set**, and Dagster's declarative machinery executes. AI decides, Dagster runs.
+See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
 ## Related
 
