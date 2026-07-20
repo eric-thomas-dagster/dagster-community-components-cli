@@ -105,7 +105,9 @@ from dagster_dbt import DbtCliResource, DbtProjectComponent
 
 
 class DbtRunVars(dg.Config):
+    """Per-run overrides. All fields optional — omit to use dbt defaults."""
     vars: dict[str, Any] = {}
+    state_path: str | None = None   # useful for `--defer --state ./prod`
 
 
 class DbtProjectWithRuntimeVarsComponent(DbtProjectComponent):
@@ -115,9 +117,11 @@ class DbtProjectWithRuntimeVarsComponent(DbtProjectComponent):
 
     def get_cli_args(self, context: dg.AssetExecutionContext) -> list[str]:
         args = super().get_cli_args(context)
-        run_vars = context.op_execution_context.op_config.get("vars") or {}
-        if run_vars:
-            args += ["--vars", json.dumps(run_vars)]
+        cfg = context.op_execution_context.op_config
+        if cfg.get("vars"):
+            args += ["--vars", json.dumps(cfg["vars"])]
+        if cfg.get("state_path"):
+            args += ["--state", cfg["state_path"]]
         return args
 ```
 
@@ -135,6 +139,20 @@ attributes:
 This same pattern extends to any dbt CLI flag — `--full-refresh`,
 `--target`, `--threads`, `--exclude`, etc. Add a field to `DbtRunVars`,
 append the flag in `get_cli_args`, and it's addressable per-run.
+
+**Note on `--select`.** `dbt.cli(context=context)` auto-adds `--select` for the
+asset keys Dagster's job selection has narrowed to. Multiple `--select` flags
+UNION in dbt — so you can't narrow FURTHER via op_config `--select` (the base
+one still applies). For "run only state-modified models on PR deploys" (Slim
+CI), the right layer to narrow at is Dagster's `asset_selection` at CI launch
+time — not the dbt CLI. That approach works with the stock `DbtProjectComponent`
+without any subclass at all.
+
+**`state_path` is for `--defer` use cases:** dev-iteration where the current
+project references upstream models that live only in prod — passing
+`state_path=./prod_dbt_state` (with `cli_args: [build, --defer, ...]` in YAML)
+tells dbt to borrow those upstreams from prod rather than trying to build
+them locally.
 
 ### 2. The queue-completion asset (success-only write-back)
 

@@ -183,16 +183,32 @@ from dagster_dbt import DbtCliResource, DbtProjectComponent
 
 
 class DbtRunVars(dg.Config):
-    """Config injected into the dbt op at run request time."""
+    """Per-run overrides for the dbt op. All fields optional — omit to use
+    dbt defaults.
+
+    - vars:       dict passed as `--vars '<json>'` (per-model vars)
+    - state_path: string passed as `--state` — useful for `--defer --state ./prod`
+                  (dev-iteration pattern: missing upstream models borrow from prod).
+                  Path must exist on the AGENT filesystem when the op runs.
+
+    NOTE: no `select` field. `dbt.cli(context=context)` already auto-adds `--select`
+    for the assets Dagster's job selection has narrowed to; adding another one
+    would UNION (dbt's behavior for multiple --select flags), not narrow further.
+    For Slim CI ("only run state-modified models"), narrow at Dagster's
+    asset_selection level in your CI launch — see dbt_slim_ci walkthrough.
+    """
     vars: dict[str, Any] = {}
+    state_path: str | None = None
 
 
 class DbtProjectWithRuntimeVarsComponent(DbtProjectComponent):
-    """DbtProjectComponent that accepts `vars` as run config and appends them
-    to the dbt CLI as `--vars '<json>'`.
+    """DbtProjectComponent that accepts per-run CLI arg overrides via op config.
 
-    Sensor emits:
-        RunRequest(run_config={"ops": {"<op_name>": {"config": {"vars": {...}}}}})
+    Common uses:
+      1. Sensor injects per-message vars for a single-model build (see the
+         message-driven dbt demo).
+      2. Dev-iteration --defer: pass state_path so dbt borrows missing
+         upstreams from prod artifacts rather than building them locally.
     """
 
     @property
@@ -201,9 +217,11 @@ class DbtProjectWithRuntimeVarsComponent(DbtProjectComponent):
 
     def get_cli_args(self, context: dg.AssetExecutionContext) -> list[str]:
         args = super().get_cli_args(context)
-        run_vars = context.op_execution_context.op_config.get("vars") or {}
-        if run_vars:
-            args += ["--vars", json.dumps(run_vars)]
+        cfg = context.op_execution_context.op_config
+        if cfg.get("vars"):
+            args += ["--vars", json.dumps(cfg["vars"])]
+        if cfg.get("state_path"):
+            args += ["--state", cfg["state_path"]]
         return args
 PY
 
