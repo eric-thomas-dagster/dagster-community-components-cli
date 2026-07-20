@@ -29,6 +29,33 @@ Examples below use option 2 (GH artifacts) because it's the easiest cross-cuttin
 
 ---
 
+## Approach A — `AutomationCondition.code_version_changed()`  ⭐ *easiest, least failure-prone*
+
+**How it works:** every dbt asset gets a `code_version` = SHA1 of its `raw_sql` (derived automatically by `dagster-dbt` — no config). When the SQL changes, the hash changes. `AutomationCondition.code_version_changed()` fires on the next automation tick, and Dagster kicks off a materialization for the changed assets.
+
+**Why it's the safest pick:** zero CI plumbing, zero prior-manifest storage, zero cross-team coordination on artifact paths / adapter versions / dbt versions between the CI runner and the code-location image. The failure mode is just "the code location didn't reload" — which you'd see immediately in Dagster+ deploy logs anyway. Everything downstream is Dagster's automation-tick loop doing what it always does.
+
+Wire it via `AutomationConditionApplicatorComponent`:
+
+```yaml
+# src/<pkg>/defs/dbt_automation/defs.yaml
+type: dagster_community_components.AutomationConditionApplicatorComponent
+attributes:
+  preserve_existing: true
+  rules:
+    # For every dbt asset — rebuild when SQL changes since last materialization.
+    # `on_missing()` handles the very first materialization (no prior code_version to compare).
+    - name: dbt_rebuild_on_code_change
+      selection: 'kind:dbt'
+      python: dagster.AutomationCondition.code_version_changed() | dagster.AutomationCondition.on_missing()
+```
+
+Plus the `apply_rules(...)` wiring in `definitions.py` (see the applicator's README).
+
+**When A alone isn't enough:** A is passive (waits for the next automation tick) and comparison-scoped-to-previous-materialization (not to prod). If you need immediate-post-deploy triggering OR a "vs prod" comparison surfaced elsewhere in Dagster, look at B or C below.
+
+---
+
 ## Approach B — Asset-selection at CI time (stock component, no subclass)
 
 **How it works:** the GH Action figures out which asset keys correspond to state-modified models (using dbt itself, on the CI runner). It then launches a Dagster job with `--asset-selection` narrowed to those specific keys. Dagster's dbt op sees `context.selected_asset_keys` = just those keys, and `dbt.cli(context=context)` auto-adds `--select` for them. dbt runs only the modified models.
@@ -132,38 +159,6 @@ No `--state` or `--select` in `cli_args`. Morning schedule + user materializes �
 The default `DagsterDbtTranslator` maps dbt model names → Dagster asset keys 1:1 by default. So if `dbt ls` prints `orders_mart`, the Dagster asset key is `orders_mart`. Applies to seeds + snapshots too.
 
 **If the customer has customized their translator** (e.g. `get_asset_key(self, props): return AssetKey(["marts", props["name"]])`), then the CI step must apply the same transformation before calling `job launch --asset-selection`. Simplest way: put the mapping logic in a tiny Python script called from the workflow.
-
----
-
-## Approach A — `AutomationCondition.code_version_changed()`  ⭐ *easiest, least failure-prone*
-
-**How it works:** every dbt asset gets a `code_version` = SHA1 of its `raw_sql` (derived automatically by `dagster-dbt` — no config). When the SQL changes, the hash changes. `AutomationCondition.code_version_changed()` fires on the next automation tick, and Dagster kicks off a materialization for the changed assets.
-
-**Why it's the safest pick:** zero CI plumbing, zero prior-manifest storage, zero cross-team coordination on artifact paths / adapter versions / dbt versions between the CI runner and the code-location image. The failure mode is just "the code location didn't reload" — which you'd see immediately in Dagster+ deploy logs anyway. Everything downstream is Dagster's automation-tick loop doing what it always does.
-
-Wire it via `AutomationConditionApplicatorComponent`:
-
-```yaml
-# src/<pkg>/defs/dbt_automation/defs.yaml
-type: dagster_community_components.AutomationConditionApplicatorComponent
-attributes:
-  preserve_existing: true
-  rules:
-    # For every dbt asset — rebuild when SQL changes since last materialization.
-    # `on_missing()` handles the very first materialization (no prior code_version to compare).
-    - name: dbt_rebuild_on_code_change
-      selection: 'kind:dbt'
-      python: dagster.AutomationCondition.code_version_changed() | dagster.AutomationCondition.on_missing()
-```
-
-Plus the `apply_rules(...)` wiring in `definitions.py` (see the applicator's README).
-
-**Comparing the two:**
-
-- **Approach B** fires ONCE per PR deploy, immediately, at CI's command. Deterministic set. Best for "validate this PR built the models it claims to change."
-- **Approach A** fires on the NEXT automation tick after deploy. Also fires if a model changes for any other reason (rerun, backfill, direct code-location update). Best for "production always catches up automatically."
-
-Most teams want both. B is the sharp tool for CI validation; A is the safety net.
 
 ---
 
