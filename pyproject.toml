@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dagster-community-components-cli"
-version = "0.7.2"
+version = "0.7.3"
 description = "CLI to search, install, and manage Dagster community components."
 readme = "README.md"
 requires-python = ">=3.10"
@@ -39,6 +39,7 @@ dev = [
 
 [project.scripts]
 dagster-component = "dagster_component_cli.cli:main"
+dagster-analyze-schedules = "dagster_component_cli.automation_analyzer:main"
 
 [project.urls]
 Homepage = "https://dagster-component-ui.vercel.app/"

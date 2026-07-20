@@ -292,6 +292,40 @@ def search(
         console.print(f"[dim]+ {len(results) - limit} more (use --limit to expand)[/dim]")
 
 
+# ── analyze-schedules ─────────────────────────────────────────────────────────
+
+
+@main.command("analyze-schedules")
+@click.option("--project-dir", "-p", default=".", help="Path to the Dagster project (default: cwd).")
+@click.option("--output", "-o", default="automation_conditions_proposal.yaml", help="Output YAML path.")
+@click.option("--stdout", is_flag=True, help="Print YAML to stdout instead of writing a file.")
+def analyze_schedules(project_dir: str, output: str, stdout: bool) -> None:
+    """Analyze existing schedules + jobs and recommend AutomationConditionApplicator rules.
+
+    Converts imperative Dagster scheduling (ScheduleDefinition + jobs) into a proposed
+    declarative AutomationConditionApplicatorComponent rules block, plus a plan of
+    which schedules to disable and which jobs to keep manual/sensor-only.
+    """
+    from .automation_analyzer import analyze, render_report, render_yaml
+    try:
+        result = analyze(Path(project_dir).resolve())
+    except Exception as e:
+        err.print(f"[red]✗[/red] {e}")
+        sys.exit(1)
+
+    yaml_text = render_yaml(result)
+    if stdout:
+        console.print(yaml_text)
+    else:
+        out_path = Path(output)
+        if not out_path.is_absolute():
+            out_path = Path(project_dir).resolve() / out_path
+        out_path.write_text(yaml_text)
+        console.print(f"[green]✓[/green] Wrote {out_path}")
+
+    console.print(render_report(result))
+
+
 # ── info ───────────────────────────────────────────────────────────────────────
 
 
