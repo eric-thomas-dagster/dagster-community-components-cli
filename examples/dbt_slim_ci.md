@@ -33,6 +33,13 @@ Examples below use option 2 (GH artifacts) because it's the easiest cross-cuttin
 
 **How it works:** every dbt asset gets a `code_version` = SHA1 of its `raw_sql` (derived automatically by `dagster-dbt` — no config). When the SQL changes, the hash changes. `AutomationCondition.code_version_changed()` fires on the next automation tick, and Dagster kicks off a materialization for the changed assets.
 
+> **⚠ You may see conflicting info in the Dagster docs.** The general docs about `code_version` say it's a **manual, user-supplied value** — that's true for regular `@asset` functions. But **`dagster-dbt` is a special case**: `DagsterDbtTranslator.get_asset_spec()` calls `default_code_version_fn()` which auto-derives `code_version = SHA1(raw_sql)` (falling back to `raw_code`, then `checksum`) for every dbt model spec. So while `code_version` is opt-in for `@asset` in general, it's **opt-out for dbt models** — you get it automatically. Verified against `dagster-dbt` 0.29.14 by direct source inspection: [`dagster_dbt_translator.py::default_code_version_fn`](https://github.com/dagster-io/dagster/blob/master/python_modules/libraries/dagster-dbt/dagster_dbt/dagster_dbt_translator.py). To sanity-check on your version:
+> ```python
+> from dagster_dbt import DagsterDbtTranslator
+> from dagster_dbt.dagster_dbt_translator import default_code_version_fn
+> print(default_code_version_fn({"raw_sql": "select 1"}))    # SHA1 hex string
+> ```
+
 **Why it's the safest pick:** zero CI plumbing, zero prior-manifest storage, zero cross-team coordination on artifact paths / adapter versions / dbt versions between the CI runner and the code-location image. The failure mode is just "the code location didn't reload" — which you'd see immediately in Dagster+ deploy logs anyway. Everything downstream is Dagster's automation-tick loop doing what it always does.
 
 **Straight Dagster** — no community component required. Two equivalent shapes, pick whichever fits the project's style:
