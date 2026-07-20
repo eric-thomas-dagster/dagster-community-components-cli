@@ -2,14 +2,17 @@
 
 **The problem.** A customer has hundreds of dbt models. On every PR, they want to build only the models that changed vs prod (not all of them). On the morning schedule, they want a full build. Ad-hoc materializes work as usual.
 
-**Two ways to solve this in Dagster.** Both work with the *stock* official `dagster_dbt.DbtProjectComponent` — no custom subclass required.
+**Three ways to solve this in Dagster.** Approach A and B work with the *stock* `dagster_dbt.DbtProjectComponent` — no subclass. Approach C is a tiny (~30-line) translator subclass that promotes "state:modified" to a first-class Dagster fact.
 
-| Approach | When it fires | Trigger source | Best for |
+> ⭐ **Start with Approach A if you're picking one.** It's the least failure-prone option — zero CI plumbing, zero manifest storage to maintain, no prod-vs-current diff to keep in sync. Dagster's built-in automation-tick loop does the work using code_versions the dbt integration already sets on every asset. Approaches B and C exist for when you specifically need immediate-post-deploy triggering or "state:modified" surfaced elsewhere in Dagster.
+
+| Approach | How | Trigger | Best for |
 |---|---|---|---|
-| **A. Asset-selection at CI time** | Once, right after the PR deploys | GH Action calls `dagster-cloud job launch --asset-selection [...]` | Slim CI validation (one shot per PR, deterministic set) |
-| **B. `AutomationCondition.code_version_changed()`** | On the next automation tick after any deploy that changed a model's SQL | Dagster's automation-tick loop | Continuous production — auto-rebuild whenever SQL ships to prod |
+| **A. `AutomationCondition.code_version_changed()`** | Every dbt asset gets `code_version = SHA1(raw_sql)` automatically. Condition fires when hash changes vs the last materialization. | Dagster's automation-tick loop | Continuous prod — "always catch up if SQL changed and I forgot to trigger a build" |
+| **B. Asset-selection at CI time** | GH Action runs `dbt ls --state ./prod --select state:modified+`, translates model names → Dagster asset keys, launches a job with `--asset-selection '[k1, k2, ...]'`. | GH Action after PR deploys | Slim CI validation — one-shot per PR, deterministic set, stock component |
+| **C. State-aware translator (tag assets with `dbt/state`)** | Subclass `DagsterDbtTranslator` to read prod manifest at defs-load time + tag each asset `dbt/state=modified\|unchanged\|new`. Then anywhere in Dagster (launch, UI, automation conditions, sensors, alerts) can use `tag:dbt/state=modified`. | Any Dagster surface that accepts asset selections | When state:modified needs to be a first-class fact in Dagster — visible in the UI, combinable with owner/group/tag selections, usable in automation conditions |
 
-They're complementary. Most teams use **A** for PR validation and **B** for the "production catches up if someone forgot to trigger a build" safety net.
+They're complementary. Most teams use **A** as a safety net + **B or C** for the sharp PR-validation tool. C is more work upfront but gives the customer a Dagster-native primitive to build on.
 
 ---
 
@@ -26,7 +29,7 @@ Examples below use option 2 (GH artifacts) because it's the easiest cross-cuttin
 
 ---
 
-## Approach A — Asset-selection at CI time (primary recommendation)
+## Approach B — Asset-selection at CI time (stock component, no subclass)
 
 **How it works:** the GH Action figures out which asset keys correspond to state-modified models (using dbt itself, on the CI runner). It then launches a Dagster job with `--asset-selection` narrowed to those specific keys. Dagster's dbt op sees `context.selected_asset_keys` = just those keys, and `dbt.cli(context=context)` auto-adds `--select` for them. dbt runs only the modified models.
 
@@ -132,11 +135,11 @@ The default `DagsterDbtTranslator` maps dbt model names → Dagster asset keys 1
 
 ---
 
-## Approach B — `AutomationCondition.code_version_changed()`
+## Approach A — `AutomationCondition.code_version_changed()`  ⭐ *easiest, least failure-prone*
 
 **How it works:** every dbt asset gets a `code_version` = SHA1 of its `raw_sql` (derived automatically by `dagster-dbt` — no config). When the SQL changes, the hash changes. `AutomationCondition.code_version_changed()` fires on the next automation tick, and Dagster kicks off a materialization for the changed assets.
 
-**Why it's complementary:** works without any CI plumbing. As long as the deploy successfully reloads the code location (Dagster reads the new manifest), the automation-tick loop picks up changed models and materializes them. Slower than approach A (fires on the next tick, not immediately post-deploy) but no CI dependency.
+**Why it's the safest pick:** zero CI plumbing, zero prior-manifest storage, zero cross-team coordination on artifact paths / adapter versions / dbt versions between the CI runner and the code-location image. The failure mode is just "the code location didn't reload" — which you'd see immediately in Dagster+ deploy logs anyway. Everything downstream is Dagster's automation-tick loop doing what it always does.
 
 Wire it via `AutomationConditionApplicatorComponent`:
 
@@ -157,10 +160,127 @@ Plus the `apply_rules(...)` wiring in `definitions.py` (see the applicator's REA
 
 **Comparing the two:**
 
-- **Approach A** fires ONCE per PR deploy, immediately, at CI's command. Deterministic set. Best for "validate this PR built the models it claims to change."
-- **Approach B** fires on the NEXT automation tick after deploy. Also fires if a model changes for any other reason (rerun, backfill, direct code-location update). Best for "production always catches up automatically."
+- **Approach B** fires ONCE per PR deploy, immediately, at CI's command. Deterministic set. Best for "validate this PR built the models it claims to change."
+- **Approach A** fires on the NEXT automation tick after deploy. Also fires if a model changes for any other reason (rerun, backfill, direct code-location update). Best for "production always catches up automatically."
 
-Most teams want both. A is the sharp tool for CI validation; B is the safety net.
+Most teams want both. B is the sharp tool for CI validation; A is the safety net.
+
+---
+
+## Approach C — State-aware translator (dbt state as a Dagster tag)
+
+Promote `state:modified` from a dbt-CLI concept to a **first-class Dagster fact**. A tiny `DagsterDbtTranslator` subclass reads the prod manifest at defs-load time, hashes each model's raw_sql, and tags every dbt asset with `dbt/state=modified` (or `unchanged` / `new`). After that, any Dagster surface that speaks the selection query language can filter on it:
+
+```bash
+# Slim CI launch — same intent as Approach B, but Dagster-native
+dagster-cloud job launch --asset-selection 'tag:dbt/state=modified'
+
+# Combined with your own tag hygiene
+dagster-cloud job launch --asset-selection 'tag:dbt/state=modified and owner:data-team'
+
+# Or in an automation condition — auto-materialize any modified model on next tick
+# (drop into automation_condition_applicator rules):
+- selection: 'tag:dbt/state=modified'
+  preset: eager
+```
+
+**The subclass** (drop into `src/<pkg>/lib/state_aware_translator.py`):
+
+```python
+"""State-aware dbt translator — tags each asset with `dbt/state` by comparing
+the current manifest against a prod manifest baked into the deployed image.
+"""
+import hashlib
+import json
+from pathlib import Path
+from typing import Any, Mapping
+
+from dagster_dbt import DagsterDbtTranslator
+
+
+def _hash_raw(props: Mapping[str, Any]) -> str:
+    code = props.get("raw_sql") or props.get("raw_code") or ""
+    return hashlib.sha1(code.encode("utf-8")).hexdigest() if code else ""
+
+
+class StateAwareDbtTranslator(DagsterDbtTranslator):
+    """Tag each dbt asset with `dbt/state=modified|unchanged|new` based on
+    a diff against a prior (prod) manifest.json.
+    """
+
+    def __init__(self, prod_manifest_path: str, **kwargs):
+        super().__init__(**kwargs)
+        self._prod_hashes: dict[str, str] = {}
+        p = Path(prod_manifest_path)
+        if p.exists():
+            try:
+                prod = json.loads(p.read_text())
+                for uid, node in (prod.get("nodes") or {}).items():
+                    if node.get("resource_type") in ("model", "seed", "snapshot"):
+                        self._prod_hashes[uid] = _hash_raw(node)
+            except Exception:
+                # Degrade to "no prior manifest" — everything gets tagged `new`
+                pass
+
+    def get_tags(self, dbt_resource_props: Mapping[str, Any]) -> Mapping[str, str]:
+        base = dict(super().get_tags(dbt_resource_props) or {})
+        uid = dbt_resource_props.get("unique_id", "")
+        if not self._prod_hashes:
+            base["dbt/state"] = "new"     # no prior manifest = treat everything as new
+        elif uid not in self._prod_hashes:
+            base["dbt/state"] = "new"     # newly-added model
+        elif self._prod_hashes[uid] != _hash_raw(dbt_resource_props):
+            base["dbt/state"] = "modified"
+        else:
+            base["dbt/state"] = "unchanged"
+        return base
+```
+
+**Wire it into the component:**
+
+```yaml
+# src/<pkg>/defs/dbt/defs.yaml
+type: dagster_dbt.DbtProjectComponent
+attributes:
+  project: "{{ project_root }}/dbt_project"
+  translation:
+    type: <pkg>.lib.state_aware_translator.StateAwareDbtTranslator
+    attributes:
+      prod_manifest_path: "{{ project_root }}/prod_dbt_state/manifest.json"
+```
+
+**GH Action difference from Approach B:** the prod manifest has to be baked into the DEPLOYED code-location image, not just present on the CI runner. Change the download step to run BEFORE `dg plus deploy build-and-publish` so the file ships inside the image:
+
+```yaml
+- name: Download prior prod manifest
+  if: github.event_name == 'pull_request'
+  uses: dawidd6/action-download-artifact@v6
+  with:
+    workflow: dagster-plus-deploy.yml
+    branch: main
+    name: prod-dbt-manifest
+    path: ${{ env.DAGSTER_PROJECT_DIR }}/prod_dbt_state
+    if_no_artifact_found: warn
+
+# Existing `dg plus deploy build-and-publish` step follows — the image now includes prod_dbt_state/
+```
+
+Also add `prod_dbt_state/` to whatever include list your Docker build uses (or ensure it's not in `.dockerignore`). Then on code-location load, the translator reads it, tags fire, and every downstream surface can filter on `tag:dbt/state=modified`.
+
+**Trade-offs vs Approach B:**
+
+| | Approach B (asset-selection at CI) | Approach C (translator tag) |
+|---|---|---|
+| Stock component? | Yes | No (30-line translator subclass) |
+| Where the manifest lives at runtime | CI runner (dbt ls) | Inside the deployed code-location image |
+| Visible in Dagster UI as "which assets changed?" | No — CI computes it once and forgets | Yes — every asset carries the tag |
+| Usable in automation conditions? | No (would need re-enumeration each tick) | Yes — `selection: 'tag:dbt/state=modified'` |
+| Combinable with owner/group/other tags? | Only via boolean at CI enumeration time | Yes — full selection expression at any Dagster surface |
+| Complexity | Deploy plumbing only | Deploy plumbing + subclass file + `translation:` YAML |
+
+**When to pick which:**
+- **B** — one-shot Slim CI validation, don't need "state:modified" elsewhere in Dagster → simplest correct answer.
+- **C** — want state:modified surfaced in the UI, combinable with your own selection syntax, usable in automation conditions / sensors / alerts → worth the small subclass investment.
 
 ---
 
