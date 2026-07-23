@@ -1,0 +1,8 @@
+{
+  "include": ["src", "tests"],
+  "exclude": ["**/__pycache__", "**/node_modules", "**/.venv"],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": "none",
+  "reportGeneralTypeIssues": "warning"
+}

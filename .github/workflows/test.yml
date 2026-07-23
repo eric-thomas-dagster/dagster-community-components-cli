@@ -36,6 +36,15 @@ jobs:
       - name: Lint
         run: ruff check src tests
 
+      # Pyright non-blocking to start — matches the community-integrations
+      # 'make pyright' target so anything we later promote upstream lifts
+      # cleanly. Flip to blocking after baseline cleanup.
+      - name: Type check (non-blocking)
+        continue-on-error: true
+        run: |
+          uv pip install --system pyright
+          pyright src
+
       - name: Test
         run: pytest --cov=dagster_component_cli --cov-report=term
 
