@@ -16,7 +16,6 @@ from dagster_component_cli.project import (
 )
 from dagster_component_cli.registry import Registry
 
-
 # ── fixtures ──────────────────────────────────────────────────────────────────
 
 

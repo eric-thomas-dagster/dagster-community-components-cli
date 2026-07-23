@@ -7,7 +7,6 @@ import json
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 import click
 from rich.console import Console
@@ -34,7 +33,6 @@ from .project import (
 from .registry import Registry, fetch_file
 from .templates import CLAUDE_MD, COPILOT_INSTRUCTIONS, CURSORRULES
 
-
 console = Console()
 err = Console(stderr=True, style="red")
 
@@ -59,7 +57,7 @@ err = Console(stderr=True, style="red")
     help="Force-refresh the cached registry manifest.",
 )
 @click.pass_context
-def main(ctx: click.Context, registry_url: Optional[str], refresh: bool) -> None:
+def main(ctx: click.Context, registry_url: str | None, refresh: bool) -> None:
     ctx.ensure_object(dict)
     ctx.obj["registry"] = Registry(url=registry_url, force_refresh=refresh)
 
@@ -101,7 +99,7 @@ def main(ctx: click.Context, registry_url: Optional[str], refresh: bool) -> None
 def add(
     ctx: click.Context,
     component_id: str,
-    target_dir: Optional[str],
+    target_dir: str | None,
     force: bool,
     no_install: bool,
     auto_install: bool,
@@ -158,10 +156,10 @@ def add(
     # instance YAML lands separately in `src/<pkg>/defs/<id>/defs.yaml`.
     # We detect via the project_root so we can do the post-install split
     # only when the user is in a `create-dagster` project.
-    canonical_pkg: Optional[str] = (
+    canonical_pkg: str | None = (
         detect_canonical_layout(project_root) if project_root and not target_dir else None
     )
-    canonical_defs_dir: Optional[Path] = (
+    canonical_defs_dir: Path | None = (
         resolve_defs_dir(project_root, canonical_pkg, cid) if canonical_pkg else None
     )
 
@@ -253,8 +251,8 @@ def add(
 def search(
     ctx: click.Context,
     query: str,
-    category: Optional[str],
-    produces: Optional[str],
+    category: str | None,
+    produces: str | None,
     limit: int,
 ) -> None:
     """Search the community registry by id, name, description, or tags.
@@ -440,7 +438,7 @@ def schema(ctx: click.Context, component_id: str, fmt: str) -> None:
 )
 @click.option("--category", help="Filter --available by category.")
 @click.pass_context
-def list_cmd(ctx: click.Context, available: bool, category: Optional[str]) -> None:
+def list_cmd(ctx: click.Context, available: bool, category: str | None) -> None:
     """List components installed in the current project, or `--available` to list all in the registry."""
     registry: Registry = ctx.obj["registry"]
 
@@ -498,7 +496,7 @@ def list_cmd(ctx: click.Context, available: bool, category: Optional[str]) -> No
 @click.option("--target-dir", help="Path to the component directory (skips auto-locate).")
 @click.option("--yes", is_flag=True, help="Skip confirmation prompt.")
 @click.pass_context
-def remove(ctx: click.Context, component_id: str, target_dir: Optional[str], yes: bool) -> None:
+def remove(ctx: click.Context, component_id: str, target_dir: str | None, yes: bool) -> None:
     """Remove a previously-installed component."""
     if target_dir:
         path = Path(target_dir).resolve()
@@ -521,7 +519,7 @@ def remove(ctx: click.Context, component_id: str, target_dir: Optional[str], yes
     # In the canonical split layout, `path` points at the components/<id>/
     # dir; the paired defs/<id>/ dir holds the instance YAML. Find and
     # offer to remove both atomically.
-    paired_defs_path: Optional[Path] = None
+    paired_defs_path: Path | None = None
     if path.name == component_id and path.parent.name == "components":
         candidate = path.parent.parent / "defs" / component_id
         if candidate.is_dir():
@@ -553,7 +551,7 @@ def remove(ctx: click.Context, component_id: str, target_dir: Optional[str], yes
 @click.argument("component_id")
 @click.option("--target-dir", help="Path to the component directory (skips auto-locate).")
 @click.pass_context
-def update(ctx: click.Context, component_id: str, target_dir: Optional[str]) -> None:
+def update(ctx: click.Context, component_id: str, target_dir: str | None) -> None:
     """Re-fetch a component's files from the registry, overwriting in place.
 
     Accepts `id@ref` to bump or change the pinned ref:
@@ -620,7 +618,7 @@ def update(ctx: click.Context, component_id: str, target_dir: Optional[str]) -> 
     "--no-copilot", "skip_copilot", is_flag=True, help="Skip .github/copilot-instructions.md.",
 )
 def init(
-    target_dir: Optional[str],
+    target_dir: str | None,
     force: bool,
     skip_claude: bool,
     skip_cursor: bool,
@@ -673,8 +671,8 @@ def _print_next_steps(
     component: dict,
     install_dir: Path,
     *,
-    canonical_pkg: Optional[str] = None,
-    defs_dir: Optional[Path] = None,
+    canonical_pkg: str | None = None,
+    defs_dir: Path | None = None,
 ) -> None:
     """Print a friendly 'now what?' block after a successful install."""
     console.print("\n[bold]Next steps[/bold]")
@@ -771,7 +769,7 @@ def _canonicalize_install(
     src.unlink()
 
 
-def _guess_component_type(component: dict) -> Optional[str]:
+def _guess_component_type(component: dict) -> str | None:
     """Best-effort inference of the dotted component type for defs.yaml."""
     cid = component.get("id", "")
     parts = [p.capitalize() for p in cid.split("_")]
@@ -782,7 +780,7 @@ def _add_as_package(
     ctx: click.Context,
     component_id: str,
     *,
-    target_dir: Optional[str],
+    target_dir: str | None,
     force: bool,
     no_install: bool,
     auto_install: bool,
@@ -894,7 +892,7 @@ def _add_as_package(
 
 
 def _inject_schema_comment(
-    yaml_path: Path, component: dict, *, ref: Optional[str] = None
+    yaml_path: Path, component: dict, *, ref: str | None = None
 ) -> None:
     """Prepend a `yaml-language-server: $schema=<url>` comment to a YAML file.
 

@@ -6,12 +6,10 @@ import json
 import os
 import time
 from pathlib import Path
-from typing import Optional
 
 import requests
 
 from . import DEFAULT_REGISTRY_URL
-
 
 CACHE_DIR = Path.home() / ".cache" / "dagster-community-components"
 CACHE_FILE = CACHE_DIR / "manifest.json"
@@ -21,9 +19,9 @@ CACHE_TTL_SECONDS = 3600  # 1 hour
 class Registry:
     """Lazy, cached client for the community components manifest."""
 
-    def __init__(self, url: Optional[str] = None, *, force_refresh: bool = False):
+    def __init__(self, url: str | None = None, *, force_refresh: bool = False):
         self.url = url or os.environ.get("DAGSTER_COMPONENT_REGISTRY_URL", DEFAULT_REGISTRY_URL)
-        self._manifest: Optional[dict] = None
+        self._manifest: dict | None = None
         self._force_refresh = force_refresh
 
     @property
@@ -36,7 +34,7 @@ class Registry:
     def components(self) -> list[dict]:
         return self.manifest.get("components", [])
 
-    def get(self, component_id: str) -> Optional[dict]:
+    def get(self, component_id: str) -> dict | None:
         """Return the manifest entry for `component_id`, or None if not found."""
         for c in self.components:
             if c.get("id") == component_id:
@@ -47,8 +45,8 @@ class Registry:
         self,
         query: str,
         *,
-        category: Optional[str] = None,
-        produces: Optional[str] = None,
+        category: str | None = None,
+        produces: str | None = None,
     ) -> list[dict]:
         """Return components whose id, name, description, or tags contain `query` (case-insensitive).
 

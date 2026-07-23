@@ -25,9 +25,10 @@ def _find_definitions(project_dir: str = ".") -> Any:
 
     Older / custom projects: try common entry points.
     """
-    from dagster import Definitions, load_from_defs_folder  # noqa: F401
     import importlib
     from pathlib import Path
+
+    from dagster import Definitions, load_from_defs_folder  # noqa: F401
 
     # ── Path 1: PROJECT_ROOT/src/<pkg>/definitions.py — canonical create-dagster shape
     cwd = Path(project_dir).resolve()

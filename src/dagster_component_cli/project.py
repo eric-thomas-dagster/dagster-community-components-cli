@@ -4,8 +4,6 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Optional
-
 
 # Component category → directory name in the user's project.
 CATEGORY_DIRS: dict[str, str] = {
@@ -27,7 +25,7 @@ CATEGORY_DIRS: dict[str, str] = {
 }
 
 
-def find_project_root(start: Optional[Path] = None) -> Optional[Path]:
+def find_project_root(start: Path | None = None) -> Path | None:
     """Walk up from `start` looking for a Dagster project marker.
 
     Returns the directory containing `pyproject.toml`, `dg.toml`, or a `defs/`
@@ -42,7 +40,7 @@ def find_project_root(start: Optional[Path] = None) -> Optional[Path]:
     return None
 
 
-def detect_canonical_layout(project_root: Path) -> Optional[str]:
+def detect_canonical_layout(project_root: Path) -> str | None:
     """If project_root looks like a `create-dagster` project, return the package name.
 
     Recognizes the layout produced by `uvx create-dagster project ...`:
@@ -106,10 +104,10 @@ def installed_components(project_root: Path) -> list[dict]:
 
 
 def resolve_install_dir(
-    project_root: Optional[Path],
+    project_root: Path | None,
     component: dict,
     *,
-    target_dir: Optional[str] = None,
+    target_dir: str | None = None,
 ) -> Path:
     """Decide where the component CLASS files (component.py, schema.json,
     README.md, requirements.txt, marker) should land.

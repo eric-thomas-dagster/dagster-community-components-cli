@@ -33,7 +33,10 @@ dependencies = [
 dev = [
     "pytest>=7.0",
     "pytest-cov>=4.0",
-    "ruff>=0.1.0",
+    # Pinned to a specific major line — ruff periodically expands the DEFAULT
+    # rule set on new minor versions, which silently breaks CI. We opt into
+    # which rules run via [tool.ruff.lint].select below.
+    "ruff>=0.13,<0.16",
     "build>=1.0",
 ]
 
@@ -53,6 +56,22 @@ packages = ["src/dagster_component_cli"]
 [tool.ruff]
 line-length = 100
 target-version = "py310"
+
+[tool.ruff.lint]
+# Explicit rule selection — matches the community-integrations standards
+# plus the classic pyflakes/pycodestyle defaults. Add rules deliberately
+# rather than inheriting ruff's default set (which expands on new minor
+# versions).
+select = [
+    "E",     # pycodestyle errors
+    "F",     # pyflakes
+    "W",     # pycodestyle warnings
+    "I",     # isort (import ordering)
+    "UP",    # pyupgrade (Optional → | None, etc.)
+]
+ignore = [
+    "E501",  # line too long — line-length is set above; skip the per-line noise
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

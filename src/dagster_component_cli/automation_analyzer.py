@@ -22,7 +22,6 @@ import sys
 from collections import defaultdict
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional
 
 # The worker script lives next to this file. We locate it by absolute path
 # rather than importing it — the worker runs inside the TARGET project's venv,
@@ -37,10 +36,10 @@ _WORKER_MODULE_FILE = str(Path(__file__).parent / "_automation_worker.py")
 class ProposedRule:
     name: str
     selection: str
-    cron: Optional[str] = None
-    preset: Optional[str] = None
+    cron: str | None = None
+    preset: str | None = None
     derive_from_upstreams: bool = False
-    strategy: Optional[str] = None
+    strategy: str | None = None
     reason: str = ""
 
     def to_yaml_dict(self) -> dict:

@@ -8,10 +8,8 @@ import subprocess
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
 
 from .registry import fetch_file
-
 
 # Files that may be present in a component directory in the registry.
 # We attempt each — missing files are skipped silently.
@@ -30,7 +28,7 @@ class InstallError(Exception):
     pass
 
 
-def parse_component_ref(spec: str) -> tuple[str, Optional[str]]:
+def parse_component_ref(spec: str) -> tuple[str, str | None]:
     """Split an `id@ref` spec into (id, ref).
 
     Examples:
@@ -44,7 +42,7 @@ def parse_component_ref(spec: str) -> tuple[str, Optional[str]]:
     return spec.strip(), None
 
 
-def file_url_for(component: dict, filename: str, ref: Optional[str] = None) -> str:
+def file_url_for(component: dict, filename: str, ref: str | None = None) -> str:
     """Build the raw-content URL for a file inside a component directory.
 
     The manifest has `<file>_url` for component.py, README.md, etc. — but we
@@ -65,7 +63,7 @@ def file_url_for(component: dict, filename: str, ref: Optional[str] = None) -> s
 
 
 def fetch_component_files(
-    component: dict, *, ref: Optional[str] = None
+    component: dict, *, ref: str | None = None
 ) -> dict[str, bytes]:
     """Download every known file for a component. Returns {filename: bytes}.
 
@@ -107,7 +105,7 @@ def write_files(target_dir: Path, files: dict[str, bytes], *, force: bool = Fals
 
 
 def write_marker(
-    target_dir: Path, component: dict, *, ref: Optional[str] = None
+    target_dir: Path, component: dict, *, ref: str | None = None
 ) -> Path:
     """Write a marker file recording install metadata.
 
