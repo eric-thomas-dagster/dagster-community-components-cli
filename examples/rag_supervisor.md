@@ -92,6 +92,6 @@ Every asset is browsable in `dg dev`. Click the plan → see the reasoning. Clic
 ## Extending
 
 - **Add more tools.** Every new tool is a YAML entry with `name`, `description` (the planner uses this to decide), and `system_message` (the specialist's persona). Adding a tool doesn't require restart-with-code — just re-materialize.
-- **Give tools retrieval access.** Pipe the corresponding `retrieved` asset from `rag_complete` into a tool's `context` (an upcoming enhancement to `SupervisorAgentComponent` — see the component README).
+- **Give tools retrieval access.** Pipe the corresponding `retrieved` asset from `rag_complete` into a tool's `context` (an upcoming enhancement to `supervisor_agent` — see the component README).
 - **Gate the plan on approval.** Attach an `@asset_check` to `supervisor_plan`; when severity=ERROR fails, the tool assets don't run. Post the plan to Slack via a sensor; require thumbs-up before allowing execution.
 - **Automation.** Wire `AutomationCondition` on `supervisor_final_answer` so it re-materializes when the plan changes — useful for continuously-evolving tasks like "monitor the state of X."

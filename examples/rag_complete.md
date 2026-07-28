@@ -109,23 +109,23 @@ Every answer is grounded — the LLM prompt template only exposes retrieved chun
 
 | Layer | Component | Path | No key? |
 |---|---|---|---|
-| Source | `DocumentCorpus` | A + B | ✓ |
-| Chunk + embed + index (fused, versioned) | `VectorIndexSnapshot` | A | ✓ |
-| Retrieval quality gate | `RagEval` | A | ✓ |
-| Chunker | `DocumentChunker` | B | ✓ |
-| Embedder | `EmbeddingsGenerator` (`sentence_transformers`) | B | ✓ |
-| Vector store | `VectorStoreWriter` (ChromaDB) | B | ✓ |
-| Queries source | `DataframeFromCsv` | B | ✓ |
-| Query embedder | `EmbeddingsGenerator` | B | ✓ |
-| Retrieval | `VectorStoreQuery` (ChromaDB) | B | ✓ |
-| Reranker | `Reranker` (`cross_encoder` local) | B | ✓ |
-| LLM answer | `LLMPromptExecutor` (OpenAI-compatible) | B | ✗ |
+| Source | `document_corpus` | A + B | ✓ |
+| Chunk + embed + index (fused, versioned) | `vector_index_snapshot` | A | ✓ |
+| Retrieval quality gate | `rag_eval` | A | ✓ |
+| Chunker | `document_chunker` | B | ✓ |
+| Embedder | `embeddings_generator` (`sentence_transformers`) | B | ✓ |
+| Vector store | `vector_store_writer` (ChromaDB) | B | ✓ |
+| Queries source | `dataframe_from_csv` | B | ✓ |
+| Query embedder | `embeddings_generator` | B | ✓ |
+| Retrieval | `vector_store_query` (ChromaDB) | B | ✓ |
+| Reranker | `reranker` (`cross_encoder` local) | B | ✓ |
+| LLM answer | `llm_prompt_executor` (OpenAI-compatible) | B | ✗ |
 
 **Both paths run over the same 5-doc corpus.** Path A gives you the state-tracking + rollback story from `rag_state.md`; Path B gives you a fully decomposed pipeline that lets you swap any single step (a different chunker, a different embedder, a different vector store) without rewriting the graph.
 
 ## Swap the LLM
 
-Edit `src/<project>/defs/rag_answer/defs.yaml`. `LLMPromptExecutor` supports OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint:
+Edit `src/<project>/defs/rag_answer/defs.yaml`. `llm_prompt_executor` supports OpenAI, Anthropic, Gemini, and any OpenAI-compatible endpoint:
 
 ```yaml
 # Anthropic
@@ -150,11 +150,11 @@ api_key: none
 
 - **Prototype / demo.** Path A alone. Corpus → snapshot → eval, no LLM step, 3 assets total, no keys. Shows the state-tracking story and gets a golden-set eval running.
 - **Production RAG.** Path A + Path B. Path A tracks state and gates quality; Path B does the actual per-request retrieval + generation. `docs_index_snapshot` gives you versioned index snapshots; `docs_vector_index` is what your live query traffic hits.
-- **Bring-your-own-vector-store.** Path B only — swap `VectorStoreWriter` and `VectorStoreQuery` from `chromadb` to `pinecone` / `weaviate` / `qdrant` / `pgvector` by changing `provider` + `connection_string`. Nothing else changes.
+- **Bring-your-own-vector-store.** Path B only — swap `vector_store_writer` and `vector_store_query` from `chromadb` to `pinecone` / `weaviate` / `qdrant` / `pgvector` by changing `provider` + `connection_string`. Nothing else changes.
 
 ## Two other RAG walkthroughs in this repo
 
 - **[`rag_state.md`](rag_state.md)** — the state-tracking pattern only (Path A here) with a *regression injection* demo: strip key terms from a doc, watch the next snapshot's asset check fail on its own.
-- **[`vector_rag.md`](vector_rag.md)** — the classic decomposed pipeline (Path B here) with `RAGPipelineComponent` for the end-to-end retrieve+generate step in one component.
+- **[`vector_rag.md`](vector_rag.md)** — the classic decomposed pipeline (Path B here) with `rag_pipeline` for the end-to-end retrieve+generate step in one component.
 
 If you're new to RAG on Dagster, start here (`rag_complete.md`). If you're focused on the "why is this better than a pipeline" story specifically, read `rag_state.md`.
