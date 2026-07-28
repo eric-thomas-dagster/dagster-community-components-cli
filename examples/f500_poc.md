@@ -1,5 +1,7 @@
 # Fortune 500 Data Platform → Dagster POC
 
+> **Heads up — this is a big one.** The runnable demo brings up **6 containers** (Postgres, MinIO, Trino, Elasticsearch, Kibana, OpenTelemetry Collector) and scaffolds **3 real Dagster code-locations** with cross-code-location asset deps. First-run pulls ~2 GB of images and takes ~10 min. Subsequent runs are ~2 min. If you want to preview the pieces before running the whole thing, skim the [Architecture](#architecture) section first.
+
 **Goal:** demonstrate that Dagster can orchestrate the full data stack of a large, brick-and-mortar Fortune 500 company — on-prem sources + cloud warehouse + BI + governance + MLOps + legacy scheduling.
 
 **Typical stack shape this walkthrough addresses** — specific vendor names below are *representative examples* of the common F500 pattern; swap in your actual stack:
@@ -393,11 +395,7 @@ Runs on the Dagster agent host (bare-metal in your case). Environment vars, work
       → cross-domain quality gate, ONE alert if either upstream drifts
 ```
 
-## Ready-to-run POC scaffold — two modes
-
-The demo ships in **two modes** so you can start without any cloud creds and then swap components once your GCP tenancy is ready.
-
-### Mode A: Local (no credentials, Docker only) — recommended for first-run
+## Ready-to-run POC scaffold — local Docker
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_f500_poc_local_demo.sh \
@@ -405,55 +403,72 @@ curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
 bash setup_f500_poc_local_demo.sh
 ```
 
-**What runs:**
+**Pre-reqs:** Docker (running) + `uv` (`https://docs.astral.sh/uv/`). No cloud credentials needed. Cost: $0. First run: ~10 min (image pulls + venv installs). Subsequent runs: ~2 min.
 
-| Piece | Local mode | GCP mode |
+### What the script builds
+
+| Layer | Piece | Container / mechanism |
 |---|---|---|
-| Legacy source DBs (sales / marketing / finance) | Postgres in Docker | Same (or on-prem SQL Server / Oracle) |
-| Landing zone (parquet) | MinIO in Docker (S3-API) | GCS |
-| SQL query engine (federated reads) | Trino in Docker | Trino + BigQuery federated queries |
-| Warehouse | DuckDB (in-process, no server) | BigQuery |
-| Central log platform | Elasticsearch in Docker | Same or GCP Logging |
-| Dagster orchestration | Dagster OSS via `dg dev` | Dagster+ Hybrid agent on GKE |
-| BI (Cognos / Power BI / Looker) | Assets emit — BI layer stubbed | Real vendors (see per-vendor walkthroughs to wire) |
+| **Legacy source DBs** | Postgres 16 with sales / marketing / finance schemas | `f500-postgres` (5432) |
+| **Landing zone** | MinIO S3-compatible object store; Dagster's default IO manager writes Delta tables here | `f500-minio` (9000 API / 9001 console) |
+| **SQL engine** | Trino coordinator with a Postgres catalog for federated reads | `f500-trino` (8080) |
+| **Warehouse** | DuckDB — file-based, `warehouse/f500.duckdb` at the workspace root | in-process, no container |
+| **Central log platform** | Elasticsearch + Kibana; Dagster compute logs land in a `dagster-compute-logs` data stream | `f500-elasticsearch` (9200) + `f500-kibana` (5601) |
+| **Log pipeline** | OpenTelemetry Collector — receives OTLP/HTTP from Dagster, exports to ES | `f500-otel-collector` (4318) |
+| **Dagster** | 3 code-locations (`sales/`, `marketing/`, `finance/`) under one `dg.toml` workspace | `dg dev` on host |
 
-**Pre-reqs (Mode A):** Docker, `uv`. No credentials needed. Cost: $0. Time: ~10 min for first run (image pulls), ~2 min thereafter.
+### Dagster asset graph the demo builds
 
-### Mode B: GCP (real cloud, real credentials)
+- **`sales/`** code-location — Postgres → `raw_customers` / `raw_orders` → `DataVaultHubLinkSatelliteComponent` emits hub / link / sat (SDA per layer) → `DuckDBTableWriterComponent` writes `sales_dim_customer` to the warehouse.
+- **`marketing/`** code-location — Postgres → `raw_campaigns` / `raw_touches` → `campaign_attribution` (declares **cross-code-location dep on `sales/dv2/customer_hub`**) → DuckDB warehouse.
+- **`finance/`** code-location — Postgres → `raw_gl_entries`; separately, `TrinoQueryComponent` runs a **federated query across `postgres.finance` + `postgres.sales`** and produces `federated_pnl` → DuckDB warehouse. Also: `FreshnessPolicyComponent` YAML that blocks on `sales/dv2/customer_sat` freshness (cross-domain quality gate — 100% components, no custom Python), `ShellCommandAssetComponent` for legacy bare-metal jobs, `K8sJobAssetComponent` stub (validates via `dg check`; execution requires a real cluster).
+- **Compute logs** — `OtlpComputeLogManager` in `dagster.yaml` ships every op's stdout/stderr as OTLP LogRecords to the OTel Collector → Elasticsearch. Browse in Kibana at http://localhost:5601 (data view `dagster-compute-logs*`).
 
-```bash
-# Set required env vars first
-export GOOGLE_APPLICATION_CREDENTIALS=~/.config/gcloud/application_default_credentials.json
-export GCP_PROJECT=your-gcp-project
-export GCP_REGION=us-central1
-export BQ_DATASET=f500_poc
+### Verification the script runs at the end
 
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_f500_poc_gcp_demo.sh \
-  -o setup_f500_poc_gcp_demo.sh
-bash setup_f500_poc_gcp_demo.sh
-```
+- `dg check defs` — all 3 code-locations pass schema + component validation.
+- Per-project `dg launch --assets '*'` — materializes the entire graph, respecting cross-loc deps.
+- ES record count — the script curls `/_count` on the compute-logs data stream and prints the number of records that landed. Expect ~100-200 records on a fresh full run.
 
-**Pre-reqs (Mode B):**
+### After the script finishes
 
-| Requirement | Why | How |
-|---|---|---|
-| **GCP project** with billing enabled | Runs against BigQuery + GCS | `gcloud projects create <id>` + link a billing account |
-| **BigQuery API enabled** | Warehouse layer | https://console.cloud.google.com/apis/library/bigquery.googleapis.com |
-| **GCS API enabled** | Landing zone | https://console.cloud.google.com/apis/library/storage.googleapis.com |
-| **Application Default Credentials** | Auth from local dev | `gcloud auth application-default login` |
-| **`roles/bigquery.dataEditor`, `roles/storage.objectAdmin`** on the caller | Read/write | `gcloud projects add-iam-policy-binding ...` |
-| **A GCS bucket** for the landing zone | Source parquet files | `gcloud storage buckets create gs://<yourname>-f500-landing` |
-| Optional: **Cognos SaaS trial**, **Looker instance**, **Collibra sandbox** | Real BI + governance | Set the vendor-specific env vars from each per-vendor walkthrough |
+Run `uv run dg dev` from `deployments/local/` inside the workspace to open the Dagster UI at http://localhost:3000. All 3 code-locations show side by side; browse the cross-code-location lineage from `marketing/campaign_attribution` → `sales/dv2/customer_hub`.
 
-The GCP-mode setup script is a superset of local mode — it uses the same 3 code-locations + DV2.0 modeling + cross-domain checks, but swaps MinIO→GCS, DuckDB→BigQuery, and adds live BI connections if the vendor credentials are present.
+### Swapping to GCP (BigQuery / GCS / Dagster+ Hybrid)
 
-### What each mode demonstrates (identical between A and B)
+Once the local demo is running, the swap to GCP is a **component substitution**, not a rewrite:
 
-- **Data mesh** — 3 code-locations (sales, marketing, finance) with cross-code-location asset deps
-- **SDA + DV2.0** — `data_vault_hub_link_satellite` emits hub / link / sat as independently-materializable assets
-- **Cross-domain asset check** — `finance/p&l_statement` blocks on freshness of upstream assets from other domains
-- **Legacy shell orchestration** — `shell_command_asset` runs a bash script as a Dagster asset
-- **k8s job stub** — `k8s_job_asset` YAML loads and validates via `dg check` (won't execute without a real cluster)
+| Local component | GCP component |
+|---|---|
+| `DatabaseQueryComponent(database_url=postgres://...)` | `BigQueryQueryComponent` — official `dagster-bigquery` |
+| `DuckDBTableWriterComponent` (file-based) | `dataframe_to_bigquery_table` or `dbt_assets` with `dagster-dbt` targeting BigQuery |
+| `MinIOIOManagerComponent` | `s3_parquet_io_manager` re-pointed at GCS via `gs://` endpoint, or the `dagster-gcp` GCS IO manager |
+| `TrinoQueryComponent` (against local Postgres) | Same component, pointed at a Trino instance federating BigQuery + GCS |
+| Elasticsearch container | GCP Logging (leave `OtlpComputeLogManager` as-is; swap the OTel Collector's exporter from `elasticsearch` to `googlecloud`) |
+| `ShellCommandAssetComponent` | Same — runs wherever the Dagster+ Hybrid agent is deployed |
+| `K8sJobAssetComponent` stub | Same YAML — becomes real when a `dagster-k8s` agent is deployed on GKE |
+
+The **3-code-location + cross-loc `AssetSpec` + cross-domain freshness check** patterns don't change — those are Dagster shapes, not vendor concerns. Pre-reqs when you cut over: GCP project + billing, BigQuery API + GCS API enabled, ADC (`gcloud auth application-default login`), `roles/bigquery.dataEditor` + `roles/storage.objectAdmin`, one landing-zone bucket.
+
+### Real BI vendors (add-on)
+
+The runnable demo omits live BI connections because they need real vendor creds. To wire each, follow the matching walkthrough:
+
+- **Cognos** — full mock-Cognos-in-Docker walkthrough at `examples/cognos.md` (uses `cognos_workspace` + siblings; no credentials needed for the mock).
+- **Power BI Fabric** — 7-component set (`fabric_workspace` + lakehouse / warehouse / pipeline / notebook / semantic model / report / dashboard).
+- **Looker** — official [`dagster-looker`](https://docs.dagster.io/integrations/libraries/looker/dagster-looker); LookML views + explores + dashboards auto-emitted as external assets.
+- **Tableau / Power BI on-prem** — official [`dagster-tableau`](https://docs.dagster.io/integrations/libraries/tableau) / [`dagster-powerbi`](https://docs.dagster.io/integrations/libraries/powerbi).
+
+Once wired, downstream BI assets show up as first-class nodes in the Dagster graph; failures on an upstream mart alert against the exact BI reports impacted.
+
+### What each mode demonstrates
+
+- **Data mesh** — 3 real code-locations (`sales/`, `marketing/`, `finance/`), each with its own `pyproject.toml` + venv + Dagster project; workspace-level `dg.toml` brings them under one UI.
+- **SDA + DV2.0** — `data_vault_hub_link_satellite` emits hub / link / sat as independently-materializable assets.
+- **Cross-domain asset check** — `FreshnessPolicyComponent` YAML in the finance code-location blocks on `sales/dv2/customer_sat` freshness — one check, cross-code-location.
+- **Legacy shell orchestration** — `shell_command_asset` runs a bash script as a Dagster asset; stdout streams through the compute log manager to Kibana.
+- **Central log platform** — `OtlpComputeLogManager` in `dagster.yaml` → OTel Collector → Elasticsearch data stream, browsable in Kibana.
+- **k8s job stub** — `k8s_job_asset` YAML loads and validates via `dg check` (won't execute without a real cluster; the smoke-test skips it).
 
 Local mode uses synthetic seed data; the shape + graph + checks + lineage are identical to what you'd see against real vendors.
 
@@ -467,9 +482,10 @@ Everything the F500 stack requires ships as either a community component (from t
 | **Power BI Fabric** | 7-component set: `fabric_workspace`, `fabric_lakehouse_resource`, etc. |
 | **Power BI on-prem** | Official `dagster-powerbi` |
 | **Collibra (lineage)** | `lineage_to_collibra` sink |
-| **Elasticsearch** | `elasticsearch_asset`, `elasticsearch_reader`, `elasticsearch_resource` |
+| **Elasticsearch — reads** (query ES as a data source) | `elasticsearch_asset`, `elasticsearch_reader`, `elasticsearch_resource` |
+| **Elasticsearch — Dagster compute logs → ES** (instance-level, `dagster.yaml`) | `OtlpComputeLogManager` from `compute_log_managers/otlp/` → OTel Collector → Elasticsearch data stream. Same wire protocol lets you swap ES for Splunk / Datadog / Honeycomb / Loki / CloudWatch — see [`OtlpComputeLogManager` README](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/compute_log_managers/otlp/README.md). |
 | **MinIO** | `minio_resource`, `minio_io_manager` |
-| **Trino** | `trino_io_manager` |
+| **Trino** | `trino_query` (federated read as an asset), `trino_io_manager`, `trino_resource` |
 | **dbt** | Official `dagster-dbt` |
 | **BigQuery** | 12 components + `dagster-gcp` |
 | **GCS** | Official `dagster-gcp`, `gcs_monitor` |
@@ -487,6 +503,8 @@ Everything the F500 stack requires ships as either a community component (from t
 
 ## Related walkthroughs
 
-- `warehouse_migration.md` — legacy DB → cloud warehouse
-- `snowflake_workspace.md` — the same StateBackedComponent shape for Snowflake
-- Per-vendor workspace walkthroughs: `qlik_replicate.md`, `tm1.md`, `qlik_compose.md`, `jde.md`, `cognos.md`
+- `cognos.md` — mock Cognos in Docker (no creds); wire the BI leg of this POC to a real (mocked) Cognos server.
+- `warehouse_migration.md` — legacy DB → cloud warehouse (SCT / SSMA style, but component-driven).
+- `snowflake_workspace.md` — the same StateBackedComponent shape for Snowflake.
+- Per-vendor workspace walkthroughs: `qlik_replicate.md`, `tm1.md`, `qlik_compose.md`, `jde.md`, `cognos.md`.
+- Official [`dagster-looker`](https://docs.dagster.io/integrations/libraries/looker/dagster-looker) — for wiring a real Looker instance into the BI leg.

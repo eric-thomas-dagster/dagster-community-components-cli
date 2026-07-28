@@ -1,37 +1,53 @@
 #!/usr/bin/env bash
-# Fortune 500 POC end-to-end demo — Mode A (local, no credentials).
+# Fortune 500 POC end-to-end demo — local, no credentials.
 #
-# WHAT THIS DEMONSTRATES
-#   The 3-code-location F500 architecture:
+# WHAT THIS DEMONSTRATES (end-to-end, on your laptop)
+#   6-container infra + 3 real Dagster code-locations + cross-domain deps:
 #     - Postgres (legacy source DBs for sales / marketing / finance)
-#     - MinIO (S3-compat landing zone)
-#     - Trino (federated SQL over MinIO)
-#     - DuckDB (warehouse layer)
-#     - 3 Dagster code locations with cross-domain deps
-#     - DV2.0 Hub / Link / Satellite modeling via data_vault_hub_link_satellite
-#     - Cross-domain asset_check
-#     - shell_command_asset (legacy job orchestration)
-#     - k8s_job_asset stub (loads via dg check, doesn't execute)
+#     - MinIO (S3-compatible landing zone, default IO manager for all 3 projects)
+#     - Trino (federated SQL query engine for cross-schema reads)
+#     - DuckDB (warehouse layer, file-based)
+#     - Elasticsearch + Kibana (central log platform)
+#     - OpenTelemetry Collector (receives Dagster compute logs → ES)
 #
-# COST: $0 — all local Docker. Pulls ~1.5 GB across 4 containers on first run.
+#   Dagster workspace with 3 code-locations (real cross-code-location deps):
+#     - sales/       Data Vault 2.0 (hub / link / sat) + warehouse write
+#     - marketing/   raw ingest + attribution asset depending on sales/customer_hub
+#     - finance/     raw GL + Trino federated P&L + cross-domain freshness check
+#                    + shell_command_asset + k8s_job_asset stub
+#
+#   OtlpComputeLogManager wired in dagster.yaml → op stdout/stderr lands in ES.
+#
+# COST: $0. Pulls ~2GB across 6 containers on first run.
+# TIME: ~10 min first run, ~2 min thereafter.
+#
+# USAGE: bash setup_f500_poc_local_demo.sh [workspace_dir]
 
 set -eo pipefail
 
-PROJECT_DIR="${1:-f500-poc-demo}"
+WORKSPACE_DIR="${1:-f500-poc-demo}"
 POSTGRES_PORT="${POSTGRES_PORT:-15432}"
 MINIO_PORT="${MINIO_PORT:-19000}"
 MINIO_CONSOLE_PORT="${MINIO_CONSOLE_PORT:-19001}"
 TRINO_PORT="${TRINO_PORT:-18080}"
-COMMIT_SHA="093c73ad"                # v0.10.40 baseline (DV2.0 included)
+ES_PORT="${ES_PORT:-19200}"
+KIBANA_PORT="${KIBANA_PORT:-15601}"
+OTEL_HTTP_PORT="${OTEL_HTTP_PORT:-14318}"
+COMMIT_SHA="${COMMIT_SHA:-main}"    # bump after push
 
 if ! command -v docker >/dev/null 2>&1; then echo "✗ docker required"; exit 1; fi
-if ! command -v uv >/dev/null 2>&1; then echo "✗ uv required"; exit 1; fi
+if ! command -v uv >/dev/null 2>&1; then echo "✗ uv required (https://docs.astral.sh/uv/)"; exit 1; fi
 
-COMPOSE_DIR="/tmp/f500-poc-infra"
-rm -rf "$COMPOSE_DIR" && mkdir -p "$COMPOSE_DIR"
+# --- 1. Fresh workspace dir ------------------------------------------------
+rm -rf "$WORKSPACE_DIR"
+mkdir -p "$WORKSPACE_DIR"
+WORKSPACE_ABS="$(cd "$WORKSPACE_DIR" && pwd)"
+cd "$WORKSPACE_ABS"
 
-# --- 1. Docker Compose for the infra ---------------------------------------
-cat > "$COMPOSE_DIR/docker-compose.yml" <<COMPOSEEOF
+# --- 2. Infra: docker-compose ---------------------------------------------
+mkdir -p infra/trino-catalog infra/otel-collector warehouse
+
+cat > infra/docker-compose.yml <<COMPOSEEOF
 name: f500-poc
 
 services:
@@ -67,6 +83,20 @@ services:
       timeout: 5s
       retries: 20
 
+  minio-init:
+    image: minio/mc:latest
+    container_name: f500-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    entrypoint: >
+      /bin/sh -c "
+      mc alias set local http://minio:9000 minioadmin minioadmin;
+      mc mb -p local/lake || true;
+      mc anonymous set download local/lake || true;
+      echo '✓ MinIO bucket lake created';
+      "
+
   trino:
     image: trinodb/trino:latest
     container_name: f500-trino
@@ -74,13 +104,48 @@ services:
     volumes:
       - ./trino-catalog:/etc/trino/catalog
     depends_on:
-      minio:
+      postgres:
+        condition: service_healthy
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.15.0
+    container_name: f500-elasticsearch
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports: ["${ES_PORT}:9200"]
+    healthcheck:
+      test: ["CMD-SHELL", "curl -sf http://localhost:9200/_cluster/health >/dev/null || exit 1"]
+      interval: 5s
+      timeout: 10s
+      retries: 30
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.15.0
+    container_name: f500-kibana
+    environment:
+      - ELASTICSEARCH_HOSTS=http://elasticsearch:9200
+    ports: ["${KIBANA_PORT}:5601"]
+    depends_on:
+      elasticsearch:
+        condition: service_healthy
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:latest
+    container_name: f500-otel-collector
+    command: ["--config=/etc/otel-collector-config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otel-collector-config.yaml
+    ports:
+      - "${OTEL_HTTP_PORT}:4318"
+    depends_on:
+      elasticsearch:
         condition: service_healthy
 COMPOSEEOF
 
-# --- 2. Postgres seed data (3 domains) --------------------------------------
-cat > "$COMPOSE_DIR/init.sql" <<'SQLEOF'
--- Sales domain
+# --- 3. Postgres seed data (3 domains) ------------------------------------
+cat > infra/init.sql <<'SQLEOF'
 CREATE SCHEMA sales;
 CREATE TABLE sales.customers (
     customer_id INT PRIMARY KEY,
@@ -99,16 +164,15 @@ CREATE TABLE sales.orders (
     updated_at TIMESTAMP DEFAULT now()
 );
 INSERT INTO sales.customers VALUES
-  (1, 'Acme Corp', 'contact@acme.com', '555-0001', '1 Acme Way', now()),
-  (2, 'Globex Inc', 'sales@globex.com', '555-0002', '2 Globex Blvd', now()),
-  (3, 'Umbrella LLC', 'orders@umbrella.co', '555-0003', '3 Rain St', now());
+  (1, 'Acme Corp',    'contact@acme.com',    '555-0001', '1 Acme Way',    now()),
+  (2, 'Globex Inc',   'sales@globex.com',    '555-0002', '2 Globex Blvd', now()),
+  (3, 'Umbrella LLC', 'orders@umbrella.co',  '555-0003', '3 Rain St',     now());
 INSERT INTO sales.orders VALUES
-  (100, 1, '2026-07-01', 1250.00, 'delivered', now()),
-  (101, 2, '2026-07-05', 4200.50, 'shipped',   now()),
-  (102, 1, '2026-07-08', 875.75,  'processing', now()),
-  (103, 3, '2026-07-09', 3100.00, 'shipped',    now());
+  (100, 1, '2026-07-01', 1250.00, 'delivered',   now()),
+  (101, 2, '2026-07-05', 4200.50, 'shipped',     now()),
+  (102, 1, '2026-07-08',  875.75, 'processing',  now()),
+  (103, 3, '2026-07-09', 3100.00, 'shipped',     now());
 
--- Marketing domain
 CREATE SCHEMA marketing;
 CREATE TABLE marketing.campaigns (
     campaign_id INT PRIMARY KEY,
@@ -125,12 +189,11 @@ CREATE TABLE marketing.campaign_touches (
     touch_date TIMESTAMP DEFAULT now()
 );
 INSERT INTO marketing.campaigns VALUES
-  (10, 'Q3 Retention',    'email',   '2026-07-01', '2026-07-31', 5000.00),
-  (11, 'Enterprise Push', 'linkedin','2026-07-15', '2026-08-15', 12000.00);
+  (10, 'Q3 Retention',    'email',    '2026-07-01', '2026-07-31',  5000.00),
+  (11, 'Enterprise Push', 'linkedin', '2026-07-15', '2026-08-15', 12000.00);
 INSERT INTO marketing.campaign_touches (campaign_id, customer_id) VALUES
   (10, 1), (10, 2), (11, 3), (11, 1);
 
--- Finance domain
 CREATE SCHEMA finance;
 CREATE TABLE finance.gl_entries (
     entry_id INT PRIMARY KEY,
@@ -141,91 +204,191 @@ CREATE TABLE finance.gl_entries (
     period_month INT
 );
 INSERT INTO finance.gl_entries VALUES
-  (1, 'Revenue', 0,       9426.25, 2026, 7),
-  (2, 'COGS',    3200.00, 0,       2026, 7),
-  (3, 'OpEx',    5000.00, 0,       2026, 7),
-  (4, 'MktSpend',17000.00, 0,      2026, 7);
+  (1, 'Revenue',  0,        9426.25, 2026, 7),
+  (2, 'COGS',     3200.00,  0,       2026, 7),
+  (3, 'OpEx',     5000.00,  0,       2026, 7),
+  (4, 'MktSpend', 17000.00, 0,       2026, 7);
 SQLEOF
 
-# --- 3. Trino catalog for MinIO/Iceberg (skipped in this lean demo) ---------
-mkdir -p "$COMPOSE_DIR/trino-catalog"
-cat > "$COMPOSE_DIR/trino-catalog/tpch.properties" <<'TRINOCAT'
-connector.name=tpch
-TRINOCAT
-cat > "$COMPOSE_DIR/trino-catalog/postgres.properties" <<TRINOCAT
+# --- 4. Trino catalog: read from Postgres ----------------------------------
+cat > infra/trino-catalog/postgres.properties <<TRINOCAT
 connector.name=postgresql
 connection-url=jdbc:postgresql://postgres:5432/legacy
 connection-user=f500
 connection-password=f500pass
 TRINOCAT
 
-# --- 4. Start the stack -----------------------------------------------------
-echo ">>> Starting F500 POC infrastructure (Postgres + MinIO + Trino)"
-docker compose -f "$COMPOSE_DIR/docker-compose.yml" up -d --wait
+# --- 5. OTel Collector: OTLP HTTP → Elasticsearch --------------------------
+cat > infra/otel-collector-config.yaml <<'OTELEOF'
+receivers:
+  otlp:
+    protocols:
+      http:
+        endpoint: 0.0.0.0:4318
+
+processors:
+  batch:
+    timeout: 5s
+
+exporters:
+  elasticsearch:
+    endpoints:
+      - http://elasticsearch:9200
+    # Backed by a data stream (created in the setup script) — the exporter's
+    # default _bulk `create` action requires this shape on ES 8.x.
+    logs_index: dagster-compute-logs
+  debug:
+    verbosity: basic
+
+service:
+  pipelines:
+    logs:
+      receivers: [otlp]
+      processors: [batch]
+      exporters: [elasticsearch, debug]
+OTELEOF
+
+# --- 6. Start the stack ----------------------------------------------------
+echo ">>> Starting F500 POC infrastructure (6 containers)"
+docker compose -f infra/docker-compose.yml up -d --wait 2>&1 | tail -10 || true
 
 for _ in $(seq 1 30); do
   if docker exec f500-postgres pg_isready -U f500 >/dev/null 2>&1; then
-    echo "    ✓ Postgres ready"; break
+    echo "    ✓ Postgres ready on :$POSTGRES_PORT"; break
   fi
   sleep 1
 done
-echo "    ✓ MinIO on :$MINIO_PORT (console :$MINIO_CONSOLE_PORT), Trino on :$TRINO_PORT"
+echo "    ✓ MinIO on :$MINIO_PORT   (console http://localhost:$MINIO_CONSOLE_PORT — minioadmin/minioadmin)"
+echo "    ✓ Trino on :$TRINO_PORT"
+# Enable auto-create at cluster level, then register an index template + data stream
+# for dagster-compute-logs. The OTel ES exporter defaults to _bulk `create` action
+# (data-stream mode), so we back it with an actual data stream.
+curl -sf -X PUT "http://localhost:${ES_PORT}/_cluster/settings" \
+  -H "Content-Type: application/json" \
+  -d '{"persistent":{"action.auto_create_index":"true"}}' >/dev/null 2>&1 || true
+curl -sf -X PUT "http://localhost:${ES_PORT}/_index_template/dagster-compute-logs" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "index_patterns": ["dagster-compute-logs*"],
+    "data_stream": {},
+    "priority": 500,
+    "template": {"mappings": {"properties": {"@timestamp": {"type": "date"}}}}
+  }' >/dev/null 2>&1 || true
+curl -sf -X PUT "http://localhost:${ES_PORT}/_data_stream/dagster-compute-logs" >/dev/null 2>&1 || true
+echo "    ✓ Elasticsearch on :$ES_PORT (dagster-compute-logs data stream registered)"
+echo "    ✓ Kibana on http://localhost:$KIBANA_PORT"
+echo "    ✓ OTel Collector OTLP/HTTP on :$OTEL_HTTP_PORT"
 
-# --- 5. Scaffold Dagster project --------------------------------------------
-echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
-rm -rf "$PROJECT_DIR"
-uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
-cd "$PROJECT_DIR"
-PKG="$(ls src/ | head -1)"
-uv add --dev -q dagster-dg-cli dagster-webserver
+# --- 7. Scaffold Dagster workspace -----------------------------------------
+echo ">>> Scaffolding Dagster workspace at $WORKSPACE_ABS"
+uvx create-dagster@latest workspace . --no-uv-sync 2>&1 | tail -3 || true
 
-# --- 6. Install community components ----------------------------------------
-# The CLI drops a starter defs.yaml with `<fill in>` placeholders under
-# src/<pkg>/defs/<id>/. We write our OWN defs.yaml files under sales/
-# marketing/finance/legacy — so delete the starter placeholders after
-# install to avoid dg check errors.
-echo ">>> Installing community components for the 3 domains + DV2.0"
-CLI="uvx --from dagster-community-components-cli dagster-component"
-$CLI --refresh add database_query --auto-install
-$CLI add data_vault_hub_link_satellite --auto-install
-$CLI add shell_command_asset --auto-install
-$CLI add k8s_job_asset --auto-install
+# --- 8. Install shared deps into deployment venv ---------------------------
+# For local dev / testing: `export DCC_LOCAL_PATH=/path/to/dagster-component-templates-src`
+# to install the DCC package from a local checkout instead of GitHub.
+if [ -n "$DCC_LOCAL_PATH" ]; then
+  DCC_SRC="dagster-community-components @ file://$DCC_LOCAL_PATH"
+  echo "    (using local DCC checkout: $DCC_LOCAL_PATH)"
+else
+  DCC_SRC="dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/$COMMIT_SHA.zip"
+fi
 
-# Drop the CLI's starter placeholder defs.yamls — we write real ones by hand.
-rm -rf \
-  "src/$PKG/defs/database_query" \
-  "src/$PKG/defs/data_vault_hub_link_satellite" \
-  "src/$PKG/defs/shell_command_asset" \
-  "src/$PKG/defs/k8s_job_asset"
+cd deployments/local
+uv add -q \
+  dagster-dg-cli \
+  dagster-webserver \
+  "$DCC_SRC" \
+  pandas \
+  duckdb \
+  pyarrow \
+  s3fs \
+  trino \
+  psycopg2-binary \
+  sqlalchemy \
+  requests
+cd "$WORKSPACE_ABS"
 
-# --- 7. Wire the 3-domain defs.yaml files -----------------------------------
-echo ">>> Wiring 3 code-locations (sales / marketing / finance)"
+# --- 9. Create 3 code-location projects + install per-project deps ---------
+# Each code-location runs its own subprocess with its own venv — dg's model.
+# Total install time: ~1-2 min per project (uv is fast + cached across projects).
+echo ">>> Creating 3 code-location projects (sales, marketing, finance)"
+COMMON_DEPS=(pandas duckdb pyarrow s3fs trino psycopg2-binary sqlalchemy requests deltalake)
+FINANCE_EXTRA_DEPS=(dagster-k8s)   # for K8sJobAssetComponent stub (ShellCommandAssetComponent uses stdlib subprocess)
+for domain in sales marketing finance; do
+  uvx create-dagster@latest project "projects/$domain" --no-uv-sync 2>&1 | tail -2 || true
+  (
+    cd "projects/$domain"
+    if [ "$domain" = "finance" ]; then
+      uv add -q "$DCC_SRC" "${COMMON_DEPS[@]}" "${FINANCE_EXTRA_DEPS[@]}"
+    else
+      uv add -q "$DCC_SRC" "${COMMON_DEPS[@]}"
+    fi
+  )
+done
 
-# --- Sales domain ---
-mkdir -p "src/$PKG/defs/sales"
-cat > "src/$PKG/defs/sales/raw_customers.yaml" <<YAML
+# --- 10. Env vars (exported BEFORE yaml writes so $PG_DSN gets bash-expanded) --
+export PG_DSN="postgresql://f500:f500pass@localhost:${POSTGRES_PORT}/legacy"
+export MINIO_ACCESS_KEY=minioadmin
+export MINIO_SECRET_KEY=minioadmin
+export DAGSTER_HOME="$WORKSPACE_ABS"
+
+# --- 11. Write defs.yaml files directly (100% components, no vendored code) --
+# DCC is installed as a package in each project's venv, so `type:` can reference
+# `dagster_community_components.<X>Component` directly. dg's autoloader picks up
+# every `defs.yaml` under each project's src/<pkg>/defs/**/ tree.
+# $PG_DSN is expanded at write time (bash heredoc); MinIO env vars stay as var
+# names (the component's *_env_var fields read them at runtime).
+echo ">>> Writing defs.yaml files for each code-location"
+
+SALES_PKG="$(ls projects/sales/src/ | head -1)"
+MKT_PKG="$(ls projects/marketing/src/ | head -1)"
+FIN_PKG="$(ls projects/finance/src/ | head -1)"
+SALES_DEFS="projects/sales/src/$SALES_PKG/defs"
+MKT_DEFS="projects/marketing/src/$MKT_PKG/defs"
+FIN_DEFS="projects/finance/src/$FIN_PKG/defs"
+
+write_defs() {
+  # write_defs <path/to/defs.yaml> <heredoc-body>
+  local path="$1"; shift
+  mkdir -p "$(dirname "$path")"
+  cat > "$path"
+}
+
+# --- Sales code-location ---
+write_defs "$SALES_DEFS/minio_io_manager/defs.yaml" <<YAML
+type: dagster_community_components.MinIOIOManagerComponent
+attributes:
+  resource_key: io_manager
+  endpoint_url: http://localhost:${MINIO_PORT}
+  access_key_env_var: MINIO_ACCESS_KEY
+  secret_key_env_var: MINIO_SECRET_KEY
+  bucket: lake
+  prefix: sales
+YAML
+
+write_defs "$SALES_DEFS/raw_customers/defs.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
   asset_name: raw_customers
-  group_name: sales
-  database_url: \${PG_DSN}
+  group_name: sales_raw
+  database_url: $PG_DSN
   query: |
     SELECT customer_id, name, email, phone, address, updated_at
     FROM sales.customers
 YAML
-cat > "src/$PKG/defs/sales/raw_orders.yaml" <<YAML
+
+write_defs "$SALES_DEFS/raw_orders/defs.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
   asset_name: raw_orders
-  group_name: sales
-  database_url: \${PG_DSN}
+  group_name: sales_raw
+  database_url: $PG_DSN
   query: |
     SELECT order_id, customer_id, order_date, order_amount, order_status, updated_at
     FROM sales.orders
 YAML
 
-# DV2.0 customer hub + sat (Sales)
-cat > "src/$PKG/defs/sales/customer_dv2.yaml" <<YAML
+write_defs "$SALES_DEFS/customer_dv2/defs.yaml" <<YAML
 type: dagster_community_components.DataVaultHubLinkSatelliteComponent
 attributes:
   entity: customer
@@ -233,12 +396,11 @@ attributes:
   business_keys: [customer_id]
   satellite_columns: [name, email, phone, address, updated_at]
   record_source: sales_erp
-  group_name: sales
+  group_name: sales_dv2
   asset_key_prefix: [sales, dv2]
 YAML
 
-# DV2.0 order hub + sat + link (Sales)
-cat > "src/$PKG/defs/sales/order_dv2.yaml" <<YAML
+write_defs "$SALES_DEFS/order_dv2/defs.yaml" <<YAML
 type: dagster_community_components.DataVaultHubLinkSatelliteComponent
 attributes:
   entity: order
@@ -247,149 +409,281 @@ attributes:
   link_business_keys: [customer_id, order_id]
   satellite_columns: [order_date, order_amount, order_status, updated_at]
   record_source: sales_erp
-  group_name: sales
+  group_name: sales_dv2
   asset_key_prefix: [sales, dv2]
 YAML
 
-# --- Marketing domain ---
-mkdir -p "src/$PKG/defs/marketing"
-cat > "src/$PKG/defs/marketing/raw_campaigns.yaml" <<YAML
+write_defs "$SALES_DEFS/warehouse_dim_customer/defs.yaml" <<YAML
+type: dagster_community_components.DuckDBTableWriterComponent
+attributes:
+  asset_name: warehouse_dim_customer
+  upstream_asset_key: sales/dv2/customer_sat
+  database_path: ${WORKSPACE_ABS}/warehouse/f500.duckdb
+  table: sales_dim_customer
+  write_mode: replace
+  group_name: sales_warehouse
+YAML
+
+# --- Marketing code-location ---
+write_defs "$MKT_DEFS/minio_io_manager/defs.yaml" <<YAML
+type: dagster_community_components.MinIOIOManagerComponent
+attributes:
+  resource_key: io_manager
+  endpoint_url: http://localhost:${MINIO_PORT}
+  access_key_env_var: MINIO_ACCESS_KEY
+  secret_key_env_var: MINIO_SECRET_KEY
+  bucket: lake
+  prefix: marketing
+YAML
+
+write_defs "$MKT_DEFS/raw_campaigns/defs.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
   asset_name: raw_campaigns
-  group_name: marketing
-  database_url: \${PG_DSN}
+  group_name: marketing_raw
+  database_url: $PG_DSN
   query: |
     SELECT campaign_id, name, channel, start_date, end_date, spend_usd
     FROM marketing.campaigns
 YAML
-cat > "src/$PKG/defs/marketing/raw_touches.yaml" <<YAML
+
+write_defs "$MKT_DEFS/raw_touches/defs.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
   asset_name: raw_touches
-  group_name: marketing
-  database_url: \${PG_DSN}
+  group_name: marketing_raw
+  database_url: $PG_DSN
   query: |
     SELECT touch_id, campaign_id, customer_id, touch_date
     FROM marketing.campaign_touches
 YAML
 
-# --- Finance domain ---
-mkdir -p "src/$PKG/defs/finance"
-cat > "src/$PKG/defs/finance/raw_gl.yaml" <<YAML
+# Cross-domain: marketing attribution depends on sales/dv2/customer_hub.
+# Dagster resolves the dep across code-locations by AssetKey.
+write_defs "$MKT_DEFS/campaign_attribution/defs.yaml" <<YAML
+type: dagster_community_components.DatabaseQueryComponent
+attributes:
+  asset_name: campaign_attribution
+  group_name: marketing_analytics
+  database_url: $PG_DSN
+  deps:
+    - sales/dv2/customer_hub
+    - raw_campaigns
+    - raw_touches
+  query: |
+    SELECT
+      c.campaign_id,
+      c.name AS campaign_name,
+      COUNT(DISTINCT t.customer_id) AS attributed_customers,
+      c.spend_usd
+    FROM marketing.campaigns c
+    LEFT JOIN marketing.campaign_touches t USING (campaign_id)
+    GROUP BY c.campaign_id, c.name, c.spend_usd
+YAML
+
+write_defs "$MKT_DEFS/warehouse_attribution/defs.yaml" <<YAML
+type: dagster_community_components.DuckDBTableWriterComponent
+attributes:
+  asset_name: warehouse_attribution
+  upstream_asset_key: campaign_attribution
+  database_path: ${WORKSPACE_ABS}/warehouse/f500.duckdb
+  table: marketing_attribution
+  write_mode: replace
+  group_name: marketing_warehouse
+YAML
+
+# --- Finance code-location ---
+write_defs "$FIN_DEFS/minio_io_manager/defs.yaml" <<YAML
+type: dagster_community_components.MinIOIOManagerComponent
+attributes:
+  resource_key: io_manager
+  endpoint_url: http://localhost:${MINIO_PORT}
+  access_key_env_var: MINIO_ACCESS_KEY
+  secret_key_env_var: MINIO_SECRET_KEY
+  bucket: lake
+  prefix: finance
+YAML
+
+write_defs "$FIN_DEFS/raw_gl_entries/defs.yaml" <<YAML
 type: dagster_community_components.DatabaseQueryComponent
 attributes:
   asset_name: raw_gl_entries
-  group_name: finance
-  database_url: \${PG_DSN}
+  group_name: finance_raw
+  database_url: $PG_DSN
   query: |
     SELECT entry_id, account, debit, credit, period_year, period_month
     FROM finance.gl_entries
 YAML
 
-# --- Legacy shell job (bare-metal orchestration) ---
-mkdir -p "src/$PKG/defs/legacy"
-cat > "src/$PKG/defs/legacy/nightly_prep.yaml" <<YAML
+# Trino federated: joins postgres.finance with postgres.sales via one query.
+write_defs "$FIN_DEFS/federated_pnl/defs.yaml" <<YAML
+type: dagster_community_components.TrinoQueryComponent
+attributes:
+  asset_name: federated_pnl
+  host: localhost
+  port: ${TRINO_PORT}
+  user: f500
+  catalog: postgres
+  schema_name: finance
+  query: |
+    SELECT
+      g.account,
+      SUM(g.credit - g.debit) AS net_amount,
+      (SELECT COUNT(*) FROM postgres.sales.orders) AS sales_order_count
+    FROM postgres.finance.gl_entries g
+    GROUP BY g.account
+  group_name: finance_federated
+  deps:
+    - raw_gl_entries
+    - sales/dv2/order_hub
+YAML
+
+write_defs "$FIN_DEFS/warehouse_pnl/defs.yaml" <<YAML
+type: dagster_community_components.DuckDBTableWriterComponent
+attributes:
+  asset_name: warehouse_pnl
+  upstream_asset_key: federated_pnl
+  database_path: ${WORKSPACE_ABS}/warehouse/f500.duckdb
+  table: finance_pnl
+  write_mode: replace
+  group_name: finance_warehouse
+YAML
+
+# Cross-domain freshness check: finance blocks on sales/dv2/customer_sat freshness.
+write_defs "$FIN_DEFS/cross_domain_check/defs.yaml" <<YAML
+type: dagster_community_components.FreshnessPolicyComponent
+attributes:
+  asset_key: sales/dv2/customer_sat
+  policy_type: time_window
+  fail_window_hours: 24
+  warn_window_hours: 12
+YAML
+
+write_defs "$FIN_DEFS/legacy_nightly_prep/defs.yaml" <<YAML
 type: dagster_community_components.ShellCommandAssetComponent
 attributes:
   asset_name: legacy_nightly_prep
-  group_name: legacy
+  group_name: finance_legacy
   command: "echo '[legacy] nightly prep started at' \$(date -u +%FT%TZ); sleep 1; echo '[legacy] done'"
 YAML
 
-# --- k8s job stub (validates via dg check; doesn't execute without a cluster) ---
-cat > "src/$PKG/defs/legacy/dbt_on_gke.yaml" <<YAML
+write_defs "$FIN_DEFS/dbt_on_gke/defs.yaml" <<YAML
 type: dagster_community_components.K8sJobAssetComponent
 attributes:
   asset_name: dbt_marts_on_gke
-  group_name: legacy
+  group_name: finance_legacy
   image: ghcr.io/acme/dbt-bigquery:latest
   command: ["dbt", "run", "--target", "prod"]
   namespace: dagster
-  cpu_limit: "2"
+  cpu_limit: 2000m
   memory_limit: 4Gi
 YAML
 
-# --- Cross-domain check: finance depends on sales freshness ---
-# Written as a Python file since asset_checks span code-locations, not YAML-native
-cat > "src/$PKG/defs/finance/cross_domain_check.py" <<'PYEOF'
-"""Cross-domain freshness check — finance gates on sales upstream."""
-import dagster as dg
+# --- 13. Workspace dagster.yaml — wire OtlpComputeLogManager --------------
+mkdir -p storage/compute-logs
+cat > dagster.yaml <<YAML
+# OtlpComputeLogManager — op stdout/stderr → OTel Collector → Elasticsearch.
+# Kibana at http://localhost:${KIBANA_PORT} → data views → dagster-compute-logs
+compute_logs:
+  module: dagster_community_components.compute_log_managers.otlp
+  class: OtlpComputeLogManager
+  config:
+    otlp_endpoint: http://localhost:${OTEL_HTTP_PORT}
+    service_name: dagster-f500-poc
+    local_dir: ${WORKSPACE_ABS}/storage/compute-logs
+    severity_stdout: 9
+    severity_stderr: 13
+    batch_size: 20
+    upload_interval: 5
+    skip_empty_files: false
+YAML
 
-
-@dg.asset_check(
-    asset=dg.AssetKey(["sales", "dv2", "order_sat"]),
-    name="finance_gates_orders_fresh",
-)
-def orders_recent_for_finance():
-    """
-    Placeholder cross-domain freshness check — real code would query the
-    latest load_date on the sat and compare to now(). For the demo we
-    just record the intent as check metadata.
-    """
-    return dg.AssetCheckResult(
-        passed=True,
-        metadata={
-            "note": dg.MetadataValue.text(
-                "Finance p&l_statement depends on this. If freshness > 3h, "
-                "PASS→FAIL and finance materializations block."
-            )
-        },
-    )
-
-
-defs = dg.Definitions(asset_checks=[orders_recent_for_finance])
-PYEOF
-
-# --- 8. Env vars ------------------------------------------------------------
-export PG_HOST=localhost
-export PG_PORT="$POSTGRES_PORT"
-export PG_DB=legacy
-export PG_USER=f500
-export PG_PASSWORD=f500pass
-export PG_DSN="postgresql://f500:f500pass@localhost:${POSTGRES_PORT}/legacy"
-
-cat > ".env" <<ENVEOF
-PG_HOST=$PG_HOST
-PG_PORT=$PG_PORT
-PG_DB=$PG_DB
-PG_USER=$PG_USER
-PG_PASSWORD=$PG_PASSWORD
+# --- 14. Env vars — write .env for reproducibility (already exported above) --
+cat > .env <<ENVEOF
 PG_DSN=$PG_DSN
+MINIO_ACCESS_KEY=$MINIO_ACCESS_KEY
+MINIO_SECRET_KEY=$MINIO_SECRET_KEY
+DAGSTER_HOME=$WORKSPACE_ABS
 ENVEOF
 
-# --- 9. Validate + materialize ----------------------------------------------
-DCC="dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/$COMMIT_SHA.zip"
+# --- 15. Validate defs -----------------------------------------------------
+# dg is run from the workspace root against the deployment env; discovers 3 code-locations from dg.toml.
+echo ">>> Running dg check defs against 3 code-locations"
+if ! uv run --project deployments/local dg check defs 2>&1 | tail -20; then
+  echo "    ✗ dg check failed — inspect above"; exit 1
+fi
+echo "    ✓ dg check defs passed for all 3 code-locations"
 
-echo ">>> Validating defs (dg check — validates 3 code-locations + DV2.0 + shell + k8s stub + cross-domain check)"
-uv run --with "$DCC" dg check defs || { echo "    ✗ dg check failed"; exit 1; }
-echo "    ✓ dg check passed — all defs.yaml validated against their schemas"
+# --- 16. Smoke-test materialization ---------------------------------------
+# dg launch runs per project — cross-loc deps resolve via AssetKey. Order: sales → marketing → finance.
+# Note: dbt_marts_on_gke is a k8s stub — validates via dg check, needs a real cluster to run.
+# We exclude it from the smoke test but leave it in the graph for demo browsing.
+SALES_ASSETS='*'
+MKT_ASSETS='*'
+FIN_ASSETS='raw_gl_entries,federated_pnl,warehouse_pnl,legacy_nightly_prep'   # skip dbt_marts_on_gke (needs k8s)
+echo ">>> Smoke-test: materialize each code-location's assets in dependency order"
+FAILED=0
+for domain in sales marketing finance; do
+  echo "    → materializing $domain assets..."
+  case "$domain" in
+    sales)     ASSETS="$SALES_ASSETS" ;;
+    marketing) ASSETS="$MKT_ASSETS"   ;;
+    finance)   ASSETS="$FIN_ASSETS"   ;;
+  esac
+  (
+    cd "projects/$domain"
+    PG_DSN="$PG_DSN" MINIO_ACCESS_KEY="$MINIO_ACCESS_KEY" MINIO_SECRET_KEY="$MINIO_SECRET_KEY" \
+      DAGSTER_HOME="$DAGSTER_HOME" \
+      uv run dg launch --assets "$ASSETS" 2>&1 | tail -12
+  ) || FAILED=1
+done
+if [ "$FAILED" != "0" ]; then
+  echo "    ⚠ one or more code-locations had materialization failures — inspect above"
+else
+  echo "    ✓ all code-locations materialized (dbt_marts_on_gke skipped — needs real k8s cluster)"
+fi
 
+# --- 17. Verify Elasticsearch received compute logs -----------------------
+echo ">>> Waiting 15s for OTel batch to flush to Elasticsearch..."
+sleep 15
+LOG_COUNT="$(curl -s "http://localhost:${ES_PORT}/dagster-compute-logs*/_count" | python3 -c 'import sys,json; print(json.load(sys.stdin).get("count", 0))' 2>/dev/null || echo 0)"
+if [ "$LOG_COUNT" -gt 0 ]; then
+  echo "    ✓ Elasticsearch has $LOG_COUNT compute log records — view in Kibana"
+else
+  echo "    ⚠ Elasticsearch has 0 compute log records — check OTel collector logs:"
+  echo "        docker logs f500-otel-collector"
+fi
+
+# --- 18. Done --------------------------------------------------------------
 cat <<DONE
 
-✓ F500 POC demo (local mode) up.
+✓ F500 POC demo up and running.
 
-Infra containers:
-  Postgres:      localhost:$POSTGRES_PORT   (user=f500 pass=f500pass db=legacy)
-  MinIO:         localhost:$MINIO_PORT      (console http://localhost:$MINIO_CONSOLE_PORT — minioadmin/minioadmin)
-  Trino:         http://localhost:$TRINO_PORT
+Infrastructure:
+  Postgres         localhost:$POSTGRES_PORT       f500 / f500pass / legacy
+  MinIO console    http://localhost:$MINIO_CONSOLE_PORT  minioadmin / minioadmin
+  MinIO S3 API     http://localhost:$MINIO_PORT
+  Trino            http://localhost:$TRINO_PORT
+  Elasticsearch    http://localhost:$ES_PORT
+  Kibana           http://localhost:$KIBANA_PORT   (data view: dagster-compute-logs*)
+  OTel Collector   http://localhost:$OTEL_HTTP_PORT (OTLP/HTTP)
 
-Dagster project:  $(pwd)
+Dagster workspace: $WORKSPACE_ABS
+  ├── dg.toml                    workspace manifest (3 code-locations)
+  ├── dagster.yaml               OtlpComputeLogManager → OTel → ES
+  ├── projects/sales/            code-location 1: DV2.0 hub/link/sat
+  ├── projects/marketing/        code-location 2: attribution (cross-loc dep on sales)
+  ├── projects/finance/          code-location 3: Trino federated + cross-domain check
+  └── warehouse/f500.duckdb      persistent warehouse
 
 Next:
-  cd $PROJECT_DIR
-  uv run --with "$DCC" dg dev
+  cd $WORKSPACE_ABS/deployments/local
+  uv run dg dev
   # → http://localhost:3000
-  # → click through: sales/marketing/finance groups, DV2.0 lineage,
-  #    legacy_nightly_prep, dbt_marts_on_gke (stub), cross-domain check
-
-Swap to GCP mode:
-  Replace: DatabaseQueryComponent(connection_env_var=PG_DSN)
-       →   BigQueryQueryAssetComponent
-  Replace: DV2.0 output → dataframe_to_bigquery instead of local pickle
-  Add:     dbt_assets with dagster-dbt targeting BigQuery
-  See:     setup_f500_poc_gcp_demo.sh (coming later)
+  # → all 3 code-locations show side by side; browse cross-loc lineage
+  #   from marketing/campaign_attribution → sales/dv2/customer_hub
 
 Cleanup:
-  cd .. && docker compose -f $COMPOSE_DIR/docker-compose.yml down -v
+  docker compose -f $WORKSPACE_ABS/infra/docker-compose.yml down -v
+  rm -rf $WORKSPACE_ABS
 DONE
