@@ -41,14 +41,12 @@ task → plan  ───────┼── specialist_b_result ──┼─�
 
 ## Recommended reading order
 
-1. **`rag_state.md`** — the shortest path to seeing the state-tracking story land. No API keys. ~3 min.
-2. **`rag_complete.md`** — every component in the collection wired end-to-end. Same corpus as `rag_state`. Compare the two paths side-by-side.
-3. **`rag_supervisor.md`** — different orchestration pattern. Read this once you're comfortable with the linear pipeline and want to see what named-runtime-decisions look like.
-4. **`vector_rag.md` / `supabase_rag.md`** — reach for these when your production vector store / conversation-memory story matters more than the state-tracking framing.
+1. **`rag_state.md`** — corpus + snapshot + eval, no API keys, ~3 min. See what an asset-check-gated regression looks like.
+2. **`rag_complete.md`** — same corpus as `rag_state`, plus a full retrieve-then-generate pipeline running alongside. See every step of the pipeline as its own asset.
+3. **`rag_supervisor.md`** — different orchestration pattern. Read this when a single retrieval isn't enough and you need a planner + specialists.
+4. **`vector_rag.md` / `supabase_rag.md`** — reach for these when your target vector store (ChromaDB with conversation memory / pgvector on Supabase) is the deciding factor.
 
 ## The RAG component palette
-
-Every walkthrough is 100% components — no custom Python in the `defs/` tree. Here's what the collection includes for RAG-adjacent work:
 
 | Layer | Components |
 |---|---|
@@ -63,8 +61,8 @@ Every walkthrough is 100% components — no custom Python in the `defs/` tree. H
 | **Memory** | `ConversationMemory` |
 | **Document extraction** | `DocumentTextExtractor`, `DocumentLayoutAnalyzer`, `DocumentAIExtractor`, `DocumentSummarizer`, `EntityExtractor` |
 
-That's ~40 components you can compose. The five walkthroughs above are the well-lit paths; anything you build on top is a rearrangement of the same primitives.
+~40 components you can compose. The five walkthroughs above are well-lit paths through them; anything you build on top is a rearrangement of the same primitives.
 
-## The one framing that matters
+## Artifacts are the graph
 
 Whichever shape you pick, hold on to this: **the artifacts are the graph**. A materialization records a specific version of a specific artifact — the corpus at time T, the index built from corpus-hash X at time T, the eval score for snapshot Y against golden set Z. Six weeks later when someone asks "why did last Tuesday's answer look weird?", the graph tells you. That's the difference between a pipeline that runs and a system you can operate.

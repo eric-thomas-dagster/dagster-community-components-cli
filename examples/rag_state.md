@@ -4,20 +4,20 @@ The three components in this walkthrough exist to turn a RAG stack from "a pipel
 
 Dagster's asset primitive is what makes that shape expressible: every artifact — the corpus, the vector index, the retrieval-quality score, the prompt — becomes a first-class thing with lineage, versions, and checks.
 
-## Two ways to do RAG in this collection
+## Two ways to wire RAG in Dagster
 
 Pick the one that matches your intent:
 
 | Shape | Component(s) | When to reach for it |
 |---|---|---|
-| **Simple RAG** — one asset that does embed + retrieve + generate | [`RAGPipelineComponent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/rag_pipeline) | "I just want RAG working in Dagster." One YAML → answer. Fast on-ramp for a proof of concept. |
-| **Stateful RAG** — corpus / snapshot / eval as separate assets | `document_corpus` + `vector_index_snapshot` + `rag_eval` (this walkthrough) | Production RAG: corpus provenance, immutable index snapshots, retrieval-quality gates, backfillable eval, partition-selectable rollback. Every stateful entity is a first-class asset. |
+| **Simple RAG** — one asset that does embed + retrieve + generate | [`RAGPipelineComponent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/rag_pipeline) | One YAML → answer. Fast on-ramp for a proof of concept. |
+| **Stateful RAG** — corpus / snapshot / eval as separate assets | `document_corpus` + `vector_index_snapshot` + `rag_eval` | Production RAG: corpus provenance, immutable index snapshots, retrieval-quality gates, backfillable eval, partition-selectable rollback. Every stateful entity is a first-class asset. |
 
 If you're prototyping, start with `RAGPipelineComponent`. If you're taking RAG to prod — where "which docs answered this question last Tuesday?" and "why did retrieval quality drop overnight?" become real questions — the three components below are the shape.
 
 ### Simple RAG — asset graph
 
-One asset with everything inside. Great for demos and prototypes; no state to browse between runs.
+One asset with everything inside. Suits demos and prototypes; no state to browse between runs.
 
 ```
                              ┌──────────────────────────┐
@@ -29,7 +29,7 @@ One asset with everything inside. Great for demos and prototypes; no state to br
                              └──────────────────────────┘
 ```
 
-### Stateful RAG — asset graph (this walkthrough)
+### Stateful RAG — asset graph
 
 Every artifact is a named, versioned asset. `snapshot_id` is a partition key, so each downstream run picks a specific snapshot — that's the rollback edge.
 

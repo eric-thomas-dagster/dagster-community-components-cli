@@ -2,7 +2,7 @@
 
 Two parallel RAG paths over the same 5-doc corpus, in one Dagster project. Runs no-key by default; drop in an OpenAI-compatible key to enable the final LLM answer step.
 
-- **Path A** — the state-tracking shape. Corpus → snapshot → eval, with an asset check that fails on retrieval-quality regressions. This is the shape you want when RAG is answering questions your team is on the hook for.
+- **Path A** — the state-tracking shape. Corpus → snapshot → eval, with an asset check that fails on retrieval-quality regressions. Use this when you need corpus provenance, index rollback via partition selection, and quality-gated downstream materialization.
 - **Path B** — the classic decomposed pipeline. Chunker → embeddings → vector store → retrieval → rerank → LLM answer. Every step is its own asset with its own history, its own re-run, its own materialization.
 
 Both paths consume the same `docs_corpus` — that's the "shared source" edge.
