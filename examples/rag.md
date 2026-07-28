@@ -10,11 +10,11 @@ Which walkthrough you want depends on where you are in the RAG journey.
 
 | Walkthrough | Shape | Requires | When |
 |---|---|---|---|
-| **[rag_state.md](rag_state.md)** | Corpus → snapshot → eval (3 assets). Includes an **injected regression** that trips the retrieval-quality asset check on its own. | No keys | You want the "why is this better than a pipeline" story in one runnable demo, ~3 min. |
-| **[rag_complete.md](rag_complete.md)** | Full pipeline: chunker → embeddings → vector store → retrieval → rerank → LLM answer, **plus** a state-tracking overlay (corpus + snapshot + eval) on the same corpus. | No key up through `reranked`; OpenAI-compatible for final answer | You're building production RAG and want to see every component in the collection wired together over one corpus. |
-| **[rag_supervisor.md](rag_supervisor.md)** | Planner LLM reads a task, picks specialists from a bounded YAML-declared set, each pick is its own asset; a synthesizer combines. | OpenAI-compatible | Your task is multi-facet — no single retrieval is enough — and you want every runtime routing decision to be a named, replayable asset. |
-| **[vector_rag.md](vector_rag.md)** | Classic embed → retrieve → rerank → RAG mega-demo, plus `conversation_memory` for multi-turn. | OpenAI | You want a compact single-project demo showing the traditional RAG stack with the OpenAI embedder + gpt-4o-mini. |
-| **[supabase_rag.md](supabase_rag.md)** | pgvector-backed RAG on a local Supabase instance. | OpenAI + local Supabase CLI | Your target vector store is Postgres/pgvector; you want a real DB, not an embedded one. |
+| **[rag_state.md](rag_state.md)** | Corpus → snapshot → eval (3 assets). Includes an **injected regression** that trips the retrieval-quality asset check on its own. | No keys | You need retrieval-quality regressions to block downstream automatically, or you want rollback to a past index snapshot via partition selection. |
+| **[rag_complete.md](rag_complete.md)** | Full pipeline: chunker → embeddings → vector store → retrieval → rerank → LLM answer, **plus** a state-tracking overlay (corpus + snapshot + eval) on the same corpus. | No key up through `reranked`; OpenAI-compatible for final answer | You're building a full retrieve-then-generate pipeline over your own docs and want to see every step as its own asset before adapting it. |
+| **[rag_supervisor.md](rag_supervisor.md)** | Planner LLM reads a task, picks specialists from a bounded YAML-declared set, each pick is its own asset; a synthesizer combines. | OpenAI-compatible | Your task needs multiple specialist responses instead of one retrieval, and you need every routing decision inspectable weeks later. |
+| **[vector_rag.md](vector_rag.md)** | Classic embed → retrieve → rerank → RAG mega-demo, plus `conversation_memory` for multi-turn. | OpenAI | You want the classic OpenAI + ChromaDB + rerank stack with multi-turn conversation memory. |
+| **[supabase_rag.md](supabase_rag.md)** | pgvector-backed RAG on a local Supabase instance. | OpenAI + local Supabase CLI | Your target vector store is Postgres/pgvector — you want a real DB backing the index, not an embedded one. |
 
 ## Asset-graph shapes at a glance
 
