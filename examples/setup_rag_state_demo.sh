@@ -219,11 +219,10 @@ Browse it all in the UI:
   # - docs_eval → Partitions: both snapshot ids present; asset check status per partition
   # - Materialization history on docs_eval → precision@k trend
 
-Contrast against Prefect / an imperative RAG flow:
-  Prefect can run the same chain. It cannot natively:
-    - Roll back queries to a past snapshot by partition selection.
-    - Block downstream materialization on a retrieval-quality asset check.
-    - Backfill the eval across all past snapshots to plot quality over time.
+What this shape gives you end-to-end:
+  - Roll back queries to a past snapshot by partition selection (no rebuild).
+  - Downstream materialization gated on the retrieval-quality asset check.
+  - Backfill the eval across all past snapshots to plot quality over time.
 
 Cleanup:
   rm -rf $PROJECT_ABS

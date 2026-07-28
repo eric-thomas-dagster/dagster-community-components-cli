@@ -24,7 +24,7 @@ The typical F500 stack carries **three schedulers** with distinct pain, each sol
 
 - **A centralized legacy job-scheduler** (representative: AutoSys / Control-M / Tivoli Workload Scheduler) — bare-metal / mixed workloads. Dependencies are **scheduling-based, not data-aware**: "app A finished → *assume* the table is filled → run app B." No lineage, no asset guarantees, no way to answer "why did today's number look weird?"
 - **A per-domain DAG scheduler** (representative: DolphinScheduler / Airflow-per-team / vendor-specific tools) — YAML-defined DAGs scoped to a single domain project, but **no cross-project asset linking**. Each domain becomes an island; cross-domain deps are duct-taped with time-based waits.
-- **A Python-flow tool for MLOps / data-science** (representative: Prefect / vanilla Airflow / bespoke Python) — often deployed per-team and hitting scale ceilings. Per-team instances can't interconnect, so ML features derived from central marts either duplicate the upstream logic or fall out of sync.
+- **A Python-flow tool for MLOps / data-science** (representative: vanilla Airflow / bespoke Python) — often deployed per-team and hitting scale ceilings. Per-team instances can't interconnect, so ML features derived from central marts either duplicate the upstream logic or fall out of sync.
 
 Dagster+ replaces all three with one asset graph, one control plane, one alert path. What replaces what depends on the specific tools in play — the community components cover the common shapes:
 
@@ -157,7 +157,7 @@ Every downstream BI asset becomes a first-class node in the Dagster graph. When 
 
 **SDA vs task-scheduling head-to-head:**
 
-Task-scheduling (Prefect / Airflow / Autosys) treats each step as an anonymous unit of work. SDA treats each step as a named data asset with typed dependencies + observability + independent materialization.
+Task-scheduling (Airflow / Autosys / legacy job schedulers) treats each step as an anonymous unit of work. SDA treats each step as a named data asset with typed dependencies + observability + independent materialization.
 
 **Demo**: the `data_vault_hub_link_satellite` community component takes ONE config and emits 2–3 SDAs (hub + sat + optional link) with:
 - `hash_key`, `hash_diff`, `load_date`, `record_source` system columns auto-populated
@@ -225,7 +225,7 @@ Metadata mapping capabilities — every asset's `metadata` dict is a lineage-lin
 
 ### 7. Orchestration: MLOps PySpark — migrating from a Python-flow tool
 
-For teams migrating off a Python-flow orchestrator (Prefect, vanilla Airflow, bespoke Python) the concept mapping is one-to-one:
+For teams migrating off a Python-flow orchestrator (vanilla Airflow, bespoke Python) the concept mapping is one-to-one:
 
 | Python-flow concept | Dagster equivalent |
 |---|---|

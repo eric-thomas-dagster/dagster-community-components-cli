@@ -2,18 +2,64 @@
 
 The three components in this walkthrough exist to turn a RAG stack from "a pipeline that occasionally writes tables" into "a set of stateful entities that evolve over time, each with a materialization history, a freshness policy, a quality check, and a rollback path."
 
-That's the shape Dagster gives you that Prefect / vanilla LangGraph / imperative flow tools don't have a primitive for.
+Dagster's asset primitive is what makes that shape expressible: every artifact — the corpus, the vector index, the retrieval-quality score, the prompt — becomes a first-class thing with lineage, versions, and checks.
 
-## Two ways to do RAG in Dagster
+## Two ways to do RAG in this collection
 
-There are two RAG stories in the registry — pick the one that matches your intent:
+Pick the one that matches your intent:
 
 | Shape | Component(s) | When to reach for it |
 |---|---|---|
-| **Simple RAG** — one asset that does embed + retrieve + generate | [`RAGPipelineComponent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/rag_pipeline) | "I just want RAG working in Dagster." One YAML → answer. Great on-ramp; not the differentiator vs Prefect. |
+| **Simple RAG** — one asset that does embed + retrieve + generate | [`RAGPipelineComponent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/rag_pipeline) | "I just want RAG working in Dagster." One YAML → answer. Fast on-ramp for a proof of concept. |
 | **Stateful RAG** — corpus / snapshot / eval as separate assets | `document_corpus` + `vector_index_snapshot` + `rag_eval` (this walkthrough) | Production RAG: corpus provenance, immutable index snapshots, retrieval-quality gates, backfillable eval, partition-selectable rollback. Every stateful entity is a first-class asset. |
 
 If you're prototyping, start with `RAGPipelineComponent`. If you're taking RAG to prod — where "which docs answered this question last Tuesday?" and "why did retrieval quality drop overnight?" become real questions — the three components below are the shape.
+
+### Simple RAG — asset graph
+
+One asset with everything inside. Great for demos and prototypes; no state to browse between runs.
+
+```
+                             ┌──────────────────────────┐
+   user query  ──────────▶   │   rag_answer            │  ──────▶  answer + sources
+   (config)                  │   (RAGPipelineComponent) │
+                             │   • embed query          │
+                             │   • search vector store  │
+                             │   • LLM generation       │
+                             └──────────────────────────┘
+```
+
+### Stateful RAG — asset graph (this walkthrough)
+
+Every artifact is a named, versioned asset. `snapshot_id` is a partition key, so each downstream run picks a specific snapshot — that's the rollback edge.
+
+```
+    ┌───────────────────┐
+    │ docs_corpus       │  metadata: doc_count, total_bytes, corpus_hash, ingested_at
+    │ (DocumentCorpus)  │  asset_check: min_doc_count
+    └────────┬──────────┘
+             │  every materialization → new corpus_hash
+             ▼
+    ┌───────────────────────────────┐
+    │ docs_index                    │  metadata: snapshot_id, snapshot_path, corpus_hash,
+    │ (VectorIndexSnapshot)         │            chunk_count, dimension, embedder
+    │                               │  side-effect: registers dynamic partition
+    └────────┬──────────────────────┘            `rag_snapshot=<snapshot_id>`
+             │  every materialization → new
+             │  immutable snapshot dir on disk
+             ▼                                    (partitions: <snap_v1>, <snap_v2>, ...)
+    ┌───────────────────────────────┐
+    │ docs_eval                     │  partitioned by rag_snapshot
+    │ (RagEval)                     │  metadata: precision_at_k, n_queries, k
+    │                               │  ┌───────────────────────────────────────────────┐
+    │                               │  │ asset_check: retrieval_quality_check          │
+    │                               │──│   FAILS if score < min OR regresses vs prior  │
+    └───────────────────────────────┘  │   → downstream runs blocked                   │
+                                       └───────────────────────────────────────────────┘
+
+    Rollback:   dg launch --assets <downstream> --partition <older_snapshot_id>
+    Backfill:   dagster asset backfill --assets docs_eval --partition-range v1...vN
+```
 
 ## Components
 
@@ -66,17 +112,14 @@ That resolves upstream to yesterday's `vector_index_snapshot` materialization, r
 
 Same story for **backfills**: `dagster asset backfill --assets rag_answer --partition-range v1...v42` re-runs the answer asset against every snapshot in the range. Useful for regression investigations ("which snapshot introduced the drop?") or for repointing at a known-good partition after a rollout.
 
-## Contrast against Prefect / an imperative flow
+## What you get end-to-end
 
-An imperative RAG flow can:
-- Run embed → retrieve → generate as tasks. ✓
-- Log a precision@k metric each run. ✓
+Beyond running embed → retrieve → generate, the stateful shape gives you:
 
-It cannot natively:
-- Track "corpus at time T" as a first-class entity distinct from "the flow that runs at time T." No `corpus_hash` provenance edge.
-- Address a past index snapshot **as a partition key** in the graph. Rollback requires filesystem restore + code changes.
-- Block downstream on a quality-regression check — the metric is a log line, not a run gate.
-- **Backfill quality across every historical snapshot in one command** — you'd script it manually against your own metrics store.
+- **"Corpus at time T" as a first-class entity** distinct from "the run that materialized it," carrying a stable `corpus_hash` that every downstream artifact traces back to.
+- **Past index snapshots addressable as partition keys** in the graph. Rollback is a partition selector, not a filesystem restore or code change.
+- **Downstream gated on the quality check.** Bad snapshots don't advance to answer generation — the regression is caught as data, not surfaced later from a customer complaint.
+- **Backfill quality across every historical snapshot in one command** — `dagster asset backfill --assets docs_eval --partition-range v1...v42`. No bespoke metrics store.
 
 ## Extending
 
