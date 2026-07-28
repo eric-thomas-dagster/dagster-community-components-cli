@@ -331,6 +331,6 @@ lands in `output_queue.jsonl` with the new vars.
 
 ## Related walkthroughs
 
-- `dbt_ml_pipeline.md` — Python ML asset between two dbt models
-- `dbt_llm_pipeline.md` — LLM-augmented dbt transforms
-- `warehouse_migration.md` — one-time legacy DB → warehouse migration
+- [dbt_ml_pipeline](dbt_ml_pipeline.md) — Python ML asset between two dbt models
+- [dbt_llm_pipeline](dbt_llm_pipeline.md) — LLM-augmented dbt transforms
+- [warehouse_migration](warehouse_migration.md) — one-time legacy DB → warehouse migration

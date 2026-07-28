@@ -90,5 +90,5 @@ The two engines fork from the same codebase and remain wire-protocol-compatible.
 ## Related
 
 - `examples/README.md` — the demo TOC
-- `clickhouse.md` — the same round-trip pattern for ClickHouse
+- [clickhouse](clickhouse.md) — the same round-trip pattern for ClickHouse
 - Component registry pages: `doris_workspace`, `starrocks_resource`, etc.

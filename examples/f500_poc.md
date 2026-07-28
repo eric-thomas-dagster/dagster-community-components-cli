@@ -503,8 +503,8 @@ Everything the F500 stack requires ships as either a community component (from t
 
 ## Related walkthroughs
 
-- `cognos.md` — mock Cognos in Docker (no creds); wire the BI leg of this POC to a real (mocked) Cognos server.
-- `warehouse_migration.md` — legacy DB → cloud warehouse (SCT / SSMA style, but component-driven).
-- `snowflake_workspace.md` — the same StateBackedComponent shape for Snowflake.
+- [cognos](cognos.md) — mock Cognos in Docker (no creds); wire the BI leg of this POC to a real (mocked) Cognos server.
+- [warehouse_migration](warehouse_migration.md) — legacy DB → cloud warehouse (SCT / SSMA style, but component-driven).
+- [snowflake_workspace](snowflake_workspace.md) — the same StateBackedComponent shape for Snowflake.
 - Per-vendor workspace walkthroughs: `qlik_replicate.md`, `tm1.md`, `qlik_compose.md`, `jde.md`, `cognos.md`.
 - Official [`dagster-looker`](https://docs.dagster.io/integrations/libraries/looker/dagster-looker) — for wiring a real Looker instance into the BI leg.

@@ -91,4 +91,4 @@ Use these components when JDE is your ERP and Orchestrator is deployed.
 
 ## Related walkthroughs
 
-- `qlik_replicate.md`, `qlik_compose.md`, `tm1.md` — same 5-component shape for other enterprise systems
+- [qlik_replicate](qlik_replicate.md), [qlik_compose](qlik_compose.md), [tm1](tm1.md) — same 5-component shape for other enterprise systems

@@ -75,7 +75,7 @@ attributes:
 
 ## Related walkthroughs
 
-- `qlik_replicate.md`, `qlik_compose.md`, `tm1.md`, `jde.md` — same 5-component shape for other enterprise systems
+- [qlik_replicate](qlik_replicate.md), [qlik_compose](qlik_compose.md), [tm1](tm1.md), [jde](jde.md) — same 5-component shape for other enterprise systems
 
 ## Prospect coverage (this session's arc)
 

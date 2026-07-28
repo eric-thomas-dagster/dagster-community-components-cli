@@ -56,4 +56,4 @@ docker stop dagster_couchdb_demo && docker rm dagster_couchdb_demo
 
 ## Related
 
-- `mongodb.md`, `neo4j.md`, `cassandra.md` — same round-trip pattern for other NoSQL stores
+- [mongodb](mongodb.md), [neo4j](neo4j.md), [cassandra](cassandra.md) — same round-trip pattern for other NoSQL stores

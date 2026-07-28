@@ -137,5 +137,5 @@ attributes:
 ## Related
 
 - Official [`dagster-mlflow`](https://docs.dagster.io/integrations/libraries/mlflow/dagster-mlflow) — the tracking side
-- `dbt_ml_pipeline.md` — flagship dbt + ML + dbt "why Dagster over Airflow"
-- `dbt_queue_driven.md` — message-driven dbt orchestration
+- [dbt_ml_pipeline](dbt_ml_pipeline.md) — flagship dbt + ML + dbt "why Dagster over Airflow"
+- [dbt_queue_driven](dbt_queue_driven.md) — message-driven dbt orchestration

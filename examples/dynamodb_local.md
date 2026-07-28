@@ -79,4 +79,4 @@ The same `defs.yaml` files work unchanged — the emulator's whole value proposi
 
 ## Related
 
-- `mongodb.md`, `couchdb.md`, `neo4j.md`, `cassandra.md` — same round-trip pattern for other NoSQL stores
+- [mongodb](mongodb.md), [couchdb](couchdb.md), [neo4j](neo4j.md), [cassandra](cassandra.md) — same round-trip pattern for other NoSQL stores

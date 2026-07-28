@@ -75,5 +75,5 @@ attributes:
 
 ## Related walkthroughs
 
-- `qlik_replicate.md` — CDC counterpart
+- [qlik_replicate](qlik_replicate.md) — CDC counterpart
 - `tm1.md` — IBM Planning Analytics with the same 5-component shape
