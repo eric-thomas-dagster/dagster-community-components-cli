@@ -18,20 +18,20 @@ Which walkthrough you want depends on where you are in the RAG journey.
 
 ## Asset-graph shapes at a glance
 
-**Retrieve-then-generate (`rag_complete` / `vector_rag` / `supabase_rag`):**
+**Retrieve-then-generate ([RAG complete](rag_complete.md) / [Vector / RAG](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)):**
 
 ```
 corpus → chunk → embed → index → retrieve → rerank → LLM answer
 ```
 
-**State-tracking (`rag_state`, and overlay in `rag_complete`):**
+**State-tracking ([RAG state-tracking](rag_state.md), and overlay in [RAG complete](rag_complete.md)):**
 
 ```
 corpus → snapshot (per-materialization partition) → eval[snapshot_id]
                                                     (asset_check gates regressions)
 ```
 
-**Planner + specialists (`rag_supervisor`):**
+**Planner + specialists ([RAG supervisor](rag_supervisor.md)):**
 
 ```
                     ┌── specialist_a_result ──┐
@@ -41,10 +41,10 @@ task → plan  ───────┼── specialist_b_result ──┼─�
 
 ## Recommended reading order
 
-1. **`rag_state.md`** — corpus + snapshot + eval, no API keys, ~3 min. See what an asset-check-gated regression looks like.
-2. **`rag_complete.md`** — same corpus as `rag_state`, plus a full retrieve-then-generate pipeline running alongside. See every step of the pipeline as its own asset.
-3. **`rag_supervisor.md`** — different orchestration pattern. Read this when a single retrieval isn't enough and you need a planner + specialists.
-4. **`vector_rag.md` / `supabase_rag.md`** — reach for these when your target vector store (ChromaDB with conversation memory / pgvector on Supabase) is the deciding factor.
+1. **[RAG state-tracking](rag_state.md)** — corpus + snapshot + eval, no API keys, ~3 min. See what an asset-check-gated regression looks like.
+2. **[RAG complete](rag_complete.md)** — same corpus as RAG state-tracking, plus a full retrieve-then-generate pipeline running alongside. See every step of the pipeline as its own asset.
+3. **[RAG supervisor](rag_supervisor.md)** — different orchestration pattern. Read this when a single retrieval isn't enough and you need a planner + specialists.
+4. **[Vector / RAG](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)** — reach for these when your target vector store (ChromaDB with conversation memory / pgvector on Supabase) is the deciding factor.
 
 ## The RAG component palette
 
