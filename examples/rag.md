@@ -10,28 +10,28 @@ Which walkthrough you want depends on where you are in the RAG journey.
 
 | Walkthrough | Shape | Requires | When |
 |---|---|---|---|
-| **[rag_state.md](rag_state.md)** | Corpus → snapshot → eval (3 assets). Includes an **injected regression** that trips the retrieval-quality asset check on its own. | No keys | You need retrieval-quality regressions to block downstream automatically, or you want rollback to a past index snapshot via partition selection. |
-| **[rag_complete.md](rag_complete.md)** | Full pipeline: chunker → embeddings → vector store → retrieval → rerank → LLM answer, **plus** a state-tracking overlay (corpus + snapshot + eval) on the same corpus. | No key up through `reranked`; OpenAI-compatible for final answer | You're building a full retrieve-then-generate pipeline over your own docs and want to see every step as its own asset before adapting it. |
-| **[rag_supervisor.md](rag_supervisor.md)** | Planner LLM reads a task, picks specialists from a bounded YAML-declared set, each pick is its own asset; a synthesizer combines. | OpenAI-compatible | Your task needs multiple specialist responses instead of one retrieval, and you need every routing decision inspectable weeks later. |
-| **[vector_rag.md](vector_rag.md)** | Classic embed → retrieve → rerank → RAG mega-demo, plus `conversation_memory` for multi-turn. | OpenAI | You want the classic OpenAI + ChromaDB + rerank stack with multi-turn conversation memory. |
-| **[supabase_rag.md](supabase_rag.md)** | pgvector-backed RAG on a local Supabase instance. | OpenAI + local Supabase CLI | Your target vector store is Postgres/pgvector — you want a real DB backing the index, not an embedded one. |
+| **[RAG as State, not as a Pipeline](rag_state.md)** | Corpus → snapshot → eval (3 assets). Includes an **injected regression** that trips the retrieval-quality asset check on its own. | No keys | You need retrieval-quality regressions to block downstream automatically, or you want rollback to a past index snapshot via partition selection. |
+| **[End-to-End RAG in Dagster](rag_complete.md)** | Full pipeline: chunker → embeddings → vector store → retrieval → rerank → LLM answer, **plus** a state-tracking overlay (corpus + snapshot + eval) on the same corpus. | No key up through `reranked`; OpenAI-compatible for final answer | You're building a full retrieve-then-generate pipeline over your own docs and want to see every step as its own asset before adapting it. |
+| **[Planner + Specialists — When One Retrieval Isn't Enough](rag_supervisor.md)** | Planner LLM reads a task, picks specialists from a bounded YAML-declared set, each pick is its own asset; a synthesizer combines. | OpenAI-compatible | Your task needs multiple specialist responses instead of one retrieval, and you need every routing decision inspectable weeks later. |
+| **[Vector / RAG mega-demo](vector_rag.md)** | Classic embed → retrieve → rerank → RAG mega-demo, plus `conversation_memory` for multi-turn. | OpenAI | You want the classic OpenAI + ChromaDB + rerank stack with multi-turn conversation memory. |
+| **[Supabase pgvector RAG](supabase_rag.md)** | pgvector-backed RAG on a local Supabase instance. | OpenAI + local Supabase CLI | Your target vector store is Postgres/pgvector — you want a real DB backing the index, not an embedded one. |
 
 ## Asset-graph shapes at a glance
 
-**Retrieve-then-generate ([RAG complete](rag_complete.md) / [Vector / RAG](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)):**
+**Retrieve-then-generate ([End-to-End RAG in Dagster](rag_complete.md) / [Vector / RAG mega-demo](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)):**
 
 ```
 corpus → chunk → embed → index → retrieve → rerank → LLM answer
 ```
 
-**State-tracking ([RAG state-tracking](rag_state.md), and overlay in [RAG complete](rag_complete.md)):**
+**State-tracking ([RAG as State, not as a Pipeline](rag_state.md), and overlay in [End-to-End RAG in Dagster](rag_complete.md)):**
 
 ```
 corpus → snapshot (per-materialization partition) → eval[snapshot_id]
                                                     (asset_check gates regressions)
 ```
 
-**Planner + specialists ([RAG supervisor](rag_supervisor.md)):**
+**Planner + specialists ([Planner + Specialists — When One Retrieval Isn't Enough](rag_supervisor.md)):**
 
 ```
                     ┌── specialist_a_result ──┐
@@ -41,10 +41,10 @@ task → plan  ───────┼── specialist_b_result ──┼─�
 
 ## Recommended reading order
 
-1. **[RAG state-tracking](rag_state.md)** — corpus + snapshot + eval, no API keys, ~3 min. See what an asset-check-gated regression looks like.
-2. **[RAG complete](rag_complete.md)** — same corpus as RAG state-tracking, plus a full retrieve-then-generate pipeline running alongside. See every step of the pipeline as its own asset.
-3. **[RAG supervisor](rag_supervisor.md)** — different orchestration pattern. Read this when a single retrieval isn't enough and you need a planner + specialists.
-4. **[Vector / RAG](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)** — reach for these when your target vector store (ChromaDB with conversation memory / pgvector on Supabase) is the deciding factor.
+1. **[RAG as State, not as a Pipeline](rag_state.md)** — corpus + snapshot + eval, no API keys, ~3 min. See what an asset-check-gated regression looks like.
+2. **[End-to-End RAG in Dagster](rag_complete.md)** — same corpus as the state-tracking demo, plus a full retrieve-then-generate pipeline running alongside. See every step of the pipeline as its own asset.
+3. **[Planner + Specialists — When One Retrieval Isn't Enough](rag_supervisor.md)** — different orchestration pattern. Read this when a single retrieval isn't enough and you need a planner + specialists.
+4. **[Vector / RAG mega-demo](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)** — reach for these when your target vector store (ChromaDB with conversation memory / pgvector on Supabase) is the deciding factor.
 
 ## The RAG component palette
 

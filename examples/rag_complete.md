@@ -1,4 +1,4 @@
-# rag_complete — the full RAG stack end-to-end
+# End-to-End RAG in Dagster
 
 Two parallel RAG paths over the same 5-doc corpus, in one Dagster project. Runs no-key by default; drop in an OpenAI-compatible key to enable the final LLM answer step.
 

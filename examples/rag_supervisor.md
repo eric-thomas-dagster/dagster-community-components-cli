@@ -1,4 +1,4 @@
-# rag_supervisor — planner picks specialists, each specialist is an asset
+# Planner + Specialists — When One Retrieval Isn't Enough
 
 A different orchestration shape than the classic retrieve-then-generate pipeline. Instead of one linear chain, a **planner LLM** reads the task, picks specialist tools from a bounded YAML-declared set, and **each pick becomes its own named asset**. A synthesizer LLM combines the invoked tools' outputs into a final grounded answer.
 
