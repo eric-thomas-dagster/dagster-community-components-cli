@@ -64,6 +64,7 @@ The full depth catalog by what-it-needs-to-run follows.
   - [Media transforms](#media-transforms)
   - [AI / NLP (no auth required)](#ai--nlp-no-auth-required)
   - [AI / NLP — via Vercel AI Gateway (one key, any provider)](#ai--nlp--via-vercel-ai-gateway-one-key-any-provider)
+  - [RAG (retrieval-augmented generation)](#rag-retrieval-augmented-generation)
   - [Cloud observability + enterprise SaaS](#cloud-observability--enterprise-saas)
   - [Durable workflow orchestration (Temporal)](#durable-workflow-orchestration-temporal)
 - [Azure (subscription required)](#azure-subscription-required)
@@ -345,6 +346,21 @@ Most demos below default to OpenAI's `gpt-4o-mini` (cheapest, most permissive ra
 | [Vision pipeline](vision_pipeline.md) | `synthetic_image_generator`, `image_metadata_extractor`, `vision_model` | **Anthropic (native — Claude vision)** | Vision component uses Claude's vision endpoint. Image metadata + LLM description as two chained assets. |
 | [LiteLLM Multi-Provider](litellm_multi_provider.md) | `litellm_inference_asset` (× 2 providers side-by-side), `synthetic_data_generator`, `dataframe_join`, `dataframe_to_csv` | **Any (LiteLLM: OpenAI / Anthropic / Gemini / Groq / Bedrock / …)** | Point at as many providers as you have keys for; runs each independently and joins outputs for side-by-side comparison. Validated Gemini + OpenAI. |
 | [Vercel AI Gateway Agent](vercel_ai_gateway_agent.md) | `vercel_ai_gateway_agent` | **Any (single Vercel `vck_*` key)** | One Vercel gateway key routes to OpenAI / Anthropic / Google / xAI / Groq / etc. via `<provider>/<model>` strings, with optional fallback chain. Live-validated across three providers. |
+
+### RAG (retrieval-augmented generation)
+
+**Start here 👉 [RAG walkthrough index (`rag.md`)](rag.md)** — one landing page with a chooser table across all five RAG walkthroughs, ASCII asset-graph diagrams of the three shapes (retrieve-then-generate, state-tracking, planner-plus-specialists), a recommended reading order, and the RAG component palette (~40 components across sources / chunking / embeddings / vector stores / reranking / retrieval / agents / evaluators / memory / document extraction).
+
+The five walkthroughs the landing page points at:
+
+| Demo | Components | Requires | Highlights |
+|---|---|---|---|
+| [**RAG (start here — landing page)**](rag.md) | — | — | Chooser + component palette; the single page to send a RAG-curious teammate to. |
+| [RAG state-tracking (corpus → snapshot → eval)](rag_state.md) | `document_corpus`, `vector_index_snapshot`, `rag_eval` | **No keys** — ChromaDB bundled ONNX embedder | Every RAG artifact as versioned state. Includes an **injected regression** — strip a term from one doc, watch the next snapshot's retrieval-quality asset check fail on its own. Retrieval-only eval, no LLM cost. Rollback = partition selector. ~3 min. |
+| [RAG complete (full stack + state-tracking overlay)](rag_complete.md) | `DocumentCorpus`, `DocumentChunker`, `EmbeddingsGenerator`, `VectorStoreWriter`, `VectorStoreQuery`, `Reranker`, `LLMPromptExecutor`, `VectorIndexSnapshot`, `RagEval`, `DataframeFromCsv` | **No key** up through `reranked`; OpenAI-compatible for the LLM answer step | Two parallel paths over one 5-doc corpus: Path A = state-tracking (corpus → snapshot → eval); Path B = decomposed pipeline (chunker → embed → index → retrieve → rerank → LLM). Every component in the RAG stack as its own asset. Live-validated end-to-end. |
+| [RAG supervisor (planner + specialists + synthesizer)](rag_supervisor.md) | `DocumentCorpus`, `SupervisorAgent` (with 3 tool personas) | **OpenAI-compatible key** | Planner LLM reads a multi-facet task, picks specialists from a bounded YAML-declared set, each pick fans out to its own asset (specialist LLM persona), synthesizer combines. Every runtime routing decision is a named, replayable asset. Live-validated — planner picked 3 of 3, synthesizer combined into a 4-sentence recommendation. ~$0.005/run. |
+| [Vector / RAG (mega-demo)](vector_rag.md) | `embeddings_generator`, `vector_store_writer`, `vector_store_query`, `reranker`, `rag_pipeline`, `conversation_memory` | **OpenAI** | Classic RAG stack in one project: OpenAI embeddings + ChromaDB + rerank + `rag_pipeline` for end-to-end retrieve+generate + `conversation_memory` for multi-turn. |
+| [Supabase pgvector RAG](supabase_rag.md) | `TextEmbeddingAsset`, `SupabaseResource`, `SupabaseVectorSearchAsset`, `LangChainChainAsset` | **OpenAI + local Supabase CLI** | Real pgvector RPC (cosine similarity via `<=>`); local Supabase via the official CLI. 1536-d OpenAI embeddings + LLM grounded on top-k retrieval. |
 
 ### Semantic layer (Cube)
 
