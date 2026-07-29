@@ -240,6 +240,10 @@ attributes:
   query_text_column: question
   top_k: 3
   include_distances: true
+  # Ordering-only dep so the asset graph shows retrieval reading from the index.
+  # Chroma path is loaded via connection_string, not via context.load_asset_value.
+  deps:
+    - docs_vector_index
   group_name: path_b_decomposed
 YAML
 
