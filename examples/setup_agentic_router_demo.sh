@@ -54,7 +54,7 @@ export DAGSTER_HOME="$PROJECT_ABS/.dagster_home"
 mkdir -p "$DAGSTER_HOME"
 
 # --- 3. Install deps ------------------------------------------------------
-uv add -q "$DCC_SRC" pandas openai duckdb
+uv add -q "$DCC_SRC" pandas openai duckdb dagster-duckdb requests
 
 # --- 4. Seed source + working dirs (Windows-portable) ---------------------
 mkdir -p data approvals courier_bookings compensations audit
@@ -66,6 +66,35 @@ c2,Bob,AF200 JFK→CDG,BAG-002,Bag missing 3 days now — no updates from airlin
 c3,Carol,DL300 SFO→JFK,BAG-003,Airline confirms bag is at JFK; need it delivered to my home.
 CSV
 
+# Seed a REAL DuckDB baggage_tracking table. The router's query_baggage_db
+# tool queries this instead of an LLM-roleplayed system prompt — this is how
+# a real customer would wire it: tool → resource → real database.
+uv run python - <<'PY'
+import duckdb
+con = duckdb.connect("data/baggage.duckdb")
+con.execute("""
+    CREATE TABLE IF NOT EXISTS baggage_tracking (
+        baggage_id       VARCHAR PRIMARY KEY,
+        last_scanned_at  VARCHAR,
+        hours_since_scan INT,
+        status           VARCHAR,
+        eta_hours        VARCHAR,
+        delivery_address VARCHAR
+    );
+""")
+con.execute("DELETE FROM baggage_tracking;")
+con.executemany(
+    "INSERT INTO baggage_tracking VALUES (?,?,?,?,?,?)",
+    [
+        ("BAG-001", "ORD",  6, "in_transit_to_LHR",  "4",  "12 Baker St, London W1U 3BE"),
+        ("BAG-002", "CDG", 72, "not_found",          "NA", "NA"),
+        ("BAG-003", "JFK",  2, "awaiting_delivery",  "NA", "123 Main St, Brooklyn NY 11201"),
+    ],
+)
+con.close()
+print("seeded data/baggage.duckdb with 3 baggage records")
+PY
+
 APPROVAL_DIR="$PROJECT_ABS/approvals"
 COURIER_DIR="$PROJECT_ABS/courier_bookings"
 COMPENSATIONS_DIR="$PROJECT_ABS/compensations"
@@ -74,6 +103,17 @@ COMPENSATIONS_DIR="$PROJECT_ABS/compensations"
 PKG="$(ls src/ | head -1)"
 DEFS="src/$PKG/defs"
 CASES="c1,c2,c3"
+
+# 5.0 DuckDB resource — the "legacy" baggage tracking DB. The router's
+# query_baggage_db tool uses tool_type: sql + this resource for real
+# lookups instead of LLM roleplay.
+mkdir -p "$DEFS/baggage_db"
+cat > "$DEFS/baggage_db/defs.yaml" <<YAML
+type: dagster_community_components.DuckDBResourceComponent
+attributes:
+  resource_key: baggage_db
+  database: ${PROJECT_ABS}/data/baggage.duckdb
+YAML
 
 # 5.1 Source — the 3 baggage reports.
 mkdir -p "$DEFS/baggage_reports"
@@ -124,14 +164,16 @@ attributes:
 
   tools:
     - name: query_baggage_db
-      description: "Query the baggage tracking database. Args: baggage_id."
-      system_message: |
-        You are the baggage tracking database. Respond ONLY with the record — no commentary.
-        Current DB contents:
-          BAG-001: last_scanned_at=ORD, hours_since_scan=6, status=in_transit_to_LHR, eta_hours=4, delivery_address="12 Baker St, London W1U 3BE"
-          BAG-002: last_scanned_at=CDG, hours_since_scan=72, status=not_found, eta_hours=NA, delivery_address=NA
-          BAG-003: last_scanned_at=JFK, hours_since_scan=2, status=awaiting_delivery, eta_hours=NA, delivery_address="123 Main St, Brooklyn NY 11201"
-        Format: "baggage_id=<id>; status=<status>; last_scanned_at=<code>; delivery_address=<address or NA>"
+      description: "Query the baggage tracking database. Args: baggage_id (e.g. BAG-001)."
+      # REAL SQL against a Dagster-managed DuckDB resource. The planner emits
+      # args (like "BAG-001") and the router executes this query with {args}
+      # substituted. Rows are returned to the planner as pipe-delimited text.
+      tool_type: sql
+      resource: baggage_db
+      sql_template: |
+        SELECT baggage_id, status, last_scanned_at, hours_since_scan, eta_hours, delivery_address
+        FROM baggage_tracking
+        WHERE baggage_id = '{args}'
 
     - name: inquire_with_airport
       description: "Send a lookup to a specific airport. Args: airport_code (IATA)."
