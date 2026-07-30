@@ -210,12 +210,32 @@ attributes:
         Simulate a terse passenger reply. Respond: "passenger_reply=<one sentence>"
 
   outputs:
+    # Each branch declares its own payload schema. The classifier extracts
+    # these fields from the ReAct trajectory (mainly the tool outputs) and
+    # emits a per-branch DataFrame downstream sinks can write directly.
     - name: delivery_request
-      description: "The agent successfully organized delivery. Emit for cases where a bag was located AND delivered."
+      description: "Bag was located and delivery was successfully organized. Emit when organize_delivery + inform_passenger were called."
+      output_schema:
+        baggage_id: "The BAG-* id from the query_baggage_db output"
+        passenger: "Passenger name from the case metadata"
+        address: "Delivery address from query_baggage_db"
+        delivery_id: "D<digits> from organize_delivery output"
+        eta_hours: "scheduled_eta_hours from organize_delivery output (integer)"
+
     - name: voucher_issued
-      description: "A care voucher was sent because the bag wasn't immediately deliverable. Emit for voucher cases."
+      description: "A care voucher was sent because the bag wasn't immediately deliverable. Emit when send_care_voucher was called."
+      output_schema:
+        passenger: "Passenger name (id passed to send_care_voucher)"
+        amount_usd: "The voucher amount (integer, e.g. 75)"
+        voucher_id: "V<digits> from send_care_voucher output"
+        reason: "One-line reason: why the voucher was issued"
+
     - name: escalation
-      description: "The case needs human review. Emit for cases where the bag is lost, awaiting passenger response, or otherwise unresolved."
+      description: "The case needs human review. Emit when the agent gave up OR requested more info from the passenger."
+      output_schema:
+        case_summary: "One-sentence summary of what happened"
+        needs_action: "What the human reviewer needs to do next"
+        urgency: "low | medium | high"
 YAML
 
 # 5.3 Downstream sink for delivery_request cases.
