@@ -130,7 +130,12 @@ attributes:
   chunk_overlap: 50
   embedder_provider: chromadb_default
   collection_name: docs
+  # Partition this asset by the same dynamic-partitions def it registers keys
+  # on for downstream. Each partition_key = one snapshot_id = one immutable
+  # ChromaDB dir. `dg launch --assets docs_index_snapshot --partition snap_v3`
+  # materializes exactly that snapshot; downstream docs_eval[snap_v3] finds it.
   dynamic_partition_name: rag_snapshot
+  partition_this_asset: true
   group_name: path_a_state_tracking
 YAML
 
@@ -212,7 +217,13 @@ attributes:
   group_name: path_b_decomposed
 YAML
 
-# Query embeddings — same model as chunk_embeddings
+# Query chain is partitioned by query_id (static: q1, q2, q3).
+# Each downstream asset filters upstream to its partition's row via
+# partition_static_column, so materializing --partition q2 processes only
+# the row where query_id=q2. Backfill across all 3: dagster asset backfill.
+QUERY_PARTITIONS="q1,q2,q3"
+
+# Query embeddings — partitioned per query
 mkdir -p "$DEFS/query_embeddings"
 cat > "$DEFS/query_embeddings/defs.yaml" <<YAML
 type: dagster_community_components.EmbeddingsGeneratorComponent
@@ -223,10 +234,13 @@ attributes:
   provider: sentence_transformers
   model: all-MiniLM-L6-v2
   batch_size: 32
+  partition_type: static
+  partition_values: "${QUERY_PARTITIONS}"
+  partition_static_column: query_id
   group_name: path_b_decomposed
 YAML
 
-# Retrieval — top-k against docs_vector_index
+# Retrieval — top-k against docs_vector_index, per query partition
 mkdir -p "$DEFS/retrieved"
 cat > "$DEFS/retrieved/defs.yaml" <<YAML
 type: dagster_community_components.VectorStoreQueryComponent
@@ -244,10 +258,13 @@ attributes:
   # Chroma path is loaded via connection_string, not via context.load_asset_value.
   deps:
     - docs_vector_index
+  partition_type: static
+  partition_values: "${QUERY_PARTITIONS}"
+  partition_static_column: query_id
   group_name: path_b_decomposed
 YAML
 
-# Reranker — cross-encoder local (no key)
+# Reranker — cross-encoder local (no key), per query partition
 mkdir -p "$DEFS/reranked"
 cat > "$DEFS/reranked/defs.yaml" <<YAML
 type: dagster_community_components.RerankerComponent
@@ -260,11 +277,13 @@ attributes:
   query_column: query
   text_column: document
   top_n: 3
+  partition_type: static
+  partition_values: "${QUERY_PARTITIONS}"
+  partition_static_column: query_id
   group_name: path_b_decomposed
 YAML
 
-# LLM answer — needs OPENAI_API_KEY. Written unconditionally; without a key,
-# the step will fail at run time but everything above still materializes.
+# LLM answer — needs OPENAI_API_KEY. Per query partition.
 mkdir -p "$DEFS/rag_answer"
 cat > "$DEFS/rag_answer/defs.yaml" <<YAML
 type: dagster_community_components.LLMPromptExecutorComponent
@@ -284,6 +303,9 @@ attributes:
     Answer:
   temperature: 0.2
   max_tokens: 300
+  partition_type: static
+  partition_values: "${QUERY_PARTITIONS}"
+  partition_static_column: query_id
   group_name: path_b_decomposed
 YAML
 
@@ -293,37 +315,79 @@ if ! uv run dg check defs 2>&1 | tail -8; then
   echo "    ✗ dg check failed"; exit 1
 fi
 
-# --- 8. Path A — materialize corpus + snapshot + eval ---------------------
+# --- 8. Path A — corpus + snapshot v1 + eval v1 ---------------------------
+# Both docs_index_snapshot AND docs_eval are partitioned by rag_snapshot.
+# We pre-register the partition keys, then materialize each per-partition.
+# Snapshot v1 is the baseline; later we inject a regression and materialize v2.
+SNAP1="snap_v1"
+SNAP2="snap_v2"
+
+echo ">>> Registering rag_snapshot partitions: $SNAP1, $SNAP2"
+uv run python - <<PY
+import os
+os.environ["DAGSTER_HOME"] = "$DAGSTER_HOME"
+from dagster import DagsterInstance
+inst = DagsterInstance.get()
+inst.add_dynamic_partitions("rag_snapshot", ["$SNAP1", "$SNAP2"])
+inst.dispose()
+print("registered:", ["$SNAP1", "$SNAP2"])
+PY
+
 echo ""
-echo ">>> Path A: docs_corpus → docs_index_snapshot → docs_eval"
+echo ">>> Path A round 1: docs_corpus → docs_index_snapshot[$SNAP1] → docs_eval[$SNAP1]"
 uv run dg launch --assets docs_corpus 2>&1 | tail -3
-uv run dg launch --assets docs_index_snapshot 2>&1 | tail -3
+uv run dg launch --assets docs_index_snapshot --partition "$SNAP1" 2>&1 | tail -3
+uv run dg launch --assets docs_eval --partition "$SNAP1" 2>&1 | tail -5
 
-SNAP="$(basename "$(readlink snapshots/latest 2>/dev/null || cat snapshots/latest.txt 2>/dev/null)")"
-if [ -z "$SNAP" ]; then echo "✗ snapshot id not resolved"; exit 1; fi
-echo "    snapshot id: $SNAP"
-uv run dg launch --assets docs_eval --partition "$SNAP" 2>&1 | tail -5
-
-# --- 9. Path B — chunker → embed → index → retrieve → rerank -------------
 echo ""
-echo ">>> Path B: chunker → embeddings → vector index → queries → retrieval → rerank"
+echo ">>> Injecting corpus regression (strips 'max_retries' + 'backoff' from retry_policy.md)"
+sed -i.bak \
+  -e 's/max_retries=[0-9]*, //g' \
+  -e 's/, backoff=Backoff\.EXPONENTIAL//g' \
+  -e 's/backoff strategy/policy shape/g' \
+  -e 's/exponential/one-shot/g' \
+  -e 's/max_retries/attempts/g' \
+  -e 's/backoff/timing/g' \
+  docs/retry_policy.md
+rm -f docs/retry_policy.md.bak
+
+echo ""
+echo ">>> Path A round 2: docs_corpus (regressed) → docs_index_snapshot[$SNAP2] → docs_eval[$SNAP2]"
+echo "    (asset check on docs_eval[$SNAP2] should FAIL — retrieval regression caught)"
+uv run dg launch --assets docs_corpus 2>&1 | tail -3
+uv run dg launch --assets docs_index_snapshot --partition "$SNAP2" 2>&1 | tail -3
+uv run dg launch --assets docs_eval --partition "$SNAP2" 2>&1 | tail -8 || true
+
+# --- 9. Path B — chunker → embed → index (unpartitioned; one-time index build)
+echo ""
+echo ">>> Path B unpartitioned prefix: chunker → embeddings → vector index"
 uv run dg launch --assets docs_chunks 2>&1 | tail -3
 uv run dg launch --assets chunk_embeddings 2>&1 | tail -3
 uv run dg launch --assets docs_vector_index 2>&1 | tail -3
 uv run dg launch --assets queries 2>&1 | tail -3
-uv run dg launch --assets query_embeddings 2>&1 | tail -3
-uv run dg launch --assets retrieved 2>&1 | tail -3
-uv run dg launch --assets reranked 2>&1 | tail -3
+
+# Path B query chain — partitioned by query_id [q1, q2, q3]. Materialize each.
+echo ""
+echo ">>> Path B partitioned query chain: [q1, q2, q3] per query_embeddings/retrieved/reranked"
+for QID in q1 q2 q3; do
+  echo "    ─── query partition: $QID ───"
+  uv run dg launch --assets query_embeddings --partition "$QID" 2>&1 | tail -2
+  uv run dg launch --assets retrieved       --partition "$QID" 2>&1 | tail -2
+  uv run dg launch --assets reranked        --partition "$QID" 2>&1 | tail -2
+done
 
 # --- 10. Optional: LLM answer step (needs OPENAI_API_KEY) ----------------
 if [ -n "$OPENAI_API_KEY" ]; then
   echo ""
-  echo ">>> LLM answer step (OPENAI_API_KEY detected)"
-  uv run dg launch --assets rag_answer 2>&1 | tail -6
+  echo ">>> LLM answer step per query partition (OPENAI_API_KEY detected)"
+  for QID in q1 q2 q3; do
+    echo "    ─── rag_answer partition: $QID ───"
+    uv run dg launch --assets rag_answer --partition "$QID" 2>&1 | tail -3
+  done
 else
   echo ""
   echo "    (skipping rag_answer — OPENAI_API_KEY not set. Everything through 'reranked' materialized;"
-  echo "     set OPENAI_API_KEY and re-run 'dg launch --assets rag_answer' to generate answers.)"
+  echo "     set OPENAI_API_KEY and re-run 'dg launch --assets rag_answer --partition <q1|q2|q3>')"
 fi
 
 # --- 11. Done -------------------------------------------------------------
@@ -334,7 +398,8 @@ cat <<DONE
 Two parallel RAG paths built over the same 5-doc corpus:
 
   Path A — state-tracking (no key required):
-    docs_corpus → docs_index_snapshot → docs_eval[$SNAP]
+    docs_corpus → docs_index_snapshot[$SNAP1,$SNAP2] → docs_eval[$SNAP1,$SNAP2]
+    (both partitioned by rag_snapshot — v1 clean, v2 regression-injected)
                                         ↑ asset check gates regressions
 
   Path B — decomposed pipeline:
