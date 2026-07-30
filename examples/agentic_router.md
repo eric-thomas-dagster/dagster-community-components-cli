@@ -2,9 +2,10 @@
 
 The **router-loop** pattern from BPMN "agentic orchestration" diagrams, done the Dagster-honest way:
 
-- **The agent is one asset per case**, not five.
-- **The ReAct loop iterations are ops** (visible in the run view, not the asset graph).
-- **The agent emits multiple typed outputs**, one per branch. Downstream lineage shows only the partitions that actually flowed through each branch.
+- **The agent is one asset per case**, static-partitioned by case_id.
+- **The ReAct loop iterations are ops** — visible in the run view, not the asset graph.
+- **Each branch is its own asset** with its own `DynamicPartitionsDefinition`. When the router picks a branch for a case, it registers that case_id on that branch's dynamic partition set. So each branch's UI shows ONLY the case keys the router actually picked for it — no sparse-empty slots, no red failures for "wrong branch" partitions.
+- **Downstream sinks share the branch's dynamic partition set** — same story: only the cases that flowed through.
 
 The alternative shape — `iterative_supervisor_agent` — declares max_iterations assets per case. That works when you want per-step re-runs and per-step lineage, but for a router demo it clutters the graph and misrepresents assets (loop iterations are compute, not state). This walkthrough uses the cleaner shape.
 
@@ -15,29 +16,33 @@ baggage_reports  (CSV source, unpartitioned — wired into lineage)
        │
        │  filtered by case_id per partition
        ▼
-baggage_triage_agent[case_id]         ← ONE graph-backed multi-asset per case
-       │                                 (llm_multi_path_router)
+baggage_triage_agent[c1,c2,c3]        ← ONE graph-backed asset per case
+       │  static partitions (case_id)   (llm_multi_path_router)
        │
        │  Inside the run view (not the asset graph):
-       │    build_task → plan_step_1 → plan_step_2 → … → classify_and_emit
-       │    (each step is an op with its own logs + trajectory chunk)
+       │    build_task → plan_step_1 → plan_step_2 → … → classify_and_register
+       │    (each step is an op with its own logs; final op registers case_id
+       │     on each picked branch's DynamicPartitionsDefinition)
        │
-       ├──►  delivery_request     ─►  courier_booked        (dataframe_to_csv)
-       │       (only for cases the agent successfully delivered)
+       ├──►  delivery_request      ─►  courier_booked        (dataframe_to_csv)
+       │       DynamicPartitionsDef("delivery_request_cases")
+       │       shows ONLY the case_ids the router picked delivery for
        │
-       ├──►  voucher_issued       ─►  compensation_paid     (dataframe_to_csv)
-       │       (only for cases where a care voucher was sent)
+       ├──►  voucher_issued        ─►  compensation_paid     (dataframe_to_csv)
+       │       DynamicPartitionsDef("voucher_issued_cases")
        │
-       └──►  escalation           ─►  human_review          (human_approval_gate)
-               (only for cases                ▼
-                needing human review)      escalation_audited (duckdb append)
+       └──►  escalation            ─►  human_review          (human_approval_gate)
+               DynamicPartitionsDef("escalation_cases")            ▼
+                                                      escalation_audited (duckdb append)
 
-Plus: approval_watcher (filesystem_monitor, partition_mode=static_partition)
+Plus: approval_watcher (filesystem_monitor, partition_mode=dynamic_partition)
       → watches approvals/, on new *.json launches approve_and_process_job
       with partition_key=<file stem>. Auto-progresses stuck escalations.
 ```
 
-The important honest property: **`courier_booked` only shows partitions for cases where the agent actually organized delivery.** `compensation_paid` only shows the voucher cases. `escalation_audited` only shows the escalation cases. The graph tells the truth about what happened per case.
+**The key move**: each branch has its own `DynamicPartitionsDefinition`. The router asset, at the end of its ReAct loop, calls `context.instance.add_dynamic_partitions("<branch>_cases", [case_id])` for each picked branch. So a branch's UI shows only the case_ids the router actually registered on it — no sparse empty slots, no red failures for "wrong branch" partitions.
+
+Downstream sinks reference the SAME dynamic partition set as their upstream branch, so they inherit the same clean per-partition view.
 
 ## Run
 

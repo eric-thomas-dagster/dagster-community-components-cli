@@ -177,9 +177,9 @@ attributes:
 YAML
 
 # 5.3 Downstream sink for delivery_request cases.
-# AutomationCondition.eager() = only fire when upstream branch emitted this
-# partition. Materialize-all no longer paints the sink red for partitions
-# whose upstream branch didn't fire — those partitions simply don't run.
+# Uses the SAME DynamicPartitionsDefinition ("delivery_request_cases") that
+# the router registers case_ids on. So courier_booked only shows partitions
+# for cases the router actually picked delivery for — no red slots.
 mkdir -p "$DEFS/courier_booked"
 cat > "$DEFS/courier_booked/defs.yaml" <<YAML
 type: dagster_community_components.DataframeToCsvComponent
@@ -187,8 +187,8 @@ attributes:
   asset_name: courier_booked
   upstream_asset_key: delivery_request
   file_path: ${COURIER_DIR}/courier_{partition_key}.csv
-  partition_type: static
-  partition_values: "${CASES}"
+  partition_type: dynamic
+  dynamic_partition_name: delivery_request_cases
   automation_condition: "{{ dg.AutomationCondition.eager() }}"
   group_name: sinks
 YAML
@@ -201,8 +201,8 @@ attributes:
   asset_name: compensation_paid
   upstream_asset_key: voucher_issued
   file_path: ${COMPENSATIONS_DIR}/compensation_{partition_key}.csv
-  partition_type: static
-  partition_values: "${CASES}"
+  partition_type: dynamic
+  dynamic_partition_name: voucher_issued_cases
   automation_condition: "{{ dg.AutomationCondition.eager() }}"
   group_name: sinks
 YAML
@@ -215,8 +215,8 @@ attributes:
   asset_name: human_review
   upstream_asset_key: escalation
   approval_dir: ${APPROVAL_DIR}
-  partition_type: static
-  partition_values: "${CASES}"
+  partition_type: dynamic
+  dynamic_partition_name: escalation_cases
   group_name: human_in_the_loop
 YAML
 
@@ -230,8 +230,8 @@ attributes:
   database_path: ${PROJECT_ABS}/audit/case_audit.duckdb
   table: escalation_audit
   write_mode: append
-  partition_type: static
-  partition_values: "${CASES}"
+  partition_type: dynamic
+  dynamic_partition_name: escalation_cases
   automation_condition: "{{ dg.AutomationCondition.eager() }}"
   group_name: sinks
 YAML
@@ -248,7 +248,10 @@ attributes:
   description: "Materialize the escalation approval gate + audit on token drop."
 YAML
 
-# 5.8 Sensor — auto-progresses c2 (or any pending case) on new token.
+# 5.8 Sensor — auto-progresses any escalated case on new token drop.
+# human_review + escalation_audited use the escalation_cases dynamic
+# partition set (populated by the router when it picks the escalation
+# branch). Sensor watches approvals/ and fires a per-partition run.
 mkdir -p "$DEFS/approval_watcher"
 cat > "$DEFS/approval_watcher/defs.yaml" <<YAML
 type: dagster_community_components.FilesystemMonitorSensorComponent
@@ -258,7 +261,8 @@ attributes:
   file_pattern: "^c[0-9]+\\\\.json$"
   job_name: approve_and_process_job
   minimum_interval_seconds: 5
-  partition_mode: static_partition
+  partition_mode: dynamic_partition
+  dynamic_partitions_name: escalation_cases
   partition_key_template: "{file_stem}"
 YAML
 
@@ -283,28 +287,51 @@ MSG
   exit 0
 fi
 
-# The router graph emits all 3 outputs — request a superset asset selection.
-# Dagster materializes only the branches the classifier picks per partition.
+# Router asset — one @graph_asset per case (ReAct steps as OPS in the run view).
+# The router registers case_ids on picked branches' dynamic partition sets as
+# a side-effect of materializing, so branch assets become materializable per
+# case only after their branch was picked.
 echo ""
-echo ">>> baggage_triage_agent — per case partition (ReAct steps are ops in the run view)"
+echo ">>> baggage_triage_agent — one graph_asset materialization per case"
 for C in c1 c2 c3; do
   echo "    ─── $C ───"
-  uv run dg launch --assets 'delivery_request,voucher_issued,escalation' --partition "$C" 2>&1 | tail -3
+  uv run dg launch --assets baggage_triage_agent --partition "$C" 2>&1 | tail -3
 done
 
-# --- 8. Downstream --------------------------------------------------------
-# For each case, try to materialize every downstream. Whichever upstream
-# branches were NOT emitted for that case will fail-to-load (skip); the ones
-# that WERE emitted will succeed. That's the graph-multi-asset story:
-# lineage stays honest per-partition based on the agent's decisions.
+# --- 8. Branch assets — only fire for cases the router picked -------------
+# Each branch has its own DynamicPartitionsDefinition. The router registered
+# the appropriate case_ids on each branch above. Attempting a partition the
+# router did NOT register raises "unknown partition" cleanly (no red trace).
 echo ""
-echo ">>> Downstream per case (only branches the agent emitted will succeed)"
+echo ">>> Branch assets — dg.AutomationCondition.eager on downstream sinks; we can also materialize directly"
+for BRANCH in delivery_request voucher_issued escalation; do
+  echo "    ─── $BRANCH ───"
+  # Query the branch's dynamic partition set to see which cases got registered.
+  uv run python - <<PY 2>&1 | tail -5 || true
+import os
+os.environ["DAGSTER_HOME"] = "$DAGSTER_HOME"
+from dagster import DagsterInstance
+inst = DagsterInstance.get()
+keys = inst.get_dynamic_partitions("${BRANCH}_cases")
+print(f"    ${BRANCH}_cases has {len(keys)} case(s) registered: {sorted(keys)}")
+for k in keys:
+    print(f"      → launching ${BRANCH}[{k}]")
+PY
+  # Actually launch each registered partition.
+  for C in c1 c2 c3; do
+    uv run dg launch --assets "$BRANCH" --partition "$C" 2>&1 | tail -1 || true
+  done
+done
+
+# --- 8b. Downstream sinks per branch --------------------------------------
+echo ""
+echo ">>> Downstream sinks per branch (only fire for cases the branch has)"
 for C in c1 c2 c3; do
   echo "    ─── $C ───"
-  uv run dg launch --assets courier_booked      --partition "$C" 2>&1 | tail -2 || true
-  uv run dg launch --assets compensation_paid   --partition "$C" 2>&1 | tail -2 || true
-  uv run dg launch --assets human_review        --partition "$C" 2>&1 | tail -2 || true
-  uv run dg launch --assets escalation_audited  --partition "$C" 2>&1 | tail -2 || true
+  uv run dg launch --assets courier_booked      --partition "$C" 2>&1 | tail -1 || true
+  uv run dg launch --assets compensation_paid   --partition "$C" 2>&1 | tail -1 || true
+  uv run dg launch --assets human_review        --partition "$C" 2>&1 | tail -1 || true
+  uv run dg launch --assets escalation_audited  --partition "$C" 2>&1 | tail -1 || true
 done
 
 # --- 9. Auto-approve any escalated case with a high-confidence resolution -
