@@ -1,84 +1,43 @@
-# Agentic Router — LLM Picks the Next Action, Human Gates the Exit
+# Agentic Router — One Asset per Case, Steps as Ops, Multiple Downstream Branches
 
-The **router-loop** pattern from Prefect's "agentic orchestration" pitch and the BPMN airline-baggage-loss diagrams — but every planner decision, every tool call, every human approval is a first-class Dagster asset.
+The **router-loop** pattern from BPMN "agentic orchestration" diagrams, done the Dagster-honest way:
 
-The agent doesn't run a fixed pipeline. It **picks** the next tool from a bounded set based on prior tool outputs, may call several, and declares `done` when it's satisfied. Downstream, an LLM classifier routes each case to auto-approval or human review, and a compensation branch fires only for cases that need it.
+- **The agent is one asset per case**, not five.
+- **The ReAct loop iterations are ops** (visible in the run view, not the asset graph).
+- **The agent emits multiple typed outputs**, one per branch. Downstream lineage shows only the partitions that actually flowed through each branch.
+
+The alternative shape — `iterative_supervisor_agent` — declares max_iterations assets per case. That works when you want per-step re-runs and per-step lineage, but for a router demo it clutters the graph and misrepresents assets (loop iterations are compute, not state). This walkthrough uses the cleaner shape.
 
 ## The asset graph
 
 ```
-                        baggage_reports (CSV source)
-                                    │
-                              one row per case_id
-                                    │
-                        ┌───────────┴───────────┐
-                        ▼           ▼           ▼
-                       c1          c2          c3   (each is a partition)
+baggage_reports  (CSV source, unpartitioned — wired into lineage)
+       │
+       │  filtered by case_id per partition
+       ▼
+baggage_triage_agent[case_id]         ← ONE graph-backed multi-asset per case
+       │                                 (llm_multi_path_router)
+       │
+       │  Inside the run view (not the asset graph):
+       │    build_task → plan_step_1 → plan_step_2 → … → classify_and_emit
+       │    (each step is an op with its own logs + trajectory chunk)
+       │
+       ├──►  delivery_request     ─►  courier_booked        (dataframe_to_csv)
+       │       (only for cases the agent successfully delivered)
+       │
+       ├──►  voucher_issued       ─►  compensation_paid     (dataframe_to_csv)
+       │       (only for cases where a care voucher was sent)
+       │
+       └──►  escalation           ─►  human_review          (human_approval_gate)
+               (only for cases                ▼
+                needing human review)      escalation_audited (duckdb append)
 
-  Per partition ────────────────────────────────────────────────────────────
-  │
-  ▼  ITERATIVE SUPERVISOR AGENT (loop, bounded tool set)
-  ├── agent_step_1  ──► planner picks: query_baggage_db  ─► tool output
-  ├── agent_step_2  ──► planner picks: organize_delivery ─► tool output
-  ├── agent_step_3  ──► planner picks: inform_passenger  ─► tool output
-  ├── agent_step_4  ──► planner: done (short-circuit)
-  └── agent_step_5  ──► short-circuit — no-op
-  │
-  ▼  agent_final_answer  (synthesizer, reads all step trajectories)
-  │      → "OUTCOME: resolved" or "OUTCOME: needs_human_review"
-  │
-  ▼  resolution  (LLM classifier)
-  │      → status=<auto|human>; compensate=<t|f>; amount_usd=<n>; reason=<...>
-  │
-  ▼  human_review  (human_approval_gate)
-  │      • setup script auto-writes token when status=auto_resolved
-  │      • otherwise waits for a real human (or the sensor)
-  │
-  ├──►  notification_sent   (dataframe_to_csv → simulated CRM push)
-  ├──►  compensation_paid   (dataframe_to_csv → simulated AP)
-  └──►  case_audit          (duckdb append → "legacy warehouse")
-
-  Plus: approval_watcher (filesystem_monitor, partition_mode=static_partition)
-        → watches approvals/, on new *.json fires approve_and_process_job
-        with partition_key from the filename.
+Plus: approval_watcher (filesystem_monitor, partition_mode=static_partition)
+      → watches approvals/, on new *.json launches approve_and_process_job
+      with partition_key=<file stem>. Auto-progresses stuck escalations.
 ```
 
-## The bounded tool set
-
-The router picks the next tool by **name** from this set (it can't invent tools or write code):
-
-| Tool | Args | Purpose |
-|---|---|---|
-| `query_baggage_db` | `baggage_id` | Look up tracking status |
-| `inquire_with_airport` | `airport_code` | Send a lookup to the last-known airport |
-| `request_info_from_passenger` | `question` | Ask the passenger for more info |
-| `send_care_voucher` | `passenger_id, amount_usd` | Issue a voucher |
-| `organize_delivery` | `baggage_id, address` | Book a courier |
-| `inform_passenger` | `passenger_id, message` | Post-back to the passenger |
-
-Each tool is an LLM invocation with its own system_message — the "database" and "airport API" are pre-seeded with the 3 cases' ground-truth data. In production, swap the tool's `system_message` for a real API call by wrapping the tool's asset (or use `openai_agent` with real MCP servers).
-
-## The three cases
-
-```
-c1: passenger=Alice,  flight=UA100 ORD→LHR, baggage_id=BAG-001,
-    description="Checked bag never arrived at LHR arrivals."
-    → DB says: in_transit_to_LHR, ETA 4h, delivery_address on file
-    → Agent trajectory: query_db → organize_delivery → inform_passenger → done
-    → OUTCOME: resolved
-
-c2: passenger=Bob,    flight=AF200 JFK→CDG, baggage_id=BAG-002,
-    description="Bag missing 3 days now — no updates from airline."
-    → DB says: not_found, last scanned CDG 72h ago
-    → Agent trajectory: query_db → inquire_with_airport → send_voucher → request_info → done
-    → OUTCOME: needs_human_review
-
-c3: passenger=Carol,  flight=DL300 SFO→JFK, baggage_id=BAG-003,
-    description="Airline confirms bag is at JFK; need it delivered."
-    → DB says: at JFK, address on file
-    → Agent trajectory: query_db → organize_delivery → inform_passenger → done
-    → OUTCOME: resolved
-```
+The important honest property: **`courier_booked` only shows partitions for cases where the agent actually organized delivery.** `compensation_paid` only shows the voucher cases. `escalation_audited` only shows the escalation cases. The graph tells the truth about what happened per case.
 
 ## Run
 
@@ -91,95 +50,102 @@ bash setup_agentic_router_demo.sh
 
 Requirements: `uv`, `OPENAI_API_KEY`. ~2 min first run.
 
-The script walks the flow: source → router (5 step assets × 3 partitions + synthesizer) → resolution classifier → auto-writes approval tokens for `auto_resolved` cases → materializes gate + sinks. c1 and c3 auto-cascade end-to-end; c2 pends at the gate for a human.
+## What each ReAct step looks like in the UI
 
-## The "stateless gate + auto-approver" pattern
+Open `http://localhost:3000` → click any partition of `baggage_triage_agent` → "View run" → the timeline shows:
 
-The `human_approval_gate` component doesn't know or care who wrote the token. In this demo, the setup script inspects each case's `resolution` output and writes the approval token itself for `auto_resolved` cases:
-
-```python
-# From the setup script:
-if "status=auto_resolved" in routing:
-    (approvals_dir / f"{case_id}.json").write_text(json.dumps({
-        "approved": True,
-        "approver": "auto_resolver (llm-driven, high-confidence)",
-        "reason": routing,
-    }))
+```
+build_task
+  → plan_step_1  (planner: "call query_baggage_db(BAG-001)" + tool output)
+  → plan_step_2  (planner: "call organize_delivery(...)" + tool output)
+  → plan_step_3  (planner: "call inform_passenger(...)" + tool output)
+  → plan_step_4  (short-circuit — prior step declared done)
+  → plan_step_5  (short-circuit)
+  → classify_and_emit  (LLM picks branches from {delivery_request, voucher_issued, escalation})
 ```
 
-The gate can't tell an LLM auto-approver from a human. That's the point: **anything that can write a JSON file can approve or reject**. Slack bot, Retool form, ServiceNow webhook, another Dagster asset, a compliance-officer signing off from their phone — same interface.
+Each op has its own logs: planner reasoning, tool called, tool output. The full trajectory also lands in every emitted asset's materialization metadata (`trajectory` markdown, `n_iterations`, `summary`).
 
-For cases where the LLM says `needs_human_review`, the script leaves the token unwritten. The gate materializes as `Failure(approval_pending)` and downstream is blocked until a real human (or the `approval_watcher` sensor picking up a manual drop) resolves it.
+## The three cases
 
-## Escape hatches: confidence + timeout
+```
+c1: Alice, UA100 ORD→LHR, BAG-001 — DB says: in_transit_to_LHR, address known
+    → agent: query_db → organize_delivery → inform_passenger → done
+    → emits: delivery_request
 
-The BPMN example has two boundary events off the AI-Agent subprocess:
+c2: Bob, AF200 JFK→CDG, BAG-002 — DB says: not_found (72h since scan)
+    → agent: query_db → inquire_with_airport → send_voucher → request_info → done
+    → emits: voucher_issued + escalation (both apply)
 
-- **Low confidence** → route to Manual Processing
-- **48h timeout** → same
+c3: Carol, DL300 SFO→JFK, BAG-003 — DB says: awaiting_delivery at JFK
+    → agent: query_db → organize_delivery → inform_passenger → done
+    → emits: delivery_request (sometimes + escalation if classifier judges monitoring needed)
+```
 
-Both fall out of Dagster's normal primitives here:
+The classifier decides per case which branches apply. c2 legitimately fires TWO branches — voucher was sent AND the case still needs human review. Multi-output branching handles that naturally; you couldn't express it with a single-output chain.
 
-- **Low-confidence** is exactly the `resolution` LLM classifier writing `status=needs_human_review`. The setup script skips writing an auto-approval token; the gate pends; a human takes over via the sensor.
-- **48h timeout** — add a `FreshnessPolicy(maximum_lag_minutes=2880)` to the `resolution` or `human_review` asset. When Dagster sees the case has been in the gate-pending state past the deadline, the freshness sensor fires an alert (in Dagster+) or triggers a job that writes a "timeout → manual" token that a downstream operator picks up.
+## The stateless gate pattern
 
-## Watch the sensor cascade c2
+The `human_review` asset (a [`human_approval_gate`](../c/human_approval_gate)) reads `approvals/<case_id>.json`. In the setup script, an "auto-assessor" step inspects each escalation's trajectory and auto-writes a token when the outcome is clear (`n_iterations >= 3` = agent used the tools well). Otherwise the token is unwritten and the gate pends.
 
-While `dg dev` is running:
+The gate can't tell a human writer from an LLM writer — that's the point. Anything that can write a JSON file can approve or reject. Slack bot, Retool form, ServiceNow webhook, another Dagster asset — same interface.
+
+For the cases the auto-assessor didn't approve, the `approval_watcher` sensor waits for a real human to drop a token. When one lands, it launches the gate + audit for that specific partition.
+
+## Watch the sensor cascade
+
+While `dg dev` is running, drop a token for any escalated case that's still pending:
 
 ```bash
-echo '{"approved": true, "approver": "you", "reason": "voucher sent, will re-open on passenger reply"}' \
-  > /tmp/agentic-router-demo/approvals/c2.json
+echo '{"approved": true, "approver": "you", "reason": "verified with airport ops"}' \
+  > /tmp/agentic-router-demo/approvals/c3.json
 ```
 
-Within ~5s, `approval_watcher` (a [`filesystem_monitor`](../c/filesystem_monitor) with `partition_mode: static_partition`) fires. Filename `c2.json` maps to `partition_key=c2` via the `{file_stem}` template. It launches `approve_and_process_job` for that partition. `human_review[c2]` + `notification_sent[c2]` + `compensation_paid[c2]` + `case_audit[c2]` all materialize on their own. No manual click.
+Within ~5s, `approval_watcher` fires → launches `approve_and_process_job` with `partition_key=c3` → `human_review[c3]` + `escalation_audited[c3]` materialize on their own.
 
-Reject instead:
+Reject:
 
 ```bash
-echo '{"approved": false, "approver": "you", "reason": "escalate to airport ops"}' \
-  > /tmp/agentic-router-demo/approvals/c2.json
+echo '{"approved": false, "approver": "you", "reason": "not enough evidence — escalate to airport ops"}' \
+  > /tmp/agentic-router-demo/approvals/c3.json
 ```
 
-Sensor fires → gate fails with `approval_rejected` → downstream stays untouched → the rejecter + reason are permanent metadata on `human_review[c2]`.
+Sensor fires → gate fails `approval_rejected` → `escalation_audited[c3]` stays untouched. The rejecter + reason are permanent metadata on `human_review[c3]`.
 
-## Why this is different from a Python script
+## Why this shape beats the alternatives
 
-**Every planner decision is an asset.** `agent_step_2[c2]` is a named, addressable materialization. It carries `{iteration, done, tool, args, reasoning, tool_output}`. Six weeks later, "why did the agent send Bob a voucher instead of escalating?" opens as a UI click — you see the planner's exact reasoning at that step.
+**Vs 5 fixed step assets per case.** Cleaner asset graph (1 per case, not 5). Steps are visible where they belong — in the run view for that partition, not in the global asset catalog.
 
-**Every tool call is a materialization.** No opaque "the agent did stuff." The trajectory is 5 assets per case; whichever step declared `done` short-circuits the rest as no-ops (still materialized, tagged as skipped).
+**Vs a monolithic single asset with all downstream branches wired.** Multi-output means each sink asset shows only the cases that flowed through it — the graph tells the truth per partition. Wiring all downstream from one output would force every sink to run for every case and either no-op or error.
 
-**Bounded tool set is safety.** The planner picks by name. It can't invent a `delete_all_customer_data` tool. The YAML lists what's callable; anything else is a validation error at plan time.
+**Vs a hand-written Python script.** The bounded tool set is safety — the planner picks BY NAME from a YAML-declared list. It can't invent a `delete_all_customer_data` tool. The task template + tool YAMLs are what an operator reviews before adding a new tool; a script would require a code review.
 
-**The gate is stateless.** LLM auto-approves the high-confidence cases by writing tokens; humans handle the rest. Same primitive, different writer. This scales — the router handles the routine 80%, the humans handle the interesting 20%, and neither knows about the other.
-
-**Partitions are cases.** Add a new baggage report → add its `case_id` to `partition_values` → materialize. Same graph, new instance.
+**Vs `iterative_supervisor_agent`.** Same primitive idea (ReAct loop, bounded tools), different asset semantics. Use `iterative_supervisor_agent` when you want each step as its own asset for per-step re-runs; use `llm_multi_path_router` (this walkthrough) when the agent is a single unit of work with multiple branches.
 
 ## Components used
 
 | Layer | Component | Notes |
 |---|---|---|
-| Source | [`dataframe_from_csv`](../c/dataframe_from_csv) | unpartitioned; 3 rows = 3 cases |
-| Router (planner loop + 6 tools) | [`iterative_supervisor_agent`](../c/iterative_supervisor_agent) | 5 step assets + synthesizer, partitioned by case_id |
-| Classifier | [`llm_prompt_executor`](../c/llm_prompt_executor) | outputs `status; compensate; amount_usd; reason` |
-| Human gate | [`human_approval_gate`](../c/human_approval_gate) | reads `<approval_dir>/<case_id>.json`; auto-approve from an assessor asset OR from a human — gate doesn't care |
-| Sink: CRM push | [`dataframe_to_csv`](../c/dataframe_to_csv) | one file per case |
-| Sink: AP compensation | [`dataframe_to_csv`](../c/dataframe_to_csv) | one file per case |
-| Sink: legacy warehouse audit | [`duckdb_table_writer`](../c/duckdb_table_writer) | append; queryable by compliance |
-| Auto-progression | [`filesystem_monitor`](../c/filesystem_monitor) | `partition_mode: static_partition`, `partition_key_template: {file_stem}` |
-| Sensor job target | [`asset_job`](../c/asset_job) | named job over [gate, notification, compensation, audit] |
+| Source | [`dataframe_from_csv`](../c/dataframe_from_csv) | Unpartitioned; one row per case; properly wired via `upstream_asset_key`. |
+| Router | [`llm_multi_path_router`](../c/llm_multi_path_router) | **The new primitive.** One graph-backed asset per case; ReAct steps as ops; multi-output branches. |
+| Sink: courier booking | [`dataframe_to_csv`](../c/dataframe_to_csv) | Downstream of `delivery_request` only. |
+| Sink: compensation | [`dataframe_to_csv`](../c/dataframe_to_csv) | Downstream of `voucher_issued` only. |
+| Human gate | [`human_approval_gate`](../c/human_approval_gate) | Downstream of `escalation` only. |
+| Sink: legacy audit | [`duckdb_table_writer`](../c/duckdb_table_writer) | Downstream of the human gate; append. |
+| Sensor | [`filesystem_monitor`](../c/filesystem_monitor) | `partition_mode: static_partition`; auto-progresses on token drop. |
+| Sensor job target | [`asset_job`](../c/asset_job) | Named job over `[human_review, escalation_audited]`. |
 
 ## Swap parts without touching the graph shape
 
-- **More/fewer tools.** Add or remove entries in the `tools:` list — no code, YAML only. Planner picks from whatever's there.
-- **A real database.** Swap the `query_baggage_db` tool's `system_message` for an actual SQL query, or replace with an `openai_agent` component using an MCP server for your DB.
-- **A different LLM per tool.** Each tool spec accepts a `model:` override — search-capable model for retrieval tools, cheap model for math.
-- **A different notification channel.** Swap `dataframe_to_csv` (notification) for `mongodb_writer` / `rest_api_writer` / `dataframe_to_kafka` / `dataframe_to_sfmc` — pick the real ticketing system.
-- **A different legacy sink.** Swap `duckdb_table_writer` for `dataframe_to_snowflake` / `dataframe_to_mssql` / `dataframe_to_bigquery` / `dataframe_to_iceberg_table`. Same fields, different backend.
+- **More tools.** Add YAML entries to `tools:`. Planner picks from whatever's there.
+- **More branches.** Add YAML entries to `outputs:` (and downstream assets to consume them).
+- **A different LLM per step.** The `model:` field is shared across planner + tools + classifier; per-tool overrides are on the `iterative_supervisor_agent` sibling (add same to this one if needed).
+- **Real APIs instead of LLM-simulated tools.** Each tool's `system_message` currently pre-seeds ground-truth data (baggage DB rows, airport records) so the demo is self-contained. In production, wrap the tool's system_message around a call to your actual DB / API / service, or use [`openai_agent`](../c/openai_agent) with real MCP servers.
+- **A different legacy audit sink.** Swap `duckdb_table_writer` for `dataframe_to_snowflake` / `dataframe_to_mssql` / `dataframe_to_bigquery` / `dataframe_to_iceberg_table`.
 
 ## Related walkthroughs
 
-- **[agentic_orchestration.md](agentic_orchestration.md)** — the simpler linear "triage → draft → gate" flavor with two LLMs and a human gate. Read first if you're new to the pattern.
-- **[rag_supervisor.md](rag_supervisor.md)** — planner + specialist agents, no human gate. Pure multi-agent story.
-- **[rag_pipeline_dynamic.md](rag_pipeline_dynamic.md)** — one-component RAG with per-partition queries.
-- **[rag_complete.md](rag_complete.md)** — end-to-end RAG (state-tracking + decomposed pipeline).
+- **[agentic_orchestration.md](agentic_orchestration.md)** — simpler linear shape: `triage_agent → draft_response → human_approval_gate → sinks`. Start here if you're new to agent + human patterns.
+- **[rag_supervisor.md](rag_supervisor.md)** — planner + parallel specialist agents (single retrieval isn't enough). No human gate.
+- **[rag_pipeline_dynamic.md](rag_pipeline_dynamic.md)** — one-component RAG with per-partition dynamic queries.
+- **[rag_complete.md](rag_complete.md)** — full RAG stack, state-tracking + decomposed pipeline.
