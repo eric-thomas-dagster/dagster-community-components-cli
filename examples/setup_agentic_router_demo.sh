@@ -177,6 +177,9 @@ attributes:
 YAML
 
 # 5.3 Downstream sink for delivery_request cases.
+# AutomationCondition.eager() = only fire when upstream branch emitted this
+# partition. Materialize-all no longer paints the sink red for partitions
+# whose upstream branch didn't fire — those partitions simply don't run.
 mkdir -p "$DEFS/courier_booked"
 cat > "$DEFS/courier_booked/defs.yaml" <<YAML
 type: dagster_community_components.DataframeToCsvComponent
@@ -186,6 +189,7 @@ attributes:
   file_path: ${COURIER_DIR}/courier_{partition_key}.csv
   partition_type: static
   partition_values: "${CASES}"
+  automation_condition: "{{ dg.AutomationCondition.eager() }}"
   group_name: sinks
 YAML
 
@@ -199,6 +203,7 @@ attributes:
   file_path: ${COMPENSATIONS_DIR}/compensation_{partition_key}.csv
   partition_type: static
   partition_values: "${CASES}"
+  automation_condition: "{{ dg.AutomationCondition.eager() }}"
   group_name: sinks
 YAML
 
@@ -227,6 +232,7 @@ attributes:
   write_mode: append
   partition_type: static
   partition_values: "${CASES}"
+  automation_condition: "{{ dg.AutomationCondition.eager() }}"
   group_name: sinks
 YAML
 
