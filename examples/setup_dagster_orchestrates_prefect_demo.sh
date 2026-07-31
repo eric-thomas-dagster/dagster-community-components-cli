@@ -258,10 +258,110 @@ attributes:
   tags: [dagster-orchestrated]
 YAML
 
-# (Downstream aggregation intentionally omitted — the demo focus is the
-# Dagster→Prefect bridge. The parsed JSON files land in parsed_output/;
-# swap in your favorite reader downstream: DocumentCorpusComponent,
-# a small @dg.asset with pd.read_json, or a dbt seed.)
+# 3. Downstream Dagster assets — close the Dagster → Prefect → Dagster round trip.
+#    parsed_documents (the trigger asset above) now returns the Prefect flow's
+#    RETURN VALUE (via state.result()). document_records[file] reads that per-partition
+#    dict and normalizes it to a Pandas row. document_index aggregates across
+#    partitions into an unpartitioned catalog table.
+#
+#    Plain-Python assets (not YAML components) — this is where mixed demos live:
+#    components for the standard bridges, Python for the bespoke shape.
+cat > "src/$PKG/defs/downstream.py" <<'PY'
+"""Downstream Dagster assets that consume the ACTUAL DATA the Prefect flow wrote.
+
+Closes the Dagster → Prefect → Dagster loop:
+  - parsed_documents[file]   (YAML: PrefectFlowRunAssetComponent → triggers flow, records flow_run_id/state)
+  - document_records[file]   (this file: reads the parsed JSON the flow wrote to disk, normalizes to a Pandas row)
+  - document_index           (this file: aggregate across partitions)
+
+The realistic pattern: Prefect wrote artifacts (JSON files under parsed_output/).
+Dagster downstream reads those artifacts. The trigger asset's return value is
+used only to know WHERE the artifact landed (via flow_result.output_path).
+Real Prefect flows often write to S3/GCS/DB rather than returning big payloads."""
+import json
+from pathlib import Path
+from typing import Any, Dict
+
+import dagster as dg
+import pandas as pd
+from dagster import AssetExecutionContext
+
+FILE_PARTITIONS = dg.StaticPartitionsDefinition(["report.pdf.txt", "prices.html", "support.eml"])
+
+
+@dg.asset(
+    key=dg.AssetKey("document_records"),
+    partitions_def=FILE_PARTITIONS,
+    ins={"parsed_documents": dg.AssetIn(key=dg.AssetKey("parsed_documents"))},
+    group_name="downstream",
+    kinds={"dagster"},
+    description="Per-file Pandas row read from the JSON file the Prefect flow wrote to disk.",
+)
+def document_records(context: AssetExecutionContext, parsed_documents: Dict[str, Any]) -> pd.DataFrame:
+    """Read the JSON artifact the Prefect flow wrote for this partition.
+
+    Convention: Dagster passed the output_dir as a Prefect flow parameter, so
+    Dagster can derive where the artifact landed (output_dir + basename(file_path)
+    + ".parsed.json"). This is more reliable than fetching state.result() which
+    requires Prefect result persistence to be configured.
+
+    In production the artifact would land on S3/GCS/ADLS and a Dagster IO manager
+    would handle the read — same pattern, different backend."""
+    file_name = context.partition_key
+    params = parsed_documents.get("parameters") or {}
+    file_path = params.get("file_path", "")
+    output_dir = params.get("output_dir", "")
+    output_path = str(Path(output_dir) / (Path(file_path).name + ".parsed.json"))
+    if not Path(output_path).exists():
+        raise dg.Failure(
+            description=f"Prefect flow didn't write the expected artifact at {output_path!r}. "
+                        f"parameters={params!r}",
+            metadata={"flow_run_id": str(parsed_documents.get("flow_run_id"))},
+        )
+
+    # THIS is where the actual data flows Dagster ← Prefect: Prefect wrote a
+    # file, Dagster reads it. In a production setup the file lives on S3/GCS/
+    # ADLS and Dagster's IO manager handles it — same pattern, different backend.
+    with open(output_path) as f:
+        parsed = json.load(f)
+    context.log.info(f"read parsed artifact from {output_path}: {parsed}")
+
+    row = {
+        "file_name": file_name,
+        "kind": parsed.get("kind"),
+        "prefect_run_id": parsed_documents.get("flow_run_id"),
+        "prefect_state": parsed_documents.get("state_name"),
+        "artifact_path": output_path,
+        **{k: v for k, v in parsed.items() if k != "kind"},
+    }
+    context.add_output_metadata({
+        "kind": dg.MetadataValue.text(str(row.get("kind"))),
+        "prefect_run_id": dg.MetadataValue.text(str(row.get("prefect_run_id"))),
+        "artifact_path": dg.MetadataValue.path(output_path),
+    })
+    return pd.DataFrame([row])
+
+
+@dg.asset(
+    key=dg.AssetKey("document_index"),
+    ins={"document_records": dg.AssetIn(
+        key=dg.AssetKey("document_records"),
+        partition_mapping=dg.AllPartitionMapping(),
+    )},
+    group_name="downstream",
+    kinds={"dagster"},
+    description="Aggregate all per-file records into an unpartitioned index table.",
+)
+def document_index(context: AssetExecutionContext, document_records: Dict[str, pd.DataFrame]) -> pd.DataFrame:
+    """Concatenate all partitions of document_records into one DataFrame."""
+    frames = [df for df in document_records.values() if df is not None and len(df) > 0]
+    combined = pd.concat(frames, ignore_index=True) if frames else pd.DataFrame()
+    context.add_output_metadata({
+        "row_count": dg.MetadataValue.int(len(combined)),
+        "kinds": dg.MetadataValue.text(", ".join(sorted(set(combined.get("kind", []).astype(str))))) if len(combined) else dg.MetadataValue.text("(none)"),
+    })
+    return combined
+PY
 
 # --- dg check + materialize -----------------------------------------------
 echo ""
@@ -280,8 +380,29 @@ for F in report.pdf.txt prices.html support.eml; do
 done
 
 echo ""
-echo ">>> Parsed output files:"
+echo ">>> Downstream Dagster: document_records[per-file] + aggregated document_index"
+for F in report.pdf.txt prices.html support.eml; do
+  uv run dg launch --assets document_records --partition "$F" 2>&1 | tail -1
+done
+uv run dg launch --assets document_index 2>&1 | tail -2
+
+echo ""
+echo ">>> Parsed output files (side-effects written by Prefect flow):"
 ls -1 "$PROJECT_ABS/parsed_output" 2>/dev/null | sed 's/^/    /' || echo "    (empty)"
+
+echo ""
+echo ">>> document_index (aggregated by Dagster from Prefect's return values):"
+uv run python - <<'PY'
+import os, pickle
+from pathlib import Path
+p = Path(".dagster_home/storage/document_index")
+if p.exists() and p.is_file():
+    with open(p, "rb") as f:
+        df = pickle.load(f)
+    print(df.to_string(index=False)[:2000] if len(df) else "  (empty)")
+else:
+    print("  (not materialized)")
+PY
 
 echo ""
 echo ">>> Prefect flow run summary (from local server):"
