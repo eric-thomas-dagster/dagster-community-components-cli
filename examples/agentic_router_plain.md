@@ -4,8 +4,16 @@ The **same asset graph** as [`agentic_router.md`](agentic_router.md), rebuilt in
 
 The only differences are **authoring surface** and **cost of adding a second one**. This walkthrough is the reference for that conversation.
 
+Two plain-Python shapes to compare:
+
+- **Variant A — `@graph_asset` with `@op` steps.** The ReAct loop is 5 pre-declared `plan_step_1..plan_step_5` ops. Each step is a visible box in the run UI with its own logs. Steps serialize between each other through the IO manager.
+- **Variant B — plain `@asset` with in-body `for` loop.** The ReAct loop is a normal Python loop inside the asset's compute function. Iteration count is dynamic (loop breaks when the planner says done). One box in the run UI; the loop shows up as sequential lines in that step's logs.
+
+Both produce the identical asset graph and same downstream behavior. Different tradeoffs for different tastes.
+
 ## Run
 
+**Variant A** (ops-based):
 ```bash
 export OPENAI_API_KEY=sk-...
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_agentic_router_plain_demo.sh \
@@ -13,7 +21,14 @@ curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
 bash setup_agentic_router_plain_demo.sh
 ```
 
-Requirements: `uv`, `OPENAI_API_KEY`. ~1 min first run.
+**Variant B** (plain @asset, no ops):
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_agentic_router_plain_simple_demo.sh \
+  -o setup_agentic_router_plain_simple_demo.sh
+bash setup_agentic_router_plain_simple_demo.sh
+```
+
+Requirements: `uv`, `OPENAI_API_KEY`. ~1 min first run each.
 
 ## Project layout
 
@@ -69,7 +84,127 @@ Ordered by how they appear:
 13. **`approve_and_process_job` = `dg.define_asset_job`** — the job the sensor launches on token drop, over `[human_review, escalation_audited]`.
 14. **`approval_watcher` `@dg.sensor`** — polls the approvals dir, yields `RunRequest(partition_key=<file_stem>)` per new token.
 
-## Side by side — the same building blocks
+## Variant A vs Variant B — the router body
+
+Both variants have identical branch assets, sinks, gate, sensor, and definitions.py. The only thing that changes is the router itself.
+
+**Variant A — `@graph_asset` + 5 `@op` ReAct steps**:
+
+```python
+def _make_step_op(iteration: int):
+    @dg.op(
+        name=f"plan_step_{iteration}",
+        ins={
+            "task_str": dg.In(str),
+            "prior_step": dg.In(dict, default_value={"done": False, "trajectory": []}),
+        },
+        out={"step": dg.Out(dict)},
+        required_resource_keys={"baggage_db"},
+    )
+    def _step(context, task_str, prior_step):
+        if prior_step.get("done"):
+            yield dg.Output({**prior_step, "iteration": iteration}, "step")
+            return
+        # ... 20+ lines: build planner prompt, LLM call, JSON parse, tool dispatch, update trajectory ...
+        yield dg.Output({**new, "trajectory": trajectory}, "step")
+    return _step
+
+STEP_OPS = [_make_step_op(i) for i in range(1, MAX_ITER + 1)]
+
+@dg.op(name="build_task", ins={"upstream": dg.In(dg.Nothing)}, out={"task_str": dg.Out(str)})
+def _build_task(context):
+    # ... 5 lines: load CSV, filter to partition, format task template ...
+
+@dg.op(
+    name="classify_and_register",
+    ins={f"step_{i+1}": dg.In(dict, default_value={"done": False, "trajectory": []}) for i in range(MAX_ITER)},
+    out={"classification": dg.Out(dict)},
+)
+def _classify(context, **kwargs):
+    # ... 30 lines: extract latest trajectory, classifier LLM call, extract payloads, register partitions ...
+
+@dg.graph_asset(
+    name="baggage_triage_agent",
+    partitions_def=router_partitions,
+    ins={"upstream": dg.AssetIn(key=dg.AssetKey("baggage_reports"))},
+)
+def baggage_triage_agent(upstream):
+    task = _build_task(upstream)
+    steps, prior = [], None
+    for op_fn in STEP_OPS:
+        step = op_fn(task_str=task) if prior is None else op_fn(task_str=task, prior_step=prior)
+        steps.append(step); prior = step
+    return _classify(**{f"step_{i+1}": s for i, s in enumerate(steps)})
+```
+
+~130 lines. Each ReAct step is a separate op box in the run UI.
+
+**Variant B — plain `@asset` with in-body `for` loop**:
+
+```python
+@dg.asset(
+    key=dg.AssetKey("baggage_triage_agent"),
+    partitions_def=router_partitions,
+    ins={"upstream": dg.AssetIn(key=dg.AssetKey("baggage_reports"))},
+    required_resource_keys={"baggage_db"},
+    kinds={"ai", "agent", "router"},
+)
+def baggage_triage_agent(context: AssetExecutionContext, upstream: pd.DataFrame) -> dict:
+    case_id = context.partition_key
+    row = upstream[upstream["case_id"] == case_id].iloc[0].to_dict()
+    task = f"...{row['passenger']}...{row['flight']}...{row['baggage_id']}..."
+    client = _llm()
+
+    # ReAct loop — plain Python. Breaks when the planner says done.
+    trajectory = []
+    for i in range(1, MAX_ITER + 1):
+        prior_txt = "\n".join(f"{t['iteration']}: {t.get('tool')}({t.get('args')}) → "
+                              f"{t.get('tool_output','')[:200]}" for t in trajectory) or "(no prior work)"
+        resp = client.chat.completions.create(model=MODEL, ...
+            messages=[{"role": "system", "content": "..."},
+                      {"role": "user", "content": f"Task:\n{task}\n\nPrior:\n{prior_txt}\n\n..."}])
+        plan = json.loads(_strip_fences(resp.choices[0].message.content or ""))
+        context.log.info(f"[step {i}] plan: {plan}")
+        if plan.get("done"): break
+        tool_output = _call_tool(plan["tool"], plan.get("args",""), context.resources.baggage_db)
+        trajectory.append({"iteration": i, "tool": plan["tool"], "args": plan.get("args"),
+                           "reasoning": plan.get("reasoning",""), "tool_output": tool_output})
+
+    # Classifier — one more LLM call, in-line
+    traj_txt = "\n".join(f"{t['iteration']}: {t.get('tool')}({t.get('args')}) → "
+                         f"{t.get('tool_output','')[:250]}" for t in trajectory) or "(no tools)"
+    resp = client.chat.completions.create(model=MODEL, ...
+        messages=[{"role": "system", "content": "Classify + extract payloads. Reply JSON: ..."},
+                  {"role": "user", "content": f"Trajectory:\n{traj_txt}\n\nBranches:\n{schema_txt}"}])
+    cls = json.loads(_strip_fences(resp.choices[0].message.content or ""))
+    payloads = {k: v for k, v in cls.get("emit", {}).items() if k in BRANCHES}
+    for branch in payloads:
+        context.instance.add_dynamic_partitions(f"{branch}_cases", [case_id])
+
+    return {"picked": list(payloads), "emit_payloads": payloads,
+            "summary": cls.get("summary",""), "trajectory": trajectory}
+```
+
+~60 lines. One box in the run UI (`baggage_triage_agent`); the ReAct loop shows up in that step's logs as sequential `[step N] plan: ...` lines.
+
+**Tradeoffs**:
+
+| | Variant A (ops) | Variant B (plain @asset) |
+|---|---|---|
+| **Router LOC** | ~130 | ~60 |
+| **ReAct visibility in UI** | 5 separate op boxes with per-step logs | 1 asset box; iterations in that step's log |
+| **Iteration count** | 5 ops pre-declared; unused ones short-circuit as no-ops | dynamic — loop breaks when planner says done |
+| **Cost per step** | 1 subprocess launch + IO manager serialize per op (multiprocess executor) | zero framework overhead per iteration |
+| **Debugging** | click the specific op box → its logs | scroll one step's logs → find the right `[step N]` line |
+| **Retries** | can retry a single step (has to re-run the whole loop above it though, since ops chain) | must retry the whole asset — but this is arguably what you want anyway |
+| **Cost per case** | small overhead per op — a few hundred ms per iteration × 5 ops | ReAct is bounded by LLM latency (multi-second), overhead is noise |
+| **When to reach for it** | you specifically want per-step lineage in the graph OR mixed retry semantics per step | almost always the simpler choice — reach for ops only when you need per-step visibility |
+
+Our take: **Variant B is the honest starting point for a plain-Dagster router.** Variant A is what you'd write if you cared about surfacing every ReAct iteration as its own graph node. In practice the loop is bounded (max 5-10 iterations) and the LLM call dominates latency — the extra op-graph structure buys little.
+
+Note the components version (`llm_multi_path_router` with `use_dynamic_partitions=true`) uses the Variant A shape internally because per-step visibility is often a demo-time ask. But nothing forces that — a hypothetical `llm_multi_path_router_simple` component could ship the Variant B shape with the same YAML surface.
+
+## Side by side — the same building blocks (components vs plain)
 
 **Router definition:**
 
