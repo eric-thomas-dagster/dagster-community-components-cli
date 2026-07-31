@@ -232,14 +232,18 @@ def collect_batch(results: List[Dict[str, Any]], *, audit_db_path: str) -> Dict[
     return {"cases": len(results), "audited": len(df)}
 PY
 
-# --- YAML: DynamicFanoutJobComponent wiring the 3 callables ---------------
+# --- YAML: DynamicFanoutAssetComponent — asset-lineage version -----------
+# (Was DynamicFanoutJobComponent, now upgraded to the asset variant so the
+# fan-out lives in the asset catalog with proper lineage.)
 DEFS="src/$PKG/defs"
-mkdir -p "$DEFS/daily_triage_job"
+mkdir -p "$DEFS/daily_triage_batch"
 
-cat > "$DEFS/daily_triage_job/defs.yaml" <<YAML
-type: dagster_community_components.DynamicFanoutJobComponent
+cat > "$DEFS/daily_triage_batch/defs.yaml" <<YAML
+type: dagster_community_components.DynamicFanoutAssetComponent
 attributes:
-  job_name: daily_triage_batch_job
+  asset_name: daily_triage_batch
+  group_name: batch_router
+  description: "Daily batch triage — fan out to N per-case ReAct triages, collect into one DataFrame."
 
   # 3 callable paths — plain Python functions in helpers.py above.
   discover_callable_path: "${PKG}.helpers:discover_cases"
@@ -250,39 +254,34 @@ attributes:
   process_kwargs:
     baggage_db_path: ${PROJECT_ABS}/data/baggage.duckdb
 
-  collect_callable_path: "${PKG}.helpers:collect_batch"
-  # Note: collect_kwargs field isn't in the component signature — collect
-  # receives only the list of results. So audit_db_path has to be embedded
-  # in the callable OR passed via env var. Here we use a small wrapper.
+  collect_callable_path: "${PKG}.helpers:collect_batch_default"
+
+  # Use case_id as the DynamicOutput mapping_key → stable per-item retries.
+  mapping_key_field: case_id
 
   # Per-item retry policy (a bad LLM call on ONE case doesn't kill the batch)
   retry_max_retries: 1
   retry_delay_seconds: 2
   retry_backoff: exponential
 
-  # Use case_id as the DynamicOutput mapping_key → stable per-item retries.
-  mapping_key_field: case_id
-
   fail_on_empty: true
+
+  kinds: [ai, agent, fanout]
 YAML
 
-# collect_batch needs the audit DB path — since DynamicFanoutJobComponent
-# doesn't support collect_kwargs, we wrap the helper to bind that path.
+# collect_batch needs the audit DB path — the DynamicFanoutAssetComponent's
+# collect_callable takes only (results,), so we wrap to bind the path.
 cat >> "src/$PKG/helpers.py" <<PY
 
 
-# Wrapper because DynamicFanoutJobComponent's collect_callable only takes
-# (results,) — no kwargs. In real deployments you'd pass paths via env vars
-# or use a resource; here we just bind the path at import time.
+# Wrapper because collect_callable_path only takes (results,) — no kwargs.
+# In production you'd pass paths via env vars or use a real Dagster resource;
+# here we bind at import time for demo simplicity.
 _AUDIT_DB = "${PROJECT_ABS}/audit/daily_audit.duckdb"
 
 def collect_batch_default(results):
     return collect_batch(results, audit_db_path=_AUDIT_DB)
 PY
-
-# Point the YAML at the wrapper
-sed -i.bak "s|collect_callable_path: \"${PKG}.helpers:collect_batch\"|collect_callable_path: \"${PKG}.helpers:collect_batch_default\"|" "$DEFS/daily_triage_job/defs.yaml"
-rm -f "$DEFS/daily_triage_job/defs.yaml.bak"
 
 # --- dg check + launch ----------------------------------------------------
 echo ""
@@ -299,9 +298,8 @@ if [ -z "$OPENAI_API_KEY" ]; then
 fi
 
 echo ""
-echo ">>> Running daily_triage_batch_job — 5 cases fan out in one run"
-uv run dg job execute --job daily_triage_batch_job 2>&1 | tail -5 || \
-  uv run dagster job execute -f "src/$PKG/definitions.py" -j daily_triage_batch_job 2>&1 | tail -5 || true
+echo ">>> daily_triage_batch — asset materialization (discover → 5x process → collect)"
+uv run dg launch --assets daily_triage_batch 2>&1 | tail -3
 
 echo ""
 echo ">>> Batch audit contents:"
@@ -322,17 +320,16 @@ cat <<DONE
 
 ✓ agentic_batch_triage demo done.
 
-Component version — DynamicFanoutJobComponent wraps discover → .map → .collect
+Component version — DynamicFanoutAssetComponent wraps discover → .map → .collect
 around the 3 user callables in helpers.py. YAML declares the wiring; Python
-lives in a separate file.
+lives in a separate file. Fan-out lives in the ASSET catalog (not a job).
 
 Browse:
   cd $PROJECT_ABS
   uv run dg dev
   # http://localhost:3000
-  # Jobs tab → daily_triage_batch_job → Launchpad → Launch run
-  # In the run view you'll see:
-  #   _discover  →  5 x _process[d1..d5]  →  _collect
+  # Assets tab → daily_triage_batch → materialize → run view shows:
+  #   _discover → 5 x process[d1..d5] → collect
 
 Compare to the plain Python version:
   https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_agentic_batch_triage_plain_demo.sh
