@@ -4,12 +4,13 @@ The **same asset graph** as [`agentic_router.md`](agentic_router.md), rebuilt in
 
 The only differences are **authoring surface** and **cost of adding a second one**. This walkthrough is the reference for that conversation.
 
-Two plain-Python shapes to compare:
+Three plain-Python shapes to compare:
 
 - **Variant A — `@graph_asset` with `@op` steps.** The ReAct loop is 5 pre-declared `plan_step_1..plan_step_5` ops. Each step is a visible box in the run UI with its own logs. Steps serialize between each other through the IO manager.
 - **Variant B — plain `@asset` with in-body `for` loop.** The ReAct loop is a normal Python loop inside the asset's compute function. Iteration count is dynamic (loop breaks when the planner says done). One box in the run UI; the loop shows up as sequential lines in that step's logs.
+- **Variant C — the minimum: unpartitioned, sequential, closest to Prefect.** No per-case partitions. No fan-out. No ops. One `@dg.asset` that loops through every case sequentially. Three unpartitioned filter assets per branch. **This is the shape a Prefect user would recognize most naturally** — Prefect doesn't have partitions as a first-class concept, so this is the closest 1:1 comparison to `@flow` + `@task` in a for-loop.
 
-Both produce the identical asset graph and same downstream behavior. Different tradeoffs for different tastes.
+Variants A and B are per-case partitioned (each case a separate materialization). Variant C is a single batch materialization with all cases inside. Different tradeoffs for different tastes.
 
 ## Run
 
@@ -28,7 +29,60 @@ curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
 bash setup_agentic_router_plain_simple_demo.sh
 ```
 
+**Variant C** (minimum — unpartitioned, sequential, closest to Prefect):
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_agentic_router_plain_minimal_demo.sh \
+  -o setup_agentic_router_plain_minimal_demo.sh
+bash setup_agentic_router_plain_minimal_demo.sh
+```
+
 Requirements: `uv`, `OPENAI_API_KEY`. ~1 min first run each.
+
+## Variant C — the Prefect-comparable minimum
+
+Prefect (2 and 3) doesn't have partitions as a first-class concept — you'd pass parameters to flow runs or use `.map()` on tasks. So this Dagster shape is the closest 1:1:
+
+- **No partitions.** One materialization handles all cases.
+- **No fan-out.** Sequential Python `for` loop inside a single `@dg.asset`.
+- **No ops.** Just chained `@dg.asset`s.
+- **No gate.** No sensor. No human-in-the-loop.
+- **Router asset** loops over the source DataFrame, calls a plain Python `triage_one_case()` per row, returns a batch DataFrame.
+- **Branch assets** are unpartitioned filter `@dg.asset`s that select rows where their branch was picked.
+- **Sink asset** aggregates all three branches and appends to a DuckDB audit table.
+
+Prefect analog:
+
+| Prefect | Dagster equivalent (Variant C) |
+|---|---|
+| `@flow` | `@dg.asset` (chained, unpartitioned) |
+| `@task` called in a loop | Python for-loop inside the `@dg.asset` compute |
+| Prefect result store | Dagster IO manager (default filesystem) |
+| Flow run history | Materialization history (per asset) |
+| Flow parameters | would be Dagster config or partition — omitted here |
+
+**What you still get from Dagster in this stripped-down shape:**
+- Every stage in the asset catalog with lineage
+- Materialization history queryable per asset
+- Downstream fan-out via normal `@asset` deps (each branch is a real graph node)
+- `dg dev` UI graphs the pipeline out of the box
+- Every primitive here is a stepping stone to add features on top
+
+**What you're intentionally not using:**
+- Per-case partitions (add later for per-case addressability)
+- DynamicOut fan-out (add later for parallelism — see [`agentic_batch_triage.md`](agentic_batch_triage.md))
+- Ops + graph_asset (add later for step-level visibility — Variant A above)
+- Human gate + sensor (add later for approval flows — see [`agentic_router.md`](agentic_router.md))
+
+The point of Variant C is: **this is what Dagster looks like before you turn on the features**. Every subsequent variant adds one thing on top:
+
+```
+Variant C (minimum)  +DynamicOut fanout        = agentic_batch_triage plain
+Variant C (minimum)  +partitions per case      = Variant B
+Variant C (minimum)  +ops + graph_asset        = Variant A
+Variant C (minimum)  +human gate + sensor      = agentic_router.md
+```
+
+Show Variant C to a Prefect user first. Then show what each Dagster feature costs to add and what it buys.
 
 ## Project layout
 
