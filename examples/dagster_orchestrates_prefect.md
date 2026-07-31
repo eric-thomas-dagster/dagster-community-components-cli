@@ -14,30 +14,48 @@ An inbox of documents lands per hour. Each document could be a PDF, an HTML tabl
 ## The asset graph
 
 ```
-inbox/                                     Prefect server (:4200) ──────────────────────────┐
-├─ report.pdf.txt          ┌──►                                                              │
-├─ prices.html             │       ┌───────┐    parse_document flow  (runtime task graph)   │
-└─ support.eml             │       │       │       │                                          │
-                            │       │       │       ├── parse_pdf(file)   ← if pdf/text       │
-                            ▼       │       ▼       ├── parse_html(file)  ← if html            │
-                    ┌─────────────┐ │     ┌───────┐ └── parse_email(file) ← if eml             │
-                    │ parsed_documents ── ┘     │              │                                │
-                    │ (Dagster asset,           │              ▼                                │
-                    │  3 partitions,            │        write_output → parsed_output/*.json    │
-                    │  triggers Prefect per file)                                              │
-                    │                                                                          │
-                    │  PrefectFlowRunAssetComponent                                            │
-                    │  api_url = http://127.0.0.1:4200/api                                     │
-                    │  parameters.file_path = "{partition_key}"                                │
-                    └──────────────────────────────────────────────────────────────────────────┘
-                            │
-                            ▼
-              parsed_output/  ← per-file JSON with the runtime-decided
-                                task graph's result. Downstream Dagster
-                                assets read from here.
+        Dagster (orchestration + catalog)      │      Prefect (:4200 server, runtime execution)
+──────────────────────────────────────────────  │  ─────────────────────────────────────────────
+                                                │
+  inbox/                                        │
+    report.pdf.txt                              │
+    prices.html                                 │
+    support.eml                                 │
+        │                                       │
+        ▼                                       │
+  parsed_documents[file]  ────── triggers ────► │  parse_document/main flow
+    PrefectFlowRunAssetComponent                │      │
+    3 static partitions                         │      │  runtime task graph:
+    api_url = local Prefect server              │      ├── parse_pdf(file)    ← if pdf / text
+    parameters:                                 │      ├── parse_html(file)   ← if html
+      file_path: {partition_key}                │      └── parse_email(file)  ← if eml
+      output_dir: parsed_output/                │              │
+    wait_for_result: true                       │              ▼
+    records flow_run_id + state in metadata     │        write_output
+        │                                       │              │
+        │                                       │              ▼
+        │        ◄──── reads artifact ────────  │  parsed_output/
+        │                                       │    report.pdf.txt.parsed.json
+        ▼                                       │    prices.html.parsed.json
+  document_records[file]                        │    support.eml.parsed.json
+    plain @dg.asset, 3 static partitions        │
+    opens the JSON Prefect wrote                │
+    normalizes to a per-file DataFrame row      │
+        │                                       │
+        ▼                                       │
+  document_index                                │
+    unpartitioned @dg.asset                     │
+    concat over all partitions                  │
+    one row per file × runtime task's fields    │
 ```
 
-Each Dagster partition materialization records the Prefect `flow_run_id` + `state` in its metadata. Six weeks later "why did prices.html not extract table rows correctly?" is a click in Dagster (find the partition) → click through to Prefect's UI (see the runtime task graph for that specific run).
+**The three stages**:
+
+1. **Dagster fans out over files**. Static partitions per file (or dynamic partitions in a real S3-watching version). Each partition triggers a Prefect flow run with `file_path` = the current partition key.
+2. **Prefect decides the task graph at runtime** based on what's inside each file. `report.pdf.txt` → `parse_pdf → write_output`. `prices.html` → `parse_html → write_output`. `support.eml` → `parse_email → write_output`. Different DAG per run. Prefect writes a JSON artifact to `parsed_output/`.
+3. **Dagster reads the artifact back**. `document_records[file]` opens the JSON, extracts the parsed fields, normalizes to a Pandas row. `document_index` concatenates all partitions into one catalog table with the Prefect `flow_run_id` on every row.
+
+Each Dagster partition materialization records the Prefect `flow_run_id` + `state` in its metadata. Six weeks later, "why did `prices.html` not extract table rows correctly?" is one click in Dagster (find the partition) → follow the `flow_run_id` link to Prefect's UI → see the runtime task graph for that specific run.
 
 ## Run
 
