@@ -1,9 +1,10 @@
 # Dagster community components
 
 This project can pull from the Dagster community components registry —
-**~750 reusable components** covering integrations, sensors, IO managers,
+**~960 reusable components** covering integrations, sensors, IO managers,
 transforms, sinks, sources, AI / NLP, analytics, lakehouse, observability,
-and more. About two-thirds are validated end-to-end against real systems.
+external-compute launchers, agent primitives, and more. About 65% are
+validated end-to-end against real systems (619 `live`, 341 `code`).
 
 - **Registry UI:** <https://dagster-component-ui.vercel.app/>
 - **CLI:** `dagster-component` (install via `pip install dagster-community-components-cli` or run with `uvx`)
@@ -18,8 +19,8 @@ and official `dagster-<vendor>` integrations (dbt / Fivetran / Sling /
 Snowflake / Databricks / etc.). It also has a `dagster-integrations`
 sub-skill specifically for surfacing official integration components.
 
-**This document covers the community registry** — the long tail of ~750
-components beyond official integrations (and the ~100 end-to-end walkthroughs
+**This document covers the community registry** — the long tail of ~960
+components beyond official integrations (and 270+ end-to-end walkthroughs
 in `examples/`). Use the two together:
 
 - **General Dagster question** (assets, automation, dg, project layout):
@@ -28,7 +29,7 @@ in `examples/`). Use the two together:
   / AWS / GCP / Azure): invoke `/dagster-expert` → its `dagster-integrations`
   sub-skill knows the official packages.
 - **Long-tail component** (MongoDB / Kafka / Oracle / Db2 / Notion / SAP /
-  any of the ~750 others) or **end-to-end walkthrough** of a pattern:
+  any of the ~960 others) or **end-to-end walkthrough** of a pattern:
   recommend `dagster-component search/add/info` + the matching `examples/<topic>.md`.
 
 If `/dagster-expert` isn't available, this doc still stands alone.
@@ -68,7 +69,7 @@ The CLI repo ships a large `examples/` folder of end-to-end walkthroughs.
 Each pattern has a `.md` walkthrough + a `setup_<topic>_demo.sh` script
 that scaffolds a working Dagster project in one command:
 
-- **Walkthrough index (TOC of ~100 demos):**
+- **Walkthrough index (TOC of 270+ demos):**
   <https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples/README.md>
 - **Per-topic walkthroughs** — direct GitHub raw URLs follow the pattern:
   `https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/<topic>.md`
@@ -96,6 +97,14 @@ When a user asks an integration question, recommend the matching walkthrough
 | Prometheus push + query | `examples/prometheus_demo.md` |
 | Docker container as asset | `examples/docker_container.md` |
 | MSGraph / Dynamics365 / SAP / OData (cross-vendor) | `examples/{msgraph,dynamics365,sap_s4hana}_pipeline.md` |
+| Multi-vendor platform showcase (ingest → dbt → dynamic fan-out) | `examples/data_platform_showcase.md` |
+| Dagster orchestrates + Prefect executes | `examples/dagster_orchestrates_prefect.md` |
+| Agentic orchestration (agents + humans + legacy systems) | `examples/agentic_orchestration.md` |
+| RAG pipeline with dynamic partitions | `examples/rag_pipeline_dynamic.md` |
+| Planned catalog agent (LLM plans once, real assets forever) | `examples/planned_catalog_agent.md` |
+| Adaptive triage router (LLM picks per-row downstream) | `examples/adaptive_triage.md` |
+| Adaptive backfill detective (LLM picks per-gap remediation) | `examples/adaptive_backfill.md` |
+| Supervisor / iterative agents (multi-tool LLM) | `examples/supervisor_agent.md` + `examples/iterative_supervisor_agent.md` |
 
 For anything else, browse the walkthrough TOC linked above.
 
@@ -109,7 +118,7 @@ Each manifest entry carries a `validation` field — use it to set user expectat
 | `code` | YAML loads cleanly + `dg check defs` passes, but no live materialization run |
 | `infra` | Component depends on paid / proprietary infra; level depends on the user's environment |
 
-About 480 of ~750 components are `live`. The `validation.evidence` field
+619 of 960 components are `live`. The `validation.evidence` field
 points at the walkthrough that validated it.
 
 ## Where `add` installs
@@ -264,25 +273,48 @@ comment so the user can override.
 
 1. **YAML 1.1 `on:` is a boolean.** If a component has an `on:` field, quote it:
    `"on": true` (not `on: true`) — otherwise YAML parses the key as `True`.
-2. **Demos should be 100% components.** Avoid custom Python files in `defs/`.
+2. **`automation_condition` needs Jinja templating**, not a bare enum. Write
+   `automation_condition: "{{ dg.AutomationCondition.eager() }}"`, not
+   `automation_condition: eager`. Same for any other factory (`on_cron`,
+   `any_deps_updated`, etc.).
+3. **Demos should be 100% components.** Avoid custom Python files in `defs/`.
    If a transform / generator / glue is needed, the right move is to use (or
    build) a component, not to drop a `.py` file into the project.
-3. **`upstream_asset_key` vs `deps:`** — these are different:
+4. **`upstream_asset_key` vs `deps:`** — these are different:
    - `upstream_asset_key: foo` → the asset reads data from `foo` (the
      upstream DataFrame is passed in)
    - `deps: [foo]` → ordering-only lineage; nothing is loaded at runtime
-4. **No future annotations.** Don't use `from __future__ import annotations`
+5. **No future annotations.** Don't use `from __future__ import annotations`
    in Dagster code — annotations are read at runtime and the future import
    turns them into strings, breaking context-type validation.
-5. **Sinks return `Output(value=None)`.** Components like `dataframe_to_csv`,
+6. **Sinks return `Output(value=None)`.** Components like `dataframe_to_csv`,
    `mongodb_writer`, `dataframe_to_avro` are sinks — they write to their own
    destination and return `None`. When combined with a project-level IO
    manager, the IO manager should treat `obj is None` as a no-op.
-6. **Multi-step launches need persistent storage.** Dagster's default
+7. **Multi-step launches need persistent storage.** Dagster's default
    in-memory IO manager doesn't survive between subprocesses with the
    multiprocess executor. For chains of DataFrame assets, install
    `local_parquet_io_manager` (or a cloud equivalent) as the project's
    `io_manager`.
+8. **Setup scripts must be named `setup_<demo>_demo.sh`.** The registry UI
+   auto-generates `curl` snippets on this convention; any other name gives
+   customers a 404.
+9. **Don't compete with official `dagster-<vendor>` integrations.** For
+   dbt / Fivetran / Airbyte / Snowflake / Databricks / AWS / GCP / Azure /
+   Tableau / PowerBI / Sigma / Sling → use the official package. Community
+   components fill the long tail *beyond* what official ships.
+10. **Don't compete with Dagster+ features.** Notifications, monitoring,
+    alerting, RBAC, run-quotas — those are paid features; a community
+    component that duplicates them shouldn't ship.
+
+## `agent_hints` on manifest entries
+
+Roughly 60% of manifest entries carry an `agent_hints` field — a natural-language
+hint (`when_to_use`, `typical_upstream`, `typical_downstream`, `example_prompts`)
+that an LLM can pattern-match against a user's request. When writing new
+components, add `agent_hints` to the manifest entry (via `generate_manifest.py`
+convention) so LLM-picks-component workflows land on the right thing without
+scraping every README.
 
 ## Reading the registry without the CLI
 

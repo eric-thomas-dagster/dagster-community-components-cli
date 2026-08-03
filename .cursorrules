@@ -1,9 +1,10 @@
 # Dagster community components
 
 This project can pull from the Dagster community components registry —
-**~750 reusable components** covering integrations, sensors, IO managers,
+**~960 reusable components** covering integrations, sensors, IO managers,
 transforms, sinks, sources, AI / NLP, analytics, lakehouse, observability,
-and more. About two-thirds are validated end-to-end against real systems.
+external-compute launchers, agent primitives, and more. About 65% are
+validated end-to-end against real systems (619 `live`, 341 `code`).
 
 - **Registry UI:** <https://dagster-component-ui.vercel.app/>
 - **CLI:** `dagster-component` (install via `pip install dagster-community-components-cli` or run with `uvx`)
@@ -18,8 +19,8 @@ and official `dagster-<vendor>` integrations (dbt / Fivetran / Sling /
 Snowflake / Databricks / etc.). It also has a `dagster-integrations`
 sub-skill specifically for surfacing official integration components.
 
-**This document covers the community registry** — the long tail of ~750
-components beyond official integrations (and the ~100 end-to-end walkthroughs
+**This document covers the community registry** — the long tail of ~960
+components beyond official integrations (and 270+ end-to-end walkthroughs
 in `examples/`). Use the two together:
 
 - **General Dagster question** (assets, automation, dg, project layout):
@@ -28,7 +29,7 @@ in `examples/`). Use the two together:
   / AWS / GCP / Azure): invoke `/dagster-expert` → its `dagster-integrations`
   sub-skill knows the official packages.
 - **Long-tail component** (MongoDB / Kafka / Oracle / Db2 / Notion / SAP /
-  any of the ~750 others) or **end-to-end walkthrough** of a pattern:
+  any of the ~960 others) or **end-to-end walkthrough** of a pattern:
   recommend `dagster-component search/add/info` + the matching `examples/<topic>.md`.
 
 If `/dagster-expert` isn't available, this doc still stands alone.
@@ -68,7 +69,7 @@ The CLI repo ships a large `examples/` folder of end-to-end walkthroughs.
 Each pattern has a `.md` walkthrough + a `setup_<topic>_demo.sh` script
 that scaffolds a working Dagster project in one command:
 
-- **Walkthrough index (TOC of ~100 demos):**
+- **Walkthrough index (TOC of 270+ demos):**
   <https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples/README.md>
 - **Per-topic walkthroughs** — direct GitHub raw URLs follow the pattern:
   `https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/<topic>.md`
@@ -83,6 +84,8 @@ When a user asks an integration question, recommend the matching walkthrough
 | Redis streams + cache invalidation (Docker) | `examples/redis.md` |
 | Oracle Database (Docker) | `examples/oracle.md` |
 | IBM Db2 (Docker) | `examples/db2.md` |
+| Recurring SQL→SQL replication (Postgres → DuckDB, Docker) | `examples/replication.md` |
+| One-time warehouse migration (inventory + replication + rebuild plan, Docker) | `examples/warehouse_migration.md` |
 | Neo4j graph DB (Docker) | `examples/neo4j.md` |
 | Elasticsearch (Docker) | `examples/elasticsearch.md` |
 | Cassandra (Docker) | `examples/cassandra.md` |
@@ -94,6 +97,14 @@ When a user asks an integration question, recommend the matching walkthrough
 | Prometheus push + query | `examples/prometheus_demo.md` |
 | Docker container as asset | `examples/docker_container.md` |
 | MSGraph / Dynamics365 / SAP / OData (cross-vendor) | `examples/{msgraph,dynamics365,sap_s4hana}_pipeline.md` |
+| Multi-vendor platform showcase (ingest → dbt → dynamic fan-out) | `examples/data_platform_showcase.md` |
+| Dagster orchestrates + Prefect executes | `examples/dagster_orchestrates_prefect.md` |
+| Agentic orchestration (agents + humans + legacy systems) | `examples/agentic_orchestration.md` |
+| RAG pipeline with dynamic partitions | `examples/rag_pipeline_dynamic.md` |
+| Planned catalog agent (LLM plans once, real assets forever) | `examples/planned_catalog_agent.md` |
+| Adaptive triage router (LLM picks per-row downstream) | `examples/adaptive_triage.md` |
+| Adaptive backfill detective (LLM picks per-gap remediation) | `examples/adaptive_backfill.md` |
+| Supervisor / iterative agents (multi-tool LLM) | `examples/supervisor_agent.md` + `examples/iterative_supervisor_agent.md` |
 
 For anything else, browse the walkthrough TOC linked above.
 
@@ -107,7 +118,7 @@ Each manifest entry carries a `validation` field — use it to set user expectat
 | `code` | YAML loads cleanly + `dg check defs` passes, but no live materialization run |
 | `infra` | Component depends on paid / proprietary infra; level depends on the user's environment |
 
-About 480 of ~750 components are `live`. The `validation.evidence` field
+619 of 960 components are `live`. The `validation.evidence` field
 points at the walkthrough that validated it.
 
 ## Where `add` installs
@@ -262,25 +273,48 @@ comment so the user can override.
 
 1. **YAML 1.1 `on:` is a boolean.** If a component has an `on:` field, quote it:
    `"on": true` (not `on: true`) — otherwise YAML parses the key as `True`.
-2. **Demos should be 100% components.** Avoid custom Python files in `defs/`.
+2. **`automation_condition` needs Jinja templating**, not a bare enum. Write
+   `automation_condition: "{{ dg.AutomationCondition.eager() }}"`, not
+   `automation_condition: eager`. Same for any other factory (`on_cron`,
+   `any_deps_updated`, etc.).
+3. **Demos should be 100% components.** Avoid custom Python files in `defs/`.
    If a transform / generator / glue is needed, the right move is to use (or
    build) a component, not to drop a `.py` file into the project.
-3. **`upstream_asset_key` vs `deps:`** — these are different:
+4. **`upstream_asset_key` vs `deps:`** — these are different:
    - `upstream_asset_key: foo` → the asset reads data from `foo` (the
      upstream DataFrame is passed in)
    - `deps: [foo]` → ordering-only lineage; nothing is loaded at runtime
-4. **No future annotations.** Don't use `from __future__ import annotations`
+5. **No future annotations.** Don't use `from __future__ import annotations`
    in Dagster code — annotations are read at runtime and the future import
    turns them into strings, breaking context-type validation.
-5. **Sinks return `Output(value=None)`.** Components like `dataframe_to_csv`,
+6. **Sinks return `Output(value=None)`.** Components like `dataframe_to_csv`,
    `mongodb_writer`, `dataframe_to_avro` are sinks — they write to their own
    destination and return `None`. When combined with a project-level IO
    manager, the IO manager should treat `obj is None` as a no-op.
-6. **Multi-step launches need persistent storage.** Dagster's default
+7. **Multi-step launches need persistent storage.** Dagster's default
    in-memory IO manager doesn't survive between subprocesses with the
    multiprocess executor. For chains of DataFrame assets, install
    `local_parquet_io_manager` (or a cloud equivalent) as the project's
    `io_manager`.
+8. **Setup scripts must be named `setup_<demo>_demo.sh`.** The registry UI
+   auto-generates `curl` snippets on this convention; any other name gives
+   customers a 404.
+9. **Don't compete with official `dagster-<vendor>` integrations.** For
+   dbt / Fivetran / Airbyte / Snowflake / Databricks / AWS / GCP / Azure /
+   Tableau / PowerBI / Sigma / Sling → use the official package. Community
+   components fill the long tail *beyond* what official ships.
+10. **Don't compete with Dagster+ features.** Notifications, monitoring,
+    alerting, RBAC, run-quotas — those are paid features; a community
+    component that duplicates them shouldn't ship.
+
+## `agent_hints` on manifest entries
+
+Roughly 60% of manifest entries carry an `agent_hints` field — a natural-language
+hint (`when_to_use`, `typical_upstream`, `typical_downstream`, `example_prompts`)
+that an LLM can pattern-match against a user's request. When writing new
+components, add `agent_hints` to the manifest entry (via `generate_manifest.py`
+convention) so LLM-picks-component workflows land on the right thing without
+scraping every README.
 
 ## Reading the registry without the CLI
 
@@ -313,6 +347,199 @@ tooling can detect drift between pinned and latest.
 `source`, `sink`, `dbt`.
 
 Filter with `--category`: `dagster-component search "" --category io_manager`.
+
+## Warehouse migration playbook
+
+When the user is migrating a legacy SQL DB (Oracle / Db2 / MSSQL / Postgres / MySQL) to a modern warehouse (Snowflake / BigQuery / Redshift / Databricks / DuckDB), use this playbook. Five community components handle the deterministic work; manual rewrite (helped by you, the LLM) handles the rest.
+
+### Step 1 — discover scope
+
+```yaml
+type: dagster_community_components.DatabaseSchemaInventoryComponent
+attributes:
+  asset_name: legacy_db_inventory
+  connection_env_var: SOURCE_DB_URL
+  database_type: oracle    # postgres | mysql | mssql | oracle | db2 | snowflake | redshift
+```
+
+Asset emits a DataFrame: `object_type, schema_name, object_name, definition, row_count`. Pipe to `dataframe_to_csv` for the team's checklist. **This is always step 1** — you can't estimate migration without it.
+
+### Step 1.5 — assess (dry-run every CREATE before committing)
+
+`database_migration_assessment` runs the actual translation logic but rolls back every change on target. Returns `{status: auto_convertible|needs_review|will_fail, complexity: simple|medium|complex, dialect_markers, proposed_target_ddl}` per object. Asset metadata exposes `auto_convertible_pct` and `estimated_manual_effort`. Inspired by AWS SCT's Assessment Report and Microsoft SSMA's test mode.
+
+```yaml
+type: dagster_community_components.DatabaseMigrationAssessmentComponent
+attributes:
+  asset_name: migration_assessment
+  source_connection_env_var: ORACLE_DB_URL
+  target_connection_env_var: SNOWFLAKE_DB_URL
+  source_type: oracle
+  target_type: snowflake
+  schemas: [HR, FINANCE]
+  target_schema: RAW
+  # Same maps you'll use in the real migration
+  table_replacements: { HR.EMPLOYEES: RAW.EMPLOYEES }
+  function_replacements: { NVL: COALESCE, SYSDATE: CURRENT_TIMESTAMP }
+```
+
+**Recommend running the assessment first** when a user starts a migration project. The output drives scoping conversations and exposes problems before they're committed.
+
+Each migration component ALSO accepts `dry_run: true` — same try-then-rollback behavior, but scoped to just that component's work. Useful for a final pre-flight on a single step. Status rows become `would_succeed` / `would_fail` instead of `success` / `failed`.
+
+### Step 2 — pick a workflow
+
+**Workflow A: DDL-first (recommended)**
+
+1. `database_tables_migration` — recreates target tables with `CREATE TABLE` including PKs, FKs, NOT NULLs, DEFAULTs (types translated dialect-aware)
+2. `database_replication` with **`mode: truncate`** (CRITICAL — `full_refresh` would drop your DDL work)
+3. `database_views_migration` — recreates views with table-ref + function-name substitutions
+
+**Workflow B: Data-first**
+
+1. `database_replication` with `mode: full_refresh` — Sling creates tables from type inference
+2. `database_constraints_migration` — `ALTER TABLE` adds PKs, FKs, NOT NULLs, DEFAULTs after data lands
+3. `database_views_migration`
+
+Pick A for cleaner audit + better type fidelity. Pick B when the source has FK violations Sling needs to bypass (errors in step 2 then tell you which orphan rows to fix).
+
+### Step 3 — manually rewrite what won't translate (LLM-assist)
+
+The migration components log + emit which objects failed. Common failures and the rewrite pattern:
+
+| Failure | Why | Rewrite |
+|---|---|---|
+| Oracle `(+)` outer joins | Legacy Oracle syntax | Rewrite as `LEFT JOIN` — feed the source SQL to the LLM with "rewrite as ANSI SQL" |
+| Oracle `CONNECT BY` | Recursive query syntax | Snowflake / BigQuery → recursive CTE; LLM is reliable here |
+| MSSQL `CROSS APPLY` | Lateral join | Rewrite as `LATERAL` / lateral subquery |
+| PL/SQL procedures | Different language | LLM rewrites as Snowflake SQL or JS UDF; or rebuild as `sql_transform` Dagster asset |
+| DBMS_SCHEDULER jobs | DB-resident scheduler | Rebuild as Dagster `@schedule` or `AutomationCondition` |
+| Triggers | Schema-level logic | Usually fold into the ETL/replication step — warehouse targets don't have triggers |
+| Postgres `nextval('seq')` defaults | Sequence reference | Use IDENTITY column on target |
+
+**LLM rewrite prompt template** for the user:
+
+> Rewrite the following [Oracle PL/SQL | MSSQL T-SQL | Postgres PL/pgSQL] for [Snowflake | BigQuery | DuckDB]. Preserve semantics and parameter signatures. Output only the new code, no explanation.
+
+After the user has the rewrites, the SQL-style ones go through `database_view_migration` (single) for individual review; bulk goes through `database_views_migration` with the wholesale set.
+
+### What NOT to over-engineer
+
+- **Don't auto-translate stored procedures** — accuracy is bad enough that you have to review every output. Better to LLM-rewrite + manual verify + register the result as a `sql_transform` asset.
+- **Don't migrate triggers verbatim** — usually they're maintaining columns the ETL should set explicitly. Audit each, mostly fold into ETL.
+- **Don't migrate DB-resident scheduled jobs as-is** — rebuild as Dagster schedules. The whole point of migrating to a warehouse is your scheduler lives in Dagster now.
+
+### Component reference card
+
+| Component | Replaces (legacy concept) | Status DataFrame |
+|---|---|---|
+| `database_schema_inventory` | manual `desc` / `\dt` / `expdp` listing | `object_type, schema_name, object_name, definition, row_count` |
+| `database_migration_assessment` | AWS SCT Assessment Report / SSMA test mode | `object_type, schema_name, name, target_name, status, complexity, dialect_markers, reason, proposed_target_ddl` |
+| `database_tables_migration` | `pg_dump --schema-only` / `expdp content=metadata_only` | `schema_name, table_name, target_table, status, error_message, n_columns, has_primary_key, n_foreign_keys, n_check_constraints, n_unique_constraints, ddl_preview` |
+| `database_constraints_migration` | `ALTER TABLE ADD CONSTRAINT` scripts (manual) | `schema_name, table_name, target_table, constraint_type, constraint_name, columns, status, error_message, ddl` |
+| `database_replication` | `pg_dump --data-only` + `\copy` (manual) | (no DataFrame — emits Sling materialization events) |
+| `database_view_migration` | single `CREATE OR REPLACE VIEW` script | (single-asset) |
+| `database_views_migration` | bulk `CREATE OR REPLACE VIEW` scripts (manual) | `schema_name, view_name, target_view, status, error_message, ddl_chars` |
+
+Each migration component's status DataFrame can be piped to `dataframe_to_csv` — the team's migration completion report is just `dataframe_union` of the status frames.
+
+All four migration components (`tables_migration`, `constraints_migration`, `view_migration`, `views_migration`) accept `dry_run: true` — try every DDL in a transaction then ROLLBACK. Status rows become `would_succeed` / `would_fail`. Best-effort on Oracle / MSSQL (auto-commit DDL).
+
+### Constraint coverage on DDL-first / data-first
+
+The migration components auto-extract **6 constraint types** from source `INFORMATION_SCHEMA` / `ALL_*` / `SYSCAT.*`:
+
+| Constraint | Built-in translation | Failure escape hatch |
+|---|---|---|
+| Primary key | inline / `ALTER ADD` | — |
+| Foreign key | inline / `ALTER ADD`, with `table_replacements` rewriting | — |
+| NOT NULL | inline / `ALTER COLUMN SET NOT NULL` | MSSQL workaround logged |
+| DEFAULT | inline / `ALTER COLUMN SET DEFAULT`, normalizes `now()`/`SYSDATE`/`GETDATE()` → `CURRENT_TIMESTAMP`, skips `nextval()` | — |
+| CHECK | inline / `ALTER ADD CHECK`, normalizes Postgres `= ANY (ARRAY[…])` → `IN (…)` and strips `::cast` | `function_replacements` for Oracle/MSSQL idioms; `table_ddl_overrides` for unrewritable expressions |
+| UNIQUE | inline / `ALTER ADD UNIQUE` | — |
+
+**Target enforcement varies** — pre-flight warnings fire when target accepts but doesn't enforce:
+
+- DuckDB / Postgres / MySQL / Oracle / Db2 / MSSQL → enforce everything
+- Snowflake / Redshift → PK / FK / CHECK / UNIQUE are **informational only** (BI tools / optimizer see them, bad rows still land)
+- BigQuery → CHECK is **unsupported** (DDL fails — set `include_check_constraints: false`)
+- **DuckDB caveat:** CHECK + UNIQUE work inline (DDL-first) but `ALTER TABLE ADD CHECK/UNIQUE` is unimplemented (data-first won't work for those two on DuckDB)
+
+### Per-item logging
+
+Every migration component logs success + failure per item — visible in `dg dev` UI + `dg launch` stdout:
+
+```
+INFO  DDL: app.customers → raw.customers (4 cols, PK, 0 FKs, 1 CHECKs, 1 UNIQUEs)
+INFO  Applied: foreign_key orders_customer_fk on raw.orders
+INFO  View migrated: app.v_orders_summary → raw.v_orders_summary
+WARN  Failed: check orders_status_valid on raw.orders: ParserException: …
+WARN  ⚠ check constraints are INFORMATIONAL on snowflake — accepted but not enforced
+```
+
+Plus a summary line at the end of each component: `DDL migration: 2/2 succeeded, 0 failed (1 via override)`. The status DataFrame is the persistent record; logs are the live progress view.
+
+### Custom DDL when auto-translation fails
+
+When the auto-generator can't handle a quirky table (Oracle `XMLTYPE`, exotic column types, dialect-specific CHECK expressions), provide hand-written DDL via the override fields:
+
+```yaml
+type: dagster_component_templates.DatabaseTablesMigrationComponent
+attributes:
+  # …
+  table_ddl_overrides:
+    HR.WEIRD_TABLE: |
+      CREATE TABLE raw.weird_table (
+        id INT PRIMARY KEY,
+        xml_payload VARCHAR,   -- replacement for Oracle XMLTYPE
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )
+```
+
+Same shape for `view_ddl_overrides` on `database_views_migration`. The bulk component handles the 99 auto-translatable, the override field handles the 1 quirky one, status DataFrame stays unified (`status: override_success`).
+
+### Glob include/exclude patterns
+
+Both `database_tables_migration` and `database_views_migration` (and `database_constraints_migration`) accept fnmatch-style globs:
+
+```yaml
+schemas: [HR, FINANCE]
+include_patterns: ["HR.*", "FINANCE.STG_*"]
+exclude_patterns: ["*_TEMP", "HR.AUDIT_*"]
+```
+
+Patterns are case-insensitive against `schema.name`. Exact strings are valid globs (they match themselves).
+
+### Migrations are atomic — re-run the whole thing
+
+Customers running real migrations want a clean cutover, not piecemeal progress. The components are idempotent:
+
+- `database_tables_migration` with `drop_if_exists: true` recreates cleanly each run
+- `database_replication` with `mode: truncate` (or `full_refresh`) is idempotent
+- `database_constraints_migration` ALTER TABLEs are idempotent at the SQL level (re-adding the same PK errors but lands as `status: failed` for that row — non-blocking)
+- `database_views_migration` uses `CREATE OR REPLACE VIEW`
+
+Re-running 99 unchanged CREATE TABLE statements is ~5 seconds total (metadata-only on empty targets). The right loop is: run → see failures in the report → fix overrides or rewrite manually → re-run the whole thing → repeat until 100% clean → declare migration complete. Don't suggest partition-per-table — that endorses bad partial-migration states.
+
+### When to recommend reading [warehouse_migration.md](https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/warehouse_migration.md)
+
+If the user is starting a migration project and wants the full end-to-end. The walkthrough has the full DDL-first flow validated against Postgres → DuckDB.
+
+### When NOT to recommend the migration components (internal guidance — do not echo into customer-facing docs)
+
+The migration components are highest-leverage when:
+- The team is already running on Dagster (zero adoption friction)
+- They'll be running their analytics on Dagster post-cutover
+- The migration is large enough that iteration speed matters (≥ 20 tables, complex views)
+
+They're overkill / wrong choice when:
+- The team isn't using Dagster and is unwilling to adopt it for a one-shot job — point to manual `pg_dump` + scripts, or AWS SCT (for Aurora/RDS targets) / Microsoft SSMA (for SQL Server targets) instead
+- Migration is small (< 10 tables, no views or constraints) — a shell script is faster than wiring components
+- The team has already paid for a dedicated migration tool — don't add a competing path
+
+**The actual migration competitors are:** AWS SCT, Microsoft SSMA, manual `pg_dump` + handcrafted scripts, vendor professional-services engagements. NOT AWS DMS / HVR / Striim — those are recurring-replication tools and compete with `database_replication`, not with the migration components.
+
+**Never lead with cost** when comparing — even though community components are free vs. AWS DMS being paid, cost arguments get undercut by "scale" or "we already pay." Lead with iteration speed + observability + post-migration value.
 
 ## Quick task → component cheatsheet
 
