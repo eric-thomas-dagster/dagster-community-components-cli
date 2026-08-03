@@ -92,6 +92,10 @@ export DAGSTER_CLOUD_ORG="placeholder"
 uv run dg check defs 2>&1 | tail -6 || fail "dg check defs failed"
 ok "Definitions validated (code-level — YAML shape is correct)"
 
+# --- Dagster+ Serverless prep -------------------------------------------
+# Make the project deployable via `dagster-cloud serverless deploy-docker`.
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/serverless_prep.sh | bash
+
 cat <<EOF
 
 $(ok "Project scaffolded at: $PROJECT_DIR")

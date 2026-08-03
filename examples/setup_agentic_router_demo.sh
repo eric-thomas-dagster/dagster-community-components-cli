@@ -470,7 +470,11 @@ except Exception as e:
     print(f"    (audit read failed: {e})")
 PY
 
-# --- 11. Final explainer --------------------------------------------------
+# --- 11. Dagster+ Serverless prep -----------------------------------------
+# Make the project deployable via `dagster-cloud serverless deploy-docker`.
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/serverless_prep.sh | bash
+
+# --- 12. Final explainer --------------------------------------------------
 cat <<DONE
 
 ✓ agentic_router demo done.
