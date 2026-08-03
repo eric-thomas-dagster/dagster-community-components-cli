@@ -16,10 +16,11 @@ if [ ! -f pyproject.toml ]; then
   exit 1
 fi
 
-# 1. Add Dagster+ Serverless runtime deps. `dagster-cloud` is required by
-#    `dagster-cloud serverless deploy-docker`'s post-install check.
-#    `boto3` is required by `serverless_io_manager` (S3-backed IO manager).
-uv add -q dagster-cloud boto3
+# 1. Add `boto3` — required by `serverless_io_manager` (S3-backed IO manager)
+#    at runtime on Cloud. `dagster-cloud` itself is provided by the Dagster+
+#    setup flow (https://dagster-component-ui.vercel.app/dagster-plus) — don't
+#    duplicate it here.
+uv add -q boto3
 
 # 2. Post-install hook that runs after the container's `COPY .` step. Installs
 #    the project package so `<pkg>` is importable at runtime. Without this,
@@ -62,9 +63,12 @@ def defs():
 DEFINITIONS_EOF
 
 echo "✓ Serverless prep complete."
-echo "  Added:    dagster-cloud, boto3 (to project deps)"
+echo "  Added:    boto3 (to project deps — for serverless_io_manager)"
 echo "  Created:  dagster_cloud_post_install.sh"
 echo "  Modified: src/${_PKG}/definitions.py  (conditional serverless_io_manager)"
+echo ""
+echo "  If you haven't run the Dagster+ setup yet, do that first:"
+echo "    https://dagster-component-ui.vercel.app/dagster-plus"
 echo ""
 echo "  Deploy with:"
 echo "    dagster-cloud serverless deploy-docker . \\"
