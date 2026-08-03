@@ -44,6 +44,12 @@ Plus: approval_watcher (filesystem_monitor, partition_mode=dynamic_partition)
 
 Downstream sinks reference the SAME dynamic partition set as their upstream branch, so they inherit the same clean per-partition view.
 
+### Live asset graph
+
+Rendered in Dagster+ after materialization — five groups (source / router / branches / sinks / human_in_the_loop), per-branch partition counts show only the cases the router actually picked:
+
+![Agentic router asset graph in Dagster+](images/agentic_router_asset_graph.png)
+
 ## Run
 
 ```bash
