@@ -48,7 +48,7 @@ if [ -n "$DCC_LOCAL_PATH" ]; then
   DCC_SRC="dagster-community-components @ file://$DCC_LOCAL_PATH"
   echo "    (using local DCC checkout: $DCC_LOCAL_PATH)"
 else
-  DCC_SRC="dagster-community-components @ https://github.com/eric-thomas-dagster/cli-community-templates/archive/$COMMIT_SHA.zip"
+  DCC_SRC="dagster-community-components @ https://github.com/eric-thomas-dagster/dagster-component-templates/archive/$COMMIT_SHA.zip"
 fi
 export DAGSTER_HOME="$PROJECT_ABS/.dagster_home"
 mkdir -p "$DAGSTER_HOME"
@@ -459,10 +459,10 @@ uv run python - <<PY
 import duckdb
 try:
     con = duckdb.connect("$PROJECT_ABS/audit/case_audit.duckdb", read_only=True)
-    rows = con.execute("SELECT branch, summary FROM escalation_audit").fetchall()
+    rows = con.execute("SELECT urgency, summary FROM escalation_audit").fetchall()
     if rows:
         print(f"    {len(rows)} row(s):")
-        for r in rows: print(f"      - branch={r[0]:<10s}  summary={str(r[1])[:100]}")
+        for r in rows: print(f"      - urgency={r[0]:<10s}  summary={str(r[1])[:100]}")
     else:
         print("    (empty)")
     con.close()
