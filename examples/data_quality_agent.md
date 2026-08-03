@@ -62,7 +62,7 @@ The LLM correctly connects the anomaly to the row's context (category, amount si
 - **Multi-column anomaly.** `anomaly_detection` supports one metric column — chain multiple instances (one per column) then union the flagged sets.
 - **Feed to `langgraph_agent` for multi-step investigation.** Replace the single-shot LangChain with a LangGraph flow: plan → look up account history → check other transactions → synthesize.
 
-## Related
+## See also
 
 - [PII detection + LLM redaction](./pii_redaction.md) — same "row-wise LLM as pass 2" shape, different problem (compliance vs. quality).
 - [Cube semantic layer + LLM](./cube_query.md) — LLM-over-structured-metrics pattern for BI.

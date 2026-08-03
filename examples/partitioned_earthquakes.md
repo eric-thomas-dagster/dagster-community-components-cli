@@ -19,6 +19,14 @@ rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_j
 | 4 | `sort` | transformation | By magnitude per partition |
 | 5 | `dataframe_to_json` | sink | Per-partition file: `/tmp/earthquakes/{partition_date}.jsonl` |
 
+## Components used
+
+- `dataframe_to_json`
+- `json_flatten`
+- `rest_api_fetcher`
+- `select_columns`
+- `sort`
+
 ## Run
 
 ```bash
@@ -55,3 +63,7 @@ One JSONL file per materialized day:
 - Same component definitions as the unpartitioned demo; partitioning is opt-in
   via three additional fields (`partition_type`, `partition_start`,
   `partition_date_column`).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

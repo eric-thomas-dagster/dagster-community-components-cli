@@ -18,7 +18,7 @@ iris_clean              ← bigquery_create_table_from_query_asset
                           └── iris_predictions_csv  ← dataframe_to_csv (/tmp/iris_predictions.csv)
 ```
 
-## Components covered (4)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -48,7 +48,7 @@ setosa,            setosa @ 99.92%,                4.6,           3.6,         1
 **~$0.001.** Iris is 150 rows; CTAS scans <1 KB, training scans <1 KB,
 prediction scans 10 rows. All below the BQ free tier in practice.
 
-## Required env var
+## Required env vars
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
@@ -58,7 +58,7 @@ The SA needs at least `roles/bigquery.dataEditor` on the destination
 dataset + `roles/bigquery.jobUser` on the project. (Or simpler:
 `roles/owner` for demos.)
 
-## Setup
+## Run
 
 1. Enable the **BigQuery API** on the SA's project.
 2. Grant the SA the BQ roles (or `roles/owner`).
@@ -141,3 +141,7 @@ options:
   horizon: 30
   confidence_level: 0.95
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

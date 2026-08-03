@@ -48,11 +48,11 @@ Three flows share the same database:
 - **Multi-collection ingest:** `mongodb_ingestion` extracts both `users` and `products` via dlt → in-memory DuckDB → unified DataFrame (`all_collections_extract`, with `_resource_type` column to distinguish source collections)
 - **Auto-serialize via IO manager:** every DataFrame asset (`synthetic_orders`, `users_from_mongo`, `all_collections_extract`) is also auto-written to its own collection by `mongodb_io_manager` (set as the project default `io_manager`). Sinks that return `Output(value=None)` (like `mongodb_writer`) are no-ops through this path.
 
-## Prereqs
+## Prerequisites
 
 - **Docker daemon running.** The setup script exits early with a clear message if it's not.
 
-## Run it
+## Run
 
 ```bash
 bash setup_mongodb_demo.sh
@@ -119,7 +119,7 @@ attributes:
   # upsert_key: order_id    # required when if_exists: upsert
 ```
 
-## Trade-offs
+## Trade-offs & gotchas
 
 - **Single env var, multiple components.** All downstream components read `MONGODB_URI` from the same env var. To target a different cluster per component, set a different `connection_string_env_var:`.
 - **No data passed via mongodb_resource.** The resource carries config only — readers and writers each construct their own pymongo client (with the same URI). Skipping the resource and pointing readers/writers at `MONGODB_URI` directly is also fine; the resource is right when many downstream components share a connection.

@@ -135,3 +135,7 @@ Live-validated on gpt-4o-mini: **16/22 clean picks in 43s, ~$0.016 total cost.**
 > **Note:** Kitchen Sink is at the edge of what gpt-4o-mini handles reliably. 5 of the 6 requested CSVs land end-to-end; the 6th (rank by revenue → top-categories.csv) is where mini occasionally stops early. Upgrade to gpt-4o for full coverage.
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

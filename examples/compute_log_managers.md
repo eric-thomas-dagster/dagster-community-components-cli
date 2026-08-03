@@ -10,7 +10,7 @@ The demo runs Splunk Free + OTel Collector contrib in Docker on your laptop, sca
 
 **Live-validated** — running the demo end-to-end materializes the asset and Splunk's search API returns 22 events on each path (`source=dagster` for direct HEC, `source=otel-collector` for the OTel route). The validation step in the script auto-checks this and prints ✓ / ✗.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_compute_log_managers_demo.sh -o setup_compute_log_managers_demo.sh

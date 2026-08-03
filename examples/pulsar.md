@@ -26,6 +26,13 @@ persistent://public/default/events  (25 seeded JSON messages)
 └── pulsar_events_obs       ← pulsar_observation_sensor → asset observations for lag/count
 ```
 
+## Components used
+
+- `pulsar_monitor`
+- `pulsar_observation_sensor`
+- `pulsar_to_database_asset`
+- `python_callable_job`
+
 ## Prerequisites
 
 - `uv` — `curl -LsSf https://astral.sh/uv/install.sh | sh`
@@ -66,13 +73,13 @@ sqlite3 /tmp/pulsar-demo.db 'SELECT COUNT(*) FROM raw_events;'    # 25
 - **StreamNative Cloud / geo-replicated Pulsar.** Swap `service_url: pulsar://localhost:6650` for `pulsar+ssl://<cluster>.streamnative.g.snio.cloud:6651` and add `auth_params_env_var: PULSAR_TOKEN`. Same YAML shape.
 - **Schema registry.** Point the component at a Pulsar schema-registry-backed topic; deserialization stays the same.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f dg-pulsar-demo
 ```
 
-## Related
+## See also
 
 - [Kafka](./kafka.md) — same three-component shape (ingest + monitor + observation) against Kafka.
 - [NATS](./nats.md) — same shape, NATS JetStream instead.

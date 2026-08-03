@@ -108,3 +108,7 @@ uv run dg launch --assets '*'
 - **Federate across multiple accounts**: create one EXTERNAL DATA SOURCE
   per storage account, reference each in different OPENROWSET calls in
   the same query
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

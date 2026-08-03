@@ -9,7 +9,14 @@
 - [`tm1_cube_data_ingestion`](../../dagster-component-templates/tree/main/assets/ingestion/tm1_cube_data_ingestion) — cube slice via MDX as a DataFrame
 - [`tm1_workspace`](../../dagster-component-templates/tree/main/integrations/tm1_workspace) — **StateBackedComponent** — auto-emit one asset per (Cube, Process, Chore)
 
-## One-command demo
+## Components used
+
+- `tm1_cube_data_ingestion`
+- `tm1_process_status_sensor`
+- `tm1_process_trigger_job`
+- `tm1_workspace`
+
+## Run
 
 Spins up a mock TM1 server in Docker (Flask container, ~130 MB), scaffolds a Dagster project, wires all five components, materializes end-to-end. **Costs $0** — no TM1 license needed.
 
@@ -110,7 +117,7 @@ Every matching TI process becomes a Dagster asset. Materialize any of them from 
 
 Use this integration when TM1 is already deployed and you want Dagster as the orchestration control plane.
 
-## Related walkthroughs
+## See also
 
 - [`qlik_replicate.md`](qlik_replicate.md) — same 5-component shape for Qlik Replicate CDC
 - (Coming soon) `cognos.md`, `qlik_compose.md`, `jde.md` — same shape for the rest of the prospect stack

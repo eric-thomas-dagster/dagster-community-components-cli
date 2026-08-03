@@ -2,6 +2,11 @@
 
 Bridges a [Precisely Connect ETL](https://www.precisely.com/product/precisely-connect/connect) (formerly Syncsort DMX / DMExpress) job with Dagster as a **declare-only external asset** that gets materialization events from a paired **status-polling sensor**. Precisely owns the schedule + execution; Dagster owns the catalog + observability.
 
+## Components used
+
+- `external_precisely_job`
+- `precisely_job_sensor`
+
 ## The two-component pattern
 
 Precisely Connect ETL publishes exactly one REST surface — `GET /projects/{jobRunId}/status` — and it returns a plain-text status string. There is **no publicly documented submit / trigger endpoint** and **no list-runs endpoint**. So Dagster can't "run" a Precisely job. What it CAN do is treat the job as a real first-class asset, and surface every observed Precisely run as a materialization event:
@@ -96,6 +101,14 @@ attributes:
   asset_key: precisely/etl/load_customers     # SAME as external asset above
   minimum_interval_seconds: 60
   default_status: running
+```
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_precisely_validation_demo.sh \
+  -o setup_precisely_validation_demo.sh
+bash setup_precisely_validation_demo.sh
 ```
 
 ## See also

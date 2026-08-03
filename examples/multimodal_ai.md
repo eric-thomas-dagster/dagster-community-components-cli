@@ -15,7 +15,7 @@ product_descriptions (10 product blurbs)
        └── description_embeddings ← litellm_embedding_batch (text-embedding-3-small)
 ```
 
-## Components covered (3)
+## Components used
 
 | Component | What it does | Backend |
 |---|---|---|
@@ -30,13 +30,13 @@ product_descriptions (10 product blurbs)
 - 5 `image_llm_extractor` calls × ~$0.005 = $0.025
 - 1 batch of 10 `litellm_embedding_batch` calls (essentially free at $0.02 per 1M tokens)
 
-## Required env var
+## Required env vars
 
 ```bash
 OPENAI_API_KEY=sk-...
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_multimodal_ai_demo.sh | bash
@@ -78,3 +78,7 @@ uv run dg dev   # http://localhost:3000
 
 Each is a candidate for its own focused demo when you have the right
 input data (audio file, PDF, batch of images, etc.).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

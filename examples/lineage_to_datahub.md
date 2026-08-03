@@ -31,7 +31,7 @@ GraphQL API.
 | `lineage_graph_extractor` | Walks the live Dagster asset graph at materialization time, emits canonical `{nodes, edges, payload_hash}` |
 | `lineage_to_datahub` | Pushes one `datasetProperties` + one `upstreamLineage` aspect per Dagster asset to DataHub's Rest.li `ingestProposal` endpoint |
 
-## Run the demo
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_lineage_to_datahub_demo.sh | bash
@@ -106,3 +106,7 @@ if you want to try a different one.
 docker compose -f /tmp/datahub-quickstart-compose.yml --profile quickstart down -v
 rm -rf lineage-to-datahub-demo
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -21,6 +21,13 @@ rest_api_fetcher (text)  → regex_parser (split)
 | 4 | `filter` | transformation | Drop rows where `title` is null (the preamble before the first item) |
 | 5 | `dataframe_to_csv` | sink | Write title, link |
 
+## Components used
+
+- `dataframe_to_csv`
+- `filter`
+- `regex_parser`
+- `rest_api_fetcher`
+
 ## Run
 
 ```bash
@@ -57,3 +64,7 @@ An open letter asking NHS England to keep its code open,https://keepthingsopen.c
 
 Add a `datetime_parser` to parse `<pubDate>...</pubDate>`, then a `sort`
 by date. Or chain a `filter` for HN posts above a points threshold.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

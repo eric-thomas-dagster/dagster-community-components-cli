@@ -9,7 +9,7 @@ The **router-loop** pattern from BPMN "agentic orchestration" diagrams, done the
 
 The alternative shape — `iterative_supervisor_agent` — declares max_iterations assets per case. That works when you want per-step re-runs and per-step lineage, but for a router demo it clutters the graph and misrepresents assets (loop iterations are compute, not state). This walkthrough uses the cleaner shape.
 
-## The asset graph
+## Architecture
 
 ```
 baggage_reports  (CSV source, unpartitioned — wired into lineage)
@@ -148,7 +148,7 @@ Sensor fires → gate fails `approval_rejected` → `escalation_audited[c3]` sta
 - **Real APIs instead of LLM-simulated tools.** Each tool's `system_message` currently pre-seeds ground-truth data (baggage DB rows, airport records) so the demo is self-contained. In production, wrap the tool's system_message around a call to your actual DB / API / service, or use [`openai_agent`](../c/openai_agent) with real MCP servers.
 - **A different legacy audit sink.** Swap `duckdb_table_writer` for `dataframe_to_snowflake` / `dataframe_to_mssql` / `dataframe_to_bigquery` / `dataframe_to_iceberg_table`.
 
-## Related walkthroughs
+## See also
 
 - **[agentic_orchestration.md](agentic_orchestration.md)** — simpler linear shape: `triage_agent → draft_response → human_approval_gate → sinks`. Start here if you're new to agent + human patterns.
 - **[rag_supervisor.md](rag_supervisor.md)** — planner + parallel specialist agents (single retrieval isn't enough). No human gate.

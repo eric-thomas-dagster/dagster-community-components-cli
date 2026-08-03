@@ -8,7 +8,7 @@ x12_messages         ← synthetic_data_generator (x12_messages, 15 msgs)
        └── x12_flat   ← x12_edi_parser (one row per ST/SE transaction)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -64,10 +64,14 @@ ISA fields are positionally fixed-width per spec, so element/component/segment s
 
 ASC X12 is the dominant US-domestic EDI standard. Every major payer, retailer, logistics provider, and bank speaks it. Migrations to FHIR + JSON are happening but the legacy X12 fire-hose isn't going away — claims clearinghouses, ERP integrations, and supply-chain ETL all ingest these envelopes daily.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_x12_edi_demo.sh | bash
 cd x12-edi-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

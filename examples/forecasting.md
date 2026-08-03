@@ -17,7 +17,7 @@ churn_dataset (100 customers, 30% churn)
        └── churn_dataset_split        ← create_samples (stratified train/val/test)
 ```
 
-## Components covered (3)
+## Components used
 
 | Component | What it produces |
 |---|---|
@@ -29,7 +29,7 @@ churn_dataset (100 customers, 30% churn)
 
 **$0.** statsmodels + pandas, all local.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_forecasting_demo.sh | bash
@@ -46,3 +46,7 @@ uv run dg dev   # http://localhost:3000
   for `(p, d, q)` tuning. More robust default choice.
 - For both: `forecast_periods` is the horizon. `confidence_level` (0–1)
   controls the prediction interval width (default 0.95).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

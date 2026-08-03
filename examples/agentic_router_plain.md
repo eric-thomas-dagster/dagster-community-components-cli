@@ -583,3 +583,7 @@ Both versions:
 - The generated project's `src/<pkg>/defs/assets.py` — after running the setup, this is the whole thing in one file.
 
 Send this walkthrough to anyone who says "your framework does too much magic." The magic is a Python file. Every line is Dagster you'd write yourself.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

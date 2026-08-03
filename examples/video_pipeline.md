@@ -10,7 +10,7 @@ sample_videos       ← synthetic_video_generator (2 MP4s w/ video+audio tracks)
        └── video_audio   ← video_audio_extract_asset (16kHz mono WAV)
 ```
 
-## Components covered (4)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -72,7 +72,7 @@ videos → video_metadata_extractor
 | `every_n_frames: 30` | Sample every Nth frame — useful when you know your source fps |
 | `fixed_count: 5` (this demo) | N frames spread evenly across duration — best for highlight reels / variable-length sources |
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_video_pipeline_demo.sh | bash
@@ -82,3 +82,7 @@ uv run dg launch --assets '*'
 ls -la /tmp/video_demo_frames/    # 10 JPEGs
 ls -la /tmp/video_demo_audio/     # 2 WAVs
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

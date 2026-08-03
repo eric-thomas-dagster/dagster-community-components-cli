@@ -6,7 +6,7 @@ Counterpart to the Azure Log Analytics demo but for AWS. Two
 sources to pull operational telemetry into Dagster pipelines for
 analytics, anomaly detection, capacity planning.
 
-## Components
+## Components used
 
 | Component | Category | Role |
 |---|---|---|
@@ -63,3 +63,7 @@ attributes:
 The components are right when you want CloudWatch results as a
 **Dagster asset** with materialization metadata, lineage, schedules, and
 auto-materialize. For ad-hoc query in a custom op, use boto3 directly.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

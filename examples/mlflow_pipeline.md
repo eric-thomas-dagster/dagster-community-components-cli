@@ -27,7 +27,7 @@ uv run dg dev            # → http://localhost:3000
 
 Requirements: [uv](https://docs.astral.sh/uv/). Cost: $0. Runs against a self-contained sqlite MLflow backend inside the project dir.
 
-## What the setup script does
+## What the script does
 
 1. Scaffolds a Dagster project (`create-dagster`)
 2. Installs `dagster-community-components`, `mlflow`, `scikit-learn`, `pandas`
@@ -134,7 +134,15 @@ attributes:
   target_job: __ASSET_JOB
 ```
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_mlflow_pipeline_demo.sh \
+  -o setup_mlflow_pipeline_demo.sh
+bash setup_mlflow_pipeline_demo.sh
+```
+
+## See also
 
 - Official [`dagster-mlflow`](https://docs.dagster.io/integrations/libraries/mlflow/dagster-mlflow) — the tracking side
 - [dbt_ml_pipeline](dbt_ml_pipeline.md) — flagship dbt + ML + dbt "why Dagster over Airflow"

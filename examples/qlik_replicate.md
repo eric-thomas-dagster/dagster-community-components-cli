@@ -9,7 +9,14 @@
 - [`qlik_replicate_task_metrics_ingestion`](../../dagster-component-templates/tree/main/assets/ingestion/qlik_replicate_task_metrics_ingestion) — per-task CDC metrics DataFrame
 - [`qlik_replicate_workspace`](../../dagster-component-templates/tree/main/integrations/qlik_replicate_workspace) — **StateBackedComponent** — auto-emit one Dagster asset per task by enumerating the workspace; one YAML instead of one-per-task
 
-## One-command demo
+## Components used
+
+- `qlik_replicate_task_metrics_ingestion`
+- `qlik_replicate_task_status_sensor`
+- `qlik_replicate_task_trigger_job`
+- `qlik_replicate_workspace`
+
+## Run
 
 Spins up a mock Qlik Enterprise Manager in Docker (Flask container, ~130 MB), scaffolds a Dagster project, wires all four components, and materializes end-to-end. **Costs $0** — no Qlik license needed.
 
@@ -105,7 +112,7 @@ Then downstream:
 
 Use this integration when Replicate is already deployed. If you're greenfield and don't have Replicate, [`database_replication`](../../dagster-component-templates/tree/main/assets/sources/database_replication) (Sling-backed, native Dagster) is a simpler starting point.
 
-## Related walkthroughs
+## See also
 
 - [`warehouse_migration.md`](warehouse_migration.md) — one-time lift-and-shift with `database_*_migration` components
 - [`replication.md`](replication.md) — recurring Sling-based replication as an alternative to Replicate

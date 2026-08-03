@@ -17,6 +17,13 @@ file_ingestion → datetime_parser → ets_forecast → dataframe_to_csv
 | 3 | `ets_forecast` | transformation | Fit ETS with additive trend + multiplicative seasonality, forecast 24 periods |
 | 4 | `dataframe_to_csv` | sink | Write 144 historical + 24 forecasted rows |
 
+## Components used
+
+- `dataframe_to_csv`
+- `datetime_parser`
+- `ets_forecast`
+- `file_ingestion`
+
 ## Run
 
 ```bash
@@ -62,3 +69,7 @@ seasonal cycle (summer peaks, winter troughs).
 Swap `ets_forecast` for `arima_forecast` (set `order: [1, 1, 1]` and
 optionally `seasonal_order: [1, 1, 1, 12]`) — same input shape, same output
 modes, but ARIMA-style fit. Or change `forecast_periods` to project further.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

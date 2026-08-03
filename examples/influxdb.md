@@ -4,7 +4,7 @@ Single-container Docker walkthrough. Spins up `influxdb:2-alpine` with a pre-ini
 
 **Live-validated** — `setup_influxdb_demo.sh` + `dg launch --assets '*'` writes 10,000 sensor samples into InfluxDB. Verified via Flux `count()` query — distinct series materialize correctly across all 5 tag columns.
 
-## Components exercised
+## Components used
 
 | Component | Role |
 |---|---|
@@ -12,7 +12,7 @@ Single-container Docker walkthrough. Spins up `influxdb:2-alpine` with a pre-ini
 | [`influxdb_resource`](https://dagster-component-ui.vercel.app/c/influxdb_resource) | Connection resource (URL + token + org + bucket via official `influxdb-client` SDK) |
 | [`dataframe_to_influxdb`](https://dagster-component-ui.vercel.app/c/dataframe_to_influxdb) | Bulk-write via `write_api` line-protocol path. Numeric → fields, others → tags (auto-classified). |
 
-## Asset graph
+## Architecture
 
 ```
 sensor_readings (synthetic_data_generator)
@@ -21,7 +21,7 @@ sensor_readings (synthetic_data_generator)
 influxdb_sensor_write (dataframe_to_influxdb)
 ```
 
-## Run it
+## Run
 
 ```bash
 bash setup_influxdb_demo.sh influxdb-demo
@@ -79,7 +79,7 @@ The demo's `defs.yaml` makes this explicit via `tag_columns:` + `field_columns:`
 - **`401 Unauthorized`** — token doesn't have write permission on the bucket. The demo's pre-seeded admin token has full access.
 - **Tag cardinality explosion** — putting high-cardinality columns (user_id, request_id) as TAGS hurts InfluxDB performance. Use them as fields. The auto-classifier helps (numeric → field) but watch string columns.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f influxdb-demo-server

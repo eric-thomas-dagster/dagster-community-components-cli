@@ -15,7 +15,7 @@ image_prompts_df          (3 product hero-shot prompts)
                   └── image_size_report  ← pandas (reads each PNG, emits dims + size)
 ```
 
-## Components covered (1)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -32,7 +32,7 @@ image_prompts_df          (3 product hero-shot prompts)
 
 **~\$0.012** for 3 images via `gemini-2.5-flash-image-preview`.
 
-## Required env var
+## Required env vars
 
 ```bash
 GEMINI_API_KEY=...    # or GOOGLE_API_KEY (component falls back)
@@ -40,7 +40,7 @@ GEMINI_API_KEY=...    # or GOOGLE_API_KEY (component falls back)
 
 Get a key at <https://aistudio.google.com/app/apikey>.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_nano_banana_demo.sh | bash
@@ -97,3 +97,7 @@ attributes:
 The component sends `[prompt, source_image_bytes]` as the request
 contents — Gemini interprets the source as the canvas and the
 prompt as the edit instructions.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

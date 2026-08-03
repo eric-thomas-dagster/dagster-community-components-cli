@@ -75,3 +75,7 @@ YAML, no code changes.
 
 ~$0.10–$0.50 per full pipeline run on `gpt-4o-mini` (30 tickets × 5
 components ≈ 150 calls).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

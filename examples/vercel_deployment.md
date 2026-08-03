@@ -109,7 +109,7 @@ On a live tick:
 1. **Initial component used Vercel `/v13/deployments`.** Vercel's stable Deployments API is `/v6` — `/v13` returns `400 Invalid API version`. Fixed.
 2. **External asset materialization via CLI.** `dagster asset materialize --select vercel/site/production` failed with "Selected keys must be a subset of existing executable asset keys" — because `AssetSpec` is declare-only. Demo now invokes the sensor via a small python program instead.
 
-## Related
+## See also
 
 - [`vercel_ai_gateway_agent`](./vercel_ai_gateway_agent.md) — LLM agent via Vercel AI Gateway (separate credential required).
 - [`temporal_workflow_sensor`](./temporal_workflow.md) — same observation pattern for Temporal workflows.

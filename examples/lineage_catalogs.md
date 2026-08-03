@@ -48,7 +48,7 @@ asset pipeline:
 - **Standard Dagster patterns** — auto-materialize, schedules, sensors
   all work for triggering the chain
 
-## Run the demo
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_lineage_catalogs_demo.sh | bash
@@ -333,3 +333,7 @@ Three common patterns:
 - **Rich source-system identity**: fill in `organization`, `dagster_ui_url`,
   `deployment_name` so the catalog renders direct deeplinks back to the
   Dagster UI from each asset entity
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

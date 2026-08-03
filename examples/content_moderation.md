@@ -39,7 +39,7 @@ The setup script branches on `OPENAI_API_KEY`:
 OPENAI_API_KEY=sk-...
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_content_moderation_demo.sh | bash
@@ -64,3 +64,7 @@ uv run dg dev    # http://localhost:3000
 Production deployments often run both: rule-based pre-filter for the
 easy 90%, ML for the ambiguous 10%, escalate to humans when the two
 disagree.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

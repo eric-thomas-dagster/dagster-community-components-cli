@@ -4,7 +4,7 @@ Single-container Docker walkthrough. Spins up `victoriametrics/victoria-metrics:
 
 **Live-validated** — `setup_victoriametrics_demo.sh` + `dg launch --assets '*'` materializes 10,000 synthetic sensor samples into VM against a real container. Verified at component release time; the 3 VM components carry `validation: live` on their manifest entries.
 
-## Components exercised
+## Components used
 
 | Component | Role |
 |---|---|
@@ -13,7 +13,7 @@ Single-container Docker walkthrough. Spins up `victoriametrics/victoria-metrics:
 | [`dataframe_to_victoriametrics`](https://dagster-component-ui.vercel.app/c/dataframe_to_victoriametrics) | Bulk-ingest via `/api/v1/import/prometheus` — Prometheus text format with the 5 label columns as Prometheus labels |
 | [`victoriametrics_query_asset`](https://dagster-component-ui.vercel.app/c/victoriametrics_query_asset) | PromQL `avg(sensor_reading) by (sensor_type)` query over the last 24h — read-back into a DataFrame |
 
-## Asset graph
+## Architecture
 
 ```
 sensor_readings (synthetic_data_generator)
@@ -25,7 +25,7 @@ vm_sensor_ingest (dataframe_to_victoriametrics)
 vm_avg_by_sensor_type (victoriametrics_query_asset → PromQL aggregate)
 ```
 
-## Run it
+## Run
 
 ```bash
 bash setup_victoriametrics_demo.sh victoriametrics-demo
@@ -48,14 +48,14 @@ curl "http://localhost:18428/api/v1/query_range?query=count(sensor_reading)&star
 
 Expected: a JSON matrix with `values` arrays of `[timestamp, count]` pairs — counts ramp up to a few hundred as the synthetic timestamps cluster in time.
 
-## What the setup script does
+## What the script does
 
 1. **Starts VictoriaMetrics single-node in Docker** (`victoriametrics/victoria-metrics:latest`) on host port 18428 with `-retentionPeriod=1d`. Plenty of room for the 24h synthetic samples.
 2. **Scaffolds the Dagster project** with `uvx create-dagster project`.
 3. **Installs the 4 components** via the community CLI (`--refresh` on first call).
 4. **Overwrites the CLI-installed example defs.yamls** with demo-specific configuration — `sensors` schema for the generator, `sensor_reading` metric name on the VM sink, `avg(sensor_reading) by (sensor_type)` for the read-back, and `deps: [vm_sensor_ingest]` to ensure the read-back asset materializes after the ingest.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f victoriametrics-demo-server

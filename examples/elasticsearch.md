@@ -9,7 +9,7 @@ Read documents from an Elasticsearch index via the community-component family. S
 | `elasticsearch_resource` | community | Shared connection config |
 | `elasticsearch_reader` | community | Run a search query → DataFrame asset (one row per hit) |
 
-## Run it
+## Run
 
 ```bash
 bash setup_elasticsearch_demo.sh

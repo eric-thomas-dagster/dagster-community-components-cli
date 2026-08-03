@@ -15,7 +15,7 @@ sample_texts                  (5 product descriptions)
                             └── embeddings_csv  ← /tmp/vertex_embeddings.csv
 ```
 
-## Components covered (1)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -41,7 +41,7 @@ All 5 distinct vectors as expected.
 100K chars/month are free; the demo's 5 short rows cost effectively
 nothing.
 
-## Required env var
+## Required env vars
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
@@ -49,7 +49,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 Required SA role: `roles/aiplatform.user` + Vertex AI API enabled.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_vertex_ai_embeddings_demo.sh | bash
@@ -97,3 +97,7 @@ Switch model:
 model_name: gemini-embedding-001                # latest Gemini-family
 model_name: text-multilingual-embedding-002     # multilingual
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

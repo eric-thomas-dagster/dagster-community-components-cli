@@ -15,7 +15,7 @@ api_call_metrics       ← cloud_monitoring_metrics_asset (api/request_count, 1h
                  └── metrics_bq       ← dataframe_to_bigquery
 ```
 
-## Components covered (4)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -62,7 +62,7 @@ export BQ_DATASET=your_dataset
 - `roles/bigquery.dataEditor` on `$BQ_DATASET`
 - `roles/bigquery.jobUser` (project-level)
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_gcp_observability_snapshot_demo.sh | bash
@@ -84,3 +84,7 @@ uv run dg launch --assets '*'
 - `bigtable_reader_asset` / `bigtable_writer_asset` — wide-column NoSQL
 - `looker_query_asset` — read Looker Modeled SQL outputs
 - `cloud_run_service_invoke_asset` — synchronous Cloud Run service request
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

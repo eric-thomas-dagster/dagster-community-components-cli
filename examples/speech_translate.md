@@ -13,7 +13,7 @@ audio_files                       (2 public Google sample gs:// audio URIs)
                             └── transcripts_csv  ← /tmp/speech_translate.csv
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -33,7 +33,7 @@ Real run output:
 
 **~$0.001.** Speech-to-Text: $0.024/min beyond the 60min/mo free tier (the demo audio is well under 1 min total). Translation: $20/M chars (~$0 for ~50 chars × 4 langs).
 
-## Required env var
+## Required env vars
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
@@ -41,7 +41,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 Required SA roles: `roles/speech.client` + `roles/cloudtranslate.user`. Both APIs enabled.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_speech_translate_demo.sh | bash
@@ -72,3 +72,7 @@ Add more target languages — Translation supports 130+ language codes:
 ```yaml
 target_languages: [es, fr, de, ja, zh-CN, hi, pt, ar, ru, it]
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -141,3 +141,7 @@ Materialized asset value:
 4. **Missing-deps handling** — a single missing optional dep (e.g. `azure-mgmt-streamanalytics`) aborted plugin discovery for the whole registry. Made the lazy loader return an inert placeholder so scans skip unavailable components silently.
 
 All four fixes landed in the same PR as the `LangGraphAgentComponent` addition.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

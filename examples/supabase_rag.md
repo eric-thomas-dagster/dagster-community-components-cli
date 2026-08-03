@@ -107,7 +107,7 @@ Chain that to `embeddings_generator` (row-wise) → upsert to Supabase via a sma
 
 Dagster's default in-memory / ephemeral IO manager doesn't survive between separate `dagster asset materialize` CLI invocations. When we materialize `rag_query_embedding` → then `retrieved_context` → then `rag_answer` in three commands, we need the intermediate DataFrames on disk. `FilesystemIOManager(base_dir=".dagster_storage")` handles that.
 
-## Related
+## See also
 
 - [Cube semantic layer + LLM](./cube_query.md) — different pattern: **structured** metrics via Cube, no vector search. Use when your questions map cleanly to measures/dimensions.
 - [LangGraph agent](./langgraph_agent.md) — multi-step reasoning. Could replace the single-step LangChain call for iterative refinement over retrieved context.

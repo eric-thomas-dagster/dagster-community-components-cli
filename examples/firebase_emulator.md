@@ -67,7 +67,7 @@ Drop them all when pointing at real Firebase, and set `FIREBASE_CREDENTIALS_PATH
 
 Same `defs.yaml`, no code changes.
 
-## Related
+## See also
 
 - [Supabase pgvector RAG](./supabase_rag.md) — same live-validation-via-local-stack approach for Supabase.
 - [Cube semantic layer](./cube_query.md) — same pattern (Docker-local Cube).

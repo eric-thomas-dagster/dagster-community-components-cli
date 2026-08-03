@@ -11,7 +11,7 @@ Exercise the MQTT family against a local Eclipse Mosquitto broker. Same componen
 | `mqtt_observation_sensor` | community | Emit `AssetObservation` on a topic |
 | `python_callable_job` | community | Target job for mqtt_monitor |
 
-## Run it
+## Run
 
 ```bash
 bash setup_mqtt_demo.sh

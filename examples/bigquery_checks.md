@@ -9,7 +9,7 @@ warehouse_table  (existing BQ table, declare-only external asset)
        └── [check] freshness_slo      ← bigquery_table_freshness_check
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | Mode | Cost |
 |---|---|---|
@@ -60,7 +60,7 @@ export BQ_TABLE=$GCP_PROJECT_ID.your_dataset.your_table   # must exist
 
 **Free.** Dry-runs return query plans without scanning data; `get_table` is metadata-only.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bigquery_checks_demo.sh | bash
@@ -72,3 +72,7 @@ uv run dg launch --assets '*'
 
 In `cost_guard/defs.yaml`, lower `max_bytes` to `100` → cost guard fails.
 In `freshness_slo/defs.yaml`, lower `max_age_minutes` to `1` → freshness fails.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -19,7 +19,7 @@ Component is **code-validated** against the `azure-monitor-query` SDK
 spec. To run end-to-end, you need a Log Analytics workspace (or a
 Sentinel workspace which is built on Log Analytics).
 
-## Setup
+## Run
 
 ```bash
 # Create workspace if you don't have one
@@ -75,3 +75,7 @@ DagsterPlusAudit_CL
 | where TimeGenerated > ago(1d)
 | summarize n = count() by event_type_s
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

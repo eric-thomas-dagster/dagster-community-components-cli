@@ -12,7 +12,7 @@ upcoming_events     ← google_calendar_ingestion (Calendar API)
        └── upcoming_events_bq   ← dataframe_to_bigquery (cloud-friendly: a real BQ table)
 ```
 
-## Components covered (3)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -39,7 +39,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 export GOOGLE_CALENDAR_ID=you@gmail.com   # owner's email or named cal ID
 ```
 
-## Setup
+## Run
 
 1. **Enable Calendar API + BigQuery API** on the SA's project. Components surface activation URLs on first call.
 2. **Share the calendar with the SA email** (the `client_email` in your JSON):
@@ -82,3 +82,7 @@ download it. For cloud-deployed pipelines, use one of:
 This demo wires up both `dataframe_to_csv` AND `dataframe_to_bigquery`
 in parallel so you can see both shapes; drop the local one before
 deploying to cloud.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

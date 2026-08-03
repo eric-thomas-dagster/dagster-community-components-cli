@@ -114,7 +114,15 @@ This is the natural next step. If you want it, the primitive is here.
 | Cube Cloud | `api_url_env_var: CUBE_API_URL` → `https://<tenant>.cubecloud.dev/cubejs-api`. `api_token_env_var: CUBE_API_TOKEN` (JWT). |
 | Self-hosted Cube in prod | Same as Cube Cloud — set both `api_url_env_var` and `api_token_env_var` with a JWT signed by your Cube secret. |
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_cube_query_demo.sh \
+  -o setup_cube_query_demo.sh
+bash setup_cube_query_demo.sh
+```
+
+## See also
 
 - [dbt + ML + dbt (mid-DAG Python)](./dbt_ml_pipeline.md) — same "Python between SQL layers" pattern, but for dbt (warehouse) instead of Cube (semantic layer).
 - [LangGraph Agent](./langgraph_agent.md) — multi-step LLM pipeline; would be the "NL query generator" in the extended text-to-Cube flow.

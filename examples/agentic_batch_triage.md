@@ -206,3 +206,15 @@ d5  Eve     escalation        BAG-005 not found; case needs review
 - Variant C (router-specific): [setup_agentic_batch_triage_router_demo.sh](setup_agentic_batch_triage_router_demo.sh)
 
 All unlisted from the main examples index — reach these via direct link during SE conversations.
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_agentic_batch_triage_demo.sh \
+  -o setup_agentic_batch_triage_demo.sh
+bash setup_agentic_batch_triage_demo.sh
+```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

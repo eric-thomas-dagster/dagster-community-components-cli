@@ -11,7 +11,7 @@ sample_documents         ← synthetic_pdf_generator (built-in invoice + letter)
                                   adds doc_text + doc_page_count columns
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -67,7 +67,7 @@ export GCP_PROJECT_ID=your-project
 - `roles/documentai.apiUser` — to invoke processors
 - `roles/documentai.editor` — additionally needed if you want the setup script to auto-create the processor
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_document_ai_demo.sh | bash
@@ -75,7 +75,7 @@ cd document-ai-demo
 uv run dg launch --assets '*'
 ```
 
-## Cleanup
+## Teardown
 
 If you want to remove the demo processor:
 ```bash
@@ -84,3 +84,7 @@ gcloud documentai processors delete <PROCESSOR_ID> \
 ```
 
 Or leave it — OCR processors have no idle cost.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

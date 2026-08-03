@@ -11,7 +11,7 @@ Exercise the NATS family against a local `nats-server -js` (JetStream enabled). 
 | `nats_observation_sensor` | community | Emit `AssetObservation` on a stream (message count / freshness) |
 | `python_callable_job` | community | Target job for nats_monitor |
 
-## Run it
+## Run
 
 ```bash
 bash setup_nats_demo.sh

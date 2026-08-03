@@ -296,3 +296,7 @@ The other two directions are real but live in different components:
 | Dagster → triggers scheduler → waits → continues | per-vendor `*_job_asset` component | see *Trigger + monitor* section above |
 
 Control-M and IBM TWS (and the broader z/OS workload-automation family) are reserved for the **commercial** offering across all three directions — the community registry stays clean of them. Every other scheduler in the table is community-fair-game.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

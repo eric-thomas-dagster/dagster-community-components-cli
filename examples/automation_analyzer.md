@@ -150,7 +150,7 @@ Jobs called out as "keep manual/sensor-only" stay put — those aren't managed b
 - **Static / dynamic partitioned assets** get flagged but not fully reshaped — the analyzer will still emit a cron rule if a schedule targets them, but you'll get a note that a cron+static-partitions combination fires only the "latest" partition per tick. Fan-out backfills need a per-partition sensor.
 - The applicator's `python:` escape hatch isn't proposed — the tool sticks to YAML-expressible rules.
 
-## Related
+## See also
 
 - [`automation_condition_applicator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/automation_condition_applicator) — the target component this tool generates YAML for
 - [Dagster automation conditions docs](https://docs.dagster.io/concepts/automation/declarative-automation)

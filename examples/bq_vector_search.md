@@ -8,6 +8,10 @@ doc_search    ← bigquery_vector_search_asset
                 (queries servicepulse-490502.dagster_demo.demo_docs_embedded)
 ```
 
+## Components used
+
+- `bigquery_vector_search_asset`
+
 ## Component covered (1)
 
 | Component | What it does |
@@ -84,10 +88,14 @@ export BQ_DATASET=your_dataset
 - `roles/bigquery.dataViewer` (to read the table)
 - `roles/bigquery.jobUser` (project, to run queries)
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bq_vector_search_demo.sh | bash
 cd bq-vector-search-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

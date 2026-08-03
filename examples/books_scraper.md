@@ -19,6 +19,12 @@ rest_api_fetcher (text)  → html_parser (extract_links)  → dataframe_to_json
 
 All three are partitioned with `partition_type: static`, `partition_values: ["1","2","3","4","5"]`.
 
+## Components used
+
+- `dataframe_to_json`
+- `html_parser`
+- `rest_api_fetcher`
+
 ## Run
 
 ```bash
@@ -70,3 +76,7 @@ book detail URLs (`/catalogue/<slug>/index.html`), then chain another
 fetch+parse pair to scrape each book's detail page. Or swap
 `partition_values` for a date-based axis if your target paginates by
 date instead of page number.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

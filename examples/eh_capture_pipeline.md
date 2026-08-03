@@ -127,7 +127,7 @@ Provision a Synapse workspace + Serverless SQL pool. We have a [`azure_synapse_s
 
 Either use `DefaultAzureCredential` (managed identity / service principal) or a connection string. `adls_monitor` supports both — see its README. The defs.yaml uses Default credential by referencing only `AZURE_STORAGE_ACCOUNT` env var; the credential discovery picks up `az login` / managed identity / `AZURE_CLIENT_ID`+`AZURE_CLIENT_SECRET`+`AZURE_TENANT_ID` automatically.
 
-## Run the demo
+## Run
 
 ```bash
 ./setup_eh_capture_pipeline_demo.sh

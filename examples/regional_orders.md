@@ -55,3 +55,7 @@ Live-validated on gpt-4o-mini: **4/4 clean picks in 7s, ~$0.0036 total cost.** O
 
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

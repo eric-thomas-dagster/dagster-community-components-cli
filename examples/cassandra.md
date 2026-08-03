@@ -10,7 +10,7 @@ Read from Cassandra via the community-component family against a single-node Cas
 | `cassandra_reader` | community | Run a CQL query → DataFrame asset |
 | `cassandra_writer` | community | DataFrame → Cassandra table (**not validated** — see Known issues) |
 
-## Run it
+## Run
 
 ```bash
 bash setup_cassandra_demo.sh

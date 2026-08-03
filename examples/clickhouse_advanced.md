@@ -76,7 +76,7 @@ The container name `clickhouse-demo-server` is shared with the base [`clickhouse
 docker rm -f clickhouse-demo-server
 ```
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f clickhouse-demo-server
@@ -86,7 +86,15 @@ docker rm -f clickhouse-demo-server
 
 The base demo validates the reader/writer/resource round-trip pattern (DataFrame in, DataFrame out). The IO manager pattern is fundamentally different — it's a project-wide slot, and mixing "explicit sink" and "auto-persist via IO manager" in the same demo would obscure both. Sibling demos let each shape stand on its own.
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_clickhouse_advanced_demo.sh \
+  -o setup_clickhouse_advanced_demo.sh
+bash setup_clickhouse_advanced_demo.sh
+```
+
+## See also
 
 - [`clickhouse.md`](clickhouse.md) — the base round-trip demo (resource + writer + external table)
 - [`doris_starrocks.md`](doris_starrocks.md) — same OSS-MPP shape for Doris + StarRocks

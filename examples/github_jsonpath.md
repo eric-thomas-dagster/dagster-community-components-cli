@@ -18,6 +18,13 @@ rest_api_fetcher → nested_field_extractor → json_path_extractor → datafram
 | 3 | `json_path_extractor` | transformation | JSONPath into `license` dict (which may be null) — `$.key`, `$.name` |
 | 4 | `dataframe_to_csv` | sink | Pick the human-meaningful columns |
 
+## Components used
+
+- `dataframe_to_csv`
+- `json_path_extractor`
+- `nested_field_extractor`
+- `rest_api_fetcher`
+
 ## Run
 
 ```bash
@@ -48,3 +55,7 @@ crewAI,crewAIInc/crewAI,crewAIInc,https://github.com/crewAIInc,mit,MIT License,5
   dict-cell column after extraction, keeping the output flat.
 - **Null-safe extraction.** `license` can be null on some repos;
   JSONPath returns null for missing paths instead of raising.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

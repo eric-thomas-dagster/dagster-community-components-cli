@@ -82,7 +82,7 @@ Result: N separate materializations of the notes asset in `dg dev`, each indepen
 
 See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
-## Related
+## See also
 
 - [`langchain_chain_asset`](https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/assets/ai/langchain_chain_asset/README.md) — the row-wise LLM primitive this component wraps for the researcher step.
 - [Supervisor Agent](./supervisor_agent.md) — picks which specialist to call (N of DIFFERENT kinds). This demo picks how many of the SAME kind of work.

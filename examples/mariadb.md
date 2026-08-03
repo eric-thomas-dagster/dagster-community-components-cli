@@ -81,13 +81,21 @@ docker exec dagster_mariadb_demo mariadb --protocol=tcp -h127.0.0.1 -udagster -p
 - **Amazon RDS for MariaDB**: same YAML, use the RDS instance endpoint as `host`.
 - **Galera Cluster**: point `host` at the HAProxy/MaxScale endpoint that fronts the cluster; app-level ops don't need cluster-awareness.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f dagster_mariadb_demo
 ```
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_mariadb_demo.sh \
+  -o setup_mariadb_demo.sh
+bash setup_mariadb_demo.sh
+```
+
+## See also
 
 - MySQL 8 walkthrough (same components) — search `dagster-component search mysql`
 - [`mysql_resource` component](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/mysql_resource) — schema + registration

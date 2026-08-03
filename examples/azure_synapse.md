@@ -200,3 +200,7 @@ az group delete --name dagster-demo-rg --yes
   — wire one Synapse pipeline to specific upstream Dagster assets.
 - **Filtering:** use `filter_by_name_pattern` / `exclude_name_pattern` to
   scope which pipelines are imported (regex).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -11,7 +11,7 @@ events                 ← synthetic_data_generator (events schema)
                                event_type + device as message attributes)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -71,7 +71,7 @@ gcloud projects add-iam-policy-binding $GCP_PROJECT_ID \
 
 **Free at this scale.** Pub/Sub free tier: 10 GB/mo combined publish + delivery throughput.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_pubsub_publish_demo.sh | bash
@@ -80,3 +80,7 @@ uv run dg launch --assets '*'
 
 gcloud pubsub subscriptions pull demo-events-sub --limit=10 --auto-ack
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -60,3 +60,7 @@ attributes:
 | Compute-intensive KQL (cross-table joins, ML, time-series functions) | ✓ | ✓ |
 | Out-of-the-box for Sentinel / AppInsights | needs setup | ✓ (managed) |
 | Cost at scale | $$ (cluster) | $/GB ingestion |
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

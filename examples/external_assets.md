@@ -13,6 +13,32 @@ streaming (11):    kafka, kinesis, eventhubs, pubsub, sqs, servicebus,
                    pulsar, nats, rabbitmq, mqtt, redis_stream
 ```
 
+## Components used
+
+- `external_adls_asset`
+- `external_bigquery_table`
+- `external_clickhouse_table`
+- `external_databricks_table`
+- `external_delta_table`
+- `external_eventhubs_asset`
+- `external_gcs_asset`
+- `external_iceberg_table`
+- `external_kafka_asset`
+- `external_kinesis_asset`
+- `external_mqtt_asset`
+- `external_nats_asset`
+- `external_pubsub_asset`
+- `external_pulsar_asset`
+- `external_rabbitmq_asset`
+- `external_redis_stream_asset`
+- `external_s3_asset`
+- `external_servicebus_asset`
+- `external_sftp_path`
+- `external_sharepoint_library`
+- `external_snowflake_table`
+- `external_sql_asset`
+- `external_sqs_asset`
+
 ## Cost
 
 **$0.** No backend reached. Each component just builds an `AssetSpec`
@@ -46,7 +72,7 @@ freshness, lineage, and metadata — but the demo itself is offline.
 | Streaming | `external_mqtt_asset` | `mqtt/sensors/temp` |
 | Streaming | `external_redis_stream_asset` | `redis_stream/orders` |
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_external_assets_demo.sh | bash
@@ -85,3 +111,7 @@ attributes:
 
 Or pair with `PerPartitionBackfillJob` to drive the dynamic-partition
 Snowflake source per-tenant — see `partitions.md`.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

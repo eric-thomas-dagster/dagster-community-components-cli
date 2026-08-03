@@ -17,6 +17,12 @@ file_ingestion → anomaly_detection → dataframe_to_csv
 | 2 | `anomaly_detection` | analytics | z-score within each `symbol` group; flag points beyond 2.5σ |
 | 3 | `dataframe_to_csv` | sink | Write the flagged report |
 
+## Components used
+
+- `anomaly_detection`
+- `dataframe_to_csv`
+- `file_ingestion`
+
 ## Run
 
 ```bash
@@ -44,3 +50,7 @@ threshold=2.5. Top hits cluster around AAPL's 2007 spike and AMZN's
 - **Anomaly metadata.** The asset emits `anomaly_count` / `anomaly_rate`
   / `detection_method` / `threshold` to the Dagster catalog; the top
   5 anomalies are also logged at materialize time for quick triage.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

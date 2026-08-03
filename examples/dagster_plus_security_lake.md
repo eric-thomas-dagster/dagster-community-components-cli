@@ -66,3 +66,15 @@ This demo is the reason we found 7 bugs in the Dagster+ pull components:
 
 End-to-end run against a real Dagster+ deployment pulled 176 audit-log entries
 correctly.
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_dagster_plus_security_lake_demo.sh \
+  -o setup_dagster_plus_security_lake_demo.sh
+bash setup_dagster_plus_security_lake_demo.sh
+```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

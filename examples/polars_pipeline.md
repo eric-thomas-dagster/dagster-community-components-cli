@@ -2,6 +2,11 @@
 
 Run multiple polars operations as **one** LazyFrame chain inside a single Dagster asset. The polars query planner fuses filters, prunes projections, and parallelizes execution — but only within one lazy chain. Spread across separate Dagster assets, the asset boundary forces materialization and breaks the optimization.
 
+## Components used
+
+- `polars_pipeline`
+- `synthetic_data_generator`
+
 ## When to use
 
 - Multiple polars ops that are tightly coupled (filter → group_by → sort → head)
@@ -98,3 +103,7 @@ Supported `agg` values in `group_by`: `sum / mean / avg / min / max / count / me
 ### Component README (full reference)
 
 [polars_pipeline](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/transforms/polars_pipeline/README.md)
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

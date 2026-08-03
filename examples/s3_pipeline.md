@@ -2,6 +2,13 @@
 
 Sensor-driven round-trip pipeline, 100% components, validated end-to-end. New CSV files dropped into an S3 bucket are auto-detected, registered as dynamic partitions, processed individually, and written back to S3 as parquet — one partition per file, fully tracked and re-runnable from the UI.
 
+## Components used
+
+- `dataframe_to_parquet`
+- `file_ingestion`
+- `s3_monitor`
+- `summarize`
+
 ## What gets stood up
 
 ```
@@ -48,7 +55,7 @@ Sensor-driven round-trip pipeline, 100% components, validated end-to-end. New CS
 | 3 | `summarize` | Aggregates per product within each partition |
 | 4 | `dataframe_to_parquet` | Writes per-partition parquet back to S3 |
 
-## Setup
+## Run
 
 ```bash
 ./setup_s3_pipeline_demo.sh
@@ -136,9 +143,13 @@ file_path:   abfss://container@account.dfs.core.windows.net/processed/{partition
 
 The same `file_ingestion` + `dataframe_to_parquet` components work — pandas + fsspec handle all three transparently when the right driver is installed (`s3fs` / `gcsfs` / `adlfs`).
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f dg-s3-demo-minio
 rm -rf s3-pipeline-demo $HOME/.dagster_home_s3_demo
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

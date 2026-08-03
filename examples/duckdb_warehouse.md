@@ -49,3 +49,7 @@ proves:
 
 Validates the end-to-end IO-manager contract that other warehouse-style demos
 (Snowflake, BigQuery, etc.) extrapolate from.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

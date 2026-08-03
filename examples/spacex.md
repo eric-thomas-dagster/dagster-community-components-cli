@@ -17,6 +17,14 @@ rest_api_fetcher → select_columns → datetime_parser → rank → dataframe_t
 | 4 | `rank` | transformation | Rank by `launch_date` descending → `rank_by_date` |
 | 5 | `dataframe_to_excel` | sink | Write `/tmp/spacex_launches.xlsx` |
 
+## Components used
+
+- `dataframe_to_excel`
+- `datetime_parser`
+- `rank`
+- `rest_api_fetcher`
+- `select_columns`
+
 ## Run
 
 ```bash
@@ -46,3 +54,7 @@ Transporter-6         2022-12-01            2
 - `dataframe_to_excel` automatically strips tz from tz-aware datetimes
   before writing (Excel doesn't support tz-aware) and logs which columns
   were touched.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

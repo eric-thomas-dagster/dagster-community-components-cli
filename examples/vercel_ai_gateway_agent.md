@@ -95,7 +95,15 @@ openai>=1.0.0
 mcp>=1.0.0
 ```
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_vercel_ai_gateway_agent_demo.sh \
+  -o setup_vercel_ai_gateway_agent_demo.sh
+bash setup_vercel_ai_gateway_agent_demo.sh
+```
+
+## See also
 
 - [`vercel_deployment` demo](./vercel_deployment.md) — deployment sensor + external asset (live-validated).
 - [`langgraph_agent`](./langgraph_agent.md) — stateful multi-step LLM graph (composes with any gateway-routed model via a custom prompt).

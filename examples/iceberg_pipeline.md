@@ -279,6 +279,14 @@ No JVM. No Spark. Single Python wheel.
 - **Concurrent writers.** Iceberg's optimistic concurrency rebases on conflict — typically transparent, but very-high-write-rate workloads should serialize via a single writer.
 - **Storage-IAM mismatch.** The catalog says "your table is at s3://...", but if your runtime can't reach S3, reads fail with confusing errors. Validate storage credentials separately first.
 
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_iceberg_pipeline_demo.sh \
+  -o setup_iceberg_pipeline_demo.sh
+bash setup_iceberg_pipeline_demo.sh
+```
+
 ## See also
 
 - [`delta_pipeline.md`](delta_pipeline.md) — sister walkthrough for Delta Lake

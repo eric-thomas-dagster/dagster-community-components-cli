@@ -9,7 +9,7 @@ support_tickets (synthetic 20 rows from synthetic_data_generator)
        └── ticket_summaries  ← anthropic_llm (claude-haiku-4-5-20251001)
 ```
 
-## Components covered (1)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -26,13 +26,13 @@ fastest current model). Bigger models are pricier:
 | `claude-sonnet-4-6` | $3 | $15 |
 | `claude-opus-4-7` | $15 | $75 |
 
-## Required env var
+## Required env vars
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_anthropic_demo.sh | bash
@@ -65,3 +65,7 @@ multi-vendor for resilience and cost. Same shape, different provider:
 Pick anthropic_llm specifically when you want Claude's tool-use,
 prompt-caching (90% off on repeated context), or 200k-token context
 window.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

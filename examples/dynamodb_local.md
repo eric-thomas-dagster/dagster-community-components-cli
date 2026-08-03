@@ -61,7 +61,7 @@ DynamoDB Local container (amazon/dynamodb-local)
 
 The emulator implements the DynamoDB API surface — Scan / Query / PutItem / BatchWriteItem / etc. — but is in-memory by default (data is lost when the container stops). For persistence across restarts, add `-v $(pwd)/data:/home/dynamodblocal/data` and `-command "-sharedDb -dbPath /home/dynamodblocal/data"` to the `docker run`.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker stop dagster_dynamodb_demo && docker rm dagster_dynamodb_demo
@@ -77,6 +77,14 @@ Once the demo works, swap to a real AWS account by:
 
 The same `defs.yaml` files work unchanged — the emulator's whole value proposition is API surface compatibility.
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_dynamodb_local_demo.sh \
+  -o setup_dynamodb_local_demo.sh
+bash setup_dynamodb_local_demo.sh
+```
+
+## See also
 
 - [mongodb](mongodb.md), [couchdb](couchdb.md), [neo4j](neo4j.md), [cassandra](cassandra.md) — same round-trip pattern for other NoSQL stores

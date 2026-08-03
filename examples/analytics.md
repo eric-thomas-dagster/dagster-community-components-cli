@@ -38,6 +38,51 @@ ml_dataset (200 rows × 6 cols)         geo_dataset (5 cities)
                                                   └── ad_spend_standardizer
 ```
 
+## Components used
+
+- `ad_spend_standardizer`
+- `append_cluster`
+- `campaign_performance`
+- `coordinate_transformer`
+- `count_regression`
+- `crm_data_standardizer`
+- `customer_360`
+- `customer_health_score`
+- `ecommerce_standardizer`
+- `event_data_standardizer`
+- `funnel_analysis`
+- `gamma_regression`
+- `geocoder`
+- `gradient_boosting_model`
+- `k_centroids_diagnostics`
+- `lead_scoring`
+- `lift_chart`
+- `linear_regression_model`
+- `marketing_data_standardizer`
+- `model_coefficients`
+- `model_comparison`
+- `model_score`
+- `multidimensional_scaling`
+- `naive_bayes_model`
+- `neural_network_model`
+- `optimization`
+- `oversample_field`
+- `point_in_polygon`
+- `priority_scorer`
+- `product_analytics_standardizer`
+- `product_recommendations`
+- `product_usage_analytics`
+- `propensity_scoring`
+- `reverse_geocoder`
+- `simulation_sampling`
+- `spline_model`
+- `stepwise`
+- `subscription_metrics`
+- `support_ticket_standardizer`
+- `svm`
+- `test_of_means`
+- `vif`
+
 ## Components used (40)
 
 ### ML models (8) — all sklearn, share `target_column` + `feature_columns`
@@ -119,3 +164,7 @@ uv run dg launch --assets '*'
 
 $0 — entirely local sklearn / scipy / statsmodels / shapely.
 The geocoder uses Nominatim (free public service) with a low rate limit.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -2,6 +2,12 @@
 
 Multi-step PySpark DataFrame chain compiled into ONE Catalyst logical plan, executed by Spark's Tungsten engine. Predicate pushdown to parquet, projection pruning, filter fusion, parallel execution — the optimizations the per-asset transforms can't deliver because the asset boundary breaks the lazy chain.
 
+## Components used
+
+- `dataframe_to_parquet`
+- `pyspark_pipeline`
+- `synthetic_data_generator`
+
 ## When to use
 
 - Big data that warrants Spark's distributed execution
@@ -121,3 +127,7 @@ Supported `agg` values in `group_by`: `sum / mean / avg / min / max / count / co
 - **`local[*]` for the demo.** The setup script uses `spark.master: "local[*]"` so one JVM does everything on your laptop's cores. For a real Spark cluster, change `spark.master` to your cluster URL (`spark://`, `yarn`, `k8s://...`, `databricks-connect://...`).
 - **JVM startup overhead is real.** The demo's ~6 seconds is mostly JVM boot. For a real cluster, that's amortized across the cluster manager — submission overhead is similar in absolute terms.
 - **`sink.kind: none` returns pandas.** Useful when downstream Dagster assets are pandas-shaped and the Spark output is small enough to collect. For large results, write to a sink kind (parquet / table / jdbc).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

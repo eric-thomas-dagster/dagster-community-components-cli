@@ -119,7 +119,7 @@ The marts model joins the dbt-computed features with the LLM-generated columns v
 - **Structured evaluation.** Add a `llm_judge` asset downstream to score each generated email on tone / brand fit / factual grounding before the marts join.
 - **Persist prompts + responses for auditing.** Add asset metadata capturing full prompts + responses per row — Dagster's asset materialization history becomes your LLM audit trail.
 
-## Related
+## See also
 
 - [dbt + ML + dbt (classical ML mid-DAG)](./dbt_ml_pipeline.md) — same shape, sklearn scorer.
 - [LangGraph Agent](./langgraph_agent.md) — multi-step LangGraph pipeline as a single asset (no dbt).

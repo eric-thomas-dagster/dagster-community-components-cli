@@ -268,3 +268,7 @@ az group delete --name dagster-demo-rg --yes
   one pipeline needs to wait for a dbt model and another doesn't.
 - **External Schedules from ADF triggers:** the component can reflect ADF
   triggers as Dagster schedules; toggle with `import_triggers: true`.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

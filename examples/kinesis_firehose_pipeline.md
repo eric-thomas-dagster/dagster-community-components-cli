@@ -127,7 +127,7 @@ aws athena create-work-group --name dagster-firehose-demo --region "$REGION"
 
 Set the result location to another S3 prefix when you create it.
 
-## Run the demo
+## Run
 
 ```bash
 ./setup_kinesis_firehose_pipeline_demo.sh

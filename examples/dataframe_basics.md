@@ -21,7 +21,7 @@ monthly_metrics (long-format)
        └── metrics_transposed  ← transpose (long → wide)
 ```
 
-## Components covered (9)
+## Components used
 
 | Component | Pandas equivalent |
 |---|---|
@@ -39,7 +39,7 @@ monthly_metrics (long-format)
 
 **$0.** Pandas only.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_dataframe_basics_demo.sh | bash
@@ -91,3 +91,7 @@ Live-validated on gpt-4o-mini: **13/15 clean picks in 35s, ~$0.0108 total cost.*
 
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -2,7 +2,7 @@
 
 The "typical Dagster" data platform demo — the shape a data-engineering SE audience will recognize immediately. Multiple upstream sources, dbt in the middle, downstream fan-out over runtime-decided cohorts. **One code location, local DuckDB, no Docker, 100% components + YAML.**
 
-## The asset graph
+## Architecture
 
 ```
   ┌── vendor_sources ─────┐    ┌── raw_warehouse ──────┐    ┌── dbt ────────────────────┐    ┌── cohort_extracts ─────┐
@@ -86,7 +86,7 @@ Kept simple for the "typical Dagster" story. Layer any of these on later if the 
 3. **Dynamic fan-out** — "and when we need runtime-decided parallelism (per-cohort, per-region, per-tenant), the fan-out asset lives in the same graph."
 4. **Everything is YAML** — walk them through the setup script's `defs.yaml` files. Each layer is 10-20 lines.
 
-## Related walkthroughs
+## See also
 
 - **[agentic_router.md](agentic_router.md)** — the agentic pattern (LLM router + human gate + sensor) on top of similar primitives.
 - **[agentic_batch_triage.md](agentic_batch_triage.md)** — the same batch fan-out pattern applied to per-case LLM triage.

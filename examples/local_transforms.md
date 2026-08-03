@@ -39,7 +39,7 @@ A full DataFrame transform chain that lives entirely on the local filesystem. Ev
 
 Every asset above (except the avro sink) is automatically persisted to `/tmp/local-transforms-storage/<asset>.parquet` by the `local_parquet_io_manager`.
 
-## Run it
+## Run
 
 ```bash
 bash setup_local_transforms_demo.sh
@@ -118,7 +118,7 @@ Writes the upstream DataFrame to one Avro file. Schema is auto-inferred from the
 
 `file_path` accepts any `fsspec`-supported URI — swap `/tmp/...` for `s3://bucket/key.avro`, `gs://bucket/key.avro`, `az://container/key.avro` and the same component writes to remote storage (add the matching `s3fs`/`gcsfs`/`adlfs` extra to requirements).
 
-## Trade-offs
+## Trade-offs & gotchas
 
 - **Local-only persistence.** Parquet files live under `base_dir`. Project IO managers don't read across projects, so to share with another Dagster project, write to a cloud bucket instead.
 - **In-process transforms.** `filter` and `summarize` run inside the Dagster worker — fine for ~millions of rows on a laptop. For larger data, push the transform into the warehouse via `sql_command_job` or a dbt model, then read back with `*_ingestion`.

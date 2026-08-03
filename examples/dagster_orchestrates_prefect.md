@@ -11,7 +11,7 @@ An inbox of documents lands per hour. Each document could be a PDF, an HTML tabl
 - **Dagster** partitions by file, kicks off one materialization per file, records the outcome in its asset catalog with per-file lineage.
 - **Prefect** runs the actual document parse — a flow that inspects the file type at runtime and calls different tasks (`parse_pdf`, `parse_html`, `parse_email`) based on what it finds. Runtime-decided DAG; that's Prefect's sweet spot.
 
-## The asset graph
+## Architecture
 
 ```
         Dagster (orchestration + catalog)      │      Prefect (:4200 server, runtime execution)
@@ -116,3 +116,7 @@ Set `PREFECT_API_KEY` in your shell before `dg dev`. Everything else stays the s
 - `prefect_worker/flow.py` — the Prefect flow. Note how the DAG isn't declared ahead of time; the flow decides at runtime which parse task to call.
 - `src/dagster_orchestrates_prefect_demo/defs/parsed_documents/defs.yaml` — the `PrefectFlowRunAssetComponent` YAML. All the demo's Dagster→Prefect bridge is here.
 - `src/dagster_orchestrates_prefect_demo/defs/prefect/defs.yaml` — the shared `PrefectResourceComponent`.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

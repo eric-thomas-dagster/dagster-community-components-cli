@@ -50,3 +50,7 @@ transactions. This demo: <1KB data, <300 transactions.
 | Global distribution / consistency tuning | ✗ | ✓ |
 | SQL queries / secondary indexes | ✗ (OData only) | ✓ |
 | Use existing Azure Storage account | ✓ | ✗ (separate Cosmos account) |
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

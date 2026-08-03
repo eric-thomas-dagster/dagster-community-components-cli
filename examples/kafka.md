@@ -31,11 +31,11 @@ Full validation of the Kafka community-component family against a single-contain
                                               process_kafka_messages   external/events
 ```
 
-## Prereqs
+## Prerequisites
 
 - **Docker daemon must be running.** The setup script starts a single `bitnami/kafka:latest` container in KRaft mode on port 9092. If Docker isn't up, the script exits early with a clear message.
 
-## Run it
+## Run
 
 ```bash
 bash setup_kafka_demo.sh

@@ -111,7 +111,7 @@ See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of a
 
 Compare to letting an LLM emit SQL / Python that runs directly against your systems: unbounded blast, no schema, hard to reproduce, invisible in lineage. This shape gets you the same adaptive intelligence with none of that risk.
 
-## Related
+## See also
 
 - [Data Quality agent — anomaly + LLM explanations](./data_quality_agent.md) — different agentic shape: LLM **narrates** anomalies for on-call rather than picking remediations.
 - [PII detection + LLM redaction](./pii_redaction.md) — LLM as **fresh eyes on statistical output**, another agentic use case.

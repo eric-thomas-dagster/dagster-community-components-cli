@@ -4,7 +4,14 @@
 
 **Components used:** `cognos_resource`, `cognos_report_run_job`, `cognos_report_status_sensor`, `cognos_report_data_ingestion`, `cognos_workspace`.
 
-## One-command demo
+## Components used
+
+- `cognos_report_data_ingestion`
+- `cognos_report_run_job`
+- `cognos_report_status_sensor`
+- `cognos_workspace`
+
+## Run
 
 Mock Cognos REST server in Docker (Flask, ~130 MB), scaffolds Dagster project, wires all 5 components, materializes end-to-end. **Costs $0**.
 
@@ -73,7 +80,7 @@ attributes:
     refresh_if_dev: true
 ```
 
-## Related walkthroughs
+## See also
 
 - [qlik_replicate](qlik_replicate.md), [qlik_compose](qlik_compose.md), [tm1](tm1.md), [jde](jde.md) — same 5-component shape for other enterprise systems
 

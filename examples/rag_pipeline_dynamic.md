@@ -155,3 +155,7 @@ You can combine them. Add `rag_pipeline` as a downstream of `docs_index_snapshot
 | Vector store | [vector_store_writer](../c/vector_store_writer) (ChromaDB) | ✓ |
 | Queries source | [dataframe_from_csv](../c/dataframe_from_csv) | ✓ |
 | End-to-end RAG (embed + retrieve + generate) | [rag_pipeline](../c/rag_pipeline) | ✗ (LLM key) |
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

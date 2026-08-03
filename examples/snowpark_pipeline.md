@@ -2,6 +2,10 @@
 
 Multi-step Snowpark DataFrame chain compiled into ONE Snowflake SQL statement. The whole pipeline runs inside the Snowflake compute warehouse — no data ever flows through Python.
 
+## Components used
+
+- `snowpark_pipeline`
+
 ## When to use
 
 - Source + sink both live in Snowflake
@@ -200,3 +204,7 @@ Supported `agg` values: `sum / mean / avg / min / max / count / count_distinct /
 - **Session is per-asset.** Each materialization opens a new Snowpark `Session`, runs the chain, then closes the session. For long-running cluster reuse, use a shared Snowflake session resource (out of scope for this single-asset component).
 - **`sink.kind: none` calls `.to_pandas()`.** Useful for downstream Dagster assets that are pandas-shaped. For large results, write to a Snowflake table — collecting to pandas brings everything through the Python wire format.
 - **Cost.** Charged to your Snowflake compute warehouse. The demo's workload (small filter / group_by / sort / limit) runs on an XS warehouse in well under a minute — fractions of a credit.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

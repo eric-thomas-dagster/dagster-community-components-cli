@@ -71,3 +71,7 @@ takes a few minutes the first time).
 |---|---|
 | Without `OPENAI_API_KEY` | **$0** — 9 truly-local NLP components only (`document_chunker`, `text_chunker`, `part_of_speech_tagger`, `topic_modeler`, `word_cloud`, `text_similarity`, `zero_shot_classifier`, `llm_output_parser`, `synthetic_data_generator`) |
 | With `OPENAI_API_KEY` | **~$0.05** — adds 4 LLM-touching components (`schema_fit`, `precision_match`, `ticket_classifier`, `sql_generator`) sharing gpt-4o-mini calls |
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

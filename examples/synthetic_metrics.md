@@ -18,6 +18,12 @@ time_series_generator → anomaly_detection → dataframe_to_csv
 | 2 | `anomaly_detection` | analytics | z-score, threshold 2.5σ |
 | 3 | `dataframe_to_csv` | sink | Write timestamp + metric + anomaly flag |
 
+## Components used
+
+- `anomaly_detection`
+- `dataframe_to_csv`
+- `time_series_generator`
+
 ## Run
 
 ```bash
@@ -46,3 +52,7 @@ threshold 2.5σ.
   attribution demos use inline Python heredocs because they need
   Stripe-shaped CSVs that `time_series_generator` doesn't produce. For
   pure time-series, this is the registry-native pattern.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

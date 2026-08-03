@@ -45,3 +45,7 @@ uv run dg dev   # → http://localhost:3000 → Assets graph
 
 $0 — fully local. All models are open-weight (sentence-transformers,
 spaCy, scikit-learn, langdetect, Presidio).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

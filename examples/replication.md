@@ -42,7 +42,7 @@ That's it — one component, three YAML files. Sling is bundled in `dagster-slin
 
 `deps:` chains the three instances (customers → orders → orders_eu) — sensible dim-then-fact-then-view ordering and avoids DuckDB single-writer contention. With a real warehouse (Snowflake / BigQuery / etc.), the chain is optional — those handle concurrent writes natively.
 
-## Run it
+## Run
 
 ```bash
 bash setup_replication_demo.sh

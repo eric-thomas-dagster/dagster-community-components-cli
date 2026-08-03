@@ -107,7 +107,7 @@ WHERE customer_id_hubspot IS NOT NULL AND customer_id_salesforce IS NOT NULL;
 - **Reverse-ETL back.** Add a downstream sink (`hubspot_sync` or a custom `dataframe_to_salesforce`) to push the golden record back to whichever system loses the merge.
 - **Ownership metadata.** Add columns like `source_of_truth = 'salesforce'` per row based on business rules (e.g., "if a contact is a Salesforce Opportunity, SF wins the address field").
 
-## Related
+## See also
 
 - [dbt + ML + dbt (mid-DAG Python)](./dbt_ml_pipeline.md) — same pattern (Python between structured layers), different problem shape.
 - `hubspot_ingestion` + `salesforce_ingestion` in the [components UI](https://dagster-component-ui.vercel.app/) — both use `dlt` under the hood for schema-aware incremental sync.

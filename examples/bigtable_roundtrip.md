@@ -12,7 +12,7 @@ sensor_readings        ← synthetic_data_generator (sensors schema)
                                       (scans SENS prefix, decodes utf-8)
 ```
 
-## Components covered (3)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -76,10 +76,14 @@ gcloud bigtable instances add-iam-policy-binding demo-instance \
   --member="serviceAccount:$SA_EMAIL" --role="roles/bigtable.user"
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_bigtable_roundtrip_demo.sh | bash
 cd bigtable-roundtrip-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

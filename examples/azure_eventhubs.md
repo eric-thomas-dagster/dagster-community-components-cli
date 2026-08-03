@@ -144,3 +144,7 @@ az group delete --name dagster-demo-rg --yes
 - **Partition key:** the demo pins events by `customer_id` so per-customer
   ordering is preserved. Drop `partition_key_column` for round-robin
   distribution.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

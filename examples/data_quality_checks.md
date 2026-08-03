@@ -60,3 +60,7 @@ uv run dg dev   # → http://localhost:3000 → Assets → orders_raw → Checks
 ## Cost
 
 $0 — entirely local.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

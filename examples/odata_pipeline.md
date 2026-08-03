@@ -47,7 +47,7 @@ OData is **the dominant machine-interface protocol across enterprise ERP**. SAP'
    └────────────────────────────────────────────┘
 ```
 
-## One-command demo
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_odata_pipeline_demo.sh | bash

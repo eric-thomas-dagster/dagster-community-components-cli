@@ -13,7 +13,7 @@ tags_data            → exploded_tags           ← array_exploder (list col �
 raw_sensors          → filled_sensors          ← ts_filler (forward-fill date gaps)
 ```
 
-## Components covered (7)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -29,7 +29,7 @@ raw_sensors          → filled_sensors          ← ts_filler (forward-fill dat
 
 **$0.** Pandas only.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_data_combination_demo.sh | bash
@@ -83,3 +83,7 @@ Live-validated on gpt-4o-mini: **8/9 clean picks in 22s, ~$0.0065 total cost.** 
 
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

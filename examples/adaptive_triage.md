@@ -102,7 +102,7 @@ Other extensions:
 
 See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
-## Related
+## See also
 
 - [PII detection + LLM redaction](./pii_redaction.md) — different agentic shape: LLM as a **double-checker** on rule-based output.
 - [Router (deterministic version)](./router.md) — the same `router` component, hand-coded predicates instead of LLM-tagged routes.

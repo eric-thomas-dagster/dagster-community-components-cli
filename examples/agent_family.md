@@ -23,7 +23,13 @@ deterministic_fs_listing              fs_agent_answer  ────────�
                                                                          }}
 ```
 
-## Run it
+## Components used
+
+- `llm_evaluator`
+- `mcp_tool_call`
+- `openai_agent`
+
+## Run
 
 ```bash
 export OPENAI_API_KEY=sk-…

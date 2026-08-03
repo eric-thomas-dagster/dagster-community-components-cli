@@ -17,6 +17,12 @@ file_ingestion → spatial_cluster → dataframe_to_csv
 | 2 | `spatial_cluster` | analytics | DBSCAN with `eps_km=50` and `min_samples=5`; uses haversine distance |
 | 3 | `dataframe_to_csv` | sink | Write `iata`, `city`, `state`, `cluster_id` |
 
+## Components used
+
+- `dataframe_to_csv`
+- `file_ingestion`
+- `spatial_cluster`
+
 ## Run
 
 ```bash
@@ -51,3 +57,7 @@ Top metro clusters:
 - **Noise (cluster_id = -1)** is a feature, not a bug. It identifies
   airports that don't belong to any dense region — useful for finding
   rural / isolated locations.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -15,7 +15,7 @@ raw_customers
   → counts       ← count_records        (group-by tally)
 ```
 
-## Components covered (10)
+## Components used
 
 | Component | What it adds |
 |---|---|
@@ -79,7 +79,7 @@ The transforms in this chain rarely make sense in isolation — they're *toolbox
 - **Hash + surrogate key** — `row_hash` lets you detect changes between runs; `customer_sk` is the join-friendly key that survives source-system renames.
 - **Number + count** — `record_id` for ordered downstream consumers; `count_records` for ops dashboards.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_data_hygiene_demo.sh | bash
@@ -130,3 +130,7 @@ Live-validated on gpt-4o-mini: **7/7 clean picks in 39s, ~$0.0055 total cost.** 
 
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

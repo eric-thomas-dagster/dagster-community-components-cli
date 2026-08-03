@@ -19,7 +19,7 @@ orders (synthetic source: 30 rows × 5 cols)
 
 **$0.** Pure local file + SQLite writes. No network, no cloud creds.
 
-## Components covered (5)
+## Components used
 
 | Component | Output |
 |---|---|
@@ -29,7 +29,7 @@ orders (synthetic source: 30 rows × 5 cols)
 | `dataframe_to_excel` | XLSX |
 | `dataframe_to_table` | SQL table via SQLAlchemy (SQLite here, but works against PostgreSQL / MySQL / DuckDB / etc.) |
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_local_sinks_demo.sh | bash
@@ -67,3 +67,7 @@ cloud credentials or specialized backends:
 Each is a candidate for its own integration-specific demo (most need
 either a localstack/wiremock + cloud-credentials path or a real
 cloud sandbox).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -25,7 +25,7 @@ tags: { ... }
 
 …plus per-component fields (`callable_path`, `url`, `statements`, etc.).
 
-## Run it
+## Run
 
 ```bash
 bash setup_composition_primitives_demo.sh
@@ -125,7 +125,7 @@ attributes:
 
 Same engine as `warehouse_maintenance_job`, but takes a single multi-statement SQL block (semicolon-separated) instead of a list. Right for: small ad-hoc procedures that read like one SQL script.
 
-## Trade-offs
+## Trade-offs & gotchas
 
 - **op-job vs asset.** These five all produce op jobs (no assets in the graph). They show up in the Jobs tab and can be launched on cron or on demand. If you want lineage tracking, use `dataframe_to_*` sinks or `*_ingestion` assets instead.
 - **Schedules default to `STOPPED`.** Switch to `RUNNING` in YAML (or via the UI) once you've sanity-checked the cadence.

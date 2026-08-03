@@ -17,6 +17,12 @@ file_ingestion → subscription_metrics → dataframe_to_csv
 | 2 | `subscription_metrics` | analytics | Compute MRR / ARR / churn / LTV / ARPU from Stripe-shaped data |
 | 3 | `dataframe_to_csv` | sink | One-row metrics snapshot |
 
+## Components used
+
+- `dataframe_to_csv`
+- `subscription_metrics`
+- `synthetic_data_generator`
+
 ## Run
 
 ```bash
@@ -59,3 +65,7 @@ $43.50, historical LTV $783.
   shape as customer_segmentation and rfm_segmentation. Multiple lineage
   inputs are supported via the optional `revenue_data_asset` and
   `customer_360_asset` fields.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

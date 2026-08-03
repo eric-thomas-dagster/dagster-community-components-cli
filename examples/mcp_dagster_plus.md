@@ -94,11 +94,19 @@ Any name that shows up is a valid `tool_name`. The `inputSchema` on each tool te
 - **Incident retro**: query historical runs via MCP + LangGraph/OpenAI agent to write natural-language postmortems
 - **Deployment health**: fetch active code-location status + materialize as an external asset with a freshness policy → alert when stale
 
-## Cleanup
+## Teardown
 
 Nothing to clean up — no containers, no local state beyond the scaffolded project directory.
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_mcp_dagster_plus_demo.sh \
+  -o setup_mcp_dagster_plus_demo.sh
+bash setup_mcp_dagster_plus_demo.sh
+```
+
+## See also
 
 - [`mcp_stripe.md`](mcp_stripe.md) — same primitive against Stripe's MCP server (swap URL + one header)
 - [`mcp_tool_picker.md`](mcp_tool_picker.md) — LLM picks *which* MCP tools to call (bounded action space)

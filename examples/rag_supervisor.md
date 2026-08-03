@@ -11,7 +11,7 @@ This is the "agent of agents" pattern with **full Dagster lineage**. Every runti
 - **Static DAG shape, dynamic routing.** All N tool assets are declared at YAML load — the fan-out is visible in `dg dev`. Tools the planner *didn't* pick still materialize (as empty DataFrames) so the graph stays visually consistent across runs.
 - **Gate-able.** Attach an `@asset_check` to `supervisor_plan` to require Slack-approval before tools run. Attach one to `supervisor_final_answer` to require faithfulness ≥ threshold before it advances downstream.
 
-## Asset graph
+## Architecture
 
 ```
                          ┌───────────────────────────────────────────┐
@@ -95,3 +95,7 @@ Every asset is browsable in `dg dev`. Click the plan → see the reasoning. Clic
 - **Give tools retrieval access.** Pipe the corresponding `retrieved` asset from `rag_complete` into a tool's `context` (an upcoming enhancement to `supervisor_agent` — see the component README).
 - **Gate the plan on approval.** Attach an `@asset_check` to `supervisor_plan`; when severity=ERROR fails, the tool assets don't run. Post the plan to Slack via a sensor; require thumbs-up before allowing execution.
 - **Automation.** Wire `AutomationCondition` on `supervisor_final_answer` so it re-materializes when the plan changes — useful for continuously-evolving tasks like "monitor the state of X."
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -14,7 +14,7 @@ support_tickets       ← synthetic_data_generator (support_tickets schema, embe
                                                       (fails when forbidden infoTypes detected)
 ```
 
-## Components covered (3)
+## Components used
 
 | Component | Category | Object type | Purpose |
 |---|---|---|---|
@@ -65,10 +65,14 @@ export GCP_PROJECT_ID=your-project
 # IAM:    roles/dlp.user on the service account
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_cloud_dlp_demo.sh | bash
 cd cloud-dlp-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

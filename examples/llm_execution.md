@@ -74,3 +74,7 @@ uv run dg dev   # → http://localhost:3000 → Assets graph
 ## Cost
 
 ~$0.30–$1.00 per full run on `gpt-4o-mini` (20 tickets × 12 components ≈ 240 calls).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

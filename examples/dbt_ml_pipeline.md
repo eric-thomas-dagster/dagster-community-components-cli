@@ -181,7 +181,7 @@ Each row is a customer with columns from `customer_features` (dbt) joined with c
 - **Add reverse-ETL downstream.** After `dim_customer_with_risk`, wire in a `hubspot_sync` or `slack_notification` sink to push the highest-risk customers to a Customer Success workflow.
 - **Add data-quality checks.** Wrap the `customer_features` model with a `dagster_asset_check` component that fails the run if the row count drops below expectations.
 
-## Related
+## See also
 
 - [Warehouse migration playbook](./warehouse_migration.md) — same shape but for one-time SQL DB → warehouse moves.
 - [Airports Clustering demo](./airports_cluster.md) — another ML-in-the-middle pattern (KMeans + Dagster asset lineage).

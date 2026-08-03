@@ -39,7 +39,7 @@ ollama pull llama3.2:3b      # 2 GB; fits on most laptops
 curl http://localhost:11434/api/tags
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_ollama_demo.sh | bash
@@ -78,3 +78,7 @@ model: phi3:medium          # Microsoft's small-model line
 ```
 
 Then `ollama pull <model>` and re-run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

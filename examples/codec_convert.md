@@ -8,7 +8,7 @@ support_tickets               ← synthetic_data_generator (multilingual tickets
        └── tickets_ascii_sanitized   ← text_codec_convert_asset (utf-8 → ascii)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -79,10 +79,14 @@ attributes:
 
 This is what banking, insurance, and federal-agency systems use every day to ingest daily z/OS-exported flat files.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_codec_convert_demo.sh | bash
 cd codec-convert-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

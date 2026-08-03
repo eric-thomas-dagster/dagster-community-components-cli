@@ -41,7 +41,7 @@ A complete `dataframe → table → dataframe` cycle for both **Apache Iceberg**
    (declare-only AssetSpec)  (declare-only AssetSpec)
 ```
 
-## Run it
+## Run
 
 ```bash
 bash setup_lakehouse_local_demo.sh
@@ -106,7 +106,7 @@ storage_options:
 - `iceberg_catalog_resource` can be used standalone (e.g., by a custom asset that wants `context.resources.iceberg`) or left out when each component embeds its own catalog config.
 - `external_iceberg_table` + `external_delta_table` register the same physical tables as declare-only assets — right for when another engine (Snowflake / Spark / Databricks) is the writer and Dagster only needs to track lineage downstream.
 
-## Trade-offs
+## Trade-offs & gotchas
 
 - **SQLite catalog is single-writer.** Fine for dev / single-machine. For multi-process or concurrent writes, switch to Postgres-backed `sql` catalog or use `rest`.
 - **pyiceberg's `merge`/upsert is limited.** This demo uses `mode: overwrite`. For real upserts, write the table from Spark/Trino and let Dagster orchestrate via `external_iceberg_table` instead.

@@ -6,7 +6,7 @@ Resource components for major enterprise SaaS platforms. Each
 provides a thin authenticated REST client that custom ops can use to
 pull data into pipelines.
 
-## Components
+## Components used
 
 | Resource | Auth | Use case |
 |---|---|---|
@@ -82,3 +82,7 @@ def workday_workers(workday: WorkdayResource) -> pd.DataFrame:
     rows = workday.get("Workers")
     return pd.DataFrame(rows.get("data", []))
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

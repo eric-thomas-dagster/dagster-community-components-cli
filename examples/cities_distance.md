@@ -23,6 +23,15 @@ file_ingestion ─┘   → distance_calculator → filter
 | 5 | `sort` | transformation | Ascending by `distance_km` |
 | 6 | `dataframe_to_csv` | sink | Write `city_origin, city_dest, distance_km` |
 
+## Components used
+
+- `dataframe_join`
+- `dataframe_to_csv`
+- `distance_calculator`
+- `file_ingestion`
+- `filter`
+- `sort`
+
 ## Run
 
 ```bash
@@ -67,3 +76,7 @@ NY-Philly the closest at ~130km, NY-SF the farthest at ~4,129km.
 Cap the search to "near each origin" by filtering `distance_km < 1000`
 before sort. Or replace the cross-join with `dataframe_join how=inner`
 on a `state` column to compute only intra-state pairs.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

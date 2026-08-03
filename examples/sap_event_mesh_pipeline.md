@@ -48,7 +48,7 @@ Event Mesh supports both. AMQP-WebSocket gives sub-second latency but needs a pe
 
 For sub-second latency requirements, build a separate AMQP consumer service that pushes into Dagster via `bin/kick_off_run.sh`. The sensor pattern is right for batch-friendly latency (~30s).
 
-## Setup
+## Run
 
 ### 1. Provision Event Mesh in BTP
 

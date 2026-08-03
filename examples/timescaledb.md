@@ -4,7 +4,7 @@ Single-container Docker walkthrough. Spins up `timescale/timescaledb:latest-pg16
 
 **Live-validated** — `setup_timescaledb_demo.sh` + `dg launch --assets '*'` materializes 10,000 synthetic sensor samples into a hypertable against a real container. End-to-end run completes in ~6s; verification SQL confirms 1 chunk + 10,000 rows + 6 sensor types with realistic averages (temperature ~23°C, pressure ~1000hPa, humidity ~50%, light ~494 lux, sound ~60dB, motion 0/1).
 
-## Components exercised
+## Components used
 
 | Component | Role |
 |---|---|
@@ -13,7 +13,7 @@ Single-container Docker walkthrough. Spins up `timescale/timescaledb:latest-pg16
 | [`dataframe_to_table`](https://dagster-component-ui.vercel.app/c/dataframe_to_table) | Loads the DataFrame into TimescaleDB as a regular Postgres table via `DataFrame.to_sql` |
 | [`sql_transform`](https://dagster-component-ui.vercel.app/c/sql_transform) | Casts the timestamp column to `timestamptz`, calls `create_hypertable(...)` (idempotent via `if_not_exists`), and returns a per-sensor-type aggregate |
 
-## Asset graph
+## Architecture
 
 ```
 sensor_readings (synthetic_data_generator)
@@ -25,7 +25,7 @@ timescaledb_sensor_load (dataframe_to_table → regular Postgres table)
 sensor_hypertable (sql_transform → ALTER timestamp + create_hypertable + summary)
 ```
 
-## Run it
+## Run
 
 ```bash
 bash setup_timescaledb_demo.sh timescaledb-demo
@@ -81,7 +81,7 @@ psycopg2.errors.WrongObjectType: invalid type for dimension "timestamp"
 
 The demo's `sql_transform` runs the cast in place via `ALTER TABLE … ALTER COLUMN "timestamp" TYPE timestamptz USING "timestamp"::timestamptz` before invoking `create_hypertable(...)`. On a 10k-row table this is instant; on larger tables you may want to set the timestamp column type at load time instead — `dataframe_to_table` accepts a `sqlalchemy_types:` field if you want to bypass the pandas-inferred TEXT mapping.
 
-## What the setup script does
+## What the script does
 
 1. **Starts TimescaleDB single-container in Docker** (`timescale/timescaledb:latest-pg16`) on host port 15432.
 2. **Polls until CREATE EXTENSION succeeds** — the TimescaleDB image auto-tunes on first launch, which restarts Postgres once after `pg_isready` first reports green. We wait for the extension-create to actually succeed instead of trusting `pg_isready` alone.
@@ -89,7 +89,7 @@ The demo's `sql_transform` runs the cast in place via `ALTER TABLE … ALTER COL
 4. **Installs the 4 components** via the community CLI (`--refresh` on first call to bust the manifest cache).
 5. **Overwrites the CLI-installed example defs.yamls** with demo-specific configuration.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f timescaledb-demo-server

@@ -159,7 +159,7 @@ Easier setup; FK failures show the orphan rows (clean them, re-run). Type fideli
 
 `deps:` chains step the pipeline through inventory → DDL → data → views. Each migration component emits a status DataFrame.
 
-## Run it
+## Run
 
 ```bash
 bash setup_warehouse_migration_demo.sh

@@ -18,6 +18,13 @@ rest_api_fetcher → datetime_parser → formula → dataframe_to_table
 | 3 | `formula` | transformation | Compute `decade = (model_year.dt.year // 10) * 10` |
 | 4 | `dataframe_to_table` | sink | Write to whatever DB `DATABASE_URL` points at — SQLite for this demo |
 
+## Components used
+
+- `dataframe_to_table`
+- `datetime_parser`
+- `formula`
+- `rest_api_fetcher`
+
 ## Run
 
 ```bash
@@ -62,3 +69,7 @@ Japan stayed efficient throughout.
   SQLite has no native tz storage. The sink auto-strips on the way in
   (preserving UTC wall time), logging which columns it touched. Set
   `false` if you're targeting Postgres TIMESTAMPTZ and want to keep tz.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

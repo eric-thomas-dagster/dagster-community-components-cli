@@ -422,7 +422,7 @@ For pure "run only state-modified on PR deploys" — you don't need any of that.
 
 ---
 
-## Related
+## See also
 
 - [`dbt_queue_driven.md`](./dbt_queue_driven.md) — message-driven dbt orchestration + subclass component pattern (`DbtProjectWithRuntimeVarsComponent`)
 - [`automation_condition_applicator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/infrastructure/automation_condition_applicator) — the component wiring for Approach B

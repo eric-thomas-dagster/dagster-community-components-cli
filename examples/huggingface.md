@@ -12,6 +12,16 @@ End-to-end walkthrough wiring **7 community components** that cover the HuggingF
 | [`huggingface_inference_endpoint`](https://dagster-component-ui.vercel.app/c/huggingface_inference_endpoint) | Call a paid dedicated Inference Endpoint (different from the shared public API) |
 | [`huggingface_space_status_sensor`](https://dagster-component-ui.vercel.app/c/huggingface_space_status_sensor) | Fire a `RunRequest` when a HF Space reaches a target stage (e.g. RUNNING after a rebuild) |
 
+## Components used
+
+- `huggingface_chat_completion`
+- `huggingface_dataset_asset`
+- `huggingface_inference_endpoint`
+- `huggingface_model_asset`
+- `huggingface_pipeline`
+- `huggingface_space_status_sensor`
+- `huggingface_text_to_image`
+
 ## Demo
 
 ```bash
@@ -46,7 +56,7 @@ Need to REACT to a HuggingFace event?
 └── Space deploy / rebuild → huggingface_space_status_sensor
 ```
 
-## Asset graph
+## Architecture
 
 The demo scaffolds this graph:
 
@@ -97,6 +107,14 @@ For **batch inference over a DataFrame column**, use the task-specific component
 | `huggingface_inference_endpoint` | **Paid** — billed per endpoint-hour by HuggingFace |
 | `huggingface_dataset_asset` / `huggingface_model_asset` | $0 (read-only Hub API calls) |
 | `huggingface_space_status_sensor` | $0 (read-only Hub API calls) |
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_huggingface_demo.sh \
+  -o setup_huggingface_demo.sh
+bash setup_huggingface_demo.sh
+```
 
 ## See also
 

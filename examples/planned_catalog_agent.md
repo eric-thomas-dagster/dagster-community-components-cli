@@ -256,7 +256,7 @@ Both eliminate per-run LLM cost. Pick based on where the plan should live:
 
 If you want engineers to review the pipeline before it hits prod, use codegen. If you want the "product manager writes a task, real assets appear" flow, use `PlannedCatalogAgentComponent`.
 
-## Related
+## See also
 
 - [`catalog_agent`](./catalog_agent.md) — the per-step exploration variant.
 - [`iterative_supervisor_agent`](./iterative_supervisor_agent.md) — same iterative shape but LLM-persona tools instead of the live catalog.

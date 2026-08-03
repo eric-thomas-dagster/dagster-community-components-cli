@@ -48,12 +48,20 @@ CouchDB container (couchdb:3)
 
 `couchdb:3` (official image). ~350 MB. First-boot is <10 seconds — the setup script polls the readiness endpoint before proceeding.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker stop dagster_couchdb_demo && docker rm dagster_couchdb_demo
 ```
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_couchdb_demo.sh \
+  -o setup_couchdb_demo.sh
+bash setup_couchdb_demo.sh
+```
+
+## See also
 
 - [mongodb](mongodb.md), [neo4j](neo4j.md), [cassandra](cassandra.md) — same round-trip pattern for other NoSQL stores

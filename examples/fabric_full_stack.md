@@ -232,3 +232,7 @@ az fabric capacity delete -g dagster-demo-rg -n <capacity-name> --yes
 - **Pair with `lineage_to_purview`** to publish the full Dagster lineage
   graph (including Fabric assets) into Purview for organization-wide
   data governance
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

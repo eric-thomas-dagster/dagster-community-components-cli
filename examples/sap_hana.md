@@ -6,7 +6,7 @@ SAP HANA database resource — provides a SQLAlchemy URL helper.
 Works with HANA Cloud, on-prem HANA, and Azure HANA (preview as a
 partner offering).
 
-## Components
+## Components used
 
 | Component | Category | Role |
 |---|---|---|
@@ -74,3 +74,7 @@ attributes:
 - Push aggregated results back into HANA Calculation Views
 - Sync HANA tables to a data lake (ADLS Gen2) for ML
 - Replicate HANA → Azure SQL via an ETL job for reporting cost
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -27,7 +27,7 @@ Fieldglass manages contractors, statements of work, and contingent labor across 
 | `oauth_rest_ingestion` | community | Paginated REST GET (page-based) → pandas DataFrame |
 | `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
 
-## Setup
+## Run
 
 ### 1. OAuth setup in Fieldglass
 

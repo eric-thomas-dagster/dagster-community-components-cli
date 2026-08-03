@@ -183,7 +183,15 @@ tls_cert_env_var: TEMPORAL_TLS_CERT
 tls_key_env_var:  TEMPORAL_TLS_KEY
 ```
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_temporal_signal_query_demo.sh \
+  -o setup_temporal_signal_query_demo.sh
+bash setup_temporal_signal_query_demo.sh
+```
+
+## See also
 
 - [`temporal_workflow` demo](./temporal_workflow.md) — the trio (trigger + external + sensor) for terminal-state observation.
 - [`langgraph_agent`](./langgraph_agent.md) — multi-step LLM pipeline as a Dagster asset (composes nicely with query_asset for durable agent state).

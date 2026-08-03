@@ -27,11 +27,11 @@ Run any container image as a first-class Dagster asset via `dagster-docker`. No 
 
 Two `docker_container_asset` instances, two different images, lineage wired with `deps:`.
 
-## Prereqs
+## Prerequisites
 
 - **Docker daemon running.** The setup script exits early with a clear message if it's not.
 
-## Run it
+## Run
 
 ```bash
 bash setup_docker_container_demo.sh
@@ -83,7 +83,7 @@ Every field except `asset_name` + `image` is optional. The component:
 
 `docker_container_asset` is **per-materialization**, not per-run — every asset launch spawns a fresh container. Good for stateless work; for long-running services (a Jupyter server, an MLflow tracking server), use a separate compose / Kubernetes manifest and declare the service as `external_*` instead.
 
-## Trade-offs
+## Trade-offs & gotchas
 
 - **Pull latency on first run.** The setup script pre-pulls `alpine:latest` + `python:3.11-slim` so the demo's first launch isn't waiting on a pull. In production, either pre-pull on the run host or accept the cold-start cost per asset.
 - **Command parsing.** `command:` is a list passed directly to `docker run image cmd...` — no shell. To use shell features (`$()`, pipes, redirects, env-var expansion), wrap with `['sh', '-c', '...']`.

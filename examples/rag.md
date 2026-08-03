@@ -67,3 +67,7 @@ task → plan  ───────┼── specialist_b_result ──┼─�
 ## Artifacts are the graph
 
 Whichever shape you pick, hold on to this: **the artifacts are the graph**. A materialization records a specific version of a specific artifact — the corpus at time T, the index built from corpus-hash X at time T, the eval score for snapshot Y against golden set Z. Six weeks later when someone asks "why did last Tuesday's answer look weird?", the graph tells you. That's the difference between a pipeline that runs and a system you can operate.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

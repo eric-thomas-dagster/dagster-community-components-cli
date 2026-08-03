@@ -12,7 +12,7 @@ orders (synthetic source: 30 rows, 4 cols)
        └── freshness_check               → time_window policy (25h fail / 13h warn)
 ```
 
-## Components covered (4)
+## Components used
 
 | Component | What it checks |
 |---|---|
@@ -25,7 +25,7 @@ orders (synthetic source: 30 rows, 4 cols)
 
 **$0.** All checks run locally on the materialized DataFrame.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_data_quality_demo.sh | bash
@@ -81,3 +81,7 @@ class OrdersSchema(pa.DataFrameModel):
 `pandera_asset_check` references this by `schema_module: <pkg>.schemas`
 + `schema_name: OrdersSchema`. Pandera does the row-level validation on
 every materialization.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

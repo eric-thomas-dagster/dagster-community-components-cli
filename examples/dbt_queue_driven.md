@@ -329,7 +329,15 @@ lands in `output_queue.jsonl` with the new vars.
 - **Failures don't publish.** Success-only semantics fall out of asset
   dependencies for free — no extra failure-handling code needed.
 
-## Related walkthroughs
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_dbt_queue_driven_demo.sh \
+  -o setup_dbt_queue_driven_demo.sh
+bash setup_dbt_queue_driven_demo.sh
+```
+
+## See also
 
 - [dbt_ml_pipeline](dbt_ml_pipeline.md) — Python ML asset between two dbt models
 - [dbt_llm_pipeline](dbt_llm_pipeline.md) — LLM-augmented dbt transforms

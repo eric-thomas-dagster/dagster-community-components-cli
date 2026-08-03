@@ -17,6 +17,13 @@ rest_api_fetcher → formula → summarize → dataframe_to_json
 | 3 | `summarize` | transformation | Group by `region`, sum population, mean density, count countries |
 | 4 | `dataframe_to_json` | sink | Write `/tmp/region_summary.json` |
 
+## Components used
+
+- `dataframe_to_json`
+- `formula`
+- `rest_api_fetcher`
+- `summarize`
+
 ## Run
 
 ```bash
@@ -47,3 +54,7 @@ uv run dg launch --assets '*'
   output column → reducer name.
 - The pipeline is fully declarative: zero custom Python beyond
   `model_validate({...})` calls.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -4,7 +4,14 @@
 
 **Components used:** `jde_orchestrator_resource`, `jde_orchestration_trigger_job`, `jde_orchestration_status_sensor`, `jde_orchestration_output_ingestion`, `jde_orchestrator_workspace`.
 
-## One-command demo
+## Components used
+
+- `jde_orchestration_output_ingestion`
+- `jde_orchestration_status_sensor`
+- `jde_orchestration_trigger_job`
+- `jde_orchestrator_workspace`
+
+## Run
 
 Mock JDE AIS server in Docker (Flask, ~130 MB), scaffolds Dagster project, wires all 5 components, materializes end-to-end. **Costs $0**.
 
@@ -89,6 +96,6 @@ attributes:
 
 Use these components when JDE is your ERP and Orchestrator is deployed.
 
-## Related walkthroughs
+## See also
 
 - [qlik_replicate](qlik_replicate.md), [qlik_compose](qlik_compose.md), [tm1](tm1.md) — same 5-component shape for other enterprise systems

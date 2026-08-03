@@ -34,11 +34,11 @@ Exercise the Redis community-component family against a single-container Redis r
    └────────────┘
 ```
 
-## Prereqs
+## Prerequisites
 
 - **Docker daemon running.**
 
-## Run it
+## Run
 
 ```bash
 bash setup_redis_demo.sh
@@ -116,7 +116,7 @@ attributes:
   batch_size: 500                        # SCAN cursor batch size
 ```
 
-## Trade-offs
+## Trade-offs & gotchas
 
 - **No data piped into Dagster assets.** This family is sensor + job-centric. To bring Redis-stream entries into the asset graph, pair `redis_streams_monitor` with a `kafka_to_database_asset`-style downstream that drains a window of entries on each trigger.
 - **`pattern: null` flushes the whole db.** Be explicit (`session:*`, `cache:*`) unless you really mean FLUSHDB.

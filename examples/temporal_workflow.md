@@ -212,3 +212,7 @@ Notes:
 temporalio>=1.7.0        # >=1.8.0 for Temporal Cloud API-key auth
 httpx>=0.27              # only for the demo activity — not required by the components
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

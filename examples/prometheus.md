@@ -59,3 +59,7 @@ The same components work against ANY Prometheus-compatible HTTP API:
   get-access-token --resource https://prometheus.monitor.azure.com`
 - **Grafana Cloud** — Bearer token from Grafana Cloud API key
 - **AWS Managed Prometheus** — needs sigv4 sidecar/proxy
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -20,6 +20,14 @@ file_ingestion → data_cleansing → formula → ltv_prediction → dataframe_t
 | 4 | `ltv_prediction` | analytics | Predict 12-month LTV per customer; bucket into value segments |
 | 5 | `dataframe_to_csv` | sink | Write the per-customer report |
 
+## Components used
+
+- `data_cleansing`
+- `dataframe_to_csv`
+- `file_ingestion`
+- `formula`
+- `ltv_prediction`
+
 ## Run
 
 ```bash
@@ -80,3 +88,7 @@ Once you have a customer-keyed dataframe, more registry components plug in:
 
 All accept transaction-shaped dataframes; many auto-detect the same column
 patterns (`customer_id`, `date`, `amount`).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

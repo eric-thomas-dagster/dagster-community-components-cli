@@ -11,7 +11,7 @@ A multi-step analytics pipeline where **every transform runs as SQL inside the w
 
 Smaller frames or chains that need Python steps → use the per-asset `backend: polars` family. Single-asset Snowflake chain with the full DataFrame API → use `snowpark_pipeline`.
 
-## Components exercised
+## Components used
 
 | Step | Component | What it emits |
 |---|---|---|
@@ -335,3 +335,7 @@ For everything not exercised by this demo (rarely-used fields, dialect quirks, e
 - **No Python pandas in flight.** The only Python-side work is `synthetic_data_generator → dataframe_to_table` to seed the source table. Every step after that is the warehouse engine doing all the work; the Python process just submits CTAS statements and reads back row counts.
 - **`mode: replace` semantics.** On DuckDB / Snowflake / BigQuery / Databricks this becomes `CREATE OR REPLACE TABLE`. On Postgres / Redshift / MSSQL / MySQL (no `CREATE OR REPLACE` support) it becomes `DROP TABLE IF EXISTS` + `CREATE TABLE AS`.
 - **`SELECT * EXCEPT()` vs `EXCLUDE`.** DuckDB and Snowflake use `EXCLUDE`; BigQuery and Databricks use `EXCEPT`. `warehouse_multi_field_formula` `output_mode: replace` and `warehouse_pipeline` `op: drop` / `op: top_n_per_group` depend on this — they only work on the four dialects that support star-projection-minus-columns.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

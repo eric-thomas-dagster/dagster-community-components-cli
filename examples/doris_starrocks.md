@@ -76,7 +76,7 @@ Plus (declare-only):
 
 Both use the same host / port defaults (`:9030` for MySQL query, `:8030` for HTTP bulk-load). If your local `:9030` is already in use, edit the setup script's `-p ${QUERY_PORT}:${QUERY_PORT}` binding.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker stop dagster_doris_demo && docker rm dagster_doris_demo
@@ -87,7 +87,15 @@ docker stop dagster_doris_demo && docker rm dagster_doris_demo
 
 The two engines fork from the same codebase and remain wire-protocol-compatible. If a customer asks "does this work with StarRocks too?" the answer is yes — same YAML, one `starrocks_*` prefix swap. Shipping the demo with both variants tests the compatibility claim in one setup script.
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_doris_starrocks_demo.sh \
+  -o setup_doris_starrocks_demo.sh
+bash setup_doris_starrocks_demo.sh
+```
+
+## See also
 
 - `examples/README.md` — the demo TOC
 - [clickhouse](clickhouse.md) — the same round-trip pattern for ClickHouse

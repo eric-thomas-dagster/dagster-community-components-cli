@@ -34,7 +34,7 @@ Read / write the Neo4j graph database via the community-component family. Same c
                         │   └─────────────────┘
 ```
 
-## Run it
+## Run
 
 ```bash
 bash setup_neo4j_demo.sh

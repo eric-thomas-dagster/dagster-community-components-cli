@@ -10,7 +10,7 @@ JSON, materialize as a Dagster asset.
 class_data_sheet     ← google_sheets_ingestion (Sheets API → DataFrame)
 ```
 
-## Components covered (1)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -27,7 +27,7 @@ class_data_sheet     ← google_sheets_ingestion (Sheets API → DataFrame)
 
 **$0.** Sheets API has a 300 req/min/project free tier.
 
-## Setup
+## Run
 
 1. Get a service-account JSON. See the
    [setup walkthrough](#service-account-setup) below if you don't
@@ -94,3 +94,7 @@ If you don't already have a service-account JSON:
 
 6. `export GOOGLE_APPLICATION_CREDENTIALS=/path/to/the/json`. Most
    Google SDKs read this env var by default.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

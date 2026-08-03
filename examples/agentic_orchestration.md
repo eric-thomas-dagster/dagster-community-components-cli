@@ -4,7 +4,7 @@ The full-stack pattern: **multiple autonomous AI agents, a human-in-the-loop gat
 
 This is the shape that Prefect describes as "agentic orchestration." Dagster's take: **treat each agent's output and each human decision as first-class state**. No black-box flow, no lost audit trail, no "why did the agent do X six weeks ago?"
 
-## The asset graph
+## Architecture
 
 ```
                               tickets (CSV source)
@@ -129,7 +129,7 @@ echo '{"approved": true, "approver": "eric", "reason": "credited $250"}' \
 
 **Auto-approve when confident.** Add an assessor asset upstream of the gate that writes the approval token itself when the model's confidence exceeds a threshold. The gate can't tell if the token came from an LLM auto-approver or from a human. Below the threshold, the token doesn't get written and it waits for a human.
 
-## Related walkthroughs
+## See also
 
 - **[rag_supervisor.md](rag_supervisor.md)** — planner LLM + specialist agents, no human gate. The pure multi-agent story.
 - **[rag_pipeline_dynamic.md](rag_pipeline_dynamic.md)** — one-component RAG with dynamic per-partition queries. The "queries as addressable state" story.

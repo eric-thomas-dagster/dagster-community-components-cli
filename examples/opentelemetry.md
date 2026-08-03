@@ -113,3 +113,7 @@ docker rm -f dg-otel-demo
   meaningful traces
 - **Custom attributes**: add any DataFrame columns to `attribute_columns`
   to pivot/filter on them in your tracing UI
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

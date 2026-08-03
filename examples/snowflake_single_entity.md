@@ -11,6 +11,15 @@ This walkthrough exists as the **single-entity counterpart** to the [`snowflake_
 
 Both shapes can co-exist in the same project. The workspace component handles auto-discovery; single-entity components handle the deliberate exceptions.
 
+## Components used
+
+- `external_snowflake_openflow_flow`
+- `snowflake_dynamic_table_refresh_asset`
+- `snowflake_openflow_status_sensor`
+- `snowflake_stored_procedure_call_asset`
+- `snowflake_task_completion_sensor`
+- `snowflake_task_execute_asset`
+
 ## Six new single-entity components
 
 | Component | Purpose | Replaces in `snowflake_workspace` |
@@ -73,6 +82,14 @@ The setup script scaffolds a project with all 6 single-entity components wired t
 | **Asset key control** | Auto-derived from entity name | Customer sets explicit `asset_key` per defs.yaml |
 | **Per-entity `deps` / `partitions_def`** | Via the workspace `<entity_name>_overrides:` shape | Native — set on the component directly |
 | **Account permissions needed** | `SHOW` privileges across the schema for auto-discovery | Just what's needed for the one entity |
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_single_entity_demo.sh \
+  -o setup_snowflake_single_entity_demo.sh
+bash setup_snowflake_single_entity_demo.sh
+```
 
 ## See also
 

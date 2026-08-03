@@ -29,7 +29,7 @@ Materialize an analysis `.ipynb` as a first-class Dagster asset. `papermill` run
    └──────────────────────────┘
 ```
 
-## Run it
+## Run
 
 ```bash
 bash setup_notebooks_demo.sh
@@ -91,7 +91,7 @@ Both wrap Jupyter notebooks as assets, but they diverge:
 
 For most analysis use cases (reports, dashboards, charts), `jupyter_notebook_asset` is the right choice. Pick `dagstermill_notebook_asset` when the notebook needs Dagster's `context.resources` or wants to yield multiple assets.
 
-## Trade-offs
+## Trade-offs & gotchas
 
 - **Kernels.** The kernel named in YAML (`kernel_name: python3`) must exist on the executor. The setup script installs the local kernel as part of the demo.
 - **Notebook size.** Papermill stores the entire executed notebook including outputs — large plots / DataFrames inflate the file. Set `store_output_ipynb: false` to skip persistence (papermill still writes intermediate state).

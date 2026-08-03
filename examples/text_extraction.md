@@ -15,7 +15,7 @@ raw_events (synthetic source, 20 rows × 8 mixed-text cols)
        └── extracted_phone_parts   ← regex_parser
 ```
 
-## Components covered (6)
+## Components used
 
 | Component | Input shape | Output |
 |---|---|---|
@@ -30,7 +30,7 @@ raw_events (synthetic source, 20 rows × 8 mixed-text cols)
 
 **$0.** Pure local — pandas + stdlib + BeautifulSoup + lxml. No network.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_text_extraction_demo.sh | bash
@@ -95,3 +95,7 @@ attributes:
 Live-validated on gpt-4o-mini: **3/4 clean picks in 10s, ~$0.0028 total cost.** Outputs written: `/tmp/posts_enriched.csv`.
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

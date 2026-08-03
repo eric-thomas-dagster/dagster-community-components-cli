@@ -316,9 +316,21 @@ If you need stronger guarantees (concurrent writes from both engines, transactio
 
 In the catalog-coordinated shape, you replace the storage-path `CREATE TABLE ... USING ICEBERG LOCATION ...` on the Databricks side with a federated catalog reference (e.g., `iceberg_silver.silver.customer_metrics` from a federated catalog). The Dagster wiring is identical — only the SQL on both sides changes.
 
-## Cleanup
+## Teardown
 
 ```bash
 rm -rf snowflake-iceberg-databricks-demo
 # Snowflake / Databricks resources live in your accounts — clean up there manually.
 ```
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_iceberg_databricks_demo.sh \
+  -o setup_snowflake_iceberg_databricks_demo.sh
+bash setup_snowflake_iceberg_databricks_demo.sh
+```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

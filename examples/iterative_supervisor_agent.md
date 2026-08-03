@@ -101,7 +101,7 @@ Bump `max_iterations` up if tasks tend to need more turns; drop it down if the a
 
 See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
-## Related
+## See also
 
 - [Supervisor Agent](./supervisor_agent.md) — single-shot version. Cheaper. Use when tools don't chain.
 - [LangGraph Agent](./langgraph_agent.md) — ReAct loop inside a single asset (no per-step Dagster visibility). Use for tight tool-use loops where you don't need per-step lineage.

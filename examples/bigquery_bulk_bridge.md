@@ -14,7 +14,7 @@ iris_export_to_gcs   ← bigquery_export_to_gcs_asset
                                  (BQ LOAD parquet → iris_round_tripped)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -52,7 +52,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 Or simpler for demos: `roles/owner` on the project.
 
-## Run it
+## Run
 
 ```bash
 # Pre-req: a BQ source table to export. The default points at the
@@ -117,3 +117,7 @@ attributes:
   partition_type: DAY
   cluster_fields: [customer_id, status]
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

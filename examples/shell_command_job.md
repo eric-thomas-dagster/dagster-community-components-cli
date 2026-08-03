@@ -40,3 +40,7 @@ uv run dg launch --job count_old_tmp_files
 This work doesn't model a tracked artifact. There's no DataFrame to materialize,
 no key worth lineage. Pretending it's an asset (e.g. via `shell_command_asset`)
 adds a fake catalog entry that drifts from reality every run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

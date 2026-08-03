@@ -14,7 +14,7 @@ support_tickets       → support_clean_text          ← text_preprocessing
                           └→ support_topics         ← topic_modeling (LDA, n_topics=4)
 ```
 
-## Components covered (6)
+## Components used
 
 | Component | Purpose |
 |---|---|
@@ -29,7 +29,7 @@ support_tickets       → support_clean_text          ← text_preprocessing
 
 **$0.** pandas + sklearn, all local.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_customer_analytics_demo.sh | bash
@@ -43,3 +43,7 @@ uv run dg dev   # http://localhost:3000
 - Pipe `customer_journeys` → `funnel_analysis` (already in `setup_analytics_demo.sh`) for funnel-shaped paths.
 - Pipe `customer_rfm_segments` → `dataframe_to_table` (in `setup_local_sinks_demo.sh`) for RFM-tier persistence.
 - Pipe `support_topics` → an LLM-based `text_classifier` (in `setup_ai_with_llm_demo.sh`) for topic-conditional classification.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

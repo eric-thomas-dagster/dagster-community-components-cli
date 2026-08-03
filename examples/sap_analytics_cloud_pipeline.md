@@ -36,7 +36,7 @@ Pull **SAP Analytics Cloud** stories, models, and comments into Dagster. SAC is 
 
 For the **read SAC stories rendered** use case, the right approach is usually to query the underlying data source directly (Datasphere / HANA / BW) instead of SAC's rendering API.
 
-## Setup
+## Run
 
 ### 1. Create an OAuth client in SAC
 

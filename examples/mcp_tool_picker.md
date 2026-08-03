@@ -105,7 +105,7 @@ Each is a config swap — the component doesn't know the difference.
 
 See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
-## Related
+## See also
 
 - [Supervisor Agent](./supervisor_agent.md) — same pattern with LLM-persona tools.
 - [Agent + MCP tool loop (agent_family)](./agent_family.md) — tighter agent-loop pattern; one agent, one loop of MCP calls per asset. Different mechanic (agent iteration vs pre-plan).

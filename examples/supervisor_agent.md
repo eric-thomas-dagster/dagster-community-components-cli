@@ -114,7 +114,7 @@ The synthesizer inline-cites which tool provided each fact — full audit trail 
 
 See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
-## Related
+## See also
 
 - [Agent + MCP tool loop](./agent_family.md) — deterministic MCP tool call vs agentic vs evaluated; a different agentic shape (single agent with real MCP tools).
 - [LangGraph Agent](./langgraph_agent.md) — multi-step reasoning inside a single asset (plan → research → critique → synthesize). Supervisor is the *between-assets* orchestration primitive; LangGraph is the *within-asset* one.

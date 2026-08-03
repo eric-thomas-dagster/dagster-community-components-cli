@@ -13,7 +13,7 @@ fhir_resources           ← synthetic_data_generator (fhir_patients, 28 resourc
 
 One component, four different `resource_types` filters → four purpose-built tables.
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -68,10 +68,14 @@ value_maps:
     male: male    # canonical pass-through (case-insensitive by default)
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_fhir_normalizer_demo.sh | bash
 cd fhir-normalizer-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

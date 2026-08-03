@@ -73,7 +73,7 @@ The LLM double-check turns Presidio's noisy multi-language output into actionabl
 - **GDPR audit gate.** Chain a `dagster_asset_check` that fails the run if any `llm_double_check.clean == False` — hard-gate compliance in CI.
 - **Custom recognizers.** Add company-specific patterns (internal customer IDs, product codes) to `PiiDetectorComponent`'s config.
 
-## Related
+## See also
 
 - [Data quality agent](./data_quality_agent.md) — same pattern (Python row-wise LLM), different problem shape (data quality vs. compliance).
 - [Cube semantic layer + LLM](./cube_query.md) — LLM-in-the-loop pattern, structured data source.

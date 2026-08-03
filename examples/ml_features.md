@@ -15,7 +15,7 @@ raw_customers (100 rows: 5 numeric + 3 categorical, with NaNs and outliers)
        └── customers_binned        ← tile_binning (annual_spend → quintile tiers)
 ```
 
-## Components covered (6)
+## Components used
 
 | Component | Strategy options |
 |---|---|
@@ -30,7 +30,7 @@ raw_customers (100 rows: 5 numeric + 3 categorical, with NaNs and outliers)
 
 **$0.** Pandas + scikit-learn, all local. No GPU, no API.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_ml_features_demo.sh | bash
@@ -54,3 +54,7 @@ each step:
 - Composes naturally — `imputation` → `outlier_clipper` →
   `feature_scaler` → `train_test_splitter` → `gradient_boosting_model`
   is a complete end-to-end ML pipeline using only registry components.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

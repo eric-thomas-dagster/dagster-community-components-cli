@@ -78,3 +78,7 @@ Live-validated on gpt-4o-mini: **4/4 clean picks in 9s, ~$0.0038 total cost.** O
 > **Note:** Router itself works cleanly — 3 routes with correct row counts. When re-running you may see the LLM occasionally stop after 2 of 3 sinks; the placeholder diagnostics asset spells out which paths are missing so you can prompt more explicitly.
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

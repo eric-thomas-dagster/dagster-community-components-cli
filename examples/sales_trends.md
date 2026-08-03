@@ -59,7 +59,7 @@ month,revenue,orders_count,rolling_avg_revenue,revenue_diff,revenue_pct
 2025-11,76773.80,136,74275.59,8610.03,0.1263
 ```
 
-## Related
+## See also
 
 - [Window Calculation](window_calculation.md) — deeper coverage of the window function set
 - [Cohort Analysis](cohort_analysis.md) — the retention-over-time counterpart to trend analysis

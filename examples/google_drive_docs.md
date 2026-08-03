@@ -18,7 +18,7 @@ doc_summaries      ← gemini_llm
                      (gemini-2.5-flash, one-sentence summary, thinking_budget=0)
 ```
 
-## Components covered (3)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -56,7 +56,7 @@ export GEMINI_API_KEY=...      # or GOOGLE_API_KEY (gemini_llm only)
    The components surface a `403 SERVICE_DISABLED` with the exact activation URL the first time each isn't enabled. Click and Enable, ~30s to propagate.
 3. **Share Drive items with the SA email** (the `client_email` in your JSON, e.g. `<name>@<project>.iam.gserviceaccount.com`). Anything not shared is invisible to the SA.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_google_drive_docs_demo.sh | bash
@@ -94,3 +94,7 @@ attributes:
   chunk_size: 500
   chunk_overlap: 50
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

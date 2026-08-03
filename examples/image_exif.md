@@ -8,7 +8,7 @@ sample_images       ← synthetic_image_generator (3 JPEGs, inject_exif: true)
        └── image_metadata  ← image_exif_extractor
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -51,10 +51,14 @@ Real-world note: actual camera EXIF varies widely (Canon vs iPhone vs DSLR all u
 | `exif_gps_altitude_m` | `GPSInfo.GPSAltitude` |
 | `exif_raw` | Full dict of every parsed tag |
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_image_exif_demo.sh | bash
 cd image-exif-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

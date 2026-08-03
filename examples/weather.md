@@ -18,6 +18,14 @@ rest_api_fetcher → datetime_parser → running_total → transpose → datafra
 | 4 | `transpose` | transformation | Pivot so dates are columns, metrics are rows |
 | 5 | `dataframe_to_csv` | sink | Write `/tmp/weather_report.csv` |
 
+## Components used
+
+- `dataframe_to_csv`
+- `datetime_parser`
+- `rest_api_fetcher`
+- `running_total`
+- `transpose`
+
 ## Run
 
 ```bash
@@ -46,3 +54,7 @@ cumulative_precip_mm  11.5        11.5        13.0        ...  37.1
   with optional grouping and sort.
 - `transpose` flips rows ↔ columns, preserving an explicit index column —
   great for executive-summary tables.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

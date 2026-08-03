@@ -12,7 +12,7 @@ litellm_agent  (single asset)
        └─ stops when the model returns plain text (no more tool calls)
 ```
 
-## Run the demo
+## Run
 
 ```bash
 export OPENAI_API_KEY=sk-…
@@ -152,3 +152,7 @@ Full registry: [github.com/modelcontextprotocol/servers](https://github.com/mode
 | Embed a corpus + retrieve + generate | `rag_pipeline` |
 | Vendor-only agent (skip the LiteLLM dep) | `openai_agent` / `anthropic_agent` / `gemini_agent` |
 | Run an agent **per row** of a DataFrame | not yet — could extend `litellm_agent` with an `upstream_asset_key` shape later |
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

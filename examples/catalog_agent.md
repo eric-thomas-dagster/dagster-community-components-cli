@@ -200,7 +200,7 @@ Catalog Agent is the current apex.
 
 The progression: hand-authored → catalog-driven → real invocation → iterative → schema-aware. Each step handles a real limitation of the prior shape. Catalog Agent is the strongest shape — everything below it is a special case (set `max_iterations: 1` for single-shot, filter `include_ids` tight for a small tool set, etc.).
 
-## Related
+## See also
 
 - [Iterative Supervisor Agent](./iterative_supervisor_agent.md) — same iterative shape but hand-authored LLM-persona tools instead of the live catalog.
 - [MCP Tool Picker](./mcp_tool_picker.md) — MCP-backed real tools; single-shot.

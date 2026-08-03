@@ -61,7 +61,7 @@ The demo hard-codes the Cube query. For the full NL flow:
 
 The primitives are all here — the LLM demo proves the safety-layer pattern. Wiring dynamic query generation is one component away.
 
-## Related
+## See also
 
 - [Cube semantic layer — simple + LLM demos](./cube_query.md) — the parent walkthrough covering both the no-LLM and LLM demos.
 - [LangGraph Agent](./langgraph_agent.md) — the natural fit for the text-to-Cube-query step above.

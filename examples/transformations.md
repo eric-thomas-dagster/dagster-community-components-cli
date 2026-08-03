@@ -47,6 +47,46 @@ orders                        category_lookup       products_dim       orders_di
        └── orders_appended          (append_fields — UNION-style row append)
 ```
 
+## Components used
+
+- `append_fields`
+- `arrange`
+- `audit_columns`
+- `auto_field`
+- `count_records`
+- `cross_join`
+- `cross_tab`
+- `data_masking`
+- `dataframe_transformer`
+- `document_merger`
+- `email_parser`
+- `field_mapper`
+- `file_transformer`
+- `find_replace`
+- `fuzzy_match`
+- `generate_rows`
+- `hash`
+- `label_encoder`
+- `lookup`
+- `make_columns`
+- `make_group`
+- `map_values`
+- `markdown_stripper`
+- `multi_field_binning`
+- `multi_field_formula`
+- `multi_row_formula`
+- `record_id`
+- `sample`
+- `scd_type_1`
+- `schema_validator`
+- `select_records`
+- `siem_event_normalizer`
+- `sql_transform`
+- `surrogate_key`
+- `text_to_columns`
+- `train_test_splitter`
+- `weighted_average`
+
 ## Validated end-to-end
 
 All 34 components materialize successfully on first run. Total wall-clock
@@ -91,3 +131,7 @@ uv run dg launch --assets '*'
 ## Cost
 
 $0 — entirely local pandas / numpy / rapidfuzz / jsonschema.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

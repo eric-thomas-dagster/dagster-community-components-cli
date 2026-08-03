@@ -60,3 +60,7 @@ RAG generation uses ~3 short `gpt-4o-mini` completions.
   templates), compose `vector_store_query → reranker → llm_prompt_executor`
   manually — that's exactly what the parallel branch in this demo
   exercises.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

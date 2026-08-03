@@ -22,7 +22,7 @@ IO managers configured (all local; pick one to swap behavior):
   - duckdb_io_manager          — DuckDB-backed pandas/polars
 ```
 
-## Components covered (12)
+## Components used
 
 The 9 `*_io_manager` components let you swap how Dagster persists asset
 values without changing your asset code. The 3 `dataframe_*` /
@@ -33,7 +33,7 @@ naturally with the IO managers.
 
 **$0.** Pure local file + DuckDB writes. No network.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_local_io_demo.sh | bash
@@ -67,3 +67,7 @@ The remaining cloud IO managers (`s3_*`, `gcs_*`, `adls_*`,
 `bigquery_*`, `snowflake_*`) need real cloud credentials. Each is a
 candidate for its own focused demo with localstack / wiremock or a
 real cloud sandbox.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -12,7 +12,7 @@ notifications      ← synthetic_data_generator (support_tickets, 5 rows)
 inbound_replies      ← imap_inbox_source (fetches replies)
 ```
 
-## Components covered (3)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -87,7 +87,7 @@ Note: Microsoft disabled IMAP basic auth by default in 2022. Your tenant admin h
 
 Originally the component called `server.login()` unconditionally, which broke against aiosmtpd / mailpit / similar dev relays that don't advertise AUTH. Fixed during this demo: the component now checks `server.esmtp_features` for `'auth'` after EHLO and only authenticates when the server expects it.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_email_roundtrip_demo.sh | bash
@@ -112,3 +112,7 @@ uv run dg launch --assets '*'
 ```
 
 Expected: 5 messages logged by aiosmtpd, 6 rows in `inbound_replies` with parsed subject / from / body.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

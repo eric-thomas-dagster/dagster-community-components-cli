@@ -7,7 +7,7 @@ Two parallel RAG paths over the same 5-doc corpus, in one Dagster project. Runs 
 
 Both paths consume the same `docs_corpus` — that's the "shared source" edge.
 
-## Asset graph
+## Architecture
 
 ```
               ┌──────────────────────┐
@@ -158,3 +158,7 @@ api_key: none
 - **[`vector_rag.md`](vector_rag.md)** — the classic decomposed pipeline (Path B here) with `rag_pipeline` for the end-to-end retrieve+generate step in one component.
 
 If you're new to RAG on Dagster, start here (`rag_complete.md`). If you're focused on the "why is this better than a pipeline" story specifically, read `rag_state.md`.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

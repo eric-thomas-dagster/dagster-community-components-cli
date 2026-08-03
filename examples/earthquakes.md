@@ -17,6 +17,14 @@ rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_j
 | 4 | `sort` | transformation | Order by magnitude (descending) |
 | 5 | `dataframe_to_json` | sink | Write `/tmp/earthquakes.jsonl` (one record per line) |
 
+## Components used
+
+- `dataframe_to_json`
+- `json_flatten`
+- `rest_api_fetcher`
+- `select_columns`
+- `sort`
+
 ## Run
 
 ```bash
@@ -38,3 +46,7 @@ uv run dg launch --assets '*'
   earthquake list under `features`).
 - `json_flatten` turns nested dict columns into flat scalar columns.
 - JSONL output preserves record-per-line structure for downstream tools.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

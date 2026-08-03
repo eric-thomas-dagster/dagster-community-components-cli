@@ -37,7 +37,7 @@ Read/write Oracle via the new `oracle_resource` + the generic SQL component fami
    └─────────────────────────────────────────────┘
 ```
 
-## Run it
+## Run
 
 ```bash
 bash setup_oracle_demo.sh

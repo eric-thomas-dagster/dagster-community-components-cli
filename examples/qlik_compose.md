@@ -9,7 +9,14 @@
 - `qlik_compose_workflow_metrics_ingestion` — per-workflow metrics DataFrame
 - `qlik_compose_workspace` — StateBackedComponent — auto-emit one asset per Workflow / Data Mart
 
-## One-command demo
+## Components used
+
+- `qlik_compose_workflow_metrics_ingestion`
+- `qlik_compose_workflow_status_sensor`
+- `qlik_compose_workflow_trigger_job`
+- `qlik_compose_workspace`
+
+## Run
 
 Mock Qlik Compose in Docker (Flask, ~130 MB), scaffolds Dagster project, wires all 5 components, materializes end-to-end. **Costs $0**.
 
@@ -73,7 +80,7 @@ attributes:
     refresh_if_dev: true
 ```
 
-## Related walkthroughs
+## See also
 
 - [qlik_replicate](qlik_replicate.md) — CDC counterpart
 - `tm1.md` — IBM Planning Analytics with the same 5-component shape

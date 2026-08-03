@@ -14,7 +14,7 @@ events                   ← synthetic_data_generator (events schema, 10 rows)
                               via demo-queue in us-central1)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -41,7 +41,7 @@ Queue state after run: 0 tasks (all dispatched + 200'd by httpbin within seconds
 | Built-in retries | Cloud Tasks retries on 4xx/5xx per queue config (max 100 attempts by default) |
 | Auth to private Cloud Run / Cloud Function targets | Set `oidc_service_account_email` — token minted automatically |
 
-## Setup
+## Run
 
 ```bash
 # 1) Enable Cloud Tasks API
@@ -93,9 +93,13 @@ After dispatch (typically seconds), the queue is empty — successful tasks are 
 - **URL templating**: `target_url: https://api.example.com/orders/{order_id}/process` substitutes row values per task.
 - **Backpressure on external APIs**: set `max_dispatches_per_second` on the queue to rate-limit outbound calls regardless of how fast Dagster materializes.
 
-## Cleanup
+## Teardown
 
 ```bash
 gcloud tasks queues delete demo-queue --location=us-central1 \
   --project=$GCP_PROJECT_ID --quiet
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -54,3 +54,7 @@ tier and a configured semantic config in the index).
 | Free | $0/mo | 50 MB / 3 indexes / no SLA |
 | Basic | ~$0.10/hr (~$74/mo) | 2 GB / 5 indexes / 99.9% SLA |
 | Standard S1 | ~$0.34/hr (~$250/mo) | 25 GB / 50 indexes / semantic ranker |
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

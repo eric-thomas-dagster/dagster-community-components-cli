@@ -26,6 +26,22 @@ All 13 extractors share the same field interface (`asset_name`,
 `upstream_asset_key`, `input_column`, `model`, `api_key_env_var`) — just
 swap the class to target a different document domain.
 
+## Components used
+
+- `bank_statement_extractor`
+- `contract_extractor`
+- `expense_report_extractor`
+- `insurance_claim_extractor`
+- `invoice_extractor`
+- `job_posting_extractor`
+- `legal_document_extractor`
+- `medical_record_extractor`
+- `purchase_order_extractor`
+- `receipt_extractor`
+- `resume_extractor`
+- `scientific_paper_extractor`
+- `shipping_label_extractor`
+
 ## Validated end-to-end (timings)
 
 | Asset | Time |
@@ -97,3 +113,7 @@ uv run dg dev   # → http://localhost:3000 → Assets graph
 ## Cost
 
 ~$0.20–$0.50 per full run on `gpt-4o-mini`.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

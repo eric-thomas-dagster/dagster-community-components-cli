@@ -19,7 +19,7 @@ sample_images           (3 synthetic PNGs in /tmp/vision_translate_imgs/)
                                       └── analysis_csv  ← /tmp/vision_translate.csv
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -42,7 +42,7 @@ Note: Vision read these synthetic shapes primarily as colors — the strongest s
 
 **~$0.005.** 3 images × 3 Vision features = 9 feature calls (~$0.0015 each above the free 1000/month tier; well within free for this demo). Translation: 3 strings × 4 langs = 12 translations totaling ~30 chars (~$0.0006 at $20/M chars).
 
-## Required env var
+## Required env vars
 
 ```bash
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
@@ -50,7 +50,7 @@ export GOOGLE_APPLICATION_CREDENTIALS=/path/to/service-account.json
 
 Required SA roles: `roles/serviceusage.serviceUsageConsumer` + Vision API + Translation API enabled.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_vision_translate_demo.sh | bash
@@ -80,3 +80,7 @@ attributes:
 ```
 
 For document parsing (forms / tables / structured), use `document_ai_extractor` instead of Vision — Document AI parses field structure, Vision OCR returns flat text.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

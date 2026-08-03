@@ -12,7 +12,7 @@ support_tickets   ← synthetic_data_generator (20 rows)
         └── ticket_summaries  ← gemini_llm (gemini-2.5-flash)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -26,7 +26,7 @@ quota (5 RPM, ~1500 req/day for text). 20 ticket summaries fit
 comfortably; the demo took ~67s total because the rate limiter
 held a few rows.
 
-## Required env var
+## Required env vars
 
 ```bash
 GEMINI_API_KEY=...    # or GOOGLE_API_KEY (component falls back)
@@ -34,7 +34,7 @@ GEMINI_API_KEY=...    # or GOOGLE_API_KEY (component falls back)
 
 Get a key at <https://aistudio.google.com/app/apikey>.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_gemini_llm_demo.sh | bash
@@ -95,3 +95,7 @@ Drop-in equivalence + production multi-vendor patterns:
 Pick `gemini_llm` specifically when you want a **free** dev/test
 experience or Google's long-context strength without bringing
 LiteLLM along.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

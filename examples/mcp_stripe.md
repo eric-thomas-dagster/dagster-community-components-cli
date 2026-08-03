@@ -97,11 +97,19 @@ The MCP surface is often **broader** than what the vendor SDK exposes — Stripe
 - **Failed-charge triage**: `list_charges` filtered on `status=failed` → feed into a `DataQualityAgentComponent` for LLM-generated per-customer remediation notes
 - **Subscription cohort analysis**: `list_subscriptions` → `filter` → `summarize` → BI board
 
-## Cleanup
+## Teardown
 
 Nothing to clean up — no containers, no local state beyond the scaffolded project directory.
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_mcp_stripe_demo.sh \
+  -o setup_mcp_stripe_demo.sh
+bash setup_mcp_stripe_demo.sh
+```
+
+## See also
 
 - [`mcp_dagster_plus.md`](mcp_dagster_plus.md) — sibling walkthrough for Dagster+'s own MCP server (same primitive, two headers instead of one)
 - [`mcp_tool_picker.md`](mcp_tool_picker.md) — LLM picks *which* Stripe MCP tools to call (bounded action space, agent shape)

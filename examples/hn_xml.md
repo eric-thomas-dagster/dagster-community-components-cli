@@ -21,6 +21,13 @@ rest_api_fetcher (text)  → xml_parser (mode: findall)
 | 3 | `array_exploder` | transformation | Explode both list-columns in parallel (zip-style) — one row per item |
 | 4 | `dataframe_to_csv` | sink | Write `title, link` |
 
+## Components used
+
+- `array_exploder`
+- `dataframe_to_csv`
+- `rest_api_fetcher`
+- `xml_parser`
+
 ## Run
 
 ```bash
@@ -54,3 +61,7 @@ of HN front-page stories.
 Swap the xpath expressions to extract `pubDate`, `description`, `dc:creator`
 (with a `namespace` mapping for the `dc:` prefix) — `xml_parser` accepts
 a dict so adding fields is one YAML line each.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

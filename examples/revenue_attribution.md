@@ -20,6 +20,13 @@ file_ingestion (revenue)   ┘
 | 2 | `revenue_attribution` | analytics | Linear attribution model; aggregates spend + computes ROI / ROAS / CAC |
 | 3 | `dataframe_to_csv` | sink | Per-campaign report |
 
+## Components used
+
+- `dataframe_to_csv`
+- `file_ingestion`
+- `revenue_attribution`
+- `synthetic_data_generator`
+
 ## Run
 
 ```bash
@@ -69,3 +76,7 @@ UTM-tagged or session-tracked marketing events keyed on the same
 `customer_id` to get non-zero attributed revenue. Switch
 `attribution_model` to `time_decay` or `first_touch` for different
 allocation behaviors.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

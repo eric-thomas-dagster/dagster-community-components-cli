@@ -34,7 +34,7 @@ Dremio is SAP's lakehouse query engine (acquired 2024-25). It federates SQL acro
    └────────────────────────────────────────────┘
 ```
 
-## One-command demo
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_dremio_pipeline_demo.sh | bash
@@ -164,7 +164,7 @@ partition_start: '2024-01-01'
 
 `{partition_key}` is substituted per run. Re-running a partition pulls the same window again — Dremio's caching handles the re-read efficiently.
 
-## Trade-offs
+## Trade-offs & gotchas
 
 - **REST is slow for big results.** Pagination at 500 rows/page caps throughput. Use Flight for anything bigger than ~100k rows.
 - **Job submission is async.** The component polls every `poll_interval_seconds` (default 1.0). Long-running queries hit `poll_timeout_seconds` (default 600 = 10 min) — tune up for big aggregations.

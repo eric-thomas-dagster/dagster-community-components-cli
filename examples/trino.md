@@ -9,7 +9,7 @@ Connect to Trino via the community-component family using a single-container Tri
 | `trino_resource` | community | Shared connection — host / port / catalog / schema / auth |
 | `trino_io_manager` | community | Asset IO manager — DataFrame ↔ Trino via partition-aware DELETE+INSERT (**only works against catalogs that support DELETE**) |
 
-## Run it
+## Run
 
 ```bash
 bash setup_trino_demo.sh

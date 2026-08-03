@@ -61,7 +61,7 @@ Every artifact is a named, versioned asset. `snapshot_id` is a partition key, so
     Backfill:   dagster asset backfill --assets docs_eval --partition-range v1...vN
 ```
 
-## Components
+## Components used
 
 | Component | Role | Status tracked |
 |---|---|---|
@@ -127,3 +127,15 @@ Beyond running embed → retrieve → generate, the stateful shape gives you:
 - **Multiple embedder A/B**: two `vector_index_snapshot` assets side-by-side over the same corpus, different `embedder_provider`. `rag_eval` on each — compare precision@k across both partitions.
 - **Automation**: attach `AutomationCondition.eager()` to `docs_index` so a new corpus materialization automatically triggers a new snapshot + eval. If the eval fails, downstream `rag_answer` remains bound to the last-good partition.
 - **Freshness alerts**: set `freshness_max_lag_minutes` on `docs_corpus` so an operator gets paged if the corpus goes stale.
+
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_rag_state_demo.sh \
+  -o setup_rag_state_demo.sh
+bash setup_rag_state_demo.sh
+```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

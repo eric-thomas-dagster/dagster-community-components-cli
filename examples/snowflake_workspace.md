@@ -447,6 +447,14 @@ uvx --from dagster-community-components-cli dagster-component add <name>
 | Snowpipe doesn't fire on S3 PUT | Verify the S3 bucket notification config — `aws s3api get-bucket-notification-configuration --bucket <bucket>` should show a `QueueConfigurations` entry pointing at the pipe's SQS ARN. |
 | `EVENTS_CLEANED_DT` shows `invalid type for dimension "timestamp"` | Old issue from pre-v0.10.2 setups — re-seed; `seed.sql`'s current shape casts the column to `TIMESTAMP_NTZ` before any hypertable / DT logic depends on it. |
 
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snowflake_workspace_demo.sh \
+  -o setup_snowflake_workspace_demo.sh
+bash setup_snowflake_workspace_demo.sh
+```
+
 ## See also
 
 - [`snowflake_demo_account_requirements.md`](snowflake_demo_account_requirements.md) — full account-permission + product-tier matrix, plus a paste-ready ask for your Snowflake admin

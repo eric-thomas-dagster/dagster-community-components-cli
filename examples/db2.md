@@ -37,7 +37,7 @@ Read/write IBM Db2 via the new `db2_resource` + the generic SQL component family
    └─────────────────────────────────────────────┘
 ```
 
-## Run it
+## Run
 
 ```bash
 bash setup_db2_demo.sh

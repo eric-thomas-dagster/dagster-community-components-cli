@@ -501,7 +501,7 @@ Everything the F500 stack requires ships as either a community component (from t
 | **Cost management** | Dagster+ Insights (not a component) |
 | **Data mesh** | Dagster+ multi-code-location + Teams RBAC (not a component) |
 
-## Related walkthroughs
+## See also
 
 - [cognos](cognos.md) — mock Cognos in Docker (no creds); wire the BI leg of this POC to a real (mocked) Cognos server.
 - [warehouse_migration](warehouse_migration.md) — legacy DB → cloud warehouse (SCT / SSMA style, but component-driven).

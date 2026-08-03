@@ -55,7 +55,15 @@ CUST000072,Sarah,Johnson,sarah.johnson519@example.com,San Antonio,TX,1144.83,413
 CUST000224,Olivia,Davis,olivia.davis272@example.com,New York,NY,4856.44,3489.91,5,697.98
 ```
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_customer_360_demo.sh \
+  -o setup_customer_360_demo.sh
+bash setup_customer_360_demo.sh
+```
+
+## See also
 
 - [Data Combination](data_combination.md) — smaller version of the same join-and-aggregate pattern
 - [Kitchen Sink](kitchen_sink.md) — the full breadth demo (21 components in one graph)

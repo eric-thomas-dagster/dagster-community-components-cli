@@ -17,6 +17,13 @@ file_ingestion → pdf_text_extractor → formula → dataframe_to_csv
 | 3 | `formula` | transformation | Compute `char_count` + `word_count`; drop the giant text column |
 | 4 | `dataframe_to_csv` | sink | Per-paper summary |
 
+## Components used
+
+- `dataframe_to_csv`
+- `file_ingestion`
+- `formula`
+- `pdf_text_extractor`
+
 ## Run
 
 ```bash
@@ -55,3 +62,7 @@ Pre-train Prompt and Predict,        /tmp/arxiv_papers/...pdf, 264609, 12210
 Add `regex_parser` (`mode: extract`) downstream to pull abstract
 sections, citation patterns, or references. Combine with
 `text_preprocessing` (lowercase, strip stopwords) for downstream NLP.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

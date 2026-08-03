@@ -8,7 +8,7 @@ fix_messages         ← synthetic_data_generator (fix_messages, 30 msgs)
        └── fix_flat   ← fix_message_parser (msg_type_filter: [D, 8])
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -82,10 +82,14 @@ attributes:
 
 FIX is the global protocol for electronic trading — equities, fixed income, FX, derivatives. Every buyside firm, broker, exchange, and ECN speaks it. Trading-ops pipelines ingest FIX firehoses for compliance reporting, P&L attribution, execution analytics, regulatory TCA.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_fix_message_demo.sh | bash
 cd fix-message-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

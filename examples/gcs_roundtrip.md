@@ -14,7 +14,7 @@ transactions           ← synthetic_data_generator (transactions schema, 20 row
                                                        (aggregate query → CSV)
 ```
 
-## Components covered (4)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -81,7 +81,7 @@ export GCS_BUCKET=your-bucket-name      # no gs:// prefix
 export BQ_DATASET=dagster_demo
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_gcs_roundtrip_demo.sh | bash
@@ -90,3 +90,7 @@ uv run dg launch --assets '*'
 
 gcloud storage cat gs://$GCS_BUCKET/sales/sales_summary_000000000000.csv
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

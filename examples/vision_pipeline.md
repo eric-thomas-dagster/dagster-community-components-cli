@@ -11,7 +11,7 @@ sample_images_df          (3 synthetic 320×240 PNGs in /tmp/vision_pipeline_ima
         └── image_descriptions    ← vision_model (Anthropic claude-haiku-4-5)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -33,13 +33,13 @@ sample_images_df          (3 synthetic 320×240 PNGs in /tmp/vision_pipeline_ima
 **~$0.005** total against `claude-haiku-4-5-20251001` for 3 images
 when the full pipeline runs. The image_metadata side is $0.
 
-## Required env var
+## Required env vars
 
 ```bash
 ANTHROPIC_API_KEY=sk-ant-...   # only needed for vision_model
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_vision_pipeline_demo.sh | bash
@@ -72,3 +72,7 @@ materialized.
 the Pydantic field is `upstream_asset_key:` (the canonical registry
 field name). Fixed the example to match. The component code didn't
 need to change — only the example.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -13,7 +13,7 @@ sensor_readings        ← synthetic_data_generator (sensors schema)
                                        (where status == "normal")
 ```
 
-## Components covered (3)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -64,10 +64,14 @@ gcloud projects add-iam-policy-binding $GCP_PROJECT_ID \
 | Transactional RDBMS at global scale | Spanner (`spanner_query_asset`) |
 | Analytic scans | BigQuery (`bigquery_query_asset`) |
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_firestore_roundtrip_demo.sh | bash
 cd firestore-roundtrip-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

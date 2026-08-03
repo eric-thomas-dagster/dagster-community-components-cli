@@ -16,6 +16,12 @@ postgres_url ── (custom op uses key_vault_resource to fetch postgres-passwor
                   dataframe_to_table → orders in Postgres
 ```
 
+## Components used
+
+- `dataframe_to_table`
+- `key_vault_resource`
+- `synthetic_data_generator`
+
 ## Validated end-to-end
 
 `KeyVaultResource.get("demo-postgres-password")` returned a 30-char secret
@@ -55,3 +61,7 @@ curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
 
 KV is ~$0.03 per 10K operations + $0 vault storage. Pennies for any sane
 workload.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

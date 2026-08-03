@@ -18,6 +18,14 @@ file_ingestion → imputation → one_hot_encoding → feature_scaler → datafr
 | 4 | `feature_scaler` | transformation | StandardScaler on the four numeric measurements |
 | 5 | `dataframe_to_parquet` | sink | Write `/tmp/penguins_features.parquet` |
 
+## Components used
+
+- `dataframe_to_parquet`
+- `feature_scaler`
+- `file_ingestion`
+- `imputation`
+- `one_hot_encoding`
+
 ## Run
 
 ```bash
@@ -37,3 +45,7 @@ numeric features + ~10 one-hot indicator columns).
 - Different category mix from Titanic — focus is on transforms, not analytics.
 - Parquet preserves dtypes; the downstream model trainer gets float32 columns
   with no type coercion at load time.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

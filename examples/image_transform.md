@@ -8,7 +8,7 @@ sample_images       ← synthetic_image_generator (3 default PNGs, 640x640)
        └── thumbnails  ← image_transform_asset (→ 128px WebP, q=80)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -36,7 +36,7 @@ No Cloud APIs, no extra binaries. Runs anywhere Python + Pillow does (`pip insta
 | Grayscale OCR preprocess | `grayscale: true`, `convert_to: png` |
 | HEIC → JPEG | `convert_to: jpg` (needs `pillow-heif` for HEIC input) |
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_image_transform_demo.sh | bash
@@ -45,3 +45,7 @@ uv run dg launch --assets '*'
 
 ls -la /tmp/image_transform_demo_out/
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

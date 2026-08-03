@@ -52,7 +52,7 @@ This demo demonstrates that all three are now first-class:
 
 None. Demo is fully local.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_partitions_demo.sh | bash
@@ -112,3 +112,7 @@ The new helper raises clear errors on misconfiguration. Try editing
 
 Previously these silently picked default values (e.g. `'2024-01-01'`)
 or created an empty `MultiPartitionsDefinition` that would fail downstream.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

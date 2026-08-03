@@ -20,6 +20,13 @@ rest_api_fetcher (rockets)  ┘
 | 3 | `select_columns` | transformation | Keep + rename to human-readable column names |
 | 4 | `dataframe_to_csv` | sink | Write the enriched 205-row table |
 
+## Components used
+
+- `dataframe_join`
+- `dataframe_to_csv`
+- `rest_api_fetcher`
+- `select_columns`
+
 ## Run
 
 ```bash
@@ -61,3 +68,7 @@ Counts per rocket:
   the component.py rather than guessing. The schema-aware YAML
   autocomplete the CLI sets up will catch this if you have the YAML
   language server installed.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

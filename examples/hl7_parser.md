@@ -8,7 +8,7 @@ hl7_messages         ← synthetic_data_generator (hl7_messages, 12 messages)
        └── hl7_segments  ← hl7_v2_parser (all 9 supported segments)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -60,10 +60,14 @@ HL7 v2.x has been the dominant messaging format inside hospitals since the 1990s
 
 Wave 4 backlog: `IN1` (insurance), `GT1` (guarantor), `NK1` (next of kin), `MRG` (merge patient).
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_hl7_parser_demo.sh | bash
 cd hl7-parser-demo
 uv run dg launch --assets '*'
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -18,7 +18,7 @@ product_sales (5 products × 36 months)
        └── per_product_forecasts     ← ts_model_factory (one model per product_id)
 ```
 
-## Components covered (4)
+## Components used
 
 | Component | Use case |
 |---|---|
@@ -31,7 +31,7 @@ product_sales (5 products × 36 months)
 
 **$0.** statsmodels + pandas, all local.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_time_series_advanced_demo.sh | bash
@@ -58,3 +58,7 @@ The `ts_model_factory` shape pairs naturally with the
 `per_partition_backfill_job` (see `partitions.md`): make the asset
 partitioned by `group_column`, and use the backfill job to
 materialize one model-fit per partition with per-tenant concurrency.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

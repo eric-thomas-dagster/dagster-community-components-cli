@@ -8,7 +8,7 @@ tones               ← synthetic_audio_generator (3 sine tones, 44.1kHz/16-bit)
        └── tones_16k_mono  ← audio_transform_asset (→ 16kHz mono WAV)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -43,7 +43,7 @@ The component fails fast at materialization time with a clear message if ffmpeg 
 | Trim first 30 seconds | `start_seconds: 0`, `end_seconds: 30` |
 | Loudness normalize | `normalize: true` (EBU R128 −16 LUFS) |
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_audio_transform_demo.sh | bash
@@ -52,3 +52,7 @@ uv run dg launch --assets '*'
 
 ls -la /tmp/audio_transform_demo_out/
 ```
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

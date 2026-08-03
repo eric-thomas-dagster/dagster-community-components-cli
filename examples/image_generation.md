@@ -18,6 +18,11 @@ image_prompts_df       (3 product hero-image prompts from synthetic_data_generat
 product_hero_images    ← litellm_image_generation (DALL-E 3 by default)
 ```
 
+## Components used
+
+- `litellm_image_generation`
+- `synthetic_data_generator`
+
 ## Prerequisites
 
 - `uv` — `curl -LsSf https://astral.sh/uv/install.sh | sh`
@@ -82,7 +87,7 @@ api_key_env_var: REPLICATE_API_KEY
 - **Download + persist images.** The default `response_format: url` returns URLs that expire (usually 1 hour on OpenAI). Chain a downstream asset that downloads each URL and writes to S3 / GCS / ADLS.
 - **Multi-provider fallback.** Wrap in a `vercel_ai_gateway_agent` for cross-provider routing (image-model equivalents exist across providers via LiteLLM).
 
-## Related
+## See also
 
 - [LiteLLM Chat](./litellm_chat.md) — same LiteLLM abstraction, text-generation side.
 - [Vercel AI Gateway Agent](./vercel_ai_gateway_agent.md) — one key routes across providers, with fallback chains.

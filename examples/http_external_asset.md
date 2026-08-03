@@ -16,7 +16,7 @@ github_runs_by_day      ← http_external_asset (DAILY-partitioned;
                           partition_key flows into ?created=YYYY-MM-DD)
 ```
 
-## Components covered (1)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -40,7 +40,7 @@ trigger + poll), well under the budget.
 | Daily partitions | `github_runs_by_day` with `partition_type: daily` + `partition_start: 2026-04-01` | partition `2026-05-01` materialized, external run `25238007065` from that day |
 | `{{ partition_key }}` Jinja templating into HTTP request | `query_params.created: "{% raw %}{{ partition_key }}{% endraw %}"` | server received `?created=2026-05-01` |
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_http_external_asset_demo.sh | bash
@@ -134,3 +134,7 @@ The condition language (`jsonpath` / `regex` / `header` / `literal` +
 `equals` / `in` / `matches` / `exists` / `truthy` / `gt` / `lt` +
 `any_of` / `all_of` / `not`) is the same regardless of the upstream
 service.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

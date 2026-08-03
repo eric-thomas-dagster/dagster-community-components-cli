@@ -6,7 +6,7 @@ SaaS observability sinks for New Relic and Dynatrace. Push
 DataFrame rows as logs (NR), events (Dynatrace), or pull metrics back
 via NRQL (NR) / Metrics API v2 (Dynatrace).
 
-## Components
+## Components used
 
 **New Relic:**
 - `newrelic_resource` — REST/NerdGraph wrapper
@@ -76,3 +76,7 @@ universal `dataframe_to_otlp_logs` / `dataframe_to_otlp_metrics` sinks
 instead, with the appropriate OTLP endpoint + bearer token. See
 [opentelemetry.md](opentelemetry.md). One sink per signal,
 many backends.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

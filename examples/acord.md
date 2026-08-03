@@ -8,7 +8,7 @@ acord_messages    ← synthetic_data_generator (acord_messages, 12 msgs)
        └── acord_flat   ← acord_xml_parser (one row per Policy/Claim/Quote)
 ```
 
-## Components covered (2)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -64,7 +64,7 @@ Other envelopes fall through with envelope-only rows (no entity extraction); eas
 
 ACORD XML is the lingua franca between US/UK/AU/CA carriers, MGAs, brokers, and rating engines. Every policy admin system, claims platform, and reinsurance reporting pipeline ingests ACORD daily. The standard is intentionally verbose (carriers extend it with vendor namespaces) — this component handles the high-traffic ~80% of fields without forcing a full ACORD-spec compiler.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_acord_demo.sh | bash
@@ -73,3 +73,7 @@ uv run dg launch --assets '*'
 ```
 
 Pure Python — no external dependencies, no network calls.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -19,6 +19,15 @@ rest_api_fetcher → select_columns → datetime_parser → filter → sort → 
 | 5 | `sort` | transformation | By `published_dt` descending |
 | 6 | `dataframe_to_parquet` | sink | Write `/tmp/dagster_releases.parquet` |
 
+## Components used
+
+- `dataframe_to_parquet`
+- `datetime_parser`
+- `filter`
+- `rest_api_fetcher`
+- `select_columns`
+- `sort`
+
 ## Run
 
 ```bash
@@ -77,3 +86,7 @@ attributes:
 Live-validated on gpt-4o-mini: **5/5 clean picks in 11s, ~$0.0033 total cost.** Outputs written: `/tmp/dagster_releases.csv`.
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -116,7 +116,7 @@ Compare to "LLM writes SQL" or "LLM emits Python": those have unbounded blast ra
 
 See [agent_pipeline_patterns.md](./agent_pipeline_patterns.md) — overview of all seven agent-pipeline demos with a selection guide + adjacent-but-not-agentic patterns (`langgraph_agent`, `dbt_llm_pipeline`, `pii_redaction`, `data_quality_agent`, `cube_llm`).
 
-## Related
+## See also
 
 - [PII detection + LLM redaction check](./pii_redaction.md) — different agentic shape: LLM as a **fresh-eyes double-checker** on statistical output.
 - [Data Quality agent (LLM narration)](./data_quality_agent.md) — same DQ upstream, different LLM job: **narrate** anomalies for on-call, don't fix them.

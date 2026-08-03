@@ -203,6 +203,14 @@ For Dagster's batch pipeline pattern (read N→transform→write 1), delta-rs is
 - **Schema enforcement is strict by default.** Adding a new column from the DataFrame trips the writer unless `schema_mode: merge`. Cautious default — flip on explicitly when intentional.
 - **`uc://` URIs need a UC-enabled Databricks workspace.** Hive Metastore tables don't expose this scheme; use the raw `s3://` / `abfss://` path.
 
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_delta_pipeline_demo.sh \
+  -o setup_delta_pipeline_demo.sh
+bash setup_delta_pipeline_demo.sh
+```
+
 ## See also
 
 - [`iceberg_pipeline.md`](iceberg_pipeline.md) — sister walkthrough for Apache Iceberg

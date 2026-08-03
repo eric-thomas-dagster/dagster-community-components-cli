@@ -122,7 +122,7 @@ gcloud auth application-default login
 export GOOGLE_APPLICATION_CREDENTIALS=/path/to/key.json
 ```
 
-## Run the demo
+## Run
 
 ```bash
 ./setup_pubsub_gcs_pipeline_demo.sh

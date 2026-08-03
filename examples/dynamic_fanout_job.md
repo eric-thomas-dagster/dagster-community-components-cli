@@ -60,3 +60,7 @@ collected 7 result(s) -> {items_processed: 7, total_bytes: 29729, categories: ['
 | Static partitions | Time-series, dimensions known upfront | Per-partition catalog history |
 | Dynamic partitions | Items become known at runtime, want catalog persistence (tenants, customers) | Catalog grows, sensor needed |
 | **DynamicOut fan-out** (this) | Items are ephemeral within a run (URLs, files, queue items) | No per-item catalog, just parallel processing |
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

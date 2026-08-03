@@ -4,7 +4,7 @@ Single-container Docker walkthrough. Spins up `clickhouse/clickhouse-server` loc
 
 **Live-validated** — `setup_clickhouse_demo.sh` + `dg launch --assets '*'` materializes 10,000 rows into `analytics.orders` against a real ClickHouse container. Verified at component release time; promotion to `live` on each component's manifest entry.
 
-## Components exercised
+## Components used
 
 | Component | Role |
 |---|---|
@@ -13,7 +13,7 @@ Single-container Docker walkthrough. Spins up `clickhouse/clickhouse-server` loc
 | [`dataframe_to_clickhouse`](https://dagster-component-ui.vercel.app/c/dataframe_to_clickhouse) | Bulk-insert via `client.insert_df()` — ~1M rows/sec per client |
 | [`external_clickhouse_table`](https://dagster-component-ui.vercel.app/c/external_clickhouse_table) | Declare-only catalog entry for `analytics.orders` |
 
-## Asset graph
+## Architecture
 
 ```
 orders_clean (synthetic_data_generator)
@@ -25,7 +25,7 @@ clickhouse_orders_load (dataframe_to_clickhouse)
 clickhouse/analytics/orders (external_clickhouse_table — declare-only)
 ```
 
-## Run it
+## Run
 
 ```bash
 # 1. Scaffold + bring up ClickHouse + install components
@@ -54,7 +54,7 @@ curl 'http://localhost:18123/?query=SELECT+count(*),min(order_date),max(order_da
 
 Expected output: `10000  2026-04-26 22:30:16  2026-05-27 22:14:00` (date range depends on when you run — synthetic_data_generator uses recent dates).
 
-## What the setup script does
+## What the script does
 
 1. **Starts ClickHouse Server in Docker** (`clickhouse/clickhouse-server:latest`) on host ports 18123 (HTTP) + 19000 (native).
 2. **Pre-creates the destination table** `analytics.orders` via HTTP POST. Schema matches `synthetic_data_generator`'s `orders` shape exactly (11 columns: `order_id`, `customer_id`, `order_date`, `category`, `num_items`, `subtotal`, `shipping`, `tax`, `total`, `status`, `region`).
@@ -62,7 +62,7 @@ Expected output: `10000  2026-04-26 22:30:16  2026-05-27 22:14:00` (date range d
 4. **Installs the 4 components** via the community CLI (`--refresh` on first call to bust the manifest cache).
 5. **Overwrites the CLI-installed example defs.yamls** with demo-specific configuration — points `dataframe_to_clickhouse` at `orders_clean` from the upstream synthetic generator, configures host/port/auth env vars.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f clickhouse-demo-server

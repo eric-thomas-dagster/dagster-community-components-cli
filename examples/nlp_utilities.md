@@ -17,7 +17,7 @@ document_pairs (hand-crafted Q&A, 7 pairs)
        └── qa_similarity_scores        ← text_similarity (cosine TF-IDF)
 ```
 
-## Components covered (6)
+## Components used
 
 | Component | Backend |
 |---|---|
@@ -46,7 +46,7 @@ needed.
 OPENAI_API_KEY=sk-...
 ```
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_nlp_utilities_demo.sh | bash
@@ -74,3 +74,7 @@ uv run dg dev   # http://localhost:3000
 - `text_similarity` with `method: cosine_tfidf` is dependency-free.
   Set `method: sentence_transformers` + `model_name: all-MiniLM-L6-v2`
   for embedding-based similarity (downloads ~80MB model).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

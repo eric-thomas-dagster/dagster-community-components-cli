@@ -2,6 +2,13 @@
 
 The polars-specific components that earn their keep beyond the per-asset `backend: polars` field.
 
+## Components used
+
+- `dataframe_to_parquet`
+- `polars_pipeline`
+- `polars_scan_parquet`
+- `synthetic_data_generator`
+
 ## Why these components exist
 
 The per-asset `backend: polars` on `filter` / `summarize` / `top_n_per_group` / etc. gets you polars's vectorized execution. But pushdown only works **within** a single lazy query graph; spread across separate Dagster assets, the asset boundary forces materialization at every step and the lazy chain is broken.
@@ -145,3 +152,7 @@ Supported `agg` values in `group_by`: `sum / mean / avg / min / max / count / me
 - **Parquet predicate coverage is statistics-dependent.** Polars uses parquet column min/max stats per row group to skip non-matching pages. Range/equality predicates on indexed columns push best. Computed-column predicates (e.g. `EXTRACT(YEAR FROM date) = 2026`) can't push to the reader — they evaluate after read.
 - **Streaming for out-of-core frames.** `streaming: true` works for frames larger than memory. Combine with predicate + projection pushdown so only matching pages stream in.
 - **Output type matters for downstream chains.** `output_type: polars` preserves the polars DataFrame so the next polars-aware asset doesn't pay a conversion cost. `output_type: pandas` is the safe default for mixed downstream consumers.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

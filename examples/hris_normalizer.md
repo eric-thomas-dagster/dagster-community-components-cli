@@ -15,7 +15,7 @@ employees_raw           (synthetic 20-row vendor HRIS export with
                 └── employees_normalized_csv  ← /tmp/employees_normalized.csv
 ```
 
-## Components covered (1)
+## Components used
 
 | Component | What it does |
 |---|---|
@@ -46,7 +46,7 @@ Customer Success                3                 2           1415.0            
 
 **$0.** Pure local pandas + synthetic data.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_hris_normalizer_demo.sh | bash
@@ -110,3 +110,7 @@ and `active` all match the same way.
 ## Why a generic component (not `workday_normalizer` / `bamboohr_normalizer`)?
 
 Same pattern as `litellm_inference_asset` vs `openai_llm`: we have a vendor-agnostic generic + per-vendor natives in parallel. Most teams running HR analytics either (a) standardize on one vendor and want a clean canonical schema, or (b) have already normalized at ingest and just need the HR analytics layer. `hris_normalizer` covers (a); upstream `merge_dev_hris_ingestion` + this normalizer covers (b).
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

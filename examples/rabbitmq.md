@@ -11,7 +11,7 @@ Exercise the RabbitMQ community-component family against a local AMQP broker. Sa
 | `rabbitmq_observation_sensor` | community | Emit `AssetObservation` on a queue (depth / consumer count / health) |
 | `python_callable_job` | community | Target job for the streams monitor |
 
-## Run it
+## Run
 
 ```bash
 bash setup_rabbitmq_demo.sh

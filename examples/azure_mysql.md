@@ -108,3 +108,7 @@ az group delete --name dagster-demo-rg --yes
 - Swap `if_exists: replace` → `append` for incremental loads
 - Use `mysql_io_manager` instead for auto-table-per-asset semantics
 - Use `mysql_resource` for ad-hoc queries from other ops
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

@@ -19,6 +19,13 @@ Each provider gets its own Dagster asset (so you see them as parallel
 nodes in the graph), backed by the **single** `litellm_inference_asset`
 component — same shape, different `model:` + `api_key_env_var:`.
 
+## Components used
+
+- `dataframe_join`
+- `dataframe_to_csv`
+- `litellm_inference_asset`
+- `synthetic_data_generator`
+
 ## Components covered (1, exercised across N providers)
 
 | Component | What it does |
@@ -52,7 +59,7 @@ export ANTHROPIC_API_KEY=sk-ant-...
 The script auto-detects which keys are set and only creates the
 corresponding `classified_*` assets — works with 1, 2, or 3 providers.
 
-## Run it
+## Run
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_litellm_multi_provider_demo.sh | bash
@@ -70,3 +77,7 @@ cat /tmp/litellm_multi_provider.csv
 
 You can mix: use native components for production paths, LiteLLM for
 the cost/quality comparison harness behind the scenes.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->

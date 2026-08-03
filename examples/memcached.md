@@ -59,7 +59,7 @@ Memcached's wire protocol is deliberately spartan: `get` / `set` / `delete` / `f
 
 Port binding is `11211` → `11211`. Override with `MEMCACHED_HOST_PORT=…` if `11211` is taken.
 
-## Cleanup
+## Teardown
 
 ```bash
 docker rm -f dagster_memcached_demo
@@ -71,7 +71,15 @@ docker rm -f dagster_memcached_demo
 - **Google Cloud Memorystore for Memcached**: same shape, swap `host` for the Memorystore endpoint.
 - **Self-hosted cluster**: point at your load-balancer / proxy endpoint; pymemcache client-side operates against a single node.
 
-## Related
+## Run
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_memcached_demo.sh \
+  -o setup_memcached_demo.sh
+bash setup_memcached_demo.sh
+```
+
+## See also
 
 - [`redis.md`](redis.md) — sibling walkthrough for the Redis component set (pattern-based invalidation + streams + observation)
 - Component: [`memcached_resource`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/memcached_resource)

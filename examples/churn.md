@@ -18,6 +18,12 @@ file_ingestion → churn_prediction → dataframe_to_csv
 | 2 | `churn_prediction` | analytics | Score each customer (inactivity threshold = 60d, lookback = 365d) and assign a risk level + recommendation |
 | 3 | `dataframe_to_csv` | sink | Write per-customer report |
 
+## Components used
+
+- `churn_prediction`
+- `dataframe_to_csv`
+- `synthetic_data_generator`
+
 ## Run
 
 ```bash
@@ -99,3 +105,7 @@ attributes:
 Live-validated on gpt-4o-mini: **5/5 clean picks in 13.6s, ~$0.0043 total cost.** Outputs written: `/tmp/churn_preds.csv` — 800 rows with `churned` label + one-hot state + `predicted` column from the RF model.
 
 After the trajectory runs once, materialization is pure cached-plan execution — no LLM per run.
+
+## See also
+
+<!-- TODO: link related walkthroughs -->
