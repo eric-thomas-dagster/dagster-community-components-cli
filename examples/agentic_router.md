@@ -48,7 +48,7 @@ Downstream sinks reference the SAME dynamic partition set as their upstream bran
 
 Rendered in Dagster+ after materialization — five groups (source / router / branches / sinks / human_in_the_loop), per-branch partition counts show only the cases the router actually picked:
 
-![Agentic router asset graph in Dagster+](images/agentic_router_asset_graph.png)
+![Agentic router asset graph in Dagster+](https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/images/agentic_router_asset_graph.png)
 
 ## Run
 
