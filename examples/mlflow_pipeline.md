@@ -1,5 +1,7 @@
 # MLflow pipeline — end-to-end MLOps with Dagster
 
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`. Sqlite-backed MLflow lives inside the container — self-contained.
+
 Self-contained demo of Dagster orchestrating a full MLflow-backed ML pipeline. Trains a churn model, registers it, promotes Staging → Production as a Dagster asset, then scores customer data using the promoted model — with an asset check gating on model existence.
 
 Uses **all 7 community MLflow components**:

@@ -1,5 +1,7 @@
 # Agentic Batch Triage — Dynamic Fan-Out (Prefect `task.map()` in Dagster)
 
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`. Set `OPENAI_API_KEY` as a deployment env var.
+
 The **batch shape** of the agentic router: N cases processed in ONE run via Dagster's `DynamicOut`. Direct analog to Prefect's `task.map()`.
 
 Different tradeoff from the per-case partition version in [agentic_router.md](agentic_router.md):

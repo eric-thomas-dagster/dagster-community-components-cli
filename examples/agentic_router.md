@@ -1,5 +1,7 @@
 # Agentic Router — One Asset per Case, Steps as Ops, Multiple Downstream Branches
 
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`. Set `OPENAI_API_KEY` as a deployment env var.
+
 The **router-loop** pattern from BPMN "agentic orchestration" diagrams, done the Dagster-honest way:
 
 - **The agent is one asset per case**, static-partitioned by case_id.

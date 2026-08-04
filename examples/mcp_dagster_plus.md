@@ -1,5 +1,7 @@
 # Dagster+ MCP — materialize Dagster+ operations as Dagster assets
 
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`. Set `DAGSTER_CLOUD_TOKEN_HEADER` (= `Bearer <your-user-token>`) and `DAGSTER_CLOUD_ORG_HEADER` (= your org slug) as deployment env vars.
+
 Wire `MCPToolCallComponent` at the **Dagster+ MCP server** (`https://mcp.agent.dagster.cloud/mcp/`). Every tool exposed by your org's MCP endpoint becomes a Dagster asset — recent runs, asset lineage, deployment health, run insights — all catalogued alongside your normal pipelines.
 
 **Setup:**

@@ -1,5 +1,7 @@
 # Data Platform Showcase — Multi-Vendor Ingest → dbt → Dynamic Fan-Out
 
+> ⚠️ **Dagster+ Serverless:** deploys, but the partitioned dbt path needs persistent storage (Serverless containers are ephemeral per-run — `/tmp/warehouse.duckdb` doesn't survive across runs). Workaround: materialize `+customer_360/fct_customer_daily` in one run (upstream `+` forces single-run execution). Full fix: swap DuckDB for MotherDuck or a real cloud warehouse.
+
 The "typical Dagster" data platform demo — the shape a data-engineering SE audience will recognize immediately. Multiple upstream sources, dbt in the middle, downstream fan-out over runtime-decided cohorts. **One code location, local DuckDB, no Docker, 100% components + YAML.**
 
 ## Architecture
