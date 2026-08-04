@@ -1,4 +1,5 @@
 # Azure Database for MySQL Flexible Server demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 DataFrame → Azure MySQL Flexible Server via `dataframe_to_table` (SQLAlchemy
 + pymysql). Same pipeline shape as `azure_sql` and `azure_postgres` — flip

@@ -1,4 +1,5 @@
 # NLP utilities — 6 standalone NLP transforms
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — RUN_SUCCESS in seconds. Synthetic article
 corpus (LLM-generated) feeds 5 local NLP transforms; a separate Q&A

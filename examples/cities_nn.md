@@ -1,4 +1,5 @@
 # Nearest-neighbors demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Reuses the 10-city CSV from the distance demo, but instead of an
 all-pairs cross-join + filter, runs `nearest_neighbors` directly: each

@@ -1,4 +1,5 @@
 # Forecast Comparison demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 evaluate which fits better via ts_compare.
 

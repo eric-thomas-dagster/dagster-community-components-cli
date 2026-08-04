@@ -1,4 +1,5 @@
 # Partitioned Earthquakes — daily backfillable pipeline
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 The earthquakes pipeline, made backfillable: each daily partition queries the
 USGS historical API for that one day. Backfill any range, materialize

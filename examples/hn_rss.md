@@ -1,4 +1,5 @@
 # Hacker News RSS — XML feed parsing
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 5-component pipeline that fetches the HN front-page RSS feed (raw XML),
 splits it into one row per `<item>`, extracts each item's title and link

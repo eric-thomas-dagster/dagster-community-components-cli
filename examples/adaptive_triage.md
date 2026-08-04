@@ -1,4 +1,5 @@
 # Adaptive Triage Router — the agent picks *which downstream runs*
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Components:** `synthetic_data_generator` (support_tickets), `langchain_chain_asset`, `router`, `dataframe_to_csv` — **100% composition of existing components, no new primitive required.**
 

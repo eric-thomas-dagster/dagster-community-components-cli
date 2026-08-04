@@ -1,4 +1,5 @@
 # Warehouse-native pipeline (CTAS pushdown family)
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A multi-step analytics pipeline where **every transform runs as SQL inside the warehouse** — no data ever flows through Python. Each Dagster asset is one `CREATE [OR REPLACE] TABLE ... AS SELECT ...` statement; the warehouse engine plans and executes.
 

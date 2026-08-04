@@ -1,4 +1,5 @@
 # GCS Round-trip — DataFrame → GCS → BQ → BQ EXPORT → GCS
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against real APIs** (servicepulse-490502, servicepulse-490502-dagster-demo bucket).
 DataFrame written as parquet, loaded into BigQuery, exported back as a CSV summary.

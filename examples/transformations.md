@@ -1,4 +1,5 @@
 # Transformations mega-demo (34 components)
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — 34 pure-pandas transformation components fan
 out from 30 synthetic orders + 3 small lookup/dim tables. **Zero API

@@ -1,4 +1,5 @@
 # Temporal + Dagster — Full-Trio End-to-End Demo
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 **Components:**
 - `TemporalWorkflowTriggerComponent` (`assets/infrastructure/temporal_workflow_trigger`)

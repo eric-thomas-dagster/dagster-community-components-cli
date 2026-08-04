@@ -1,4 +1,5 @@
 # Local IO managers — 9 IO managers + 3 source/sink components round-tripping
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — RUN_SUCCESS materializing through every IO
 manager configured in the demo. $0 cost — all local.

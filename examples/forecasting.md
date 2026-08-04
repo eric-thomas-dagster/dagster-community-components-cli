@@ -1,4 +1,5 @@
 # Forecasting — ARIMA + ETS + train/val/test sampling
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — RUN_SUCCESS in seconds. Three time-series
 components on synthetic data with realistic seasonality + trend.

@@ -1,4 +1,5 @@
 # Document AI — OCR text extraction in Dagster
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against real APIs** (servicepulse-490502, OCR_PROCESSOR).
 Generates 2 synthetic PDFs, sends them through Cloud Document AI's OCR

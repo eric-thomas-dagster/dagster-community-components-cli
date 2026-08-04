@@ -1,4 +1,5 @@
 # Customer analytics — journey, segmentation, attribution, ML, NLP
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — RUN_SUCCESS in seconds. 5 synthetic source
 assets feed 6 marketing/retention components. All sklearn/pandas, no

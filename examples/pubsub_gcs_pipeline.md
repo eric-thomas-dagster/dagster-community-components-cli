@@ -1,4 +1,5 @@
 # Pub/Sub → Cloud Storage Subscription → Dagster → BigQuery — blueprint
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 GCP mirror of the [Event Hubs Capture demo](eh_capture_pipeline.md). Same production-shape pattern: **Dagster doesn't process the queue directly** — a Pub/Sub Cloud Storage Subscription (built-in GCP service) lands every message in GCS as durable Parquet, and Dagster picks up files event-driven. Each new file = one Dagster dynamic partition = fully re-runnable.
 

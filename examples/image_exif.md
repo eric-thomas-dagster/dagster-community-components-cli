@@ -1,4 +1,5 @@
 # Image EXIF — synthetic JPEGs with injected EXIF → flat DataFrame
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** (pure Python; Pillow + piexif). 3 synthetic JPEGs with injected camera/GPS/capture metadata → flat DataFrame with all EXIF columns extracted.
 

@@ -1,4 +1,5 @@
 # Vercel Deployment — Sensor + Catalog Demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Components:**
 - `VercelDeploymentSensorComponent` (`sensors/vercel_deployment_sensor`)

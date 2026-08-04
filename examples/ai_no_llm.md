@@ -1,4 +1,5 @@
 # AI components — no LLM key required
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — 30 synthetic multilingual support tickets fan out
 through 5 local AI components. No OpenAI/Anthropic key needed.

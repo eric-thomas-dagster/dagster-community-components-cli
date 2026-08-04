@@ -1,4 +1,5 @@
 # Shell Command Job demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A scheduled shell-command op job — no asset materialized. Cron-driven file
 cleanup, status pings, ad-hoc maintenance.

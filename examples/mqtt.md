@@ -1,4 +1,5 @@
 # MQTT end-to-end — local docker, no auth
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Exercise the MQTT family against a local Eclipse Mosquitto broker. Same components target HiveMQ Cloud / AWS IoT Core / managed brokers unchanged — only `broker_host` / TLS / auth env vars change.
 

@@ -1,4 +1,5 @@
 # NATS end-to-end — local docker, JetStream, no auth
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Exercise the NATS family against a local `nats-server -js` (JetStream enabled). Same components target Synadia Cloud / self-hosted NATS clusters unchanged — only `servers` / `nats_url_env_var` content changes.
 

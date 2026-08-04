@@ -1,4 +1,5 @@
 # Google Sheets ingestion — service-account auth end-to-end
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end.** RUN_SUCCESS pulling 2 rows from a real
 Google Sheet via service-account auth.

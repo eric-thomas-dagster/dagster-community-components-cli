@@ -1,4 +1,5 @@
 # IBM Planning Analytics (TM1) → Dagster orchestration
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 **Goal:** wrap IBM Planning Analytics (TM1) with Dagster so you can schedule TI processes / chores, react to process state changes, materialize cube slices as DataFrame assets, and auto-emit assets for the entire cube + process catalog.
 

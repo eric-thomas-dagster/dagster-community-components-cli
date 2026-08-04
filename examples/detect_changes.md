@@ -1,4 +1,5 @@
 # Detect Changes demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Diff yesterday's customer snapshot against today's, classify each row as
 **insert / update / delete / unchanged**.

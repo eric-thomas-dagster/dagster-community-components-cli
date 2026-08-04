@@ -1,4 +1,5 @@
 # PySpark Pipeline — Catalyst-optimized chain in a single asset
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Multi-step PySpark DataFrame chain compiled into ONE Catalyst logical plan, executed by Spark's Tungsten engine. Predicate pushdown to parquet, projection pruning, filter fusion, parallel execution — the optimizations the per-asset transforms can't deliver because the asset boundary breaks the lazy chain.
 

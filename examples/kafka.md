@@ -1,4 +1,5 @@
 # Kafka end-to-end — local broker, no SaaS, no auth
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Full validation of the Kafka community-component family against a single-container Kafka broker running locally in KRaft mode (no Zookeeper, no managed cluster, no auth). The same components work unchanged against MSK / Confluent Cloud / Strimzi / self-hosted clusters — just swap `bootstrap_servers` + `security_protocol`.
 

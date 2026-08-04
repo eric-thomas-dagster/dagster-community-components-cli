@@ -1,4 +1,5 @@
 # West-coast cities demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Same 10-city CSV from the cities_distance demo, but this time the
 bounding_box_filter component keeps only cities west of lng -100 and

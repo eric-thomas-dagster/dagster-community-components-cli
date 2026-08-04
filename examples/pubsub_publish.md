@@ -1,4 +1,5 @@
 # Pub/Sub Publish — DataFrame rows → Pub/Sub messages with attributes
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against real APIs** (servicepulse-490502, demo-events topic).
 5 order events published, all 5 pulled from the subscription with correct attribute routing.

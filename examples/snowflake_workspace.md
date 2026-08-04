@@ -1,4 +1,5 @@
 # Dagster + Snowflake — full-surface demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A single bootstrap (**`seed.sh`** + **`bootstrap.sh`**) provisions a complete, always-running Snowflake data platform managed entirely from Dagster. Every Snowflake primitive — dynamic tables, tasks, stored procedures, streams, pipes, stages, materialized views, Iceberg tables, Cortex AI, Snowpark — appears as a first-class Dagster asset with real lineage, schedules, sensors, and event-driven automation. Push a button, see the whole graph light up.
 

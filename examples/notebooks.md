@@ -1,4 +1,5 @@
 # Jupyter notebooks as Dagster assets — papermill, no auth
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Materialize an analysis `.ipynb` as a first-class Dagster asset. `papermill` runs the notebook out-of-process, injects parameters into a tagged parameters cell, and stores the fully-executed `.ipynb` (with cell outputs) next to the input as evidence. Pure local — no SaaS, no cloud, no auth.
 

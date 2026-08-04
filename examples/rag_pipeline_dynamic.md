@@ -1,4 +1,5 @@
 # One-Component RAG, Driven by Dynamic Queries
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 `rag_pipeline` is the "one-component RAG" shape — embed, retrieve, and generate in a single asset. This walkthrough shows how to drive it with dynamic per-partition queries (not a hardcoded string or env var), so each query gets its own asset materialization, its own run history, and its own retry semantics.
 

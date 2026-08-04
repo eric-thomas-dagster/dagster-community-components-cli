@@ -1,4 +1,5 @@
 # Doris + StarRocks — one round-trip demo, two OSS MPP databases
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Docker-local end-to-end validation of the Apache Doris component set — and, because StarRocks is a Doris fork that speaks the same MySQL wire protocol, the same demo shell works against `starrocks/allin1-ubuntu` with a one-argument swap.
 

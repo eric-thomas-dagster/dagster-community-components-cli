@@ -1,4 +1,5 @@
 # Palmer Penguins — ML feature engineering
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 5-component pipeline that pulls Palmer Penguins data, fills missing values,
 one-hot encodes categorical columns, standard-scales numeric features, and

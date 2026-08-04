@@ -1,4 +1,5 @@
 # US airports — DBSCAN spatial clustering
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 3-component pipeline that pulls 3,376 US airports (vega-datasets), runs
 DBSCAN spatial clustering with a 50km neighborhood radius, writes each

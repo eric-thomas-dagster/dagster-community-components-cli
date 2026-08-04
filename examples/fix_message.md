@@ -1,4 +1,5 @@
 # FIX Message Parser — synthetic trading messages → flat DataFrame
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** (pure Python). 30 synthetic FIX 4.4 messages → 30 flat rows with resolved enums and tag lookups, filtered to orders + executions only.
 

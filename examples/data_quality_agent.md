@@ -1,4 +1,5 @@
 # Data Quality Agent — Anomaly Detection + LLM Explanations
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Components:** `synthetic_data_generator`, `anomaly_detection`, `filter`, `langchain_chain_asset` — all existing, composed via YAML.
 

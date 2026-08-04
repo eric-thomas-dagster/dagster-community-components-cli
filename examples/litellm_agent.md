@@ -1,4 +1,5 @@
 # LiteLLM Agent with MCP — demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Single-shot LLM agent that uses [Model Context Protocol](https://modelcontextprotocol.io) (MCP) servers as its tool layer. The demo points the agent at the official `@modelcontextprotocol/server-filesystem` server, asks it a question about a directory, and confirms the trajectory + final answer.
 

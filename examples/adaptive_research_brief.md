@@ -1,4 +1,5 @@
 # Adaptive Research Brief — the agent decides *how many* things to research
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Component (new):** `AdaptiveResearchBriefComponent` — one YAML block emits `plan + notes + brief`.
 

@@ -1,4 +1,5 @@
 # Trino end-to-end — local docker, no auth
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Connect to Trino via the community-component family using a single-container Trino coordinator with built-in `memory` catalog.
 

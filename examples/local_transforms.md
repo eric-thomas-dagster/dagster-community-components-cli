@@ -1,4 +1,5 @@
 # Local transforms + sinks — DataFrame pipeline without cloud or auth
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A full DataFrame transform chain that lives entirely on the local filesystem. Every intermediate asset is persisted as Parquet by the project's IO manager, filter + summarize transforms are wired declaratively, and the final stage writes Avro on disk. No SaaS, no cloud, no auth, no warehouse.
 

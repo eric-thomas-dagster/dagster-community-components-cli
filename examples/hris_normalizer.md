@@ -1,4 +1,5 @@
 # HRIS Normalizer — vendor-agnostic employee-data pipeline
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against a synthetic 20-row vendor export.** Maps
 vendor-specific column names + status codes (e.g. `T` / `L` / `REG-FT`)

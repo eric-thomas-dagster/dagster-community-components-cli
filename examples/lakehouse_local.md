@@ -1,4 +1,5 @@
 # Lakehouse local roundtrip — Iceberg + Delta without cloud
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A complete `dataframe → table → dataframe` cycle for both **Apache Iceberg** and **Delta Lake**, running entirely against the local filesystem. No S3, no Glue, no Snowflake catalog, no Spark/JVM, no auth. Validates that the Iceberg and Delta family of community components work end-to-end before you point them at a real lakehouse.
 

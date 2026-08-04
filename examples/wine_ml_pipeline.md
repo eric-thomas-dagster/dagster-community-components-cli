@@ -1,4 +1,5 @@
 # Wine ML Pipeline demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Builds a more substantial ML pipeline than the existing wine_demo:
   - feature scaling (standardize the 11 chemistry features)

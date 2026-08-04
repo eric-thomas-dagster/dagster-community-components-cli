@@ -1,4 +1,5 @@
 # ACORD XML Parser — synthetic insurance messages → flat per-entity DataFrame
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** (pure Python). 12 synthetic ACORD XML messages rotated across four envelope types → 12 flat rows split 6 Policy + 3 Claim + 3 Quote, ready for warehouse / claims / actuarial pipelines.
 

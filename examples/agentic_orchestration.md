@@ -1,4 +1,5 @@
 # Agentic Orchestration — Agents + Humans + Legacy Systems
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 The full-stack pattern: **multiple autonomous AI agents, a human-in-the-loop gate, and post-back to legacy systems, all in one graph**. Every step is an asset. Every asset is partitioned per case. Every decision — agent classification, agent draft, human approve/reject — is a replayable materialization with metadata.
 

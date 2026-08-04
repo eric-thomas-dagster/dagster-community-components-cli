@@ -1,4 +1,5 @@
 # BigQuery Asset Checks — cost guardrail + freshness SLO
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against real APIs** (servicepulse-490502, gcp_observability_errors table). Two complementary checks on a BQ table:
 

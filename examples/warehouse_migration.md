@@ -1,4 +1,5 @@
 # Warehouse migration — the one-time lift+shift from a legacy SQL DB to a modern warehouse
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 > **Replication vs. migration:** replication is the recurring data sync (see [replication.md](replication.md)). **This walkthrough is about migration** — the broader one-time project: schema + data + constraints + views, all the database-resident structure your new warehouse needs.
 

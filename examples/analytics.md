@@ -1,4 +1,5 @@
 # Analytics mega-demo (40 components)
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — 40 sklearn / scipy / statsmodels analytics
 components running on synthetic ML / customer / event / campaign data.

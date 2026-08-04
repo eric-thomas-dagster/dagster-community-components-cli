@@ -1,4 +1,5 @@
 # GitHub Search — JSONPath + dot-path extraction
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 4-component pipeline that hits GitHub's repo search API, then flattens
 nested fields (`owner.*`, `license.*`) into top-level columns using

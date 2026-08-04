@@ -1,4 +1,5 @@
 # Cube Semantic Layer — Two Demos, One Docker Container
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 **Components:**
 - `CubeQueryAssetComponent` (`assets/analytics/cube_query_asset`)

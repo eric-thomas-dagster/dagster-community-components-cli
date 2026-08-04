@@ -1,4 +1,5 @@
 # Azure Database for PostgreSQL Flexible Server demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 DataFrame → Azure PostgreSQL Flexible Server via `dataframe_to_table`
 (SQLAlchemy + psycopg2). Same pipeline shape as the `azure_sql` /

@@ -1,4 +1,5 @@
 # Snowpark Pipeline — full compute pushdown to Snowflake
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Multi-step Snowpark DataFrame chain compiled into ONE Snowflake SQL statement. The whole pipeline runs inside the Snowflake compute warehouse — no data ever flows through Python.
 

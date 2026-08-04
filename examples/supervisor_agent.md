@@ -1,4 +1,5 @@
 # Supervisor Agent — the agent picks *which agents to call*
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Component (new):** `SupervisorAgentComponent` — one YAML block emits `plan + N tool assets + synthesis`.
 

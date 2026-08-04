@@ -1,4 +1,5 @@
 # ClickHouse (advanced) — IO manager + observation sensor
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Docker-local end-to-end for the ClickHouse **code-level** components — the ones the base [`clickhouse.md`](clickhouse.md) demo doesn't exercise. Same `clickhouse/clickhouse-server` image, extra components wired.
 

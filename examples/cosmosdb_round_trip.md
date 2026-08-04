@@ -1,4 +1,5 @@
 # Azure Cosmos DB Round-Trip demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 DataFrame → Cosmos DB (NoSQL/SQL API) → SQL query back → CSV report. Validates
 both the writer and reader components in one chain, with the read depending on

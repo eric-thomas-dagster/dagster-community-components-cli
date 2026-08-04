@@ -1,4 +1,5 @@
 # Hacker News RSS — xml_parser variant
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Same goal as the [regex_parser HN demo](hn_rss.md) — extract titles +
 links from the HN front-page RSS feed — but routed through the proper

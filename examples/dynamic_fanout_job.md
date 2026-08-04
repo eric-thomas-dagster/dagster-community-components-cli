@@ -1,4 +1,5 @@
 # Dynamic Fanout Job demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Generic `DynamicOut` fan-out — discover a list of items at runtime, process each
 in parallel via `.map()`, optionally collect results. The most general

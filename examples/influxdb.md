@@ -1,4 +1,5 @@
 # InfluxDB 2.x — DataFrame → Flux query (live, Docker)
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Single-container Docker walkthrough. Spins up `influxdb:2-alpine` with a pre-initialized org + bucket + admin token, scaffolds a Dagster project that generates IoT sensor data, and bulk-writes 10,000 points into InfluxDB via the official `influxdb-client` Python SDK.
 

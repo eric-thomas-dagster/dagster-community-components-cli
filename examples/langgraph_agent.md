@@ -1,4 +1,5 @@
 # LangGraph Agent — Multi-Step Research Pipeline Demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Component:** `LangGraphAgentComponent` (`dagster_community_components`)
 **Script:** [`setup_langgraph_agent_demo.sh`](./setup_langgraph_agent_demo.sh)

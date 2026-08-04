@@ -1,4 +1,5 @@
 # Iris Unsupervised demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Replaces the separate iris_clusters and iris_pca demos with one richer
 pipeline that runs both algorithms in sequence:

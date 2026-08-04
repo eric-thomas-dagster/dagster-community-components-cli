@@ -1,4 +1,5 @@
 # Local NLP mega-demo (13 components)
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — 13 NLP / lightweight-AI components running on
 30 synthetic support tickets. **8 are fully local (no API key)**, **4

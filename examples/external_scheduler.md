@@ -1,4 +1,5 @@
 # External Scheduler demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 How to keep an existing master scheduler — Control-M, Autosys, CA WA ESP, Tidal, IBM TWS, JAMS, Stonebranch, Redwood, Airflow, cron,
 Jenkins, anything — in charge of *when* a Dagster job runs, without writing

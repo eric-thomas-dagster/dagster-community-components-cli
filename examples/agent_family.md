@@ -1,4 +1,5 @@
 # Agent family demo — `mcp_tool_call` + `openai_agent` + `llm_evaluator`
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 End-to-end demo of the three new agent-stack components in one Dagster project, one MCP server, one materialization chain. All against the no-auth `@modelcontextprotocol/server-filesystem` so anyone with an `OPENAI_API_KEY` can run it.
 

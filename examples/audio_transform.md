@@ -1,4 +1,5 @@
 # Audio Transform — sine-tone WAVs → 16kHz mono WAVs (Whisper-ready)
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** (local, no external services). 3 sine-tone WAVs at 44.1kHz/16-bit/mono → resampled to 16kHz/mono via ffmpeg.
 

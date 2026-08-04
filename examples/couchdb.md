@@ -1,4 +1,5 @@
 # CouchDB — reader + writer + resource round-trip
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Docker-local end-to-end for the CouchDB document-DB component set. Reader uses a Mango-style selector to pull active docs; a Python transform bumps them into a premium tier; the writer upserts them into a target database. All three shipped CouchDB components validated in one demo.
 

@@ -1,4 +1,5 @@
 # Neo4j end-to-end — local docker, no SaaS
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Read / write the Neo4j graph database via the community-component family. Same components target AuraDB / self-hosted clusters unchanged — only `uri` + auth env vars change.
 

@@ -1,4 +1,5 @@
 # Message-driven dbt orchestration
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 An external system publishes messages to a queue. Dagster picks them up via
 a sensor. Each message says either **"build this model with these vars"**

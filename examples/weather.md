@@ -1,4 +1,5 @@
 # NYC Weather — running totals + transpose + CSV
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 5-component pipeline that pulls 14 days of NYC weather from Open-Meteo,
 parses dates, computes running precipitation, transposes into a metric-per-day

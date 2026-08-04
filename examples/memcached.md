@@ -1,4 +1,5 @@
 # Memcached — resource + flush job
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Docker-local end-to-end for the Memcached component set. Two brand-new components, live-validated against `memcached:1.6-alpine`.
 

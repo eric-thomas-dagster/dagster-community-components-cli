@@ -1,4 +1,5 @@
 # BigQuery Query — ad-hoc SELECT against the public Shakespeare dataset
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against `bigquery-public-data.samples.shakespeare`.**
 Real BQ query, 20 rows returned, downstream pandas word_summary

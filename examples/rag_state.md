@@ -1,4 +1,5 @@
 # RAG as State, not as a Pipeline
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 The three components in this walkthrough exist to turn a RAG stack from "a pipeline that occasionally writes tables" into "a set of stateful entities that evolve over time, each with a materialization history, a freshness policy, a quality check, and a rollback path."
 

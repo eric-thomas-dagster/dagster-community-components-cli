@@ -1,4 +1,5 @@
 # Local sinks — round-trip a DataFrame to 5 file/table formats
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — RUN_SUCCESS in seconds. Same `orders`
 DataFrame fans out to 5 sinks; output files all written and inspectable

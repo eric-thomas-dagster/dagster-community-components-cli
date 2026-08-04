@@ -1,4 +1,5 @@
 # Cloud Tasks Fan-out — async work dispatch from Dagster
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against real APIs** (servicepulse-490502 →
 us-central1/demo-queue → httpbin.org). A Dagster asset emits 10

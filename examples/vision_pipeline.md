@@ -1,4 +1,5 @@
 # Vision pipeline — image metadata + vision-LLM description
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Two AI components on the same image set, end-to-end.** A custom
 asset generates 3 synthetic PNGs; both downstream components consume

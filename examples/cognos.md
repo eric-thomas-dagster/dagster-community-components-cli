@@ -1,4 +1,5 @@
 # IBM Cognos Analytics → Dagster orchestration
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 **Goal:** wrap **Cognos Analytics** (BI reports + dashboards) with Dagster to schedule report runs, react to report completion, ingest report output as DataFrames, and auto-emit assets for every report.
 

@@ -1,4 +1,5 @@
 # Nano Banana — `gemini_image_generation` end-to-end
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A native (no-LiteLLM) Nano Banana demo: 3 product hero-shot prompts →
 Gemini 2.5 Flash Image generates 3 PNGs → downstream pandas asset

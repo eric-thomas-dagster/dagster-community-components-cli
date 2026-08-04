@@ -1,4 +1,5 @@
 # dbt + ML + dbt — A Python ML Model in the Middle of Your dbt DAG
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Components:**
 - `dagster_dbt.DbtProjectComponent` (official dagster-dbt) — used twice with different `select` filters

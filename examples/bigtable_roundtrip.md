@@ -1,4 +1,5 @@
 # Bigtable Round-trip — write + read in one Dagster pipeline
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against real APIs** (servicepulse-490502, demo-instance, demo-table). DataFrame → Bigtable → DataFrame, with column-family routing and JSON encoding for nested values.
 

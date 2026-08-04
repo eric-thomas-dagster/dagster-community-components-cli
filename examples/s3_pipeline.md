@@ -1,4 +1,5 @@
 # S3 dynamic-partition pipeline — `setup_s3_pipeline_demo.sh`
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Sensor-driven round-trip pipeline, 100% components, validated end-to-end. New CSV files dropped into an S3 bucket are auto-detected, registered as dynamic partitions, processed individually, and written back to S3 as parquet — one partition per file, fully tracked and re-runnable from the UI.
 

@@ -1,4 +1,5 @@
 # Kinesis → Firehose → S3 → Dagster → Athena — blueprint
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 AWS mirror of the [Event Hubs Capture](eh_capture_pipeline.md) and [Pub/Sub → GCS](pubsub_gcs_pipeline.md) demos. Same production-shape pattern: **Dagster doesn't process the queue directly** — Kinesis Data Firehose (a built-in AWS service) lands every record in S3 as durable Parquet, and Dagster picks up files event-driven via a dynamic-partition `s3_monitor`. Each new file = one Dagster dynamic partition = fully re-runnable.
 

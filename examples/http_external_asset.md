@@ -1,4 +1,5 @@
 # HTTP External Asset — wraps any HTTP-driven external job runner
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against the public GitHub Actions REST API** —
 RUN_SUCCESS materializing through the full chain in ~4s. Three asset

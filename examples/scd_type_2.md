@@ -1,4 +1,5 @@
 # SCD Type 2 demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Slowly Changing Dimension Type 2 (history-tracking) on a synthetic 4-customer
 snapshot. Validates the merge-and-expire logic end-to-end.

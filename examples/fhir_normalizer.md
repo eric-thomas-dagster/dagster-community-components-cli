@@ -1,4 +1,5 @@
 # FHIR Normalizer — synthetic FHIR R4 resources → flat per-resource DataFrames
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** (pure Python, no external services). 28 generated FHIR resources covering 6 types → 4 specialized downstream tables, each as flat tabular data ready for BQ / parquet / etc.
 

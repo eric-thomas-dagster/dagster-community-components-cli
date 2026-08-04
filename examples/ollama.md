@@ -1,4 +1,5 @@
 # Ollama — local LLM inference, zero API cost
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validation level: infra** — components and YAML wired up; runs end-to-end
 once Ollama is installed and running locally. Can't be validated in CI

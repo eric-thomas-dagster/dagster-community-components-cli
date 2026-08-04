@@ -1,4 +1,5 @@
 # Cassandra end-to-end — local docker, no auth
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Read from Cassandra via the community-component family against a single-node Cassandra container.
 

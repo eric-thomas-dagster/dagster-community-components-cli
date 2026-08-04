@@ -1,4 +1,5 @@
 # BQ ↔ GCS bulk bridge — vendor-native EXTRACT + LOAD round-trip
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against real GCP infrastructure**, full BQ → GCS → BQ
 round-trip in <8s. Two new vendor-native components that use

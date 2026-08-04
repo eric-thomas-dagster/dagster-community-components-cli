@@ -1,4 +1,5 @@
 # Azure Data Factory demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Import an existing ADF instance into Dagster: every ADF pipeline becomes a
 Dagster external asset, ADF triggers can be reflected as Dagster schedules,

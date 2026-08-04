@@ -1,4 +1,5 @@
 # Composition primitives — small jobs without external auth
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Dagster pipelines aren't only assets. Most production projects need a handful of small **jobs**: nightly database VACUUM, uptime heartbeats, calls to internal services, scheduled callbacks into Python utilities. The community registry has a family of `*_job` components that wrap each pattern declaratively — pure YAML, no Python.
 

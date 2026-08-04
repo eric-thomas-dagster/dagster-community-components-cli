@@ -1,4 +1,5 @@
 # BigQuery Vector Search — semantic retrieval over BQ embeddings
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end against real APIs** (servicepulse-490502, demo_docs_embedded table).
 2 query vectors → top-3 matches each, semantically correct ordering.

@@ -1,4 +1,5 @@
 # Azure Event Hubs Round-Trip demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 100 synthetic e-commerce orders → DataFrame → published to Azure Event
 Hubs → consumed by `eventhubs_to_database_asset` → landed in Azure

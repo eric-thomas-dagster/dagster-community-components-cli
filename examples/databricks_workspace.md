@@ -1,4 +1,5 @@
 # Bring existing Databricks Jobs into Dagster — interactive setup
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 You have a Databricks workspace with existing Jobs. You want them as Dagster assets — with cross-job dependencies modeled in lineage, scheduled or auto-cascading — without writing YAML by hand. Run one script. Answer the prompts. You're done.
 

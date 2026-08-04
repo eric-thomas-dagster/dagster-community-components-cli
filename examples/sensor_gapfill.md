@@ -1,4 +1,5 @@
 # IoT sensor gap-fill demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 cumulative metric on top.
 

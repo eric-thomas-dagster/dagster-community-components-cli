@@ -1,4 +1,5 @@
 # Cube + LLM — natural-language narrative over governed metrics
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 **Components:** `CubeQueryAssetComponent`, `LangChainChainAssetComponent`
 

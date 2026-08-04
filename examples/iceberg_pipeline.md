@@ -1,4 +1,5 @@
 # Apache Iceberg → Dagster pipeline blueprint
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Read from and write back to **existing Iceberg tables** owned by other engines — Snowflake, Trino, Spark, Flink, Databricks, etc. Engine-agnostic via PyIceberg.
 

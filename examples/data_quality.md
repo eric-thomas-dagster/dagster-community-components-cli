@@ -1,4 +1,5 @@
 # Data quality — 4 asset_check components on a synthetic orders asset
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — `dg check` passes with 4 asset_check
 components attached to a synthetic `orders` source. Pure local, $0 cost.

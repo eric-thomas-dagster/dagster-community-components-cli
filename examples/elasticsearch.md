@@ -1,4 +1,5 @@
 # Elasticsearch end-to-end — local docker, no auth
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Read documents from an Elasticsearch index via the community-component family. Same components target Elastic Cloud / self-hosted clusters unchanged — only `hosts` / `api_key_env_var` change.
 

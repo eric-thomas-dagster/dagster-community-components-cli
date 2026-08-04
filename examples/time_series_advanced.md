@@ -1,4 +1,5 @@
 # Time-series advanced — comparison + covariates + per-group factory
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — RUN_SUCCESS in seconds. 4 advanced ts_*
 components run on synthetic data. All statsmodels, no SaaS.

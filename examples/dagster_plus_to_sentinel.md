@@ -1,4 +1,5 @@
 # Dagster+ → Microsoft Sentinel demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Pull Dagster+ audit-log entries via GraphQL, normalize to OCSF v1.1, ship to a
 Microsoft Sentinel workspace via the Log Analytics ingestion API. Events land

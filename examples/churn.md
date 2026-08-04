@@ -1,4 +1,5 @@
 # Churn prediction — synthetic customer aggregates → risk scores
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 3-component pipeline that generates 200 synthetic customer-level
 aggregate rows (`last_activity`, `total_orders`, `total_revenue`,

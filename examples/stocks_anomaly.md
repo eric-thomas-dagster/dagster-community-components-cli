@@ -1,4 +1,5 @@
 # Stocks anomaly detection
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 3-component pipeline that pulls 10 years of monthly close prices for 5
 tickers, runs z-score anomaly detection grouped by symbol (so MSFT outliers

@@ -1,4 +1,5 @@
 # Vintage Cars → SQL — write a DataFrame to SQLite
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 4-component pipeline that pulls the classic vega cars dataset (406 cars from
 1970-1982, US/Europe/Japan), parses the model year, derives a decade column,

@@ -1,4 +1,5 @@
 # Temporal Signal + Query — Push and Pull Live Workflow State
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 **Components:**
 - `TemporalSignalAssetComponent` (`assets/infrastructure/temporal_signal_asset`)

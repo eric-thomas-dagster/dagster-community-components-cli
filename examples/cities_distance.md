@@ -1,4 +1,5 @@
 # US Cities — pairwise haversine distances
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 6-component pipeline that takes 10 major US cities, cross-joins to
 itself for all 100 pairs, computes haversine distance per pair, drops

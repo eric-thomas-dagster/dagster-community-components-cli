@@ -1,4 +1,5 @@
 # Web scraper — partitioned multi-page crawl
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 3-component pipeline that scrapes 5 paginated pages of `books.toscrape.com`,
 one partition per page. Each partition fetches its page, extracts every link,

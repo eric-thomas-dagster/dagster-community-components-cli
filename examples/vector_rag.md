@@ -1,4 +1,5 @@
 # Vector / RAG mega-demo (5 components)
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — embeddings → ChromaDB index → vector search →
 local rerank → end-to-end RAG → conversation memory, all in one

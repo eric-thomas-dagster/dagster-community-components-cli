@@ -1,4 +1,5 @@
 # OCSF + Security Lake demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Synthetic Dagster+ audit events through the **full asset pipeline**: raw → OCSF
 normalize → conformance check → Parquet (mocking AWS Security Lake's layout, no

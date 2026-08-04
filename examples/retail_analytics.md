@@ -1,4 +1,5 @@
 # Retail Customer Analytics demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Generates 2000 synthetic orders, parses the dates, then runs TWO
 parallel analytics branches off the typed dataset: RFM segmentation

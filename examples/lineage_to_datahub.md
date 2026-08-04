@@ -1,4 +1,5 @@
 # Lineage → DataHub demo
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 Surface your Dagster asset graph (nodes + edges) in **DataHub OSS** running
 locally in Docker. End-to-end live-validated: the demo pushes 8 datasets

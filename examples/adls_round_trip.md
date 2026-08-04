@@ -1,4 +1,5 @@
 # Azure ADLS Round-Trip demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 DataFrame → Azure Data Lake Storage Gen2 (Parquet) → observable external asset.
 

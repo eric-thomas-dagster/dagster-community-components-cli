@@ -1,4 +1,5 @@
 # Video Pipeline — synthetic videos → metadata + frames + audio
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** (ffmpeg-only, no external services). 2 synthetic MP4s (h264 + AAC) fanning out through 3 parallel video processors.
 

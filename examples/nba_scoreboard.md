@@ -1,4 +1,5 @@
 # NBA Scoreboard
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 > **Heads-up.** This demo hits a public, undocumented NBA **JSON endpoint** (not
 > HTML scraping — the same JSON the NBA's own mobile apps consume):

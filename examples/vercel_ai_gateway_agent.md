@@ -1,4 +1,5 @@
 # Vercel AI Gateway Agent — Multi-Provider LLM through One Token
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Component:** `VercelAIGatewayAgentComponent` (`assets/ai/vercel_ai_gateway_agent`)
 **Validation:** **live** — round-trip through Vercel AI Gateway → `openai/gpt-4o-mini` → Dagster asset materialization confirmed 2026-07-02 (2.14s, RUN_SUCCESS).

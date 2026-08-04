@@ -1,4 +1,5 @@
 # Data combination — joins, unions, reshape, coerce
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — RUN_SUCCESS in seconds. 6 synthetic source
 assets feed 7 combination/coercion transforms.

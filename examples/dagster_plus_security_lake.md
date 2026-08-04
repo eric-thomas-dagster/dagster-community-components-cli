@@ -1,4 +1,5 @@
 # Dagster+ Audit → AWS Security Lake demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **This is a Dagster+ demo** — pulls real audit-log entries from your Dagster+
 deployment via GraphQL, normalizes to OCSF v1.1, optionally lands in AWS

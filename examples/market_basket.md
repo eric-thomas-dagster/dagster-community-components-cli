@@ -1,4 +1,5 @@
 # Market Basket demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Generates 200 synthetic shopping baskets with realistic item co-occurrence,
 runs apriori to find frequent itemsets + derive association rules

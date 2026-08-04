@@ -1,4 +1,5 @@
 # REST Countries — formula + summarize + JSON
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 4-component pipeline that pulls every country from the REST Countries API,
 computes population density per country, rolls up by region, writes a JSON

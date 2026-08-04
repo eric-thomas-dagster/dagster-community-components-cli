@@ -1,4 +1,5 @@
 # Qlik Replicate → Dagster orchestration
+> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
 
 **Goal:** wrap Qlik Replicate (control plane: Qlik Enterprise Manager) with Dagster so you can start/stop tasks, react to task-state transitions, and materialize CDC metrics as assets — without leaving the Dagster UI.
 

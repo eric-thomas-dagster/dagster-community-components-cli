@@ -1,4 +1,5 @@
 # LLM execution mega-demo (12 components)
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** — 20 synthetic support tickets fan out through
 12 LLM-execution components, ~240 OpenAI calls against `gpt-4o-mini`.

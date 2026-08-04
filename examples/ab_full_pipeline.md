@@ -1,4 +1,5 @@
 # A/B Full Pipeline demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 An end-to-end experimentation pipeline:
   1. eligible_users (synthetic) → ab_treatments (deterministic split)

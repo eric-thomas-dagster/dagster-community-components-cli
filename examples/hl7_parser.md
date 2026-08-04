@@ -1,4 +1,5 @@
 # HL7 v2 Parser — synthetic hospital messages → flat segment DataFrame
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Validated end-to-end** (pure Python). 12 messages rotating through ADT^A01 admit + ORU^R01 lab result + ORM^O01 order → 64 flat segment rows spanning all 9 supported segment types.
 

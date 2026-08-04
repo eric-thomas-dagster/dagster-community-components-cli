@@ -1,4 +1,5 @@
 # Snowflake → Iceberg → Databricks Lakeflow — blueprint
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A common production pattern: **Snowflake** does the heavy SQL transformations on raw data, lands the result as an **Apache Iceberg** table in cloud storage (S3 / ADLS / GCS), and **Databricks Lakeflow Declarative Pipelines** (formerly DLT) read the same Iceberg table directly to feed downstream models / dashboards / lakehouse silver-gold layers.
 

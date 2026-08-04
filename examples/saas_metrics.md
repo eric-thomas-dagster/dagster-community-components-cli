@@ -1,4 +1,5 @@
 # SaaS metrics — synthetic Stripe → MRR / ARR / churn / LTV
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 3-component pipeline that generates a Stripe-shaped CSV (50 synthetic
 subscriptions across active / trialing / canceled states), runs

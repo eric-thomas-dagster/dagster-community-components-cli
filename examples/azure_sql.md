@@ -1,4 +1,5 @@
 # Azure SQL Database demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 DataFrame → Azure SQL serverless via `dataframe_to_table` (SQLAlchemy +
 pymssql). Same pipeline shape as the movies_sql / cars_sql demos — flip

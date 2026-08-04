@@ -1,4 +1,5 @@
 # Subscription survival demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Generates 300 synthetic subscriptions (free/pro/enterprise tiers with
 realistic churn rates) via synthetic_data_generator's `subscriptions`

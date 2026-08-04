@@ -1,4 +1,5 @@
 # RSS Sensor demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 rss_feed_sensor polls Hacker News' frontpage RSS every 10 minutes. When new
 entries appear, it triggers a RunRequest that materializes the

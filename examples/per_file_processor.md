@@ -1,4 +1,5 @@
 # Per-File Processor Job demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Inbox-style fan-out: list files in a directory matching a glob, process each
 in parallel, archive the originals on success. The demo runs in `local`

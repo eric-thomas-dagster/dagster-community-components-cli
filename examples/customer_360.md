@@ -1,4 +1,5 @@
 # Customer 360 (natural-language build)
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 Per-customer aggregate view — orders rolled up to `total_spent` / `order_count` / `avg_order_value` and joined back to the customer profile. Built entirely from a natural-language task via [`planned_catalog_agent`](./planned_catalog_agent.md), no hand-authored per-component defs.yaml.
 

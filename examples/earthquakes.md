@@ -1,4 +1,5 @@
 # USGS Earthquakes — REST + JSON pipeline
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 5-component pipeline that pulls the USGS public earthquake feed, flattens
 nested GeoJSON, selects + sorts fields, writes JSONL.

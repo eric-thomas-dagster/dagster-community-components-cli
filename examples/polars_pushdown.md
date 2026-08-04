@@ -1,4 +1,5 @@
 # Polars-native pushdown — predicate-pushdown source + lazy pipeline
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 The polars-specific components that earn their keep beyond the per-asset `backend: polars` field.
 

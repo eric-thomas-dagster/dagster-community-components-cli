@@ -1,4 +1,5 @@
 # DuckDB Warehouse demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A **real Dagster project** — assets persisted to a local DuckDB file via the
 `duckdb_io_manager` resource, a downstream summary asset that loads the upstream

@@ -1,4 +1,5 @@
 # Synthetic time-series — registry-native generator
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 A 3-component pipeline that generates 30 days of synthetic hourly metrics
 via `time_series_generator` (no external data, no upstream — pure

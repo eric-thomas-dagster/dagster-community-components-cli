@@ -1,4 +1,5 @@
 # Catalog Agent — schema-discovering chained pipeline over 900 real components
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
 **Component (new):** `CatalogAgentComponent` — the most sophisticated agentic primitive in the registry. Per-step planner picks REAL components from the live 900-component manifest, executes them via reflection + in-process materialization, and sees the ACTUAL columns of each step's output before planning the next — so it can plan against data with unknown schemas.
 
