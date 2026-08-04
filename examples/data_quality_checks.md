@@ -1,5 +1,5 @@
 # Data Quality Checks demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** — 100 synthetic orders go through 4 different
 asset_check components in parallel, all attached to the same asset.

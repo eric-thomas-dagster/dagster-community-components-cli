@@ -1,5 +1,5 @@
 # MongoDB end-to-end — local docker, no auth
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Read, write, and resource the MongoDB community-component family against a single-container MongoDB running locally. The same components work unchanged against MongoDB Atlas / EC2-hosted / on-prem replica sets — just swap `connection_string_env_var` + `tls`.
 

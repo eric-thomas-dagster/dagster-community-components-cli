@@ -1,5 +1,5 @@
 # Redis end-to-end — local docker, no auth
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Exercise the Redis community-component family against a single-container Redis running locally. The same components target managed Redis (ElastiCache / MemoryStore / Redis Cloud / Azure Cache) unchanged — only the connection fields change.
 

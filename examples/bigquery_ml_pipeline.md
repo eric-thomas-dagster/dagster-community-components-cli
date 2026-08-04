@@ -1,5 +1,5 @@
 # BigQuery-native ML pipeline — CTAS + BQML train + BQML predict
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **A complete ML pipeline running entirely inside BigQuery** — no Python
 ML stack, no scikit-learn, no PyTorch. Trains and predicts via SQL.

@@ -1,5 +1,5 @@
 # Cloud DLP — two flavors of PII detection in Dagster
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end against real APIs** (servicepulse-490502). Same
 Cloud DLP service, two Dagster object types — pick the right one for

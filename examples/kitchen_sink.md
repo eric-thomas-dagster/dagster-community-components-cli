@@ -1,5 +1,5 @@
 # Kitchen Sink demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 The showcase demo: **21 community components in one project**. An e-commerce intelligence
 pipeline that exercises ingest → quality → join → transform → analytics → sink → schedule —

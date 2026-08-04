@@ -1,5 +1,5 @@
 # Compute Log Managers — Splunk + OTel Collector, live in Docker
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 End-to-end walkthrough validating the three compute log managers shipped in `dagster-community-components` v0.10.18+:
 

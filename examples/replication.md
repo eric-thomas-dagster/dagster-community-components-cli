@@ -1,5 +1,5 @@
 # Recurring SQL→SQL replication — Postgres → DuckDB end-to-end (Oracle / Db2 / Snowflake / BigQuery retargets unchanged)
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 > **Replication vs. migration:** this walkthrough covers the **recurring** data-sync pattern — runs on a schedule, picks up incrementally, keeps the warehouse in sync with the operational DB. For the **one-time** warehouse-migration story (PL/SQL procedures, scheduled jobs, views, triggers — everything that's *not* a table), see [warehouse_migration.md](warehouse_migration.md), which uses `database_schema_inventory` alongside this same `database_replication` component.
 

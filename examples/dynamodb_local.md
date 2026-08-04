@@ -1,5 +1,5 @@
 # DynamoDB Local — reader + writer + resource round-trip
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Docker-local end-to-end for the DynamoDB component set using AWS's official `amazon/dynamodb-local` emulator. No AWS account, no credentials, no cost — every read/write goes to a container on `:8000`.
 

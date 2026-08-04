@@ -1,5 +1,5 @@
 # Event Hubs Capture → ADLS → Dagster → Synapse — blueprint
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Production-shape streaming pipeline. **Dagster doesn't process the queue directly** — Event Hubs Capture (a built-in Azure service) lands every event in ADLS as durable **Avro** files (the Standard-tier default; Parquet capture is Premium/preview), and Dagster picks up files event-driven. Each new file = one Dagster dynamic partition = fully re-runnable.
 

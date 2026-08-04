@@ -1,5 +1,5 @@
 # Azure Cache for Redis Round-Trip demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 DataFrame → Redis hashes (TLS on port 6380) → SQL query back as DataFrame
 → CSV report. Validates `redis_writer` and `redis_reader` against a real

@@ -1,5 +1,5 @@
 # Airline Passengers — fit ETS, forecast 24 months out
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 A 4-component pipeline that fits an Exponential Smoothing model (Holt-Winters)
 to the classic 1949-1960 monthly airline passengers series and projects 24

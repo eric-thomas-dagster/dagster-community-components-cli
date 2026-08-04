@@ -1,5 +1,5 @@
 # Firebase — Live-Validated via the Emulator Suite
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 **Components:**
 - `FirebaseResourceComponent` (`resources/firebase_resource`)

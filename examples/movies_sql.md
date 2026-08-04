@@ -1,5 +1,5 @@
 # Top 250 Movies → SQL demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Computes a "Top 250" ranking from **real MovieLens data** (officially published
 by GroupLens), parses year out of the title, and lands the result in SQLite via

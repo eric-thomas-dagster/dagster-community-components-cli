@@ -1,5 +1,5 @@
 # ML feature engineering — 6 pre-modeling transforms
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** — RUN_SUCCESS in seconds. Synthetic 100-row
 customer dataset (with intentional missing values + outliers) feeds

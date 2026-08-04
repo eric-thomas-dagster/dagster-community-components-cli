@@ -1,5 +1,5 @@
 # Agentic Router — One Asset per Case, Steps as Ops, Multiple Downstream Branches
-> ⚠️ **Dagster+ Serverless:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
+> ⚠️ **Dagster+ Serverless / Hybrid:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
 
 
 The **router-loop** pattern from BPMN "agentic orchestration" diagrams, done the Dagster-honest way:

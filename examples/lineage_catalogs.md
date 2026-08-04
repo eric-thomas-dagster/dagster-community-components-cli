@@ -1,5 +1,5 @@
 # Catalog Lineage Sync demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Export the Dagster asset lineage graph to your data catalog, with
 **lock-step fan-out across multiple catalogs** and **only-push-on-change**

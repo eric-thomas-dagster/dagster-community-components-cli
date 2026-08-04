@@ -1,5 +1,5 @@
 # Data Hygiene Pipeline — 9 utility transforms in one chain
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** (pure Python). 50 synthetic CRM customer rows pass through 9 utility components — auditing, validating, normalizing, masking, hashing, keying, numbering, counting — to demonstrate the *data-hygiene toolbox* that ships in the registry.
 

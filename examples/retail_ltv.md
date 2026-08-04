@@ -1,5 +1,5 @@
 # UCI Online Retail — customer lifetime value prediction
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 A 5-component customer-data-platform pipeline. Pulls the canonical UCI
 Online Retail dataset (542k transactions from a UK e-commerce site,

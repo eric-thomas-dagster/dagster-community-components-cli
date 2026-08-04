@@ -1,5 +1,5 @@
 # CRM Reconciliation — HubSpot + Salesforce Unified Customer View
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Components:**
 - `SyntheticDataGeneratorComponent` (`assets/ai/synthetic_data_generator`) — synth data for the local demo

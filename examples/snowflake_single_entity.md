@@ -1,5 +1,5 @@
 # Snowflake — single-entity components (companion to `snowflake_workspace`)
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 This walkthrough exists as the **single-entity counterpart** to the [`snowflake_workspace.md`](snowflake_workspace.md) auto-discovery demo. For most teams the workspace component is the right shape — it scans your Snowflake account and brings every task / stored proc / dynamic table / stream / pipe / external table / alert / MV into Dagster's catalog in one go.
 

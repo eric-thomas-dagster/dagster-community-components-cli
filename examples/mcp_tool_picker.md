@@ -1,5 +1,5 @@
 # MCP Tool Picker — the agent picks *which MCPs to call*
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Component (new):** `MCPToolPickerComponent` — one YAML block emits `plan + N MCP-tool assets + synthesis`.
 

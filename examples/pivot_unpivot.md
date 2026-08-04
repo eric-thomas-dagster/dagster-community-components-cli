@@ -1,5 +1,5 @@
 # Pivot ↔ Unpivot demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Round-trip on monthly sales data: long → wide via `pivot`, then back to long via
 `unpivot`. Verifies both transforms compose cleanly without data loss.

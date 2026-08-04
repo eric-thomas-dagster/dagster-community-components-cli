@@ -1,5 +1,5 @@
 # Revenue attribution — split conversions across marketing channels
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 A 4-component pipeline that fans in two synthetic CSVs (5 marketing
 campaigns + 120 Stripe charge events), runs `revenue_attribution` with

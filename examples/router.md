@@ -1,5 +1,5 @@
 # Router demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Multi-output conditional split on 30 synthetic orders — `router` emits one
 asset per route, exclusive matching (each row goes to exactly one bucket).

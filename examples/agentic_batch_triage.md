@@ -1,5 +1,5 @@
 # Agentic Batch Triage — Dynamic Fan-Out (Prefect `task.map()` in Dagster)
-> ⚠️ **Dagster+ Serverless:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
+> ⚠️ **Dagster+ Serverless / Hybrid:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
 
 
 The **batch shape** of the agentic router: N cases processed in ONE run via Dagster's `DynamicOut`. Direct analog to Prefect's `task.map()`.

@@ -1,5 +1,5 @@
 # JD Edwards Orchestrator → Dagster orchestration
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 **Goal:** wrap **JDE Orchestrator** with Dagster to schedule orchestrations, react to completion events, ingest orchestration output, and auto-emit assets for every orchestration.
 

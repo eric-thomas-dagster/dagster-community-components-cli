@@ -1,5 +1,5 @@
 # Adaptive Backfill Detective — the agent decides *how* to fill each gap
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Components:** `synthetic_data_generator` (sparse_sensors), `formula`, `summarize`, `langchain_chain_asset`, `router`, `dataframe_to_csv` — **100% composition of existing components.**
 

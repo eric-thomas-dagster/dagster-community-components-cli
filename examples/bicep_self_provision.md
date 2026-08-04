@@ -1,5 +1,5 @@
 # Bicep Self-Provisioning demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 The first asset in the graph is a Bicep deployment. Once it succeeds,
 downstream assets use the storage account it just created. Dagster owns the

@@ -1,5 +1,5 @@
 # AI components — LLM-powered (OpenAI / Azure OpenAI)
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** — 30 synthetic support tickets fan out through 5
 LLM-powered components, ~150 OpenAI API calls total against `gpt-4o-mini`.

@@ -1,5 +1,5 @@
 # MariaDB — using the MySQL components unchanged
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 MariaDB is wire-compatible with MySQL: same protocol, same drivers, same tools. This walkthrough validates the existing `MySQLResourceComponent` + `DataframeToTableComponent` against a `mariadb:11` Docker container with **zero component changes** — the same YAML that works against MySQL 8 works against MariaDB 11.
 

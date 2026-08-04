@@ -1,5 +1,5 @@
 # Google Calendar — events to CSV + BigQuery
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end against a real Google Calendar.** RUN_SUCCESS pulling
 60 events from `ethomasii@gmail.com`, lands them in both a local CSV and a

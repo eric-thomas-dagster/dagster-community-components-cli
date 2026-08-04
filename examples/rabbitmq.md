@@ -1,5 +1,5 @@
 # RabbitMQ end-to-end — local docker, no auth
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Exercise the RabbitMQ community-component family against a local AMQP broker. Same components target self-hosted clusters / Amazon MQ / CloudAMQP unchanged — only the `amqp_url_env_var` content changes.
 

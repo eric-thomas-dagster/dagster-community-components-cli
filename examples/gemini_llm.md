@@ -1,5 +1,5 @@
 # Gemini LLM — text generation on synthetic tickets
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end against the live Gemini API.** RUN_SUCCESS in
 1m7s for 20 synthetic support-ticket rows via `gemini-2.5-flash`.

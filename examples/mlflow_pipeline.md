@@ -1,5 +1,5 @@
 # MLflow pipeline — end-to-end MLOps with Dagster
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 
 Self-contained demo of Dagster orchestrating a full MLflow-backed ML pipeline. Trains a churn model, registers it, promotes Staging → Production as a Dagster asset, then scores customer data using the promoted model — with an asset check gating on model existence.

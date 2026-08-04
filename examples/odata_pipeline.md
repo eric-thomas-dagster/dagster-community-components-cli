@@ -1,5 +1,5 @@
 # OData → Dagster pipeline blueprint
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Generic OData v2/v4 ingestion → transform → write-back, demonstrated end-to-end against the **public Northwind sample** at services.odata.org. No credentials required.
 

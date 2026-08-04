@@ -1,5 +1,5 @@
 # Text Codec Convert — sanitize multilingual text to ASCII
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** (pure Python). 10 multilingual support tickets → ASCII-sanitized via codec round-trip. Same component handles ANY codec pair: ASCII↔EBCDIC, UTF-8↔UTF-16, Windows-1252→UTF-8, Latin-1→UTF-8.
 

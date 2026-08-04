@@ -1,5 +1,5 @@
 # TimescaleDB — DataFrame → hypertable → summary (live, Docker)
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Single-container Docker walkthrough. Spins up `timescale/timescaledb:latest-pg16` locally, scaffolds a Dagster project that generates IoT sensor time-series, lands them into a Postgres table, converts that table to a TimescaleDB hypertable via `create_hypertable(...)`, and returns a per-sensor-type summary.
 

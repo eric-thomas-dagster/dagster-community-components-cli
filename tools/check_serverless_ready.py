@@ -109,9 +109,9 @@ def scan(script: Path) -> dict:
 
 
 BADGES = {
-    "ready":       "> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.",
-    "needs_mods":  "> ⚠️ **Dagster+ Serverless:** deploys with modifications — {why}.",
-    "local_only":  "> ❌ **Dagster+ Serverless:** local-only demo — requires {why}.",
+    "ready":       "> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).",
+    "needs_mods":  "> ⚠️ **Dagster+ Serverless / Hybrid:** deploys with modifications — {why}.",
+    "local_only":  "> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires {why}.",
 }
 
 # Walkthroughs that already have a hand-authored badge — leave alone.

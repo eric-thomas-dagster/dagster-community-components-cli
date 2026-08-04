@@ -1,5 +1,5 @@
 # Dremio → Dagster pipeline blueprint
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Query a Dremio cluster (OSS or Cloud) from Dagster and materialize the result as an asset. Demonstrated end-to-end against a **local Dremio in Docker** — no Dremio Cloud account needed.
 

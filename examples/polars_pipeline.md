@@ -1,5 +1,5 @@
 # Polars Pipeline (single-asset multi-step lazy chain)
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Run multiple polars operations as **one** LazyFrame chain inside a single Dagster asset. The polars query planner fuses filters, prunes projections, and parallelizes execution — but only within one lazy chain. Spread across separate Dagster assets, the asset boundary forces materialization and breaks the optimization.
 

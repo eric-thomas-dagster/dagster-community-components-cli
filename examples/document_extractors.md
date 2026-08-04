@@ -1,5 +1,5 @@
 # Document extractors mega-demo (13 components)
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** — 13 LLM-driven document extractors, each
 specialized for a different document domain, all running against a

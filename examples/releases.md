@@ -1,5 +1,5 @@
 # GitHub Releases — filter + sort + Parquet
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 A 6-component pipeline that pulls the last 50 releases of `dagster-io/dagster`
 from GitHub, parses publish dates, filters to stable releases (no prereleases

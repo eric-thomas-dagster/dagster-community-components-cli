@@ -1,5 +1,5 @@
 # X12 EDI Parser — synthetic envelopes → flat transaction DataFrame
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** (pure Python). 15 synthetic ASC X12 messages → 15 flat transaction rows ready for warehouse / claims / order-management pipelines.
 

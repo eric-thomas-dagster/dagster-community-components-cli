@@ -1,5 +1,5 @@
 # Partitions — the four canonical shapes end-to-end
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** — exercises the canonical partition shape (Phase 1
 of the partition rework) across four use cases on the same `dataframe_to_csv`

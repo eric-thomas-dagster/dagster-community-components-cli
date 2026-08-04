@@ -352,12 +352,6 @@ except Exception as e:
 con.close()
 PY
 
-# --- Dagster+ Serverless prep -------------------------------------------
-# Make the project deployable via `dagster-cloud serverless deploy-docker`.
-# Adds dagster-cloud + boto3 deps, emits dagster_cloud_post_install.sh, and
-# rewrites definitions.py with a conditional serverless_io_manager (leaves
-# local `dg dev` behavior unchanged).
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/serverless_prep.sh | bash
 
 cat <<DONE
 

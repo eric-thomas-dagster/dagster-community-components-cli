@@ -1,5 +1,5 @@
 # Email Round-Trip — fan out via SMTP, pull replies via IMAP
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** against local SMTP + IMAP servers. 5 synthetic support tickets → 5 outbound notification emails (`smtp_send_asset`) + 6 reply emails pulled from a mailbox (`imap_inbox_source`).
 

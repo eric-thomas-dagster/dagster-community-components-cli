@@ -1,5 +1,5 @@
 # DataFrame basics — 9 fundamental shape-preserving transforms
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** — RUN_SUCCESS in seconds. Synthetic 60-row sales
 dataset fans out through 9 standard pandas operations, each exposed as a

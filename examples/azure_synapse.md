@@ -1,5 +1,5 @@
 # Azure Synapse Analytics demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Import an existing Synapse workspace into Dagster: every Synapse pipeline
 becomes a Dagster external asset that can be triggered + polled. Same

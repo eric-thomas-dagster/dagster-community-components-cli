@@ -1,5 +1,5 @@
 # OpenTelemetry full-stack demo (metrics + logs + traces)
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Push synthetic pipeline data through all three OpenTelemetry signals
 (metrics, logs, traces) to a single OTLP/HTTP endpoint. **One set of

@@ -1,5 +1,5 @@
 # Data Doctor — the agent decides *what* the pipeline does
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Components:** `synthetic_data_generator` (with new `inject_dq_issues` flag), `dataframe_describe`, `langchain_chain_asset`, **`data_remediation_asset`** (new)
 

@@ -1,5 +1,5 @@
 # Content moderation — rule-based + ML-based, side by side
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** — 30 synthetic user comments fan out through two
 moderation components in parallel. RUN_SUCCESS in ~22 seconds.

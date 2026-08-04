@@ -1,5 +1,5 @@
 # Dagster Orchestrates + Prefect Executes — Each Doing What It's Best At
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Not competitive — **complementary**. Dagster owns the graph, the partition (per-file / per-tenant / per-day), the asset catalog, the state tracking. Prefect owns the per-run work — including **durable execution** and **runtime-decided task graphs** (the exact tasks depend on what's inside each input).
 

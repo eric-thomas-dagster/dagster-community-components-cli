@@ -1,5 +1,5 @@
 # ClickHouse — DataFrame → ClickHouse end-to-end (live, Docker)
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Single-container Docker walkthrough. Spins up `clickhouse/clickhouse-server` locally, scaffolds a Dagster project that generates synthetic order data, bulk-loads it into ClickHouse via the official `clickhouse-connect` client, and declares the destination table as an external asset for catalog lineage.
 

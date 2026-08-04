@@ -262,9 +262,6 @@ attributes:
     purpose: titanic_refresh
 EOF
 
-# --- Dagster+ Serverless prep -------------------------------------------
-# Make the project deployable via `dagster-cloud serverless deploy-docker`.
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/serverless_prep.sh | bash
 
 cat <<MSG
 

@@ -1,5 +1,5 @@
 # Anthropic Claude — anthropic_llm component on synthetic tickets
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated at infra level** — script + defs.yaml load clean
 (`dg check defs` passes); end-to-end run requires `ANTHROPIC_API_KEY`.

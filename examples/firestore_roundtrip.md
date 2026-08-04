@@ -1,5 +1,5 @@
 # Firestore Round-trip — write + read with filter
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end against real APIs** (servicepulse-490502, devices collection).
 5 device docs written, 4 active devices read back with a `WHERE status == active` filter.

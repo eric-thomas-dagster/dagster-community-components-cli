@@ -1,5 +1,5 @@
 # External assets — declare 21 integrations in one code location
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** — `dg check` passes with all 21 external_*_asset
 components loaded. They're declare-only (no compute), so this validates

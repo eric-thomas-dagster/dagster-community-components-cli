@@ -1,5 +1,5 @@
 # Speech-to-Text + Translation — audio → transcript → 4 languages
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end against real GCP** with public Google sample audio.
 Two GCP ML-API components chained, no audio file uploads required.

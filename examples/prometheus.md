@@ -1,5 +1,5 @@
 # Prometheus full demo (push + pull)
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 **Validated end-to-end** against live infrastructure.
 

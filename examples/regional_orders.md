@@ -1,5 +1,5 @@
 # Multi-region orders union demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Three regions (NA, EU, APAC) export their order extracts as separate
 CSVs with slightly different column sets (NA uses USD, EU uses EUR,

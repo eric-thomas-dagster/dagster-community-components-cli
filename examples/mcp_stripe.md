@@ -1,5 +1,5 @@
 # Stripe MCP — materialize Stripe operations as Dagster assets
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Wire `MCPToolCallComponent` at Stripe's official MCP server (`https://mcp.stripe.com/`). Every tool Stripe MCP exposes — customers, charges, balances, payment links, subscriptions — becomes a first-class Dagster asset with lineage, materialization history, and freshness.
 

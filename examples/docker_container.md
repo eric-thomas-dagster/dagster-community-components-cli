@@ -1,5 +1,5 @@
 # Docker container as a Dagster asset
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Run any container image as a first-class Dagster asset via `dagster-docker`. No SaaS, no auth, no managed cluster — just the local Docker daemon. Right when the work needs an isolated runtime (a specific Python version, system libs, ML model weights, vendored CLI tools) but you don't want to build a Dockerfile into every Dagster project.
 

@@ -1,5 +1,5 @@
 # Azure Synapse Serverless SQL — query parquet without compute
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **No Synapse-specific component needed.** This demo proves the killer
 Synapse Serverless SQL workflow works with the generic registry components

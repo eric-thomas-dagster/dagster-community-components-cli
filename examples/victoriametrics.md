@@ -1,5 +1,5 @@
 # VictoriaMetrics — DataFrame → VM → PromQL read-back (live, Docker)
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Single-container Docker walkthrough. Spins up `victoriametrics/victoria-metrics:latest` locally, scaffolds a Dagster project that generates IoT sensor time-series, ingests it into VictoriaMetrics via the Prometheus text-format import endpoint, and reads back a PromQL aggregate.
 

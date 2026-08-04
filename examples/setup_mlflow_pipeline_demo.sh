@@ -241,9 +241,6 @@ export MLFLOW_TRACKING_URI  # must be visible to dg
 uv run dg check defs 2>&1 | tail -8 || fail "dg check defs failed"
 ok "Definitions validated"
 
-# ── Dagster+ Serverless prep ────────────────────────────────────────────────
-# Make the project deployable via `dagster-cloud serverless deploy-docker`.
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/serverless_prep.sh | bash
 
 # ── Final message ───────────────────────────────────────────────────────────
 cat <<EOF

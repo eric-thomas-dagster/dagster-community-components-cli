@@ -1,5 +1,5 @@
 # ADLS Inbox demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Sensor-driven inbox-to-warehouse — the most common Azure data flow customers
 ask about. An upstream system drops files into an ADLS Gen2 container; Dagster

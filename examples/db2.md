@@ -1,5 +1,5 @@
 # IBM Db2 end-to-end — Db2 Community Edition in Docker
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Read/write IBM Db2 via the new `db2_resource` + the generic SQL component family. Same components target the full Db2 estate unchanged — only `host` / `port` / `ssl` change:
 

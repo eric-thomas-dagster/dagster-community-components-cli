@@ -1,5 +1,5 @@
 # Planned Catalog Agent — state-backed catalog_agent (LLM plans once, real assets forever)
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Component (new):** `PlannedCatalogAgentComponent` — the `dg.StateBackedComponent` variant of [`CatalogAgentComponent`](./catalog_agent.md). Runs the LLM planner + real materializations ONCE at prepare time (`write_state_to_path`) and caches the full plan to Dagster's native state store. Every subsequent load reads the cache and emits REAL Dagster assets — zero LLM cost per run.
 

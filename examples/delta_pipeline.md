@@ -1,5 +1,5 @@
 # Delta Lake → Dagster pipeline blueprint
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Read from and write back to **existing Delta Lake tables** owned by other engines — Spark, Databricks, Trino, Flink — using `delta-rs` (no Spark / no JVM).
 

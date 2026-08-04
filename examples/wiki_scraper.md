@@ -1,5 +1,5 @@
 # Web scraper demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Fetches a Wikipedia page (raw HTML, no API), extracts every <table> on
 the page, picks the first big one, writes it to CSV. Demonstrates the

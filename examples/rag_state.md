@@ -1,5 +1,5 @@
 # RAG as State, not as a Pipeline
-> ⚠️ **Dagster+ Serverless:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
+> ⚠️ **Dagster+ Serverless / Hybrid:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
 
 The three components in this walkthrough exist to turn a RAG stack from "a pipeline that occasionally writes tables" into "a set of stateful entities that evolve over time, each with a materialization history, a freshness policy, a quality check, and a rollback path."
 

@@ -1,5 +1,5 @@
 # dbt + LLM + dbt — LangChain in the Middle of Your dbt DAG
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Components:**
 - `dagster_dbt.DbtProjectComponent` (official) — used twice with different `select` filters + explicit `op.name`

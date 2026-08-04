@@ -1,5 +1,5 @@
 # Agentic Router — Plain Dagster (No Components, No YAML)
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 The **same asset graph** as [`agentic_router.md`](agentic_router.md), rebuilt in **raw Dagster Python** — no components, no YAML, no framework layer. Same runtime behavior, same UI, same partition scheme, same sensor, same gate.
 

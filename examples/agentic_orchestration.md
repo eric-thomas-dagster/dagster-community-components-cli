@@ -1,5 +1,5 @@
 # Agentic Orchestration — Agents + Humans + Legacy Systems
-> ⚠️ **Dagster+ Serverless:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
+> ⚠️ **Dagster+ Serverless / Hybrid:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
 
 The full-stack pattern: **multiple autonomous AI agents, a human-in-the-loop gate, and post-back to legacy systems, all in one graph**. Every step is an asset. Every asset is partitioned per case. Every decision — agent classification, agent draft, human approve/reject — is a replayable materialization with metadata.
 

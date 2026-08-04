@@ -1,5 +1,5 @@
 # Image Transform — synthetic PNGs → resized WebP thumbnails
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end** (local, no external services). 3 synthetic PNGs (640×640) → 3 WebP thumbnails (128px max-dimension, q=80) on disk.
 

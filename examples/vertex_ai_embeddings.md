@@ -1,5 +1,5 @@
 # Vertex AI Text Embeddings — text → 768-dim vectors
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Validated end-to-end against real Vertex AI.** 5 product descriptions →
 5 × 768-dim embeddings via `text-embedding-004`, materialized via the

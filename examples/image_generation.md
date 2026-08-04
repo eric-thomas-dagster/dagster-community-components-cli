@@ -1,5 +1,5 @@
 # Image Generation — LiteLLM row-wise images across many providers
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Component:** `litellm_image_generation` (+ `synthetic_data_generator` as upstream prompts)
 

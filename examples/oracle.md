@@ -1,5 +1,5 @@
 # Oracle Database end-to-end — local Docker, no license, no Instant Client
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 Read/write Oracle via the new `oracle_resource` + the generic SQL component family. Same components target the full Oracle estate unchanged — only `host` / `port` / `service_name` change:
 

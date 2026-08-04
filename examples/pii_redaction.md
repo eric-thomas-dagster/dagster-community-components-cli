@@ -1,5 +1,5 @@
 # PII Detection + LLM Redaction — GDPR/HIPAA-Grade Compliance Pipeline
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 **Components:** `synthetic_data_generator`, `pii_detector`, `pii_redactor`, `langchain_chain_asset` — all existing, composed via YAML.
 

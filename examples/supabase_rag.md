@@ -1,5 +1,5 @@
 # Supabase pgvector RAG — Real RAG in ~200 lines of YAML
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 **Components:**
 - `TextEmbeddingAssetComponent` (new — `assets/ai/text_embedding_asset`)

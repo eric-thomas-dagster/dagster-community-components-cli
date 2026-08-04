@@ -1,5 +1,5 @@
 # Synthetic time-series — registry-native generator
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 A 3-component pipeline that generates 30 days of synthetic hourly metrics
 via `time_series_generator` (no external data, no upstream — pure

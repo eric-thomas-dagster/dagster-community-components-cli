@@ -1,5 +1,5 @@
 # Precisely Connect ETL — external asset + status sensor
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Bridges a [Precisely Connect ETL](https://www.precisely.com/product/precisely-connect/connect) (formerly Syncsort DMX / DMExpress) job with Dagster as a **declare-only external asset** that gets materialization events from a paired **status-polling sensor**. Precisely owns the schedule + execution; Dagster owns the catalog + observability.
 

@@ -1,5 +1,5 @@
 # Store Coverage demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Builds service-area zones around 5 retail stores, finds which of 100
 customers fall inside each zone, computes per-store coverage stats,

@@ -1,5 +1,5 @@
 # Apache Pulsar — ingest, monitor, observe (Docker)
-> ❌ **Dagster+ Serverless:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
 
 **Components:** `pulsar_to_database_asset`, `pulsar_monitor`, `pulsar_observation_sensor`, `python_callable_job`
 

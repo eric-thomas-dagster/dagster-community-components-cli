@@ -1,5 +1,5 @@
 # Window Calculation demo
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
 Synthetic 3-symbol × 10-day stock-price ticks → one `window_calculation`
 component computes **every supported window function** in one pass.
