@@ -1,6 +1,6 @@
 # Titanic Complete demo
+> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
 
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`. No secrets, no external services.
 
 A larger companion to the focused titanic_demo / titanic_etl_demo /
 titanic_logreg_demo / titanic_quality_demo demos. This one walks the

@@ -1,5 +1,5 @@
 # End-to-End RAG in Dagster
-> ✅ **Dagster+ Serverless:** deploys as-is via `dagster-cloud serverless deploy-docker`.
+> ⚠️ **Dagster+ Serverless:** deploys with modifications — emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path.
 
 Two parallel RAG paths over the same 5-doc corpus, in one Dagster project. Runs no-key by default; drop in an OpenAI-compatible key to enable the final LLM answer step.
 

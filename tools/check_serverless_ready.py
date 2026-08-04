@@ -59,6 +59,15 @@ NEEDS_MODS_PATTERNS = [
     # is a candidate — but this is hard to detect from just the setup script text.
 ]
 
+# Setup scripts that emit `$PROJECT_ABS` inside a heredoc-generated defs.yaml
+# bake a local scaffold-time absolute path into the project. That path doesn't
+# exist on Serverless. Detect the pattern by looking for $PROJECT_ABS inside
+# any cat > ... <<EOF ... EOF block (or its many quoting variants).
+HEREDOC_ABS_PATH_PATTERN = re.compile(
+    r"cat\s*>[^\n]*<<\s*['\"]?\w+['\"]?\n(.*?)^\w+\s*$",
+    re.MULTILINE | re.DOTALL,
+)
+
 BUNDLED_FIXTURE_PATTERNS = [
     # Signals that project bundles its own data → OK for Serverless
     r"seeds/[a-z_]+\.csv",
@@ -83,6 +92,15 @@ def scan(script: Path) -> dict:
         if re.search(pat, text):
             hits_mods.append(reason)
 
+    # Look for $PROJECT_ABS / $(pwd) baked into an emitted defs.yaml — these
+    # expand to scaffold-time local paths that don't exist on Serverless.
+    for heredoc_body in HEREDOC_ABS_PATH_PATTERN.findall(text):
+        # Only worry about heredocs that look like they emit YAML (defs.yaml or profiles.yml).
+        if "type: dagster" in heredoc_body or "attributes:" in heredoc_body or "profile:" in heredoc_body:
+            if re.search(r"\$PROJECT_ABS|\$\(pwd\)|\$\{PROJECT_ABS\}", heredoc_body):
+                hits_mods.append("emits absolute local path ($PROJECT_ABS) into defs.yaml — Serverless container won't have that path")
+                break
+
     if hits_local:
         return {"status": "local_only", "signals": hits_local, "why": "container/server dependency"}
     if hits_mods:
@@ -106,13 +124,26 @@ def already_badged(md_path: Path) -> bool:
     return False
 
 
-def apply_badge(md_path: Path, status: str, why: str | None) -> bool:
-    if not md_path.exists() or already_badged(md_path):
+def apply_badge(md_path: Path, status: str, why: str | None, overwrite: bool = False) -> bool:
+    if not md_path.exists():
         return False
     if status not in BADGES:
         return False
+    if already_badged(md_path) and not overwrite:
+        return False
     text = md_path.read_text()
     lines = text.splitlines(keepends=True)
+    # If overwriting, drop any existing badge block (line matching '> ... Dagster+ Serverless: ...' plus one following blank).
+    if already_badged(md_path):
+        new_lines = []
+        skipped = False
+        for ln in lines:
+            if not skipped and "Dagster+ Serverless:" in ln and ln.lstrip().startswith(">"):
+                skipped = True
+                # Also skip a trailing blank line if present.
+                continue
+            new_lines.append(ln)
+        lines = new_lines
     # Find the H1
     h1_i = next((i for i, ln in enumerate(lines) if ln.startswith("# ")), None)
     if h1_i is None:
@@ -131,6 +162,7 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--json", action="store_true", help="Machine-readable report.")
     ap.add_argument("--apply", action="store_true", help="Auto-add badges for confident classifications.")
+    ap.add_argument("--overwrite", action="store_true", help="With --apply, also overwrite existing badges to match current classification (useful when the classifier improves).")
     args = ap.parse_args()
 
     setup_scripts = sorted(EXAMPLES.glob("setup_*_demo.sh"))
@@ -149,13 +181,13 @@ def main():
     if args.apply:
         added = 0
         for r in results:
-            if r["already_badged"]:
+            if r["already_badged"] and not args.overwrite:
                 continue
             if r["status"] in ("ready", "local_only", "needs_mods"):
                 md_path = EXAMPLES / f"{r['demo']}.md"
-                if apply_badge(md_path, r["status"], r["why"]):
+                if apply_badge(md_path, r["status"], r["why"], overwrite=args.overwrite):
                     added += 1
-        print(f"applied {added} badges")
+        print(f"applied {added} badges (overwrite={args.overwrite})")
 
     if args.json:
         print(json.dumps(results, indent=2))
