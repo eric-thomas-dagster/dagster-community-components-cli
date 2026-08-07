@@ -1,10 +1,10 @@
 # hybrid_git_runner — Deploy once. Iterate with `git push`.
 
-> **⚠️ Status: DESIGN-VERIFIED, RUNTIME VERIFICATION IN PROGRESS.**
-> - Component subclass loads correctly (verified locally). ✓
-> - `deploy.sh` scaffolds + emits the right `deploy-docker` command shape (verified via dry-run). ✓
-> - Prebuilt image pushed to `ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest` (2026-08-07). ✓
-> - **Still pending**: no live Hybrid agent has been deployed against a test Dagster+ deployment yet — end-to-end `./deploy.sh` → `git push` → asset materializes flow is not yet verified. See [Testing this end-to-end](#testing-this-end-to-end) for the ~30 min one-time infra setup needed to close that gap.
+> **Status: DESIGN + IMAGE VERIFIED, LIVE HYBRID DEPLOY PENDING.**
+> - ✓ Component subclass loads correctly (verified locally).
+> - ✓ `deploy.sh` scaffolds + emits the right `deploy-docker` command shape (verified via dry-run).
+> - ✓ **Prebuilt runner image publicly available at `ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest`** — anonymous pull confirmed working 2026-08-07. Anyone can `./deploy.sh` (Mode 1) with no build, no push, no auth on their side.
+> - ⏳ Last gap: no live Hybrid agent has been deployed against a test Dagster+ deployment yet — end-to-end `./deploy.sh` → `git push` → asset materializes flow is not yet runtime-verified. See [Testing this end-to-end](#testing-this-end-to-end) for the ~30 min one-time infra setup needed to close that gap.
 
 **A "runner container" for Dagster+ Hybrid.** Deploy it ONCE to your Hybrid agent; from then on, iterate by pushing `.py` flows to a git repo the runner watches. No Docker rebuild per iteration. Same ergonomics as Prefect's Managed pool — you push code, the platform runs it.
 
@@ -239,6 +239,7 @@ cd hybrid_git_runner/
 
 - **Component subclass loads:** `HybridRunnerComponent(ScriptGithubComponent)` — inherits all fields, overrides `use_local=False` + `airflow_auto_install=False` + `prefect_auto_install=False`. ✓
 - **`deploy.sh` scaffolds + emits correct commands:** dry-run tested — all 3 modes emit the expected `dagster-cloud serverless deploy-docker ...` invocation. ✓
+- **Prebuilt runner image live at `ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest`** — public, anonymous `docker pull` verified working 2026-08-07. Includes fat data-eng deps: pandas + sqlalchemy + duckdb + boto3 + s3fs + gcsfs + adlfs + psycopg2 + pymysql + prefect + airflow. Image size 2.76 GB. Digest `sha256:264cd011...`. ✓
 - **`deploy-docker` command shape** — validated separately: same command shape shipped 7 locations to a private Dagster+ prod deployment on 2026-08-03 (Serverless projects with docker deploys).
 - **Live Hybrid deploy — NOT YET RUN.** See [Testing this end-to-end](#testing-this-end-to-end) above for what's needed. Blocker: no Hybrid agent running on any test Dagster+ deployment yet.
 
