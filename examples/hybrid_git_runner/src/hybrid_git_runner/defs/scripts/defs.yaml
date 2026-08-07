@@ -1,0 +1,16 @@
+type: hybrid_git_runner.hybrid_runner_component.HybridRunnerComponent
+attributes:
+  # All fields default from env vars. Set env vars on your Dagster+
+  # code location (Deployment settings → Environment variables) — same
+  # runner image works across prod / staging / dev / branch deployments
+  # via different env-var overrides per deployment.
+  #
+  # Env vars the base component reads (documented on ScriptGithubComponent):
+  #   SCRIPTS_REPO_URL     — HTTPS git repo (required)
+  #   SCRIPTS_REPO_BRANCH  — branch to track (default: main)
+  #   SCRIPTS_DIR          — subdir inside the repo (default: scripts)
+  #   GITHUB_TOKEN         — for private repos (optional)
+  #
+  # Any field below can be set here as a hard override, but env-var
+  # driven config is preferred so one image handles multi-deployment
+  # topology without image churn.
