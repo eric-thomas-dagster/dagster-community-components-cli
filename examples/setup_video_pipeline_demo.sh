@@ -25,6 +25,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas
@@ -58,7 +60,7 @@ cat > "src/$PKG/defs/sample_videos/defs.yaml" <<EOF
 type: $PKG.components.synthetic_video_generator.component.SyntheticVideoGeneratorComponent
 attributes:
   asset_name: sample_videos
-  output_dir: /tmp/video_demo_in
+  output_dir: out/video_demo_in
   samples: default
   group_name: ingest
 EOF
@@ -83,7 +85,7 @@ attributes:
   upstream_asset_key: sample_videos
   video_path_column: file_path
   video_id_column: clip_id
-  output_dir: /tmp/video_demo_frames
+  output_dir: out/video_demo_frames
   mode: fixed_count
   fixed_count: 5
   image_format: jpg
@@ -99,7 +101,7 @@ attributes:
   asset_name: video_audio
   upstream_asset_key: sample_videos
   video_path_column: file_path
-  output_dir: /tmp/video_demo_audio
+  output_dir: out/video_demo_audio
   target_format: wav
   sample_rate: 16000
   channels: 1
@@ -122,7 +124,7 @@ Materialize:
     uv run dg launch --assets '*'
 
 Inspect:
-    ls -la /tmp/video_demo_in/      # source MP4s
-    ls -la /tmp/video_demo_frames/  # 10 extracted JPEG frames
-    ls -la /tmp/video_demo_audio/   # extracted WAV audio tracks
+    ls -la $PROJECT_ABS/out/video_demo_in/      # source MP4s
+    ls -la $PROJECT_ABS/out/video_demo_frames/  # 10 extracted JPEG frames
+    ls -la $PROJECT_ABS/out/video_demo_audio/   # extracted WAV audio tracks
 MSG

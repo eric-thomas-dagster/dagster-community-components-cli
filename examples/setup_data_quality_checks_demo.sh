@@ -31,6 +31,7 @@ PROJECT_DIR="${1:-data-quality-checks-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pandera dagster-pandas
@@ -83,7 +84,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_csv
   upstream_asset_key: orders_raw
-  file_path: /tmp/dq_orders.csv
+  file_path: out/dq_orders.csv
   group_name: report
 EOF
 

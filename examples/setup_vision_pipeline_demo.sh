@@ -34,6 +34,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pillow anthropic openai
@@ -59,7 +61,7 @@ cat > "src/$PKG/defs/sample_images/defs.yaml" <<EOF
 type: $PKG.components.synthetic_image_generator.component.SyntheticImageGeneratorComponent
 attributes:
   asset_name: sample_images_df
-  output_dir: /tmp/vision_pipeline_images
+  output_dir: out/vision_pipeline_images
   samples: default
   group_name: ingest
 EOF
@@ -117,7 +119,7 @@ cat <<MSG
 >>> Setup complete.
 
 Asset graph:
-    sample_images_df          (3 synthetic PNGs in /tmp/vision_pipeline_images)
+    sample_images_df          (3 synthetic PNGs in $PROJECT_ABS/out/vision_pipeline_images)
           │
           ├── image_metadata      ← image_metadata_extractor (PIL)
           └── image_descriptions  ← vision_model (Anthropic Claude haiku)

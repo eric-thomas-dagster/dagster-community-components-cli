@@ -47,6 +47,7 @@ docker exec "$ORACLE_NAME" sh -c "echo 'SELECT 1 FROM dual;' | sqlplus -S system
 echo ">>> 3/5  Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
@@ -75,7 +76,7 @@ write_yaml() {
 write_yaml "local_parquet_io_manager" "type: $PKG.components.local_parquet_io_manager.component.LocalParquetIOManagerComponent
 attributes:
   resource_key: io_manager
-  base_dir: /tmp/oracle-demo-storage
+  base_dir: out/oracle-demo-storage
   create_dir: true"
 
 write_yaml "oracle_resource" "type: $PKG.components.oracle_resource.component.OracleResourceComponent

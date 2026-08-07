@@ -54,6 +54,8 @@ echo ">>> Pushgateway: $PUSHGATEWAY_URL  Prometheus: $PROMETHEUS_URL"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas prometheus_client requests
@@ -80,7 +82,7 @@ cat > "src/$PKG/defs/local_parquet_io_manager/defs.yaml" <<EOF
 type: $PKG.components.local_parquet_io_manager.component.LocalParquetIOManagerComponent
 attributes:
   resource_key: io_manager
-  base_dir: /tmp/prometheus-demo-storage
+  base_dir: out/prometheus-demo-storage
   create_dir: true
 EOF
 
@@ -145,7 +147,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: revenue_report
   upstream_asset_key: revenue_by_category
-  file_path: /tmp/prometheus_revenue_by_category.csv
+  file_path: out/prometheus_revenue_by_category.csv
   group_name: report
 EOF
 
@@ -166,7 +168,7 @@ Materialize (sleep 8s after first run for Prometheus to scrape pushgateway):
     uv run dg launch --assets '*revenue_report'            # query + report
 
 Verify:
-    head /tmp/prometheus_revenue_by_category.csv
+    head $PROJECT_ABS/out/prometheus_revenue_by_category.csv
     curl -s '$PROMETHEUS_URL/api/v1/query?query=orders_metric' | head
 
 Teardown:

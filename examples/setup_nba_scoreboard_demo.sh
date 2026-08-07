@@ -19,6 +19,8 @@ PROJECT_DIR="${1:-nba-scoreboard-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -71,7 +73,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: scoreboard_csv
   upstream_asset_key: nba_scoreboard_summary
-  file_path: /tmp/nba_scoreboard.csv
+  file_path: out/nba_scoreboard.csv
   include_index: false
   group_name: sink
 EOF
@@ -145,5 +147,5 @@ Then enable the sensor in the UI:
     # NOT on every server timestamp tick. The RunRequest is tagged with
     # hash_strategy=json_path + a digest_prefix so you can see why it fired.
 
-Output: /tmp/nba_scoreboard.csv — game_id, home/away teams + scores, status.
+Output: $PROJECT_ABS/out/nba_scoreboard.csv — game_id, home/away teams + scores, status.
 MSG

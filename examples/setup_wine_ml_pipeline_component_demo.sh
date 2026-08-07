@@ -18,6 +18,8 @@ PROJECT_DIR="${1:-wine-ml-pipeline-component-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -66,9 +68,9 @@ attributes:
   outputs:
     assets: [preds, imp, cv]
     csv_sinks:
-      - {from: preds, path: /tmp/wine_predictions.csv}
-      - {from: imp,   path: /tmp/wine_importance.csv}
-      - {from: cv,    path: /tmp/wine_cv.csv}
+      - {from: preds, path: out/wine_predictions.csv}
+      - {from: imp,   path: out/wine_importance.csv}
+      - {from: cv,    path: out/wine_cv.csv}
 YAMLEOF
 
 echo ""
@@ -80,6 +82,6 @@ echo "        → http://localhost:3000 — 3 asset nodes (wine_ml_preds, _imp, 
 echo ""
 echo "Or headless:"
 echo "    cd $PROJECT_DIR && uv run dg launch --assets '*'"
-echo "    ls -la /tmp/wine_*.csv"
+echo "    ls -la $PROJECT_ABS/out/wine_*.csv"
 echo ""
 echo "See examples/wine_ml_pipeline_component.md for the full walkthrough."

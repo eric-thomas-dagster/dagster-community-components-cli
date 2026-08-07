@@ -15,7 +15,7 @@
 #   lineage_graph_extractor → lineage_graph (canonical asset payload)
 #                              │
 #                              ▼
-#                       lineage_to_file → /tmp/dagster_lineage.json
+#                       lineage_to_file → $PROJECT_ABS/out/dagster_lineage.json
 #
 # CHANGE DETECTION
 #   The lineage sink stores the upstream payload_hash in its asset
@@ -33,6 +33,8 @@ PROJECT_DIR="${1:-lineage-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pyarrow
@@ -65,7 +67,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_csv
   upstream_asset_key: orders_raw
-  file_path: /tmp/orders_export.csv
+  file_path: out/orders_export.csv
   description: "Orders exported to CSV (silver layer)"
   group_name: silver
 EOF
@@ -86,7 +88,7 @@ type: $PKG.components.lineage_to_file.component.LineageToFileComponent
 attributes:
   asset_name: lineage_in_local_json
   upstream_asset_key: lineage_graph
-  catalog_url: /tmp/dagster_lineage.json
+  catalog_url: out/dagster_lineage.json
   api_token_env: ""
   only_push_on_change: true
 EOF
@@ -102,7 +104,7 @@ Materialize (with persistent DAGSTER_HOME so change detection persists):
     uv run dg launch --assets '*'
 
 Inspect the JSON output:
-    python3 -c "import json; d=json.load(open('/tmp/dagster_lineage.json')); print(f\"nodes={d['sync_metadata']['total_nodes']}, edges={d['sync_metadata']['total_edges']}, hash={d['sync_metadata']['payload_hash']}\")"
+    python3 -c "import json; d=json.load(open('$PROJECT_ABS/out/dagster_lineage.json')); print(f\"nodes={d['sync_metadata']['total_nodes']}, edges={d['sync_metadata']['total_edges']}, hash={d['sync_metadata']['payload_hash']}\")"
 
 Verify change detection — re-materialize lineage_in_local_json:
     uv run dg launch --assets '+lineage_in_local_json' 2>&1 | grep "skipping push to file"

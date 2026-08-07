@@ -18,13 +18,15 @@ PROJECT_DIR="${1:-ocsf-security-lake-demo}"
 echo ">>> Scaffolding"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pyarrow tabulate
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 
-mkdir -p /tmp/ocsf_demo
+mkdir -p $PROJECT_ABS/out/ocsf_demo
 # Synthetic audit events now generated 100%-components via parametric_data_generator.
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
@@ -118,7 +120,7 @@ type: $PKG.components.dataframe_to_parquet.component.DataframeToParquetComponent
 attributes:
   asset_name: ocsf_parquet
   upstream_asset_key: dagster_plus_audit_ocsf
-  file_path: /tmp/ocsf_demo/dagster_plus_audit_ocsf.parquet
+  file_path: out/ocsf_demo/dagster_plus_audit_ocsf.parquet
   compression: snappy
   group_name: ocsf_demo
 EOF
@@ -129,10 +131,10 @@ cat <<MSG
 Materialize: cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Output:
-  /tmp/ocsf_demo/dagster_plus_audit_ocsf.parquet (OCSF rows)
+  $PROJECT_ABS/out/ocsf_demo/dagster_plus_audit_ocsf.parquet (OCSF rows)
 
 Inspect:
-  uv run python -c "import pandas as pd; df = pd.read_parquet('/tmp/ocsf_demo/dagster_plus_audit_ocsf.parquet'); print(df['class_uid'].value_counts()); print(df.head())"
+  uv run python -c "import pandas as pd; df = pd.read_parquet('$PROJECT_ABS/out/ocsf_demo/dagster_plus_audit_ocsf.parquet'); print(df['class_uid'].value_counts()); print(df.head())"
 
 Expected: rows mapped to class_uid 3002 (Authentication) for LOG_IN/LOG_OUT,
 3005 (Account Change) for USER_INVITED/TOKEN_CREATED, 3006 (User Access) for

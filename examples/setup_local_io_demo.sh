@@ -10,6 +10,8 @@ PROJECT_DIR="${1:-local-io-demo}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas duckdb polars deltalake pyiceberg pylance pyarrow
@@ -26,8 +28,8 @@ for c in local_csv_io_manager local_json_io_manager local_parquet_io_manager \
   $CLI add $c --auto-install || echo "FAILED: $c"
 done
 
-echo ">>> Pre-creating seed CSV at /tmp/local_io_demo_seed.csv (avoid asset-dep race)"
-cat > /tmp/local_io_demo_seed.csv <<'CSV'
+echo ">>> Pre-creating seed CSV at $PROJECT_ABS/out/local_io_demo_seed.csv (avoid asset-dep race)"
+cat > $PROJECT_ABS/out/local_io_demo_seed.csv <<'CSV'
 id,name,amount
 1,Alice,100.0
 2,Bob,200.0
@@ -47,7 +49,7 @@ import dagster as dg
 @dg.asset(group_name="ingest")
 def seed_csv_file() -> str:
     """Seeder: write a CSV that dataframe_from_csv can read."""
-    out = "/tmp/local_io_demo_seed.csv"
+    out = "out/local_io_demo_seed.csv"
     pd.DataFrame({
         "id": [1, 2, 3, 4, 5],
         "name": ["Alice", "Bob", "Carol", "Dave", "Eve"],
@@ -60,7 +62,7 @@ def seed_csv_file() -> str:
 def seed_duckdb() -> str:
     """Seeder: write a DuckDB file with a sample table for duckdb_query_reader."""
     import duckdb
-    path = "/tmp/local_io_demo.duckdb"
+    path = "out/local_io_demo.duckdb"
     if os.path.exists(path):
         os.remove(path)
     con = duckdb.connect(path)
@@ -99,40 +101,40 @@ write_yaml() {
 write_yaml "local_csv_io_manager" "type: $PKG.components.local_csv_io_manager.component.LocalCsvIOManagerComponent
 attributes:
   resource_key: csv_io
-  base_dir: /tmp/local_io_demo/csv
+  base_dir: out/local_io_demo/csv
   create_dir: true"
 
 write_yaml "local_json_io_manager" "type: $PKG.components.local_json_io_manager.component.LocalJsonIOManagerComponent
 attributes:
   resource_key: json_io
-  base_dir: /tmp/local_io_demo/json
+  base_dir: out/local_io_demo/json
   create_dir: true"
 
 write_yaml "local_parquet_io_manager" "type: $PKG.components.local_parquet_io_manager.component.LocalParquetIOManagerComponent
 attributes:
   resource_key: parquet_io
-  base_dir: /tmp/local_io_demo/parquet
+  base_dir: out/local_io_demo/parquet
   create_dir: true"
 
 write_yaml "duckdb_polars_io_manager" "type: $PKG.components.duckdb_polars_io_manager.component.DuckDBPolarsIOManagerComponent
 attributes:
   resource_key: duckdb_polars_io
-  database: /tmp/local_io_demo/duckdb_polars.duckdb"
+  database: out/local_io_demo/duckdb_polars.duckdb"
 
 write_yaml "polars_io_manager" "type: $PKG.components.polars_io_manager.component.PolarsIOManagerComponent
 attributes:
   resource_key: polars_io
-  base_dir: /tmp/local_io_demo/polars"
+  base_dir: out/local_io_demo/polars"
 
 write_yaml "delta_lake_io_manager" "type: $PKG.components.delta_lake_io_manager.component.DeltaLakeIOManagerComponent
 attributes:
   resource_key: delta_io
-  root_uri: /tmp/local_io_demo/delta"
+  root_uri: $PROJECT_ABS/out/local_io_demo/delta"
 
 write_yaml "deltalake_polars_io_manager" "type: $PKG.components.deltalake_polars_io_manager.component.DeltaLakePolarsIOManagerComponent
 attributes:
   resource_key: delta_polars_io
-  root_uri: /tmp/local_io_demo/delta_polars"
+  root_uri: $PROJECT_ABS/out/local_io_demo/delta_polars"
 
 write_yaml "iceberg_io_manager" "type: $PKG.components.iceberg_io_manager.component.IcebergIOManagerComponent
 attributes:
@@ -143,13 +145,13 @@ attributes:
 write_yaml "lance_io_manager" "type: $PKG.components.lance_io_manager.component.LanceIOManagerComponent
 attributes:
   resource_key: lance_io
-  base_path: /tmp/local_io_demo/lance"
+  base_path: out/local_io_demo/lance"
 
 # --- Source/sink components in active round-trips ---
 write_yaml "dataframe_from_csv" "type: $PKG.components.dataframe_from_csv.component.DataframeFromCsvComponent
 attributes:
   asset_name: csv_data
-  file_path: /tmp/local_io_demo_seed.csv
+  file_path: out/local_io_demo_seed.csv
   deps:
     - seed_csv_file
   group_name: round_trip"
@@ -157,7 +159,7 @@ attributes:
 write_yaml "duckdb_query_reader" "type: $PKG.components.duckdb_query_reader.component.DuckDBQueryReaderComponent
 attributes:
   asset_name: duckdb_query_result
-  database_path: /tmp/local_io_demo.duckdb
+  database_path: out/local_io_demo.duckdb
   query: 'SELECT category, SUM(amount) AS total FROM sample GROUP BY category'
   deps:
     - seed_duckdb
@@ -167,7 +169,7 @@ write_yaml "duckdb_table_writer" "type: $PKG.components.duckdb_table_writer.comp
 attributes:
   asset_name: orders_in_duckdb
   upstream_asset_key: writer_input_df
-  database_path: /tmp/local_io_demo_writer.duckdb
+  database_path: out/local_io_demo_writer.duckdb
   table_name: orders
   write_mode: replace
   group_name: round_trip"

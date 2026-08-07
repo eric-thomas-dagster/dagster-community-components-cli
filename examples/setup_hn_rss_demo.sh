@@ -17,6 +17,8 @@ PROJECT_DIR="${1:-hn-rss-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -90,7 +92,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: feed_report
   upstream_asset_key: feed_clean
-  file_path: /tmp/hn_frontpage.csv
+  file_path: out/hn_frontpage.csv
   include_index: false
   columns: [title, link]
   group_name: sink
@@ -104,9 +106,9 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/hn_frontpage.csv — top stories from the Hacker News
+Output: $PROJECT_ABS/out/hn_frontpage.csv — top stories from the Hacker News
 front-page feed. Refresh the run any time to get the latest set.
 
 Inspect:
-    head -10 /tmp/hn_frontpage.csv
+    head -10 $PROJECT_ABS/out/hn_frontpage.csv
 MSG

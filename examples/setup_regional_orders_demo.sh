@@ -17,6 +17,8 @@ PROJECT_DIR="${1:-regional-orders-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -25,7 +27,7 @@ uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — bre
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 echo ">>> Generating three regional CSVs (different column sets on purpose)"
-cat > /tmp/orders_na.csv <<'EOF'
+cat > $PROJECT_ABS/out/orders_na.csv <<'EOF'
 order_id,customer_id,amount_usd,region
 NA-001,c_2001,89.99,north_america
 NA-002,c_2002,142.50,north_america
@@ -33,7 +35,7 @@ NA-003,c_2003,56.00,north_america
 NA-004,c_2004,310.75,north_america
 EOF
 
-cat > /tmp/orders_eu.csv <<'EOF'
+cat > $PROJECT_ABS/out/orders_eu.csv <<'EOF'
 order_id,customer_id,amount_eur,region
 EU-101,c_3101,72.30,europe
 EU-102,c_3102,118.40,europe
@@ -42,7 +44,7 @@ EU-104,c_3104,205.10,europe
 EU-105,c_3105,67.85,europe
 EOF
 
-cat > /tmp/orders_apac.csv <<'EOF'
+cat > $PROJECT_ABS/out/orders_apac.csv <<'EOF'
 order_id,customer_id,amount_local,tax_rate,region
 APAC-201,c_4201,8500.00,0.10,apac
 APAC-202,c_4202,12300.00,0.10,apac
@@ -67,7 +69,7 @@ cat > "src/$PKG/defs/orders_na/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: orders_na
-  file_path: /tmp/orders_na.csv
+  file_path: out/orders_na.csv
   description: North America regional order extract (USD)
   group_name: ingest
 EOF
@@ -76,7 +78,7 @@ cat > "src/$PKG/defs/orders_eu/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: orders_eu
-  file_path: /tmp/orders_eu.csv
+  file_path: out/orders_eu.csv
   description: Europe regional order extract (EUR)
   group_name: ingest
 EOF
@@ -85,7 +87,7 @@ cat > "src/$PKG/defs/orders_apac/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: orders_apac
-  file_path: /tmp/orders_apac.csv
+  file_path: out/orders_apac.csv
   description: APAC regional order extract (local currency + tax_rate)
   group_name: ingest
 EOF
@@ -108,7 +110,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_global_report
   upstream_asset_key: orders_global
-  file_path: /tmp/orders_global.csv
+  file_path: out/orders_global.csv
   include_index: false
   group_name: sink
 EOF
@@ -124,10 +126,10 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/orders_global.csv — 12 orders across 3 regions, with the
+Output: $PROJECT_ABS/out/orders_global.csv — 12 orders across 3 regions, with the
 column union of all three sources (NA's amount_usd, EU's amount_eur,
 APAC's amount_local + tax_rate). Missing values are NaN by region.
 
 Inspect:
-    cat /tmp/orders_global.csv
+    cat $PROJECT_ABS/out/orders_global.csv
 MSG

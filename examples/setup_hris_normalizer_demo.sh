@@ -26,6 +26,8 @@ PROJECT_DIR="${1:-hris-normalizer-demo}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas
@@ -109,7 +111,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: employees_normalized_csv
   upstream_asset_key: employees_normalized
-  file_path: /tmp/employees_normalized.csv
+  file_path: out/employees_normalized.csv
   include_index: false
   description: CSV export of the normalized employee table.
   group_name: sink
@@ -124,12 +126,12 @@ Asset graph:
           │
           └── employees_normalized   ← hris_normalizer (canonical schema)
                   │
-                  └── employees_normalized_csv     ← /tmp/employees_normalized.csv
+                  └── employees_normalized_csv     ← $PROJECT_ABS/out/employees_normalized.csv
 
 Materialize all three:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
 Inspect:
-    cat /tmp/employees_normalized.csv
+    cat $PROJECT_ABS/out/employees_normalized.csv
 MSG

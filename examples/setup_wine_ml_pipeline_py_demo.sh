@@ -20,6 +20,8 @@ PROJECT_DIR="${1:-wine-ml-pipeline-py-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -125,19 +127,19 @@ components = [
     DataframeToCsvComponent(
         asset_name="predictions_report",
         upstream_asset_key="wine_predictions",
-        file_path="/tmp/wine_predictions.csv",
+        file_path="out/wine_predictions.csv",
         group_name="sink",
     ),
     DataframeToCsvComponent(
         asset_name="importance_report",
         upstream_asset_key="wine_feature_importance",
-        file_path="/tmp/wine_importance.csv",
+        file_path="out/wine_importance.csv",
         group_name="sink",
     ),
     DataframeToCsvComponent(
         asset_name="cv_report",
         upstream_asset_key="wine_cv_scores",
-        file_path="/tmp/wine_cv.csv",
+        file_path="out/wine_cv.csv",
         group_name="sink",
     ),
 ]
@@ -155,6 +157,6 @@ echo "        → http://localhost:3000 — click Materialize all"
 echo ""
 echo "Or headless:"
 echo "    cd $PROJECT_DIR && uv run dg launch --assets '*'"
-echo "    ls -la /tmp/wine_*.csv"
+echo "    ls -la $PROJECT_ABS/out/wine_*.csv"
 echo ""
 echo "See examples/wine_ml_pipeline_py.md for the full walkthrough."

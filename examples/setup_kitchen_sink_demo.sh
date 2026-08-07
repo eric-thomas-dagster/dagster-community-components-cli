@@ -36,6 +36,8 @@ PROJECT_DIR="${1:-kitchen-sink-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -289,7 +291,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: revenue_by_category_report
   upstream_asset_key: revenue_by_category
-  file_path: /tmp/kitchen_sink_revenue_by_category.csv
+  file_path: out/kitchen_sink_revenue_by_category.csv
   include_index: false
   group_name: sink
 EOF
@@ -299,7 +301,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: revenue_by_city_report
   upstream_asset_key: revenue_by_city
-  file_path: /tmp/kitchen_sink_revenue_by_city.csv
+  file_path: out/kitchen_sink_revenue_by_city.csv
   include_index: false
   group_name: sink
 EOF
@@ -309,7 +311,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: top_categories_report
   upstream_asset_key: top_categories
-  file_path: /tmp/kitchen_sink_top_categories.csv
+  file_path: out/kitchen_sink_top_categories.csv
   include_index: false
   group_name: sink
 EOF
@@ -319,7 +321,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: rfm_report
   upstream_asset_key: customer_rfm
-  file_path: /tmp/kitchen_sink_rfm.csv
+  file_path: out/kitchen_sink_rfm.csv
   include_index: false
   group_name: sink
 EOF
@@ -329,7 +331,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_recent_report
   upstream_asset_key: orders_recent
-  file_path: /tmp/kitchen_sink_orders_recent.csv
+  file_path: out/kitchen_sink_orders_recent.csv
   include_index: false
   group_name: sink
 EOF
@@ -362,13 +364,13 @@ Or open the UI to browse the lineage graph:
     cd $PROJECT_DIR && uv run dg dev
 
 Outputs (5 reports in /tmp):
-  /tmp/kitchen_sink_revenue_by_category.csv
-  /tmp/kitchen_sink_revenue_by_city.csv
-  /tmp/kitchen_sink_top_categories.csv
-  /tmp/kitchen_sink_rfm.csv
-  /tmp/kitchen_sink_orders_recent.csv
+  $PROJECT_ABS/out/kitchen_sink_revenue_by_category.csv
+  $PROJECT_ABS/out/kitchen_sink_revenue_by_city.csv
+  $PROJECT_ABS/out/kitchen_sink_top_categories.csv
+  $PROJECT_ABS/out/kitchen_sink_rfm.csv
+  $PROJECT_ABS/out/kitchen_sink_orders_recent.csv
 
 Inspect:
-    head /tmp/kitchen_sink_revenue_by_category.csv
-    head /tmp/kitchen_sink_rfm.csv
+    head $PROJECT_ABS/out/kitchen_sink_revenue_by_category.csv
+    head $PROJECT_ABS/out/kitchen_sink_rfm.csv
 MSG

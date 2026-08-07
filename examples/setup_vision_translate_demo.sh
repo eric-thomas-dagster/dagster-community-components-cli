@@ -5,10 +5,10 @@
 #   Two new GCP ML-API components chained end-to-end:
 #     vision_api_asset: detects labels + objects in 3 synthetic images
 #     translation_api_asset: translates the labels to es/fr/de/ja
-#     dataframe_to_csv: writes the result to /tmp/vision_translate.csv
+#     dataframe_to_csv: writes the result to $PROJECT_ABS/out/vision_translate.csv
 #
 # Asset graph:
-#   sample_images       (3 synthetic PNGs in /tmp/vision_translate_imgs/)
+#   sample_images       (3 synthetic PNGs in $PROJECT_ABS/out/vision_translate_imgs/)
 #         │
 #         └── image_analysis      ← vision_api_asset (LABEL + OBJECT + SAFE_SEARCH)
 #                  │
@@ -35,6 +35,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pillow google-auth google-cloud-vision google-cloud-translate
@@ -63,7 +65,7 @@ cat > "src/$PKG/defs/sample_images/defs.yaml" <<EOF
 type: $PKG.components.synthetic_image_generator.component.SyntheticImageGeneratorComponent
 attributes:
   asset_name: sample_images
-  output_dir: /tmp/vision_translate_imgs
+  output_dir: out/vision_translate_imgs
   samples: default
   group_name: ingest
 EOF
@@ -121,7 +123,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: analysis_csv
   upstream_asset_key: analysis_translated
-  file_path: /tmp/vision_translate.csv
+  file_path: out/vision_translate.csv
   include_index: false
   description: Vision labels + Translation outputs combined.
   group_name: sink
@@ -140,12 +142,12 @@ Asset graph:
                               │
                               └── analysis_translated  ← translation_api_asset (4 languages)
                                         │
-                                        └── analysis_csv  ← /tmp/vision_translate.csv
+                                        └── analysis_csv  ← $PROJECT_ABS/out/vision_translate.csv
 
 Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
 Inspect:
-    cat /tmp/vision_translate.csv
+    cat $PROJECT_ABS/out/vision_translate.csv
 MSG

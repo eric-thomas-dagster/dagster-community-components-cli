@@ -37,7 +37,7 @@ fi
 # in-memory: tasks start STOPPED; run/reload move them to RUNNING then
 # STOPPED after ~5s. Metrics are pseudo-random so the ingestion asset
 # shows different values on each poll.
-MOCK_DIR="/tmp/qlik-em-mock-src"
+MOCK_DIR="$PROJECT_ABS/qlik-em-mock-src"
 rm -rf "$MOCK_DIR" && mkdir -p "$MOCK_DIR"
 
 cat > "$MOCK_DIR/mock_em.py" <<'PYEOF'
@@ -210,6 +210,7 @@ echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 rm -rf "$PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 uv add --dev -q dagster-dg-cli dagster-webserver
 

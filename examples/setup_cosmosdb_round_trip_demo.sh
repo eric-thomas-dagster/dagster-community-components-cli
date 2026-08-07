@@ -58,6 +58,8 @@ fi
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas azure-cosmos
@@ -118,7 +120,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: high_value_orders_report
   upstream_asset_key: cosmos_high_value_orders
-  file_path: /tmp/cosmos_high_value_orders.csv
+  file_path: out/cosmos_high_value_orders.csv
   include_index: false
   group_name: report
 EOF
@@ -136,7 +138,7 @@ Verify in Cosmos:
         -g dagster-demo-rg -d demo -c orders --query-text 'SELECT VALUE COUNT(1) FROM c' 2>/dev/null
 
 Inspect the report:
-    head /tmp/cosmos_high_value_orders.csv
+    head $PROJECT_ABS/out/cosmos_high_value_orders.csv
 
 Teardown:
     az group delete --name dagster-demo-rg --yes

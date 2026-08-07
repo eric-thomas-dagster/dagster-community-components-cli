@@ -23,6 +23,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas
@@ -51,7 +53,7 @@ cat > "src/$PKG/defs/tones/defs.yaml" <<EOF
 type: $PKG.components.synthetic_audio_generator.component.SyntheticAudioGeneratorComponent
 attributes:
   asset_name: tones
-  output_dir: /tmp/audio_transform_demo_in
+  output_dir: out/audio_transform_demo_in
   samples: default
   sample_rate: 44100
   group_name: ingest
@@ -65,7 +67,7 @@ attributes:
   asset_name: tones_16k_mono
   upstream_asset_key: tones
   audio_path_column: file_path
-  output_dir: /tmp/audio_transform_demo_out
+  output_dir: out/audio_transform_demo_out
   target_format: wav
   sample_rate: 16000
   channels: 1
@@ -86,6 +88,6 @@ Materialize:
     uv run dg launch --assets '*'
 
 Inspect:
-    ls -la /tmp/audio_transform_demo_in/    # 44.1kHz source tones
-    ls -la /tmp/audio_transform_demo_out/   # 16kHz mono outputs (~36% the size)
+    ls -la $PROJECT_ABS/out/audio_transform_demo_in/    # 44.1kHz source tones
+    ls -la $PROJECT_ABS/out/audio_transform_demo_out/   # 16kHz mono outputs (~36% the size)
 MSG

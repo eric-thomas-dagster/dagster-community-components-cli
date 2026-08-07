@@ -47,6 +47,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas google-auth google-api-python-client google-genai
@@ -115,7 +117,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: doc_summaries_csv
   upstream_asset_key: doc_summaries
-  file_path: /tmp/doc_summaries.csv
+  file_path: out/doc_summaries.csv
   include_index: false
   description: CSV export of Doc id + title + summary.
   group_name: sink
@@ -132,14 +134,14 @@ Asset graph:
                   │
                   └── doc_summaries  ← gemini_llm (one-sentence summary)
                             │
-                            └── doc_summaries_csv  ← dataframe_to_csv (/tmp/doc_summaries.csv)
+                            └── doc_summaries_csv  ← dataframe_to_csv ($PROJECT_ABS/out/doc_summaries.csv)
 
 Materialize all four:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
 After running, inspect the CSV:
-    cat /tmp/doc_summaries.csv
+    cat $PROJECT_ABS/out/doc_summaries.csv
 
 Inspect:
     uv run dg dev   # http://localhost:3000

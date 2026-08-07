@@ -23,6 +23,8 @@ PROJECT_DIR="${1:-wine-ml-pipeline-ops-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps (no dagster-community-components — pure Dagster + ops)"
@@ -158,20 +160,20 @@ def wine_cv_scores(context: dg.AssetExecutionContext, wine_scaled: pd.DataFrame)
 
 @dg.asset(group_name="sink")
 def wine_predictions_csv(context: dg.AssetExecutionContext, wine_predictions: pd.DataFrame) -> None:
-    wine_predictions.to_csv("/tmp/wine_predictions.csv", index=False)
-    context.log.info(f"Wrote {len(wine_predictions)} rows to /tmp/wine_predictions.csv")
+    wine_predictions.to_csv("out/wine_predictions.csv", index=False)
+    context.log.info(f"Wrote {len(wine_predictions)} rows to $PROJECT_ABS/out/wine_predictions.csv")
 
 
 @dg.asset(group_name="sink")
 def wine_importance_csv(context: dg.AssetExecutionContext, wine_feature_importance: pd.DataFrame) -> None:
-    wine_feature_importance.to_csv("/tmp/wine_importance.csv", index=False)
-    context.log.info(f"Wrote {len(wine_feature_importance)} rows to /tmp/wine_importance.csv")
+    wine_feature_importance.to_csv("out/wine_importance.csv", index=False)
+    context.log.info(f"Wrote {len(wine_feature_importance)} rows to $PROJECT_ABS/out/wine_importance.csv")
 
 
 @dg.asset(group_name="sink")
 def wine_cv_csv(context: dg.AssetExecutionContext, wine_cv_scores: pd.DataFrame) -> None:
-    wine_cv_scores.to_csv("/tmp/wine_cv.csv", index=False)
-    context.log.info(f"Wrote {len(wine_cv_scores)} rows to /tmp/wine_cv.csv")
+    wine_cv_scores.to_csv("out/wine_cv.csv", index=False)
+    context.log.info(f"Wrote {len(wine_cv_scores)} rows to $PROJECT_ABS/out/wine_cv.csv")
 
 
 # ── Wire into one Definitions ──────────────────────────────────────────
@@ -199,7 +201,7 @@ echo "        → http://localhost:3000 — click Materialize all"
 echo ""
 echo "Or headless:"
 echo "    cd $PROJECT_DIR && uv run dg launch --assets '*'"
-echo "    ls -la /tmp/wine_*.csv"
+echo "    ls -la $PROJECT_ABS/out/wine_*.csv"
 echo ""
 echo "See examples/wine_ml_pipeline_ops.md for the full walkthrough +"
 echo "comparison with the other three variants."

@@ -19,6 +19,8 @@ PROJECT_DIR="${1:-store-coverage-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps (geopandas pulls shapely + pyproj)"
@@ -27,7 +29,7 @@ uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — bre
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 echo ">>> Generating the 5-store + 100-customer CSVs"
-cat > /tmp/stores.csv <<'EOF'
+cat > $PROJECT_ABS/out/stores.csv <<'EOF'
 store_id,name,lat,lng
 S001,Manhattan,40.7589,-73.9851
 S002,Brooklyn,40.6782,-73.9442
@@ -66,7 +68,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: stores_raw
-  file_path: /tmp/stores.csv
+  file_path: out/stores.csv
   description: 5 NYC-area retail stores
   group_name: ingest
 EOF
@@ -185,7 +187,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: coverage_report
   upstream_asset_key: coverage_per_store
-  file_path: /tmp/store_coverage.csv
+  file_path: out/store_coverage.csv
   include_index: false
   group_name: sink
 EOF
@@ -195,7 +197,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: grid_report
   upstream_asset_key: nyc_grid
-  file_path: /tmp/nyc_grid_cells.csv
+  file_path: out/nyc_grid_cells.csv
   include_index: false
   group_name: sink
 EOF
@@ -225,10 +227,10 @@ Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
 Outputs:
-  /tmp/store_coverage.csv  — customer count + total lifetime value per store
-  /tmp/nyc_grid_cells.csv  — 5km grid cells over NYC metro
+  $PROJECT_ABS/out/store_coverage.csv  — customer count + total lifetime value per store
+  $PROJECT_ABS/out/nyc_grid_cells.csv  — 5km grid cells over NYC metro
 
 Inspect:
-    cat /tmp/store_coverage.csv
-    head /tmp/nyc_grid_cells.csv
+    cat $PROJECT_ABS/out/store_coverage.csv
+    head $PROJECT_ABS/out/nyc_grid_cells.csv
 MSG

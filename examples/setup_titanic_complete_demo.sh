@@ -25,6 +25,8 @@ PROJECT_DIR="${1:-titanic-complete-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -223,7 +225,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: predictions_report
   upstream_asset_key: titanic_predictions
-  file_path: /tmp/titanic_predictions.csv
+  file_path: out/titanic_predictions.csv
   include_index: false
   group_name: sink
 EOF
@@ -233,7 +235,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: eda_report
   upstream_asset_key: titanic_eda
-  file_path: /tmp/titanic_eda.csv
+  file_path: out/titanic_eda.csv
   include_index: false
   group_name: sink
 EOF
@@ -243,7 +245,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: survivors_report
   upstream_asset_key: titanic_survivors
-  file_path: /tmp/titanic_survivors.csv
+  file_path: out/titanic_survivors.csv
   include_index: false
   group_name: sink
 EOF
@@ -275,9 +277,9 @@ Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
 Outputs:
-  /tmp/titanic_predictions.csv  — survival predictions from logistic regression
-  /tmp/titanic_eda.csv          — summary stats by passenger class
-  /tmp/titanic_survivors.csv    — only the rows where Survived=1
+  $PROJECT_ABS/out/titanic_predictions.csv  — survival predictions from logistic regression
+  $PROJECT_ABS/out/titanic_eda.csv          — summary stats by passenger class
+  $PROJECT_ABS/out/titanic_survivors.csv    — only the rows where Survived=1
 
 Companion to the focused titanic / titanic_etl / titanic_logreg /
 titanic_quality demos — this one shows them all combined in a single

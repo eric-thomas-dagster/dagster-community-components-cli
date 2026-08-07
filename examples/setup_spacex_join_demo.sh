@@ -19,6 +19,8 @@ PROJECT_DIR="${1:-spacex-join-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -98,7 +100,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: launches_report
   upstream_asset_key: launches_clean
-  file_path: /tmp/spacex_with_rockets.csv
+  file_path: out/spacex_with_rockets.csv
   include_index: false
   group_name: sink
 EOF
@@ -114,9 +116,9 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/spacex_with_rockets.csv — every SpaceX launch enriched with
+Output: $PROJECT_ABS/out/spacex_with_rockets.csv — every SpaceX launch enriched with
 its rocket's name and specs (height, mass).
 
 Inspect launches per rocket:
-    awk -F, 'NR>1{print \$5}' /tmp/spacex_with_rockets.csv | sort | uniq -c | sort -rn
+    awk -F, 'NR>1{print \$5}' $PROJECT_ABS/out/spacex_with_rockets.csv | sort | uniq -c | sort -rn
 MSG

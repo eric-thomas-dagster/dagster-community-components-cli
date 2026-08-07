@@ -123,6 +123,8 @@ docker exec "$PG_NAME" psql -U postgres -d "$PG_SRC_DB" -c "
 echo ">>> 3/6  Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
@@ -161,7 +163,7 @@ write_yaml "migration_plan_csv" "type: $PKG.components.dataframe_to_csv.componen
 attributes:
   asset_name: migration_plan_csv
   upstream_asset_key: legacy_db_inventory
-  file_path: /tmp/legacy_db_migration_plan.csv
+  file_path: out/legacy_db_migration_plan.csv
   group_name: migration_planning"
 
 # 3. Tables DDL — recreate the schema (types + PK + FK + NOT NULL + DEFAULT) on target
@@ -245,11 +247,11 @@ Verify the migration:
       UNION ALL SELECT 'v_orders_summary', COUNT(*) FROM raw.v_orders_summary;"
 
     # 3. Migration plan CSV (checklist of objects, including the ones requiring manual LLM-assisted rewrite)
-    cat /tmp/legacy_db_migration_plan.csv
+    cat $PROJECT_ABS/out/legacy_db_migration_plan.csv
 
 Stop + clean up:
     docker rm -f $PG_NAME
-    rm -f $DUCKDB_PATH /tmp/legacy_db_migration_plan.csv
+    rm -f $DUCKDB_PATH $PROJECT_ABS/out/legacy_db_migration_plan.csv
 
 Workflow B (data-first) — swap tables_ddl + truncate for:
   - database_replication with mode: full_refresh   (no upfront DDL needed)

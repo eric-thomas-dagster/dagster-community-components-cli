@@ -35,7 +35,7 @@ PROJECT_DIR="${1:-kafka-demo}"
 KAFKA_NAME=dg-kafka-demo
 KAFKA_PORT=9092
 TOPIC=events
-DB_PATH="/tmp/${PROJECT_DIR}.db"
+DB_PATH="$PROJECT_ABS/${PROJECT_DIR}.db"
 
 echo ">>> 1/6  Starting Kafka in Docker ($KAFKA_NAME:$KAFKA_PORT, KRaft mode)"
 docker rm -f "$KAFKA_NAME" >/dev/null 2>&1 || true
@@ -67,6 +67,7 @@ echo ">>> 3/6  Scaffolding Dagster project at $PROJECT_DIR"
 rm -f "$DB_PATH"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14

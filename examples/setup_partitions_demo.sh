@@ -36,6 +36,8 @@ PROJECT_DIR="${1:-partitions-demo}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas
@@ -106,7 +108,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_unpartitioned
   upstream_asset_key: tenant_orders
-  file_path: /tmp/partitions_demo/unpartitioned/orders.csv
+  file_path: out/partitions_demo/unpartitioned/orders.csv
   group_name: sinks
 EOF
 
@@ -117,7 +119,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_per_region
   upstream_asset_key: tenant_orders
-  file_path: /tmp/partitions_demo/per_region/orders.csv
+  file_path: out/partitions_demo/per_region/orders.csv
   partition_type: static
   partition_values: "us,eu,apac"
   partition_static_column: region
@@ -130,7 +132,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_per_day
   upstream_asset_key: tenant_orders
-  file_path: /tmp/partitions_demo/per_day/orders.csv
+  file_path: out/partitions_demo/per_day/orders.csv
   partition_type: daily
   partition_start: "2025-04-25"
   partition_date_column: order_date
@@ -143,7 +145,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_per_tenant
   upstream_asset_key: tenant_orders
-  file_path: /tmp/partitions_demo/per_tenant/orders.csv
+  file_path: out/partitions_demo/per_tenant/orders.csv
   partition_type: dynamic
   dynamic_partition_name: tenants
   partition_static_column: tenant_id
@@ -189,7 +191,7 @@ Three steps to run end-to-end:
   uv run dg launch --jobs tenant_backfill_job
 
 Inspect the outputs:
-  ls /tmp/partitions_demo/per_*
+  ls $PROJECT_ABS/out/partitions_demo/per_*
 
 Or open the asset graph:
   uv run dg dev   # http://localhost:3000

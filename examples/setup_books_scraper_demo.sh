@@ -16,6 +16,8 @@ PROJECT_DIR="${1:-books-scraper-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -67,7 +69,7 @@ type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: page_report
   upstream_asset_key: page_links
-  file_path: /tmp/books_page_{partition_key}.json
+  file_path: out/books_page_{partition_key}.json
   orient: records
   indent: 2
   partition_type: static
@@ -89,8 +91,8 @@ Loop all 5 pages headlessly:
 Or open the UI and pick partitions there:
     uv run dg dev   # http://localhost:3000
 
-Output: /tmp/books_page_<N>.json (one file per materialized partition).
+Output: $PROJECT_ABS/out/books_page_<N>.json (one file per materialized partition).
 
 Inspect:
-    cat /tmp/books_page_1.json | head -30
+    cat $PROJECT_ABS/out/books_page_1.json | head -30
 MSG

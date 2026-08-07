@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-passengers-forecast-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -75,7 +77,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: passengers_report
   upstream_asset_key: passengers_with_forecast
-  file_path: /tmp/passengers_forecast.csv
+  file_path: out/passengers_forecast.csv
   include_index: false
   group_name: sink
 EOF
@@ -91,12 +93,12 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/passengers_forecast.csv — 144 historical months (Jan 1949 to
+Output: $PROJECT_ABS/out/passengers_forecast.csv — 144 historical months (Jan 1949 to
 Dec 1960) plus 24 forecasted months (Jan 1961 to Dec 1962).
 
 Inspect:
-    head -3 /tmp/passengers_forecast.csv          # first historical rows
-    tail -25 /tmp/passengers_forecast.csv         # forecasted tail
+    head -3 $PROJECT_ABS/out/passengers_forecast.csv          # first historical rows
+    tail -25 $PROJECT_ABS/out/passengers_forecast.csv         # forecasted tail
 
 You'll see the model picks up the strong upward trend + 12-month seasonal
 cycle and projects two more years of growth.

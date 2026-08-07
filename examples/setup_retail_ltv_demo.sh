@@ -16,6 +16,8 @@ PROJECT_DIR="${1:-retail-ltv-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -88,7 +90,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: customer_ltv_report
   upstream_asset_key: customer_ltv
-  file_path: /tmp/customer_ltv.csv
+  file_path: out/customer_ltv.csv
   include_index: false
   group_name: sink
 EOF
@@ -104,13 +106,13 @@ Materialize headlessly (the ingest step downloads ~45MB on first run):
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/customer_ltv.csv — one row per qualifying customer with
+Output: $PROJECT_ABS/out/customer_ltv.csv — one row per qualifying customer with
 their predicted 12-month LTV plus historical aggregates.
 
 Inspect — top 5 highest-LTV customers:
     uv run python -c "
     import pandas as pd
-    df = pd.read_csv('/tmp/customer_ltv.csv')
+    df = pd.read_csv('$PROJECT_ABS/out/customer_ltv.csv')
     cols = ['customer_id','total_transactions','historical_ltv','predicted_total_ltv','value_segment']
     print(f'Customers scored: {len(df)}')
     print(df.sort_values('predicted_total_ltv', ascending=False).head(5)[cols].to_string(index=False))

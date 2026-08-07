@@ -10,7 +10,7 @@ COMMIT_SHA="692a8752"
 if ! command -v docker >/dev/null 2>&1; then echo "✗ docker required"; exit 1; fi
 if ! command -v uv >/dev/null 2>&1; then echo "✗ uv required"; exit 1; fi
 
-MOCK_DIR="/tmp/cognos-mock-src"
+MOCK_DIR="$PROJECT_ABS/cognos-mock-src"
 rm -rf "$MOCK_DIR" && mkdir -p "$MOCK_DIR"
 
 cat > "$MOCK_DIR/mock_cognos.py" <<'PYEOF'
@@ -111,6 +111,7 @@ echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 rm -rf "$PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 uv add --dev -q dagster-dg-cli dagster-webserver
 

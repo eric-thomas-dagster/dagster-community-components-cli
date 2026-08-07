@@ -11,6 +11,8 @@ PROJECT_DIR="${1:-transformations-demo}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas numpy jsonschema rapidfuzz duckdb duckdb-engine sqlalchemy
@@ -40,7 +42,7 @@ import pandas as pd
 import dagster as dg
 
 # DuckDB SQLAlchemy URL for sql_transform component
-os.environ.setdefault("SQL_DB_URL", "duckdb:////tmp/transformations_demo.duckdb")
+os.environ.setdefault("SQL_DB_URL", "duckdb:///$PROJECT_ABS/out/transformations_demo.duckdb")
 
 
 @dg.asset(group_name="ingest")
@@ -118,7 +120,7 @@ def orders_dim_existing() -> pd.DataFrame:
 @dg.asset(group_name="ingest")
 def orders_csv_file() -> str:
     """Write a CSV file to disk for file_transformer to read."""
-    out = "/tmp/transformations_demo_orders.csv"
+    out = "out/transformations_demo_orders.csv"
     pd.DataFrame({
         "order_id": [1, 2, 3, 4, 5],
         "customer": ["Alice", "Bob", "Carol", "Dave", "Eve"],
@@ -235,7 +237,7 @@ attributes:
   asset_name: orders_files
   upstream_asset_key: orders
   output_format: parquet
-  output_directory: /tmp/transformations_demo_out
+  output_directory: $PROJECT_ABS/out/transformations_demo_out
   group_name: transforms"
 
 # 10. find_replace

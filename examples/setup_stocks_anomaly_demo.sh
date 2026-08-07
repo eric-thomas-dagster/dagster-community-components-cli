@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-stocks-anomaly-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -58,7 +60,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: stocks_anomaly_report
   upstream_asset_key: stocks_with_anomalies
-  file_path: /tmp/stocks_anomalies.csv
+  file_path: out/stocks_anomalies.csv
   include_index: false
   group_name: sink
 EOF
@@ -74,10 +76,10 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/stocks_anomalies.csv — every monthly close + an is_anomaly flag.
+Output: $PROJECT_ABS/out/stocks_anomalies.csv — every monthly close + an is_anomaly flag.
 Z-score is computed within each symbol so MSFT's history is evaluated against
 itself, not pooled with AMZN's much wider price range.
 
 Inspect:
-    awk -F, 'NR==1{print; next} \$NF=="True"' /tmp/stocks_anomalies.csv | head -10
+    awk -F, 'NR==1{print; next} \$NF=="True"' $PROJECT_ABS/out/stocks_anomalies.csv | head -10
 MSG

@@ -19,6 +19,8 @@ PROJECT_DIR="${1:-revenue-attribution-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -27,7 +29,7 @@ uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — bre
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 echo ">>> Writing the 5-row marketing campaigns literal table"
-cat > /tmp/marketing_campaigns.csv <<'EOF'
+cat > $PROJECT_ABS/out/marketing_campaigns.csv <<'EOF'
 campaign_name,spend,impressions,clicks,conversions
 Spring_Sale,8000,150000,4500,320
 Brand_Awareness,12000,300000,3000,80
@@ -51,7 +53,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: marketing_data
-  file_path: /tmp/marketing_campaigns.csv
+  file_path: out/marketing_campaigns.csv
   description: Marketing campaigns (5 campaigns, 90-day window)
   group_name: ingest
 EOF
@@ -90,7 +92,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: campaign_attribution_report
   upstream_asset_key: campaign_attribution
-  file_path: /tmp/campaign_attribution.csv
+  file_path: out/campaign_attribution.csv
   include_index: false
   group_name: sink
 EOF
@@ -103,10 +105,10 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/campaign_attribution.csv — per-campaign spend, impressions,
+Output: $PROJECT_ABS/out/campaign_attribution.csv — per-campaign spend, impressions,
 clicks, conversions, plus computed ROI / ROAS / CAC where the data
 permits.
 
 Inspect:
-    cat /tmp/campaign_attribution.csv
+    cat $PROJECT_ABS/out/campaign_attribution.csv
 MSG

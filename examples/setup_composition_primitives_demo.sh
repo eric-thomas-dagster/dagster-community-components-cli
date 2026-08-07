@@ -26,7 +26,7 @@
 
 set -euo pipefail
 PROJECT_DIR="${1:-composition-primitives-demo}"
-SQLITE_DB="/tmp/${PROJECT_DIR}.db"
+SQLITE_DB="$PROJECT_ABS/${PROJECT_DIR}.db"
 
 echo ">>> Cleaning prior SQLite db"
 rm -f "$SQLITE_DB"
@@ -48,6 +48,7 @@ PY
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14

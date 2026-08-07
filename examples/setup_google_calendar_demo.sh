@@ -4,12 +4,12 @@
 # WHAT THIS DEMONSTRATES
 #   The new google_calendar_ingestion component pulling real events
 #   from a Google Calendar via service-account auth, then a downstream
-#   pandas summary asset, then a CSV sink writing /tmp/calendar_events.csv.
+#   pandas summary asset, then a CSV sink writing $PROJECT_ABS/out/calendar_events.csv.
 #
 # Asset graph:
 #   upcoming_events     ← google_calendar_ingestion
 #         │
-#         └── upcoming_events_csv  ← dataframe_to_csv (/tmp/calendar_events.csv)
+#         └── upcoming_events_csv  ← dataframe_to_csv ($PROJECT_ABS/out/calendar_events.csv)
 #
 # REQUIRED ENV VARS
 #   GOOGLE_APPLICATION_CREDENTIALS  Path to service-account JSON.
@@ -37,6 +37,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas google-auth google-api-python-client
@@ -71,7 +73,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: upcoming_events_csv
   upstream_asset_key: upcoming_events
-  file_path: /tmp/calendar_events.csv
+  file_path: out/calendar_events.csv
   include_index: false
   description: Local CSV export of upcoming events (works on local dev — for Dagster+ cloud use the BQ sink below).
   group_name: sink
@@ -99,7 +101,7 @@ cat <<MSG
 Asset graph:
     upcoming_events     ← google_calendar_ingestion ($GOOGLE_CALENDAR_ID)
           │
-          ├── upcoming_events_csv  ← dataframe_to_csv  (/tmp/calendar_events.csv — local dev)
+          ├── upcoming_events_csv  ← dataframe_to_csv  ($PROJECT_ABS/out/calendar_events.csv — local dev)
           └── upcoming_events_bq   ← dataframe_to_bigquery  (cloud-friendly: lands a BQ table)
 
 Materialize all three:
@@ -108,7 +110,7 @@ Materialize all three:
 
 After running:
     # local sink
-    cat /tmp/calendar_events.csv
+    cat $PROJECT_ABS/out/calendar_events.csv
     # cloud sink — query the BQ table the SA wrote
     bq query --nouse_legacy_sql 'SELECT COUNT(*) FROM dagster_demo.calendar_events'
 

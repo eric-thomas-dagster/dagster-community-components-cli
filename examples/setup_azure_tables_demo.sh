@@ -52,6 +52,8 @@ fi
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas azure-data-tables azure-identity
@@ -110,7 +112,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: high_value_orders_report
   upstream_asset_key: high_value_orders
-  file_path: /tmp/azure_tables_high_value_orders.csv
+  file_path: out/azure_tables_high_value_orders.csv
   group_name: report
 EOF
 
@@ -123,7 +125,7 @@ Materialize:
     uv run dg launch --assets '*'
 
 Verify:
-    head /tmp/azure_tables_high_value_orders.csv
+    head $PROJECT_ABS/out/azure_tables_high_value_orders.csv
     az storage entity query --table-name dagsterorders --account-name "\$AZURE_STORAGE_ACCOUNT" --account-key "\$AZURE_STORAGE_ACCOUNT_KEY" --filter "total gt 500.0" --num-results 5
 
 Teardown:

@@ -18,6 +18,8 @@ PROJECT_DIR="${1:-synthetic-metrics-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -69,7 +71,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: metrics_report
   upstream_asset_key: metrics_with_anomalies
-  file_path: /tmp/synthetic_metrics_anomalies.csv
+  file_path: out/synthetic_metrics_anomalies.csv
   include_index: false
   group_name: sink
 EOF
@@ -82,13 +84,13 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/synthetic_metrics_anomalies.csv — every hour, the synthetic
+Output: $PROJECT_ABS/out/synthetic_metrics_anomalies.csv — every hour, the synthetic
 cpu_pct value, plus is_anomaly + anomaly_score.
 
 Inspect:
     uv run python -c "
     import pandas as pd
-    df = pd.read_csv('/tmp/synthetic_metrics_anomalies.csv')
+    df = pd.read_csv('$PROJECT_ABS/out/synthetic_metrics_anomalies.csv')
     print(f'rows: {len(df)}, anomalies: {df.is_anomaly.sum()}')
     print(df[df.is_anomaly].head(8).to_string())
     "

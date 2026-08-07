@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-forecast-comparison-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -110,7 +112,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: arima_report
   upstream_asset_key: arima_predictions
-  file_path: /tmp/forecast_arima.csv
+  file_path: out/forecast_arima.csv
   include_index: false
 EOF
 
@@ -119,7 +121,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: ets_report
   upstream_asset_key: ets_predictions
-  file_path: /tmp/forecast_ets.csv
+  file_path: out/forecast_ets.csv
   include_index: false
 EOF
 
@@ -128,7 +130,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: comparison_report
   upstream_asset_key: model_comparison
-  file_path: /tmp/forecast_comparison.csv
+  file_path: out/forecast_comparison.csv
   include_index: false
 EOF
 
@@ -153,7 +155,7 @@ Materialize:
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Outputs:
-  /tmp/forecast_arima.csv      — 30-day ARIMA(2,1,2) forecast
-  /tmp/forecast_ets.csv        — 30-day ETS additive forecast
-  /tmp/forecast_comparison.csv — head-to-head metrics on a held-out test set
+  $PROJECT_ABS/out/forecast_arima.csv      — 30-day ARIMA(2,1,2) forecast
+  $PROJECT_ABS/out/forecast_ets.csv        — 30-day ETS additive forecast
+  $PROJECT_ABS/out/forecast_comparison.csv — head-to-head metrics on a held-out test set
 MSG

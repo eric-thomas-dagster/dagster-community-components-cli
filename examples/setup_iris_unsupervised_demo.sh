@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-iris-unsupervised-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -80,7 +82,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: iris_report
   upstream_asset_key: iris_clustered
-  file_path: /tmp/iris_unsupervised.csv
+  file_path: out/iris_unsupervised.csv
   include_index: false
   group_name: sink
 EOF
@@ -91,12 +93,12 @@ cat <<MSG
 Materialize:
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
-Output: /tmp/iris_unsupervised.csv — every flower with PC1, PC2, cluster, and distance to centroid.
+Output: $PROJECT_ABS/out/iris_unsupervised.csv — every flower with PC1, PC2, cluster, and distance to centroid.
 
 Inspect (kmeans should land roughly along species lines — Iris is famously well-separated):
     uv run python -c "
     import pandas as pd
-    df = pd.read_csv('/tmp/iris_unsupervised.csv')
+    df = pd.read_csv('$PROJECT_ABS/out/iris_unsupervised.csv')
     print(pd.crosstab(df.species, df.cluster, margins=True))
     "
 MSG

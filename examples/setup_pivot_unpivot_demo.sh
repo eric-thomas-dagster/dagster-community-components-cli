@@ -13,14 +13,16 @@ PROJECT_DIR="${1:-pivot-unpivot-demo}"
 echo ">>> Scaffolding"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas tabulate
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 
-mkdir -p /tmp/pivot_demo
-cat > /tmp/pivot_demo/sales_long.csv <<'EOF'
+mkdir -p $PROJECT_ABS/out/pivot_demo
+cat > $PROJECT_ABS/out/pivot_demo/sales_long.csv <<'EOF'
 month,region,revenue
 Jan,East,100
 Jan,West,200
@@ -47,7 +49,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: sales_long
-  file_path: /tmp/pivot_demo/sales_long.csv
+  file_path: out/pivot_demo/sales_long.csv
   description: 9 rows of monthly revenue by region (long format)
   group_name: pivot_demo
 EOF
@@ -84,7 +86,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: wide_report
   upstream_asset_key: sales_wide
-  file_path: /tmp/pivot_demo/sales_wide.csv
+  file_path: out/pivot_demo/sales_wide.csv
   include_index: false
   group_name: pivot_demo
 EOF
@@ -94,7 +96,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: long_report
   upstream_asset_key: sales_long_again
-  file_path: /tmp/pivot_demo/sales_long_again.csv
+  file_path: out/pivot_demo/sales_long_again.csv
   include_index: false
   group_name: pivot_demo
 EOF
@@ -105,6 +107,6 @@ cat <<MSG
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Outputs:
-    /tmp/pivot_demo/sales_wide.csv         (3 rows, 4 cols: month, East, North, West)
-    /tmp/pivot_demo/sales_long_again.csv   (9 rows, 3 cols: month, region, revenue)
+    $PROJECT_ABS/out/pivot_demo/sales_wide.csv         (3 rows, 4 cols: month, East, North, West)
+    $PROJECT_ABS/out/pivot_demo/sales_long_again.csv   (9 rows, 3 cols: month, region, revenue)
 MSG

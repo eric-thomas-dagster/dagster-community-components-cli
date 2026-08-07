@@ -30,6 +30,8 @@ PROJECT_DIR="${1:-external-scheduler-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas
@@ -37,8 +39,8 @@ uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — bre
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 # Generate a tiny synthetic CSV to keep the demo offline-only
-mkdir -p /tmp/extsched_demo
-cat > /tmp/extsched_demo/orders.csv <<'EOF'
+mkdir -p $PROJECT_ABS/out/extsched_demo
+cat > $PROJECT_ABS/out/extsched_demo/orders.csv <<'EOF'
 order_id,customer_id,order_date,total
 ORD0001,C001,2026-04-30,420.50
 ORD0002,C002,2026-04-30,89.99
@@ -62,7 +64,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: orders_raw
-  file_path: /tmp/extsched_demo/orders.csv
+  file_path: out/extsched_demo/orders.csv
   description: Synthetic 7-row order log spanning 2026-04-30 to 2026-05-03
   group_name: orders
   partition_type: daily
@@ -90,7 +92,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: daily_revenue_report
   upstream_asset_key: daily_revenue
-  file_path: /tmp/extsched_demo/daily_revenue_{partition_key}.csv
+  file_path: out/extsched_demo/daily_revenue_{partition_key}.csv
   include_index: false
   group_name: orders
   partition_type: daily
@@ -314,7 +316,7 @@ For Dagster+, set DAGSTER_GRAPHQL_URL to your deployment's /graphql URL plus
 DAGSTER_PLUS_USER_TOKEN — and that's it. Same script, no extra component.
 
 Output files:
-    /tmp/extsched_demo/daily_revenue_2026-05-01.csv     (per-day rollup)
+    $PROJECT_ABS/out/extsched_demo/daily_revenue_2026-05-01.csv     (per-day rollup)
 
 Why this isn't a Dagster component: an "external-scheduler integration" with
 a Dagster component would be backwards. The whole point is keeping the

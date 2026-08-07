@@ -18,13 +18,15 @@ PROJECT_DIR="${1:-router-demo}"
 echo ">>> Scaffolding"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 
-mkdir -p /tmp/router_demo
+mkdir -p $PROJECT_ABS/out/router_demo
 # Synthetic orders now generated 100%-components via parametric_data_generator.
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
@@ -101,7 +103,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: high_report
   upstream_asset_key: high_value_orders
-  file_path: /tmp/router_demo/high.csv
+  file_path: out/router_demo/high.csv
   include_index: false
   group_name: router_demo
 EOF
@@ -111,7 +113,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: medium_report
   upstream_asset_key: medium_value_orders
-  file_path: /tmp/router_demo/medium.csv
+  file_path: out/router_demo/medium.csv
   include_index: false
   group_name: router_demo
 EOF
@@ -121,7 +123,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: low_report
   upstream_asset_key: low_value_orders
-  file_path: /tmp/router_demo/low.csv
+  file_path: out/router_demo/low.csv
   include_index: false
   group_name: router_demo
 EOF
@@ -130,5 +132,5 @@ cat <<MSG
 
 >>> Setup complete.
 Materialize: cd $PROJECT_DIR && uv run dg launch --assets '*'
-Outputs: /tmp/router_demo/{high,medium,low}.csv
+Outputs: $PROJECT_ABS/out/router_demo/{high,medium,low}.csv
 MSG

@@ -14,6 +14,8 @@ PROJECT_DIR="${1:-window-calc-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -21,7 +23,7 @@ uv add -q pandas
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 
-mkdir -p /tmp/window_demo
+mkdir -p $PROJECT_ABS/out/window_demo
 echo ">>> Generating synthetic stock prices"
 uv run python - <<'PY'
 import csv, random
@@ -33,7 +35,7 @@ for day in range(1, 11):
         # random walk
         prices[sym] = round(p + random.uniform(-3, 3), 2)
         rows.append({"symbol": sym, "trade_date": f"2025-04-{day:02d}", "close": prices[sym]})
-with open("/tmp/window_demo/prices.csv", "w", newline="") as f:
+with open("$PROJECT_ABS/out/window_demo/prices.csv", "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=rows[0].keys())
     w.writeheader(); w.writerows(rows)
 print(f"wrote {len(rows)} rows")
@@ -52,7 +54,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: stock_prices
-  file_path: /tmp/window_demo/prices.csv
+  file_path: out/window_demo/prices.csv
   description: 3 symbols × 10 days of synthetic close prices
   group_name: window_demo
 EOF
@@ -83,7 +85,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: window_report
   upstream_asset_key: stock_prices_with_windows
-  file_path: /tmp/window_demo/prices_with_windows.csv
+  file_path: out/window_demo/prices_with_windows.csv
   include_index: false
   group_name: window_demo
 EOF
@@ -96,7 +98,7 @@ Materialize:
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Output:
-    /tmp/window_demo/prices_with_windows.csv
+    $PROJECT_ABS/out/window_demo/prices_with_windows.csv
 
 Expected: 30 rows × 11 cols (symbol, trade_date, close + 8 window outputs).
 Per-symbol: row_num goes 1..10. prev_close[day1]=NaN. cum_close strictly grows.

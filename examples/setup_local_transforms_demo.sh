@@ -25,8 +25,8 @@
 
 set -euo pipefail
 PROJECT_DIR="${1:-local-transforms-demo}"
-STORAGE_DIR="/tmp/local-transforms-storage"
-AVRO_PATH="/tmp/revenue_summary.avro"
+STORAGE_DIR="$PROJECT_ABS/local-transforms-storage"
+AVRO_PATH="$PROJECT_ABS/revenue_summary.avro"
 
 echo ">>> Clearing prior local storage"
 rm -rf "$STORAGE_DIR" "$AVRO_PATH"
@@ -35,6 +35,7 @@ mkdir -p "$STORAGE_DIR"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14

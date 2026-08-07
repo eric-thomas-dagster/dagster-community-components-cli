@@ -49,7 +49,7 @@ info "Starting local Cube server via Docker (port 4000)…"
 docker rm -f "$CUBE_CONTAINER" >/dev/null 2>&1 || true
 
 # Prepare a minimal Cube model schema for the e-commerce sample data.
-CUBE_WORK="/tmp/${PROJECT_NAME}_cube_conf"
+CUBE_WORK="$PROJECT_ABS/${PROJECT_NAME}_cube_conf"
 rm -rf "$CUBE_WORK" && mkdir -p "$CUBE_WORK/model/cubes"
 
 # Cube env — use in-process DuckDB with sample tables loaded into memory.
@@ -125,6 +125,7 @@ done
 info "Scaffolding Dagster project…"
 uvx create-dagster project "$PROJECT_DIR" --uv-sync 2>&1 | tail -3 || fail "create-dagster failed"
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 
 info "Installing deps…"
 if [ -n "${DCC_SRC:-}" ] && [ -d "$DCC_SRC" ]; then

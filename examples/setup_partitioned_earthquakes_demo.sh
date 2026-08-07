@@ -16,6 +16,8 @@ PARTITION_START="${2:-2026-04-01}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR (partitions start $PARTITION_START)"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -100,7 +102,7 @@ type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: earthquakes_report
   upstream_asset_key: earthquakes_sorted
-  file_path: /tmp/earthquakes_{partition_key}.jsonl
+  file_path: out/earthquakes_{partition_key}.jsonl
   orient: records
   lines: true
   date_format: iso
@@ -123,5 +125,5 @@ Materialize a range (backfill):
 Or open the UI and pick partitions there:
     uv run dg dev
 
-Output: /tmp/earthquakes_<partition_date>.jsonl per day, biggest magnitude first.
+Output: $PROJECT_ABS/out/earthquakes_<partition_date>.jsonl per day, biggest magnitude first.
 MSG

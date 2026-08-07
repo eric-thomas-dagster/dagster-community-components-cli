@@ -22,6 +22,8 @@ PROJECT_DIR="${1:-scd-type-2-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -30,10 +32,10 @@ uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — bre
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 echo ">>> Generating synthetic snapshots"
-mkdir -p /tmp/scd_demo
+mkdir -p $PROJECT_ABS/out/scd_demo
 
 # Yesterday — pre-existing SCD2 dimension
-cat > /tmp/scd_demo/customers_yesterday.csv <<'EOF'
+cat > $PROJECT_ABS/out/scd_demo/customers_yesterday.csv <<'EOF'
 customer_id,name,plan_tier,billing_address,effective_from,effective_to,is_current
 C001,Alice,free,"123 Main St",2025-01-01,,True
 C002,Bob,free,"456 Oak Ave",2025-01-15,,True
@@ -41,7 +43,7 @@ C003,Charlie,pro,"789 Pine Rd",2025-02-01,,True
 EOF
 
 # Today — incoming. C002 upgraded, C003 missing, C004 net-new
-cat > /tmp/scd_demo/customers_today.csv <<'EOF'
+cat > $PROJECT_ABS/out/scd_demo/customers_today.csv <<'EOF'
 customer_id,name,plan_tier,billing_address
 C001,Alice,free,"123 Main St"
 C002,Bob,pro,"456 Oak Ave"
@@ -62,7 +64,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: customers_yesterday
-  file_path: /tmp/scd_demo/customers_yesterday.csv
+  file_path: out/scd_demo/customers_yesterday.csv
   description: Pre-existing SCD2 dimension snapshot
   group_name: scd_demo
 EOF
@@ -71,7 +73,7 @@ cat > "src/$PKG/defs/csv_today/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: customers_today
-  file_path: /tmp/scd_demo/customers_today.csv
+  file_path: out/scd_demo/customers_today.csv
   description: Incoming snapshot — C002 upgraded, C003 missing, C004 new
   group_name: scd_demo
 EOF
@@ -98,7 +100,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: scd2_report
   upstream_asset_key: customers_scd2
-  file_path: /tmp/scd_demo/customers_scd2_output.csv
+  file_path: out/scd_demo/customers_scd2_output.csv
   include_index: false
   group_name: scd_demo
 EOF
@@ -111,7 +113,7 @@ Materialize:
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Output:
-    /tmp/scd_demo/customers_scd2_output.csv
+    $PROJECT_ABS/out/scd_demo/customers_scd2_output.csv
 
 Expected rows: 5 (C001 unchanged, C002 expired+new, C003 unchanged-because-missing, C004 new)
 MSG

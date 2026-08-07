@@ -14,6 +14,8 @@ PROJECT_DIR="${1:-countries-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -71,7 +73,7 @@ type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: region_summary_report
   upstream_asset_key: region_summary
-  file_path: /tmp/region_summary.json
+  file_path: out/region_summary.json
   orient: records
   indent: 2
   group_name: sink
@@ -88,6 +90,6 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/region_summary.json — total population and mean density
+Output: $PROJECT_ABS/out/region_summary.json — total population and mean density
 per region, with country counts. 250 countries → 6 regions.
 MSG

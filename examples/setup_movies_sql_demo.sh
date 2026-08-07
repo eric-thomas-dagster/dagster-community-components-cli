@@ -36,6 +36,8 @@ PROJECT_DIR="${1:-movies-sql-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -78,7 +80,7 @@ type: $PKG.components.archive_fetcher.component.ArchiveFetcherComponent
 attributes:
   asset_name: ml_archive
   url: https://files.grouplens.org/datasets/movielens/ml-latest-small.zip
-  extract_to: /tmp/movies_demo
+  extract_to: out/movies_demo
   flatten: true                # strip the top-level "ml-latest-small/" dir
   include_glob: ["*.csv"]      # only emit CSVs in the dict
   description: MovieLens (latest-small) — 100k ratings on 9k movies by 600 users
@@ -225,13 +227,13 @@ cat <<MSG
 
 Materialize headlessly (point DATABASE_URL at a SQLite file):
     cd $PROJECT_DIR
-    DATABASE_URL=sqlite:////tmp/movies.db uv run dg launch --assets '*'
+    DATABASE_URL=sqlite:///$PROJECT_ABS/out/movies.db uv run dg launch --assets '*'
 
 Or open the UI:
-    DATABASE_URL=sqlite:////tmp/movies.db uv run dg dev
+    DATABASE_URL=sqlite:///$PROJECT_ABS/out/movies.db uv run dg dev
 
 Inspect the result:
-    sqlite3 /tmp/movies.db <<SQL
+    sqlite3 $PROJECT_ABS/out/movies.db <<SQL
       .headers on
       .mode column
       SELECT decade, COUNT(*) AS movies, ROUND(AVG(rating), 2) AS avg_rating

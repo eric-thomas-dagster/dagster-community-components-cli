@@ -38,6 +38,8 @@ DS_NAME="${DATASET##*.}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas google-auth google-cloud-bigquery db-dtypes
@@ -117,7 +119,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: iris_predictions_csv
   upstream_asset_key: iris_predictions
-  file_path: /tmp/iris_predictions.csv
+  file_path: out/iris_predictions.csv
   include_index: false
   description: CSV export of the iris predictions.
   group_name: sink
@@ -134,14 +136,14 @@ Asset graph:
                   │
                   └── iris_predictions   ← BQML predict (ML.PREDICT)
                             │
-                            └── iris_predictions_csv  ← /tmp/iris_predictions.csv
+                            └── iris_predictions_csv  ← $PROJECT_ABS/out/iris_predictions.csv
 
 Materialize all four:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
 Inspect:
-    cat /tmp/iris_predictions.csv
+    cat $PROJECT_ABS/out/iris_predictions.csv
     bq show $DATASET.iris_clean
     bq show -m $DATASET.iris_logreg
 

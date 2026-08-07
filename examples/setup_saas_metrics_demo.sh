@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-saas-metrics-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -68,7 +70,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: saas_metrics_report
   upstream_asset_key: saas_metrics
-  file_path: /tmp/saas_metrics.csv
+  file_path: out/saas_metrics.csv
   include_index: false
   group_name: sink
 EOF
@@ -81,9 +83,9 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/saas_metrics.csv — current MRR / ARR / churn / LTV /
+Output: $PROJECT_ABS/out/saas_metrics.csv — current MRR / ARR / churn / LTV /
 ARPU snapshot computed from the synthetic Stripe data.
 
 Inspect:
-    cat /tmp/saas_metrics.csv
+    cat $PROJECT_ABS/out/saas_metrics.csv
 MSG

@@ -22,6 +22,8 @@ PROJECT_DIR="${1:-wine-ml-pipeline-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -180,7 +182,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: predictions_report
   upstream_asset_key: wine_predictions
-  file_path: /tmp/wine_predictions.csv
+  file_path: out/wine_predictions.csv
   include_index: false
   group_name: sink
 EOF
@@ -190,7 +192,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: importance_report
   upstream_asset_key: wine_feature_importance
-  file_path: /tmp/wine_importance.csv
+  file_path: out/wine_importance.csv
   include_index: false
   group_name: sink
 EOF
@@ -200,7 +202,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: cv_report
   upstream_asset_key: wine_cv_scores
-  file_path: /tmp/wine_cv.csv
+  file_path: out/wine_cv.csv
   include_index: false
   group_name: sink
 EOF
@@ -231,12 +233,12 @@ Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
 Outputs:
-  /tmp/wine_predictions.csv  — every wine + predicted quality + true quality
-  /tmp/wine_importance.csv   — features ranked by tree importance
-  /tmp/wine_cv.csv           — 5-fold cross-validation scores
+  $PROJECT_ABS/out/wine_predictions.csv  — every wine + predicted quality + true quality
+  $PROJECT_ABS/out/wine_importance.csv   — features ranked by tree importance
+  $PROJECT_ABS/out/wine_cv.csv           — 5-fold cross-validation scores
 
 Inspect:
-    head -3 /tmp/wine_predictions.csv
-    cat /tmp/wine_importance.csv
-    cat /tmp/wine_cv.csv
+    head -3 $PROJECT_ABS/out/wine_predictions.csv
+    cat $PROJECT_ABS/out/wine_importance.csv
+    cat $PROJECT_ABS/out/wine_cv.csv
 MSG

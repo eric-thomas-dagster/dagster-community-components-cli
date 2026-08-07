@@ -14,6 +14,8 @@ PROJECT_DIR="${1:-earthquakes-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -89,7 +91,7 @@ type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: earthquakes_report
   upstream_asset_key: earthquakes_sorted
-  file_path: /tmp/earthquakes.jsonl
+  file_path: out/earthquakes.jsonl
   orient: records
   lines: true
   date_format: iso
@@ -107,6 +109,6 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev   # http://localhost:3000
 
-Output: /tmp/earthquakes.jsonl — one JSON line per earthquake, biggest
+Output: $PROJECT_ABS/out/earthquakes.jsonl — one JSON line per earthquake, biggest
 magnitude first, last 24 hours. Results vary day-to-day (live feed).
 MSG

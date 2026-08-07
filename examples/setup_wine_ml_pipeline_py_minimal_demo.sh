@@ -23,6 +23,8 @@ PROJECT_DIR="${1:-wine-ml-pipeline-py-minimal-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -117,8 +119,8 @@ _ingest = FileIngestionComponent(
 def wine_model_outputs(context: dg.AssetExecutionContext, wine_raw: pd.DataFrame):
     scaled = _scale_features(wine_raw)
     preds, importance = _train_predict_importance(scaled)
-    preds.to_csv("/tmp/wine_predictions.csv", index=False)
-    importance.to_csv("/tmp/wine_importance.csv", index=False)
+    preds.to_csv("out/wine_predictions.csv", index=False)
+    importance.to_csv("out/wine_importance.csv", index=False)
     context.log.info(f"wrote 2 CSVs; {len(preds)} predictions, {len(importance)} features")
     return preds, importance
 
@@ -129,7 +131,7 @@ def wine_model_outputs(context: dg.AssetExecutionContext, wine_raw: pd.DataFrame
 def wine_cv_scores(context: dg.AssetExecutionContext, wine_raw: pd.DataFrame) -> pd.DataFrame:
     scaled = _scale_features(wine_raw)
     df = _cross_validate(scaled)
-    df.to_csv("/tmp/wine_cv.csv", index=False)
+    df.to_csv("out/wine_cv.csv", index=False)
     context.log.info(f"5-fold CV — mean test={df['test_score'].mean():.3f}")
     return df
 
@@ -150,6 +152,6 @@ echo "        → http://localhost:3000 — click Materialize all"
 echo ""
 echo "Or headless:"
 echo "    cd $PROJECT_DIR && uv run dg launch --assets '*'"
-echo "    ls -la /tmp/wine_*.csv"
+echo "    ls -la $PROJECT_ABS/out/wine_*.csv"
 echo ""
 echo "See examples/wine_ml_pipeline_py_minimal.md for the full walkthrough."

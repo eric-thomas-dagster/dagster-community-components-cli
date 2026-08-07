@@ -60,6 +60,8 @@ info "Target project: $PROJECT_DIR"
 info "Scaffolding Dagster project…"
 uvx create-dagster project "$PROJECT_DIR" --uv-sync 2>&1 | tail -3 || fail "create-dagster failed"
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 
 info "Installing deps…"
 if [ -n "${DCC_SRC:-}" ] && [ -d "$DCC_SRC" ]; then
@@ -227,7 +229,7 @@ type: dagster_community_components.DataframeToCsvComponent
 attributes:
   asset_name: ${route}_export
   upstream_asset_key: ${route}
-  file_path: /tmp/${PROJECT_NAME}/${route}.csv
+  file_path: out/${PROJECT_NAME}/${route}.csv
   group_name: adaptive_backfill
 YAML
 done
@@ -256,7 +258,7 @@ ok "Demo complete."
 echo
 info "Per-action (sensor, day) counts:"
 for route in ok_days interpolate_queue re_ingest_queue escalate_queue; do
-  f="/tmp/${PROJECT_NAME}/${route}.csv"
+  f="$PROJECT_ABS/out/${PROJECT_NAME}/${route}.csv"
   if [ -f "$f" ]; then
     lines=$(wc -l < "$f" | tr -d ' ')
     n=$((lines - 1))

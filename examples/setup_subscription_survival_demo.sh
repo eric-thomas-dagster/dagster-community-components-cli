@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-subscription-survival-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -61,7 +63,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: survival_report
   upstream_asset_key: subscription_survival_curves
-  file_path: /tmp/subscription_survival.csv
+  file_path: out/subscription_survival.csv
   include_index: false
   group_name: sink
 EOF
@@ -89,9 +91,9 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/subscription_survival.csv — survival probability at days
+Output: $PROJECT_ABS/out/subscription_survival.csv — survival probability at days
 30, 60, 90, 180, 365 for each plan tier.
 
 Inspect — what fraction of free-tier subs are still active after 60 days?
-    cat /tmp/subscription_survival.csv
+    cat $PROJECT_ABS/out/subscription_survival.csv
 MSG

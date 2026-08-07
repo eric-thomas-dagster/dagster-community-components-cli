@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-github-jsonpath-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -81,7 +83,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: repos_report
   upstream_asset_key: repos_flat
-  file_path: /tmp/github_repos.csv
+  file_path: out/github_repos.csv
   include_index: false
   columns: [name, full_name, owner_login, owner_url, license_key, license_name, stargazers_count, language]
   group_name: sink
@@ -95,9 +97,9 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/github_repos.csv — top 10 "orchestrator" GitHub repos
+Output: $PROJECT_ABS/out/github_repos.csv — top 10 "orchestrator" GitHub repos
 with nested owner/license fields flattened into top-level columns.
 
 Inspect:
-    column -t -s, /tmp/github_repos.csv | head -11
+    column -t -s, $PROJECT_ABS/out/github_repos.csv | head -11
 MSG

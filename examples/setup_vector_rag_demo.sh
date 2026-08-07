@@ -7,7 +7,7 @@
 #         │
 #         └→ kb_embeddings (embeddings_generator: OpenAI text-embedding-3-small)
 #                 │
-#                 └→ kb_index (vector_store_writer: chromadb /tmp/chroma_db)
+#                 └→ kb_index (vector_store_writer: chromadb $PROJECT_ABS/out/chroma_db)
 #                                 │
 #   queries (5 synthetic questions)
 #         │
@@ -23,7 +23,7 @@
 #
 #   chat_log (3 user/assistant turns)
 #         │
-#         └→ chat_history (conversation_memory: writes /tmp/chat_memory.json)
+#         └→ chat_history (conversation_memory: writes $PROJECT_ABS/out/chat_memory.json)
 #
 # REQUIRED ENV
 #   OPENAI_API_KEY    OpenAI key (sk-...)
@@ -41,6 +41,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas openai chromadb sentence-transformers
@@ -146,7 +148,7 @@ attributes:
   upstream_asset_key: kb_embeddings
   provider: chromadb
   collection_name: knowledge_base
-  connection_string: /tmp/chroma_kb
+  connection_string: out/chroma_kb
   embedding_column: embedding
   upsert: true
   batch_size: 50
@@ -176,7 +178,7 @@ attributes:
   upstream_asset_key: query_embeddings
   provider: chromadb
   collection_name: knowledge_base
-  connection_string: /tmp/chroma_kb
+  connection_string: out/chroma_kb
   embedding_column: embedding
   query_text_column: text
   top_k: 3
@@ -208,7 +210,7 @@ attributes:
   upstream_asset_key: rag_corpus
   vector_store_provider: chromadb
   collection_name: knowledge_base
-  vector_store_connection: /tmp/chroma_kb
+  vector_store_connection: out/chroma_kb
   llm_provider: openai
   llm_model: gpt-4o-mini
   llm_api_key: \${OPENAI_API_KEY}
@@ -231,7 +233,7 @@ type: $PKG.components.conversation_memory.component.ConversationMemoryComponent
 attributes:
   asset_name: chat_history
   upstream_asset_key: chat_log
-  memory_file: /tmp/chat_memory.json
+  memory_file: out/chat_memory.json
   user_message_column: user_message
   assistant_message_column: assistant_message
   max_messages: 20

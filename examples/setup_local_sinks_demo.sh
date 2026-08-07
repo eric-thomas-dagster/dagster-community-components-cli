@@ -8,11 +8,11 @@
 #   through every supported format.
 #
 # Components covered (5):
-#   - dataframe_to_csv      → /tmp/local_sinks_demo/orders.csv
-#   - dataframe_to_parquet  → /tmp/local_sinks_demo/orders.parquet
-#   - dataframe_to_json     → /tmp/local_sinks_demo/orders.json
-#   - dataframe_to_excel    → /tmp/local_sinks_demo/orders.xlsx
-#   - dataframe_to_table    → SQLite at /tmp/local_sinks_demo/orders.db
+#   - dataframe_to_csv      → $PROJECT_ABS/out/local_sinks_demo/orders.csv
+#   - dataframe_to_parquet  → $PROJECT_ABS/out/local_sinks_demo/orders.parquet
+#   - dataframe_to_json     → $PROJECT_ABS/out/local_sinks_demo/orders.json
+#   - dataframe_to_excel    → $PROJECT_ABS/out/local_sinks_demo/orders.xlsx
+#   - dataframe_to_table    → SQLite at $PROJECT_ABS/out/local_sinks_demo/orders.db
 #                              (table name: orders)
 #
 # Cloud-backed sinks (dataframe_to_s3, _gcs, _adls, _bigquery,
@@ -28,6 +28,8 @@ PROJECT_DIR="${1:-local-sinks-demo}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pyarrow openpyxl sqlalchemy
@@ -53,7 +55,7 @@ import dagster as dg
 # SQLAlchemy URL for the dataframe_to_table sink (SQLite is dependency-free)
 os.environ.setdefault(
     "ORDERS_DB_URL",
-    "sqlite:////tmp/local_sinks_demo/orders.db",
+    "sqlite:///$PROJECT_ABS/out/local_sinks_demo/orders.db",
 )
 
 
@@ -74,7 +76,7 @@ def orders() -> pd.DataFrame:
 defs = dg.Definitions(assets=[orders])
 PYEOF
 
-mkdir -p /tmp/local_sinks_demo
+mkdir -p $PROJECT_ABS/out/local_sinks_demo
 
 echo ">>> Writing 5 sink defs.yaml"
 
@@ -83,7 +85,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_csv
   upstream_asset_key: orders
-  file_path: /tmp/local_sinks_demo/orders.csv
+  file_path: out/local_sinks_demo/orders.csv
   group_name: sinks
 EOF
 
@@ -92,7 +94,7 @@ type: $PKG.components.dataframe_to_parquet.component.DataframeToParquetComponent
 attributes:
   asset_name: orders_parquet
   upstream_asset_key: orders
-  file_path: /tmp/local_sinks_demo/orders.parquet
+  file_path: out/local_sinks_demo/orders.parquet
   group_name: sinks
 EOF
 
@@ -101,7 +103,7 @@ type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: orders_json
   upstream_asset_key: orders
-  file_path: /tmp/local_sinks_demo/orders.json
+  file_path: out/local_sinks_demo/orders.json
   group_name: sinks
 EOF
 
@@ -110,7 +112,7 @@ type: $PKG.components.dataframe_to_excel.component.DataframeToExcelComponent
 attributes:
   asset_name: orders_xlsx
   upstream_asset_key: orders
-  file_path: /tmp/local_sinks_demo/orders.xlsx
+  file_path: out/local_sinks_demo/orders.xlsx
   group_name: sinks
 EOF
 
@@ -134,10 +136,10 @@ Materialize all 5 sinks (one upstream, five outputs):
     uv run dg launch --assets '*'
 
 Inspect:
-    ls /tmp/local_sinks_demo/
+    ls $PROJECT_ABS/out/local_sinks_demo/
         orders.csv  orders.parquet  orders.json  orders.xlsx  orders.db
 
-    sqlite3 /tmp/local_sinks_demo/orders.db "SELECT count(*) FROM orders;"
+    sqlite3 $PROJECT_ABS/out/local_sinks_demo/orders.db "SELECT count(*) FROM orders;"
         # 30
 
 Or open the asset graph:

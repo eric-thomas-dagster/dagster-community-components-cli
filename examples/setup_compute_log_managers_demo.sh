@@ -141,6 +141,8 @@ done
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 # requests for the Splunk HEC + OTLP POST paths in our CLMs;
@@ -159,7 +161,7 @@ compute_logs:
   module: dagster_community_components.compute_log_managers.tee
   class: TeeComputeLogManager
   config:
-    local_dir: /tmp/clm-demo-local
+    local_dir: out/clm-demo-local
     display_manager_index: 0
     fail_on_partial_upload: false
     managers:
@@ -175,7 +177,7 @@ compute_logs:
           source: dagster                  # source=dagster distinguishes from OTel
           verify_ssl: false                # self-signed cert
           batch_size: 100
-          local_dir: /tmp/clm-demo-local
+          local_dir: out/clm-demo-local
       # Path 2: Dagster → OTel Collector → Splunk HEC (OTel Collector
       # tags events with source=otel-collector via its splunk_hec exporter)
       - module: dagster_community_components.compute_log_managers.otlp
@@ -186,7 +188,7 @@ compute_logs:
           location_label: clm-demo
           batch_size: 100
           verify_ssl: false
-          local_dir: /tmp/clm-demo-local
+          local_dir: out/clm-demo-local
 EOF
 
 # --- 5. Write a tiny asset that prints to stdout --------------------------
@@ -295,7 +297,7 @@ Teardown when you're done:
 ──────────────────────────────────────────────────────────────────────
   docker rm -f $SPLUNK_CONTAINER $OTEL_CONTAINER
   docker network rm $NETWORK
-  rm -rf /tmp/clm-demo-local
+  rm -rf $PROJECT_ABS/out/clm-demo-local
 
 To re-run the demo only (Splunk + OTel stay up):
   cd $PROJECT_DIR

@@ -27,6 +27,8 @@ SINK_MODE="${2:-local}"   # local | security_lake
 echo ">>> Scaffolding"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas requests pyarrow tabulate
@@ -109,7 +111,7 @@ type: $PKG.components.dataframe_to_parquet.component.DataframeToParquetComponent
 attributes:
   asset_name: dagster_plus_security_lake_local
   upstream_asset_key: dagster_plus_audit_ocsf
-  file_path: /tmp/dagster_plus_audit_ocsf.parquet
+  file_path: out/dagster_plus_audit_ocsf.parquet
   compression: snappy
   group_name: security_lake_local
 EOF
@@ -130,7 +132,7 @@ Materialize:
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Output (sink_mode=local):
-    /tmp/dagster_plus_audit_ocsf.parquet — OCSF rows
+    $PROJECT_ABS/out/dagster_plus_audit_ocsf.parquet — OCSF rows
 
 Output (sink_mode=security_lake):
     s3://<bucket>/ext-dagster-plus-audit/region=<r>/accountId=<a>/eventDay=<YYYYMMDD>/*.parquet

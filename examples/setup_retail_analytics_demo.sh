@@ -21,6 +21,8 @@ PROJECT_DIR="${1:-retail-analytics-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -119,7 +121,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: segments_report
   upstream_asset_key: customer_segments
-  file_path: /tmp/retail_segments.csv
+  file_path: out/retail_segments.csv
   include_index: false
   group_name: sink
 EOF
@@ -129,7 +131,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: cohorts_report
   upstream_asset_key: monthly_cohorts
-  file_path: /tmp/retail_cohorts.csv
+  file_path: out/retail_cohorts.csv
   include_index: false
   group_name: sink
 EOF
@@ -139,7 +141,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: spend_report
   upstream_asset_key: customer_running_spend
-  file_path: /tmp/retail_running_spend.csv
+  file_path: out/retail_running_spend.csv
   include_index: false
   group_name: sink
 EOF
@@ -170,12 +172,12 @@ Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
 Outputs (3 reports from the same upstream):
-  /tmp/retail_segments.csv       — RFM-scored customer segments
-  /tmp/retail_cohorts.csv        — monthly cohort retention matrix
-  /tmp/retail_running_spend.csv  — cumulative spend per customer over time
+  $PROJECT_ABS/out/retail_segments.csv       — RFM-scored customer segments
+  $PROJECT_ABS/out/retail_cohorts.csv        — monthly cohort retention matrix
+  $PROJECT_ABS/out/retail_running_spend.csv  — cumulative spend per customer over time
 
 Inspect:
-    head -5 /tmp/retail_segments.csv
-    head /tmp/retail_cohorts.csv
-    head -5 /tmp/retail_running_spend.csv
+    head -5 $PROJECT_ABS/out/retail_segments.csv
+    head $PROJECT_ABS/out/retail_cohorts.csv
+    head -5 $PROJECT_ABS/out/retail_running_spend.csv
 MSG

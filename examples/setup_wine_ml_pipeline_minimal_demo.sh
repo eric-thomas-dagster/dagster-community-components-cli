@@ -21,6 +21,8 @@ PROJECT_DIR="${1:-wine-ml-pipeline-minimal-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps (no dagster-community-components — pure Dagster)"
@@ -132,9 +134,9 @@ def wine_model_outputs(context: dg.AssetExecutionContext, wine_raw: pd.DataFrame
     preds = _predict(clf, split_df)
     importance = _extract_importance(clf)
 
-    _write_csv(preds, "/tmp/wine_predictions.csv")
-    _write_csv(importance, "/tmp/wine_importance.csv")
-    context.log.info("wrote /tmp/wine_predictions.csv + /tmp/wine_importance.csv")
+    _write_csv(preds, "out/wine_predictions.csv")
+    _write_csv(importance, "out/wine_importance.csv")
+    context.log.info("wrote $PROJECT_ABS/out/wine_predictions.csv + $PROJECT_ABS/out/wine_importance.csv")
 
     return preds, importance
 
@@ -156,8 +158,8 @@ def wine_cv_scores(context: dg.AssetExecutionContext, wine_raw: pd.DataFrame) ->
         "test_score": scores["test_score"],
         "fit_time": scores["fit_time"],
     })
-    _write_csv(df, "/tmp/wine_cv.csv")
-    context.log.info(f"5-fold CV — mean test={df['test_score'].mean():.3f}; wrote /tmp/wine_cv.csv")
+    _write_csv(df, "out/wine_cv.csv")
+    context.log.info(f"5-fold CV — mean test={df['test_score'].mean():.3f}; wrote $PROJECT_ABS/out/wine_cv.csv")
     return df
 
 
@@ -175,7 +177,7 @@ echo "        → http://localhost:3000 — click Materialize all (only 3 nodes 
 echo ""
 echo "Or headless:"
 echo "    cd $PROJECT_DIR && uv run dg launch --assets '*'"
-echo "    ls -la /tmp/wine_*.csv"
+echo "    ls -la $PROJECT_ABS/out/wine_*.csv"
 echo ""
 echo "See examples/wine_ml_pipeline_minimal.md for the full walkthrough"
 echo "+ comparison with the higher-asset-count variants."

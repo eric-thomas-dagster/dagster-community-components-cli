@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-releases-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -90,7 +92,7 @@ type: $PKG.components.dataframe_to_parquet.component.DataframeToParquetComponent
 attributes:
   asset_name: releases_report
   upstream_asset_key: releases_ordered
-  file_path: /tmp/dagster_releases.parquet
+  file_path: out/dagster_releases.parquet
   compression: snappy
   index: false
   group_name: sink
@@ -107,6 +109,6 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/dagster_releases.parquet — last 50 stable releases, newest
+Output: $PROJECT_ABS/out/dagster_releases.parquet — last 50 stable releases, newest
 first, with parsed publish dates (parquet preserves tz-aware datetimes).
 MSG

@@ -16,6 +16,8 @@ PROJECT_DIR="${1:-west-coast-cities-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -24,7 +26,7 @@ uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — bre
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 echo ">>> Generating the 10-city CSV"
-cat > /tmp/us_cities.csv <<'EOF'
+cat > $PROJECT_ABS/out/us_cities.csv <<'EOF'
 city,lat,lng
 New York,40.7128,-74.0060
 Los Angeles,34.0522,-118.2437
@@ -51,7 +53,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: us_cities
-  file_path: /tmp/us_cities.csv
+  file_path: out/us_cities.csv
   description: 10 major US cities with lat/lng
   group_name: ingest
 EOF
@@ -78,7 +80,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: west_coast_report
   upstream_asset_key: west_coast_cities
-  file_path: /tmp/west_coast_cities.csv
+  file_path: out/west_coast_cities.csv
   include_index: false
   include_preview_metadata: true
   preview_rows: 25
@@ -96,7 +98,7 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/west_coast_cities.csv — only the cities inside the bounding box
+Output: $PROJECT_ABS/out/west_coast_cities.csv — only the cities inside the bounding box
 (west of -100 lng, south of 38 lat).
 
 Note: the bounding_box_filter and dataframe_to_csv assets each include a

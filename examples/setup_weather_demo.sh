@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-weather-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -85,7 +87,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: weather_report
   upstream_asset_key: weather_by_date
-  file_path: /tmp/weather_report.csv
+  file_path: out/weather_report.csv
   include_index: false
   group_name: sink
 EOF
@@ -101,6 +103,6 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/weather_report.csv — NYC weather pivoted, one row per metric,
+Output: $PROJECT_ABS/out/weather_report.csv — NYC weather pivoted, one row per metric,
 one column per day.
 MSG

@@ -18,6 +18,8 @@ PROJECT_DIR="${1:-sensor-gapfill-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -88,7 +90,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: sensor_running_avg_report
   upstream_asset_key: sensor_running_avg
-  file_path: /tmp/sensor_running_avg.csv
+  file_path: out/sensor_running_avg.csv
   include_index: false
   group_name: sink
 EOF
@@ -104,12 +106,12 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/sensor_running_avg.csv — every hour for every sensor with
+Output: $PROJECT_ABS/out/sensor_running_avg.csv — every hour for every sensor with
 a forward-filled temperature_c plus a running average of temperature
 since the start of the series.
 
 Inspect — show the running average converging for sensor_a:
-    head -1 /tmp/sensor_running_avg.csv
-    awk -F, 'NR>1 && \$2=="sensor_a" {print}' /tmp/sensor_running_avg.csv | head -5
-    awk -F, 'NR>1 && \$2=="sensor_a" {print}' /tmp/sensor_running_avg.csv | tail -5
+    head -1 $PROJECT_ABS/out/sensor_running_avg.csv
+    awk -F, 'NR>1 && \$2=="sensor_a" {print}' $PROJECT_ABS/out/sensor_running_avg.csv | head -5
+    awk -F, 'NR>1 && \$2=="sensor_a" {print}' $PROJECT_ABS/out/sensor_running_avg.csv | tail -5
 MSG

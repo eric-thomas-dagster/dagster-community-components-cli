@@ -46,7 +46,7 @@ fi
 # file instead of going through the `acryl-datahub` CLI. The CLI uses
 # python-docker which has a known urllib3>=2 + Mac-Docker-Desktop
 # incompatibility that makes it hang on Apple Silicon.
-DATAHUB_COMPOSE="/tmp/datahub-quickstart-compose.yml"
+DATAHUB_COMPOSE="$PROJECT_ABS/datahub-quickstart-compose.yml"
 echo ">>> Fetching DataHub quickstart compose file ($DATAHUB_VERSION)"
 curl -sS \
   "https://raw.githubusercontent.com/datahub-project/datahub/master/docker/quickstart/docker-compose.quickstart-profile.yml" \
@@ -98,7 +98,7 @@ done
 
 # --- 2b. Pre-load DataHub's MySQL schema (workaround for v1.3.0 bug) ----
 echo ">>> Pre-loading DataHub init.sql into MySQL"
-DATAHUB_INIT_SQL="/tmp/datahub-init.sql"
+DATAHUB_INIT_SQL="$PROJECT_ABS/datahub-init.sql"
 curl -sS \
   "https://raw.githubusercontent.com/datahub-project/datahub/$DATAHUB_VERSION/docker/mysql-setup/init.sql" \
   | sed 's/DATAHUB_DB_NAME/datahub/g' > "$DATAHUB_INIT_SQL"
@@ -174,6 +174,7 @@ echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 rm -rf "$PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 uv add --dev -q dagster-dg-cli dagster-webserver
 

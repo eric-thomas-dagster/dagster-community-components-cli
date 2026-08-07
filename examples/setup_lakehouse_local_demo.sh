@@ -36,8 +36,8 @@
 
 set -euo pipefail
 PROJECT_DIR="${1:-lakehouse-local-demo}"
-ICEBERG_WH="/tmp/iceberg-warehouse"
-DELTA_PATH="/tmp/delta-events"
+ICEBERG_WH="$PROJECT_ABS/iceberg-warehouse"
+DELTA_PATH="$PROJECT_ABS/delta-events"
 
 echo ">>> Clearing prior local lakehouse storage"
 rm -rf "$ICEBERG_WH" "$DELTA_PATH"
@@ -46,6 +46,7 @@ mkdir -p "$ICEBERG_WH"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14

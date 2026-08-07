@@ -54,7 +54,7 @@ command -v docker >/dev/null 2>&1 || fail "docker not found."
 # ── Cube dev-server (identical setup to setup_cube_query_demo.sh) ──────────
 info "Starting local Cube via Docker on port 4000…"
 docker rm -f "$CUBE_CONTAINER" >/dev/null 2>&1 || true
-CUBE_WORK="/tmp/${PROJECT_NAME}_cube_conf"
+CUBE_WORK="$PROJECT_ABS/${PROJECT_NAME}_cube_conf"
 rm -rf "$CUBE_WORK" && mkdir -p "$CUBE_WORK/model/cubes"
 cat > "$CUBE_WORK/.env" <<'ENV'
 CUBEJS_DEV_MODE=true
@@ -139,6 +139,7 @@ for c in d.get('cubes', []):
 info "Scaffolding Dagster project…"
 uvx create-dagster project "$PROJECT_DIR" --uv-sync 2>&1 | tail -3 || fail "create-dagster failed"
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 
 info "Installing deps (dagster-community-components + langchain-openai + requests)…"
 if [ -n "${DCC_SRC:-}" ] && [ -d "$DCC_SRC" ]; then

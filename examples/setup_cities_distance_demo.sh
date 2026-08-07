@@ -20,6 +20,8 @@ PROJECT_DIR="${1:-cities-distance-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -28,7 +30,7 @@ uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — bre
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 echo ">>> Generating a 10-city CSV with lat/lng"
-cat > /tmp/cities.csv <<'EOF'
+cat > $PROJECT_ABS/out/cities.csv <<'EOF'
 city,lat,lng
 New York,40.7128,-74.0060
 Los Angeles,34.0522,-118.2437
@@ -61,7 +63,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: cities_origin
-  file_path: /tmp/cities.csv
+  file_path: out/cities.csv
   description: Origin cities (left side of pair)
   group_name: ingest
 EOF
@@ -70,7 +72,7 @@ cat > "src/$PKG/defs/csv_destinations/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: cities_dest
-  file_path: /tmp/cities.csv
+  file_path: out/cities.csv
   description: Destination cities (right side of pair)
   group_name: ingest
 EOF
@@ -129,7 +131,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: pairs_report
   upstream_asset_key: pairs_sorted
-  file_path: /tmp/city_distances.csv
+  file_path: out/city_distances.csv
   include_index: false
   columns: [city_origin, city_dest, distance_km]
   group_name: sink
@@ -143,11 +145,11 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/city_distances.csv — every (origin, destination, km)
+Output: $PROJECT_ABS/out/city_distances.csv — every (origin, destination, km)
 triple, sorted shortest-first. 10×10 cross-join minus 10 self-pairs = 90 rows.
 
 Inspect — closest + farthest pairs:
-    head -5 /tmp/city_distances.csv
+    head -5 $PROJECT_ABS/out/city_distances.csv
     echo "---"
-    tail -5 /tmp/city_distances.csv
+    tail -5 $PROJECT_ABS/out/city_distances.csv
 MSG

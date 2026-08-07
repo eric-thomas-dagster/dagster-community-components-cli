@@ -16,6 +16,8 @@ PROJECT_DIR="${1:-image-transform-demo}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pillow
@@ -43,7 +45,7 @@ cat > "src/$PKG/defs/sample_images/defs.yaml" <<EOF
 type: $PKG.components.synthetic_image_generator.component.SyntheticImageGeneratorComponent
 attributes:
   asset_name: sample_images
-  output_dir: /tmp/image_transform_demo_in
+  output_dir: out/image_transform_demo_in
   samples: default
   width: 640
   height: 640
@@ -58,7 +60,7 @@ attributes:
   asset_name: thumbnails
   upstream_asset_key: sample_images
   image_path_column: file_path
-  output_dir: /tmp/image_transform_demo_out
+  output_dir: out/image_transform_demo_out
   resize_to: [128, 128]
   preserve_aspect_ratio: true
   convert_to: webp
@@ -80,6 +82,6 @@ Materialize:
     uv run dg launch --assets '*'
 
 Inspect:
-    ls -la /tmp/image_transform_demo_in/   # 640x640 source PNGs
-    ls -la /tmp/image_transform_demo_out/  # 128px WebP thumbnails
+    ls -la $PROJECT_ABS/out/image_transform_demo_in/   # 640x640 source PNGs
+    ls -la $PROJECT_ABS/out/image_transform_demo_out/  # 128px WebP thumbnails
 MSG

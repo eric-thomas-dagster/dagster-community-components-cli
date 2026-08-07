@@ -23,7 +23,7 @@ RMQ_NAME=dg-rabbitmq-demo
 RMQ_PORT=5672
 RMQ_MGMT_PORT=15672
 QUEUE=orders
-DB_PATH="/tmp/${PROJECT_DIR}.db"
+DB_PATH="$PROJECT_ABS/${PROJECT_DIR}.db"
 
 echo ">>> 1/5  Starting RabbitMQ in Docker ($RMQ_NAME:$RMQ_PORT, mgmt:$RMQ_MGMT_PORT)"
 docker rm -f "$RMQ_NAME" >/dev/null 2>&1 || true
@@ -62,6 +62,7 @@ echo ">>> 3/5  Scaffolding Dagster project at $PROJECT_DIR"
 rm -f "$DB_PATH"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14

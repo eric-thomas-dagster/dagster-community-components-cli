@@ -40,6 +40,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pillow google-genai
@@ -81,7 +83,7 @@ attributes:
   image_model: gemini-2.5-flash-image
 
   prompt_column: prompt
-  output_dir: /tmp/nano_banana_demo
+  output_dir: out/nano_banana_demo
   output_path_column: generated_image_path
   output_filename_template: "{prompt_id}_{idx}.png"
 
@@ -100,7 +102,7 @@ Asset graph:
     image_prompts_df              ← synthetic_data_generator (image_prompts, 3 rows)
           │
           └── product_hero_images  ← gemini_image_generation (Nano Banana)
-                                    saves PNGs to /tmp/nano_banana_demo
+                                    saves PNGs to $PROJECT_ABS/out/nano_banana_demo
 
 Materialize:
     cd $PROJECT_DIR

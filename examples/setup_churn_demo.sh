@@ -16,6 +16,8 @@ PROJECT_DIR="${1:-churn-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -66,7 +68,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: churn_report
   upstream_asset_key: customers_with_churn_risk
-  file_path: /tmp/churn_predictions.csv
+  file_path: out/churn_predictions.csv
   include_index: false
   group_name: sink
 EOF
@@ -79,13 +81,13 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/churn_predictions.csv — every customer, days since last
+Output: $PROJECT_ABS/out/churn_predictions.csv — every customer, days since last
 activity, risk score, is_at_risk flag, plus contributing risk factors.
 
 Inspect — risk-level distribution + top 5 highest risks:
     uv run python -c "
     import pandas as pd
-    df = pd.read_csv('/tmp/churn_predictions.csv')
+    df = pd.read_csv('$PROJECT_ABS/out/churn_predictions.csv')
     print(f'customers: {len(df)}')
     print(df.churn_risk_level.value_counts().to_string())
     print()

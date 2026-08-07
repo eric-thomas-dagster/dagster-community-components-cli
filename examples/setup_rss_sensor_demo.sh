@@ -16,6 +16,8 @@ PROJECT_DIR="${1:-rss-sensor-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -64,7 +66,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: news_csv
   upstream_asset_key: latest_news_summary
-  file_path: /tmp/hn_news.csv
+  file_path: out/hn_news.csv
   include_index: false
   group_name: sink
 EOF
@@ -94,5 +96,5 @@ Then start the sensor in the UI:
     # minute and triggers a re-materialization whenever new HN frontpage
     # entries appear. No auth required — public RSS.
 
-Output: /tmp/hn_news.csv — title / link / pubDate of HN frontpage entries.
+Output: $PROJECT_ABS/out/hn_news.csv — title / link / pubDate of HN frontpage entries.
 MSG

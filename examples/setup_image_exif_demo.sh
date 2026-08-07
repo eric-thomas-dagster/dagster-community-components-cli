@@ -17,6 +17,7 @@ PROJECT_DIR="${1:-image-exif-demo}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas pillow piexif
@@ -44,7 +45,7 @@ cat > "src/$PKG/defs/sample_images/defs.yaml" <<EOF
 type: $PKG.components.synthetic_image_generator.component.SyntheticImageGeneratorComponent
 attributes:
   asset_name: sample_images
-  output_dir: /tmp/image_exif_demo_in
+  output_dir: out/image_exif_demo_in
   samples: default
   width: 640
   height: 480

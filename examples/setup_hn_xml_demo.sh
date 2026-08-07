@@ -18,6 +18,8 @@ PROJECT_DIR="${1:-hn-xml-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -80,7 +82,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: feed_report
   upstream_asset_key: feed_items
-  file_path: /tmp/hn_xml_frontpage.csv
+  file_path: out/hn_xml_frontpage.csv
   include_index: false
   columns: [title, link]
   group_name: sink
@@ -94,9 +96,9 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/hn_xml_frontpage.csv — same shape as the regex-parser
+Output: $PROJECT_ABS/out/hn_xml_frontpage.csv — same shape as the regex-parser
 variant of the HN demo, but extracted via xpath instead of regex.
 
 Inspect:
-    head -10 /tmp/hn_xml_frontpage.csv
+    head -10 $PROJECT_ABS/out/hn_xml_frontpage.csv
 MSG

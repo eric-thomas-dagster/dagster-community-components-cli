@@ -13,7 +13,7 @@
 #                  │
 #                  └── transcripts_translated  ← translation_api_asset (es/fr/de/ja)
 #                            │
-#                            └── transcripts_csv  ← /tmp/speech_translate.csv
+#                            └── transcripts_csv  ← $PROJECT_ABS/out/speech_translate.csv
 #
 # REQUIRED ENV VAR
 #   GOOGLE_APPLICATION_CREDENTIALS  service-account JSON
@@ -32,6 +32,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas google-auth google-cloud-speech google-cloud-translate
@@ -105,7 +107,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: transcripts_csv
   upstream_asset_key: transcripts_translated
-  file_path: /tmp/speech_translate.csv
+  file_path: out/speech_translate.csv
   include_index: false
   description: Transcripts plus translations.
   group_name: sink
@@ -122,12 +124,12 @@ Asset graph:
                     │
                     └── transcripts_translated  ← translation_api_asset (es / fr / de / ja)
                               │
-                              └── transcripts_csv  ← /tmp/speech_translate.csv
+                              └── transcripts_csv  ← $PROJECT_ABS/out/speech_translate.csv
 
 Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
 Inspect:
-    cat /tmp/speech_translate.csv
+    cat $PROJECT_ABS/out/speech_translate.csv
 MSG

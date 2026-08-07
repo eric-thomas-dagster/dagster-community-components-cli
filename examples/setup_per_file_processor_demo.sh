@@ -8,21 +8,22 @@ PROJECT_DIR="${1:-per-file-demo}"
 echo ">>> Scaffolding"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
 uv add --dev -q dagster-dg-cli dagster-webserver
 
-mkdir -p /tmp/per_file_demo/incoming /tmp/per_file_demo/archive
+mkdir -p $PROJECT_ABS/out/per_file_demo/incoming $PROJECT_ABS/out/per_file_demo/archive
 echo ">>> Writing 5 synthetic CSV files into the inbox"
 for i in 1 2 3 4 5; do
-  echo "id,name,value" > "/tmp/per_file_demo/incoming/order_$i.csv"
+  echo "id,name,value" > "$PROJECT_ABS/out/per_file_demo/incoming/order_$i.csv"
   for j in $(seq 1 4); do
-    echo "$j,item_${i}_${j},$((100 * i + j))" >> "/tmp/per_file_demo/incoming/order_$i.csv"
+    echo "$j,item_${i}_${j},$((100 * i + j))" >> "$PROJECT_ABS/out/per_file_demo/incoming/order_$i.csv"
   done
 done
-ls /tmp/per_file_demo/incoming/
+ls $PROJECT_ABS/out/per_file_demo/incoming/
 
 cat > "src/$PKG/file_callables.py" <<'PY'
 """Per-file processor for the demo."""
@@ -54,7 +55,7 @@ attributes:
   default_status: STOPPED
 
   storage: local
-  local_directory: /tmp/per_file_demo/incoming
+  local_directory: out/per_file_demo/incoming
   pattern: "*.csv"
   max_files_per_run: 50
 
@@ -73,5 +74,5 @@ Run once to test:
     cd $PROJECT_DIR && uv run dg launch --job process_inbox_csvs
 
 Expected: 5 files processed in parallel, each parsed, then moved to
-    /tmp/per_file_demo/incoming/archive/
+    $PROJECT_ABS/out/per_file_demo/incoming/archive/
 MSG

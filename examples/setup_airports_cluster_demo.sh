@@ -16,6 +16,8 @@ PROJECT_DIR="${1:-airports-cluster-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -60,7 +62,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: airports_report
   upstream_asset_key: airports_clustered
-  file_path: /tmp/airports_clusters.csv
+  file_path: out/airports_clusters.csv
   include_index: false
   group_name: sink
 EOF
@@ -73,13 +75,13 @@ Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
-Output: /tmp/airports_clusters.csv — every airport tagged with a
+Output: $PROJECT_ABS/out/airports_clusters.csv — every airport tagged with a
 DBSCAN cluster_id (-1 = noise/outlier, 0+ = cluster ID).
 
 Inspect — top 10 metro clusters by airport count:
     uv run python -c "
     import pandas as pd
-    df = pd.read_csv('/tmp/airports_clusters.csv')
+    df = pd.read_csv('$PROJECT_ABS/out/airports_clusters.csv')
     print(f'Total airports: {len(df)}')
     print(f'Noise (rural/isolated): {(df.cluster_id == -1).sum()}')
     print(f'Distinct metro clusters: {df[df.cluster_id >= 0].cluster_id.nunique()}')

@@ -68,6 +68,8 @@ fi
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas redis
@@ -129,7 +131,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: orders_report
   upstream_asset_key: orders_from_redis
-  file_path: /tmp/redis_orders_report.csv
+  file_path: out/redis_orders_report.csv
   group_name: report
 EOF
 
@@ -142,7 +144,7 @@ Materialize:
     uv run dg launch --assets '*'
 
 Verify:
-    head /tmp/redis_orders_report.csv
+    head $PROJECT_ABS/out/redis_orders_report.csv
     redis-cli --tls -h "\$REDIS_HOST" -p 6380 -a "\$REDIS_PASSWORD" KEYS "ORD*" | head
 
 Teardown:

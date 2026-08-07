@@ -11,6 +11,8 @@ PROJECT_DIR="${1:-analytics-demo}"
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas numpy scikit-learn scipy statsmodels imbalanced-learn shapely geopy joblib
@@ -219,7 +221,7 @@ def trained_model() -> str:
     X = np.random.RandomState(42).normal(0, 1, (50, 3))
     y = (X[:, 0] + X[:, 1] > 0).astype(int)
     m = LogisticRegression().fit(X, y)
-    path = "/tmp/analytics_demo_model.pkl"
+    path = "out/analytics_demo_model.pkl"
     joblib.dump(m, path)
     return path
 
@@ -320,7 +322,7 @@ write_yaml "model_score" "type: $PKG.components.model_score.component.ModelScore
 attributes:
   asset_name: model_predictions
   upstream_asset_key: ml_dataset
-  model_path: /tmp/analytics_demo_model.pkl
+  model_path: $PROJECT_ABS/out/analytics_demo_model.pkl
   feature_columns: [x1, x2, x3]
   deps:
     - trained_model

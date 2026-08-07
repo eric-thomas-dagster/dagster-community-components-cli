@@ -56,6 +56,7 @@ docker exec "$DB2_NAME" su - "$DB2_USER" -c "db2 connect to $DB2_DB; db2 'VALUES
 echo ">>> 3/5  Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
@@ -81,7 +82,7 @@ write_yaml() {
 write_yaml "local_parquet_io_manager" "type: $PKG.components.local_parquet_io_manager.component.LocalParquetIOManagerComponent
 attributes:
   resource_key: io_manager
-  base_dir: /tmp/db2-demo-storage
+  base_dir: out/db2-demo-storage
   create_dir: true"
 
 write_yaml "db2_resource" "type: $PKG.components.db2_resource.component.Db2ResourceComponent

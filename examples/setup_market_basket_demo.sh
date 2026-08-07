@@ -17,6 +17,8 @@ PROJECT_DIR="${1:-market-basket-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -50,10 +52,10 @@ for order_id in range(1, 201):
     items += random.sample(extras, k=random.randint(1, 3))
     for item in set(items):
         rows.append({"order_id": f"ORD{order_id:04d}", "product_name": item})
-with open("/tmp/baskets.csv", "w", newline="") as f:
+with open("$PROJECT_ABS/out/baskets.csv", "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=rows[0].keys())
     w.writeheader(); w.writerows(rows)
-print(f"wrote /tmp/baskets.csv: {len(rows)} line items across 200 baskets")
+print(f"wrote $PROJECT_ABS/out/baskets.csv: {len(rows)} line items across 200 baskets")
 PY
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
@@ -73,7 +75,7 @@ cat > "src/$PKG/defs/file_ingestion/defs.yaml" <<EOF
 type: $PKG.components.file_ingestion.component.FileIngestionComponent
 attributes:
   asset_name: order_line_items
-  file_path: /tmp/baskets.csv
+  file_path: out/baskets.csv
   description: 200 synthetic shopping baskets with item bundles
   group_name: ingest
 EOF
@@ -120,7 +122,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: strong_rules_report
   upstream_asset_key: strong_rules
-  file_path: /tmp/strong_rules.csv
+  file_path: out/strong_rules.csv
   include_index: false
 EOF
 
@@ -129,7 +131,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: top_antecedents_report
   upstream_asset_key: rules_by_antecedent
-  file_path: /tmp/rules_by_antecedent.csv
+  file_path: out/rules_by_antecedent.csv
   include_index: false
 EOF
 
@@ -153,10 +155,10 @@ Materialize:
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Outputs:
-  /tmp/strong_rules.csv             — rules with lift > 1.5 (the actionable ones)
-  /tmp/rules_by_antecedent.csv      — for each antecedent, the count of consequents and best lift
+  $PROJECT_ABS/out/strong_rules.csv             — rules with lift > 1.5 (the actionable ones)
+  $PROJECT_ABS/out/rules_by_antecedent.csv      — for each antecedent, the count of consequents and best lift
 
 Inspect:
-    head /tmp/strong_rules.csv
-    head /tmp/rules_by_antecedent.csv
+    head $PROJECT_ABS/out/strong_rules.csv
+    head $PROJECT_ABS/out/rules_by_antecedent.csv
 MSG

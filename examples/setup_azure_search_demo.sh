@@ -75,6 +75,8 @@ fi
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas azure-search-documents azure-identity
@@ -134,7 +136,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: search_results_report
   upstream_asset_key: high_value_search_results
-  file_path: /tmp/azure_search_results.csv
+  file_path: out/azure_search_results.csv
   group_name: report
 EOF
 
@@ -147,7 +149,7 @@ Materialize:
     uv run dg launch --assets '*'
 
 Verify:
-    head /tmp/azure_search_results.csv
+    head $PROJECT_ABS/out/azure_search_results.csv
 
 Teardown:
     az search service delete -g dagster-demo-rg -n <service> --yes

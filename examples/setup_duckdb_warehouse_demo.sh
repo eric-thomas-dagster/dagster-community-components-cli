@@ -11,7 +11,7 @@
 #                     → iris_summary (Python asset, downstream)
 #                     → cron_schedule (job + 02:00 schedule)
 #
-# Outputs land as TWO tables in /tmp/iris_warehouse.duckdb (queryable
+# Outputs land as TWO tables in $PROJECT_ABS/out/iris_warehouse.duckdb (queryable
 # directly with the `duckdb` CLI), not as CSV files.
 
 set -euo pipefail
@@ -20,6 +20,8 @@ PROJECT_DIR="${1:-duckdb-warehouse-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -49,7 +51,7 @@ cat > "src/$PKG/defs/duckdb_io_manager/defs.yaml" <<EOF
 type: $PKG.components.duckdb_io_manager.component.DuckDBIOManagerComponent
 attributes:
   resource_key: io_manager
-  database: /tmp/iris_warehouse.duckdb
+  database: out/iris_warehouse.duckdb
   schema_name: main
 EOF
 
@@ -91,7 +93,7 @@ Materialize once (manual seed):
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Inspect the warehouse directly:
-    uv run python -c "import duckdb; print(duckdb.connect('/tmp/iris_warehouse.duckdb').execute('SHOW TABLES').fetchall()); print(duckdb.connect('/tmp/iris_warehouse.duckdb').execute('SELECT * FROM iris_summary').fetch_df())"
+    uv run python -c "import duckdb; print(duckdb.connect('$PROJECT_ABS/out/iris_warehouse.duckdb').execute('SHOW TABLES').fetchall()); print(duckdb.connect('$PROJECT_ABS/out/iris_warehouse.duckdb').execute('SELECT * FROM iris_summary').fetch_df())"
 
 Then start the UI:
     cd $PROJECT_DIR && uv run dg dev

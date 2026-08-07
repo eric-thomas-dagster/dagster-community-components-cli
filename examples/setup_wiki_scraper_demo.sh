@@ -17,6 +17,8 @@ PROJECT_DIR="${1:-wiki-scraper-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -83,7 +85,7 @@ type: $PKG.components.dataframe_to_json.component.DataframeToJsonComponent
 attributes:
   asset_name: page_tables_report
   upstream_asset_key: tables_exploded
-  file_path: /tmp/wiki_tables.json
+  file_path: out/wiki_tables.json
   orient: records
   indent: 2
   group_name: sink
@@ -100,13 +102,13 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev
 
-Output: /tmp/wiki_tables.json — every <table> on the Wikipedia "List of
+Output: $PROJECT_ABS/out/wiki_tables.json — every <table> on the Wikipedia "List of
 countries by GDP (nominal)" page, parsed into structured rows-of-cells.
 
 Inspect:
     uv run python -c "
     import json
-    tables = json.load(open('/tmp/wiki_tables.json'))
+    tables = json.load(open('$PROJECT_ABS/out/wiki_tables.json'))
     print(f'Found {len(tables)} tables')
     biggest = max(tables, key=lambda t: len(t['table']))
     print(f'Biggest table: {len(biggest[\"table\"])} rows')

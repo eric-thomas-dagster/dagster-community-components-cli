@@ -3,7 +3,7 @@
 #
 # Pulls Palmer Penguins data, fills missing values, one-hot encodes categorical
 # columns, standard-scales numeric features, writes the ML-ready feature matrix
-# to /tmp/penguins_features.parquet.
+# to $PROJECT_ABS/out/penguins_features.parquet.
 #
 # Pipeline (5 components, all autoloaded by `dg`):
 #     file_ingestion → imputation → one_hot_encoding → feature_scaler → dataframe_to_parquet
@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-penguins-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
@@ -77,7 +79,7 @@ type: $PKG.components.dataframe_to_parquet.component.DataframeToParquetComponent
 attributes:
   asset_name: penguins_features
   upstream_asset_key: penguins_scaled
-  file_path: /tmp/penguins_features.parquet
+  file_path: out/penguins_features.parquet
   compression: snappy
   index: false
   group_name: sink
@@ -94,5 +96,5 @@ Materialize headlessly:
 Or open the UI:
     cd $PROJECT_DIR && uv run dg dev   # http://localhost:3000
 
-Output: /tmp/penguins_features.parquet — 344 rows × ~14 columns.
+Output: $PROJECT_ABS/out/penguins_features.parquet — 344 rows × ~14 columns.
 MSG

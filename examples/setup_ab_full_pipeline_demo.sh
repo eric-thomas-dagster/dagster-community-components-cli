@@ -15,6 +15,8 @@ PROJECT_DIR="${1:-ab-full-pipeline-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding deps"
@@ -125,7 +127,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: results_report
   upstream_asset_key: ab_test_results
-  file_path: /tmp/ab_results.csv
+  file_path: out/ab_results.csv
   include_index: false
 EOF
 
@@ -134,7 +136,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: assignments_report
   upstream_asset_key: user_assignments
-  file_path: /tmp/ab_assignments.csv
+  file_path: out/ab_assignments.csv
   include_index: false
 EOF
 
@@ -143,7 +145,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: trend_report
   upstream_asset_key: daily_trend
-  file_path: /tmp/ab_trend.csv
+  file_path: out/ab_trend.csv
   include_index: false
 EOF
 
@@ -152,7 +154,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: sizing_report
   upstream_asset_key: next_experiment_sizing
-  file_path: /tmp/ab_sizing.csv
+  file_path: out/ab_sizing.csv
   include_index: false
 EOF
 
@@ -176,8 +178,8 @@ Materialize:
     cd $PROJECT_DIR && uv run dg launch --assets '*'
 
 Outputs:
-  /tmp/ab_assignments.csv  — 5000 users randomly split into control/treatment
-  /tmp/ab_results.csv      — significance verdict
-  /tmp/ab_trend.csv        — daily conversion rates per variant
-  /tmp/ab_sizing.csv       — required sample size for the NEXT experiment
+  $PROJECT_ABS/out/ab_assignments.csv  — 5000 users randomly split into control/treatment
+  $PROJECT_ABS/out/ab_results.csv      — significance verdict
+  $PROJECT_ABS/out/ab_trend.csv        — daily conversion rates per variant
+  $PROJECT_ABS/out/ab_sizing.csv       — required sample size for the NEXT experiment
 MSG

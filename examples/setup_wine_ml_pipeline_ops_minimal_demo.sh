@@ -23,6 +23,8 @@ PROJECT_DIR="${1:-wine-ml-pipeline-ops-minimal-demo}"
 echo ">>> Scaffolding canonical Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps (no dagster-community-components — pure Dagster + ops)"
@@ -81,7 +83,7 @@ def train_op(scaled: pd.DataFrame) -> DecisionTreeClassifier:
 def predict_and_write_op(clf: DecisionTreeClassifier, scaled: pd.DataFrame) -> pd.DataFrame:
     out = scaled.copy()
     out["predicted"] = clf.predict(scaled[FEATURES])
-    out.to_csv("/tmp/wine_predictions.csv", index=False)
+    out.to_csv("out/wine_predictions.csv", index=False)
     return out
 
 
@@ -91,7 +93,7 @@ def importance_and_write_op(clf: DecisionTreeClassifier) -> pd.DataFrame:
         "feature": FEATURES,
         "importance": clf.feature_importances_,
     }).sort_values("importance", ascending=False)
-    df.to_csv("/tmp/wine_importance.csv", index=False)
+    df.to_csv("out/wine_importance.csv", index=False)
     return df
 
 
@@ -108,7 +110,7 @@ def cv_and_write_op(scaled: pd.DataFrame) -> pd.DataFrame:
         "test_score": scores["test_score"],
         "fit_time": scores["fit_time"],
     })
-    df.to_csv("/tmp/wine_cv.csv", index=False)
+    df.to_csv("out/wine_cv.csv", index=False)
     return df
 
 
@@ -159,6 +161,6 @@ echo "        → http://localhost:3000 — click Materialize all"
 echo ""
 echo "Or headless:"
 echo "    cd $PROJECT_DIR && uv run dg launch --assets '*'"
-echo "    ls -la /tmp/wine_*.csv"
+echo "    ls -la $PROJECT_ABS/out/wine_*.csv"
 echo ""
 echo "See examples/wine_ml_pipeline_ops_minimal.md for the full walkthrough."

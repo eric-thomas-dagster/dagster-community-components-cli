@@ -13,7 +13,7 @@ PULSAR_NAME=dg-pulsar-demo
 PULSAR_PORT=6650
 PULSAR_HTTP_PORT=8081
 TOPIC=persistent://public/default/events
-DB_PATH="/tmp/${PROJECT_DIR}.db"
+DB_PATH="$PROJECT_ABS/${PROJECT_DIR}.db"
 
 echo ">>> 1/5  Starting Pulsar in Docker (standalone mode) on :$PULSAR_PORT (HTTP :$PULSAR_HTTP_PORT)"
 docker rm -f "$PULSAR_NAME" >/dev/null 2>&1 || true
@@ -54,6 +54,7 @@ echo ">>> 3/5  Scaffolding Dagster project at $PROJECT_DIR"
 rm -f "$DB_PATH"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
 PKG="$(ls src/ | head -1)"
 
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14

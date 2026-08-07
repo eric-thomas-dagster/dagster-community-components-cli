@@ -41,6 +41,8 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+PROJECT_ABS="$(pwd)"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas litellm
@@ -170,7 +172,7 @@ type: $PKG.components.dataframe_to_csv.component.DataframeToCsvComponent
 attributes:
   asset_name: compare_csv
   upstream_asset_key: multi_provider_compare
-  file_path: /tmp/litellm_multi_provider.csv
+  file_path: out/litellm_multi_provider.csv
   include_index: false
   description: Per-ticket summaries from each LiteLLM-routed provider, side by side.
   group_name: sink
@@ -189,12 +191,12 @@ Asset graph (whichever providers had keys):
                   │
                   └── multi_provider_compare    ← pandas (side-by-side join)
                             │
-                            └── compare_csv      ← /tmp/litellm_multi_provider.csv
+                            └── compare_csv      ← $PROJECT_ABS/out/litellm_multi_provider.csv
 
 Materialize:
     cd $PROJECT_DIR
     uv run dg launch --assets '*'
 
 Inspect:
-    cat /tmp/litellm_multi_provider.csv
+    cat $PROJECT_ABS/out/litellm_multi_provider.csv
 MSG

@@ -61,6 +61,7 @@ fi
 echo ">>> Scaffolding Dagster project at $PROJECT_DIR"
 uvx create-dagster@latest project "$PROJECT_DIR" --no-uv-sync >/dev/null
 cd "$PROJECT_DIR"
+mkdir -p out
 PKG="$(ls src/ | head -1)"
 
 uv add -q pandas google-auth google-cloud-documentai reportlab
@@ -87,7 +88,7 @@ cat > "src/$PKG/defs/sample_documents/defs.yaml" <<EOF
 type: $PKG.components.synthetic_pdf_generator.component.SyntheticPdfGeneratorComponent
 attributes:
   asset_name: sample_documents
-  output_dir: /tmp/docai_demo_pdfs
+  output_dir: out/docai_demo_pdfs
   samples: default
   group_name: ingest
 EOF
