@@ -240,6 +240,7 @@ The **content** is identical — same fit params, same output columns, same file
 
 ## See also
 
+- [`wine_ml_pipeline_minimal.md`](wine_ml_pipeline_minimal.md) — same pipeline with only 3 assets (scaling/splitting/CSV writes are plain Python; most Prefect-like).
 - [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) — same as raw, but the multi-asset body calls plain Python helper funcs.
 - [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same shape with @op + @graph_multi_asset — first-class typed I/O per step.
 - [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python instantiation).

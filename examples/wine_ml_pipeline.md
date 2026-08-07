@@ -43,6 +43,7 @@ uv run dg launch --assets '*'
 
 ## See also
 
+- [`wine_ml_pipeline_minimal.md`](wine_ml_pipeline_minimal.md) — same pipeline with only 3 assets (scaling/splitting/CSV writes are plain Python; most Prefect-like).
 - [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline as one Python file (community components, no YAML).
 - [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — same pipeline as one Python file, no components (pure Dagster + inline).
 - [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same pipeline with @op-decomposed model stage inside a @graph_multi_asset.

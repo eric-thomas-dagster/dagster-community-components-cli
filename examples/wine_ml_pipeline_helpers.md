@@ -147,6 +147,7 @@ Same tests aren't possible against `_raw`-style inline logic without either (a) 
 
 ## See also
 
+- [`wine_ml_pipeline_minimal.md`](wine_ml_pipeline_minimal.md) — same pipeline with only 3 assets (scaling/splitting/CSV writes are plain Python; most Prefect-like).
 - [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — inline logic (this variant's starting point).
 - [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same shape but helpers are `@dg.op` functions inside a `@dg.graph_multi_asset`.
 - [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python instantiation).

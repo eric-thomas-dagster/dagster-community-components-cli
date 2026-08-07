@@ -257,6 +257,7 @@ Ops also compose across graph assets — you can reuse the same `train_model` op
 
 ## See also
 
+- [`wine_ml_pipeline_minimal.md`](wine_ml_pipeline_minimal.md) — same pipeline with only 3 assets (scaling/splitting/CSV writes are plain Python; most Prefect-like).
 - [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — same pipeline, all `@asset` funcs, no ops.
 - [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python instantiation).
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML `defs.yaml` files.
