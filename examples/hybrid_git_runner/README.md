@@ -1,10 +1,10 @@
 # hybrid_git_runner — Deploy once. Iterate with `git push`.
 
-> **⚠️ Status: DESIGN-VERIFIED, NOT RUNTIME-VERIFIED.**
-> - Component subclass loads correctly (verified locally).
-> - `deploy.sh` scaffolds + emits the right `deploy-docker` command shape.
-> - **BUT**: no end-to-end test against a live Hybrid agent has been run yet — no such agent is currently deployed. And the prebuilt image referenced in Mode 1 (`ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest`) has NOT been built + pushed yet. Anyone trying Mode 1 today gets a 404. Modes 2 (BYO --registry) and 3 (--image) require a Hybrid agent + a real image before they can be validated.
-> - See [Testing this end-to-end](#testing-this-end-to-end) for the concrete steps required to run the first live verification. Estimate: ~30 min of one-time infra setup on the account holder's side.
+> **⚠️ Status: DESIGN-VERIFIED, RUNTIME VERIFICATION IN PROGRESS.**
+> - Component subclass loads correctly (verified locally). ✓
+> - `deploy.sh` scaffolds + emits the right `deploy-docker` command shape (verified via dry-run). ✓
+> - Prebuilt image pushed to `ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest` (2026-08-07). ✓
+> - **Still pending**: no live Hybrid agent has been deployed against a test Dagster+ deployment yet — end-to-end `./deploy.sh` → `git push` → asset materializes flow is not yet verified. See [Testing this end-to-end](#testing-this-end-to-end) for the ~30 min one-time infra setup needed to close that gap.
 
 **A "runner container" for Dagster+ Hybrid.** Deploy it ONCE to your Hybrid agent; from then on, iterate by pushing `.py` flows to a git repo the runner watches. No Docker rebuild per iteration. Same ergonomics as Prefect's Managed pool — you push code, the platform runs it.
 
