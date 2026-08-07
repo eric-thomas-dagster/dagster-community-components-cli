@@ -30,7 +30,7 @@ Sibling component for the LLM domain. **5 ops in v1**: `llm_call`, `route` (rout
 Contains the **"Why Dagster (not just a job runner)"** section — the sharpest pitch for the assets model over a run-and-log-it approach:
 
 - Every step's decision (router pick, arbitrator reasoning, critique history) is a **browsable versioned asset with typed metadata**: `cost_usd` (Float), `latency_ms` (Int), `tokens_total` (Int), `model_fingerprint` (Text), `materialized_at` (Timestamp), `op` (Text) — no log-grepping.
-- **Dagster+ Insights** consumes the numeric metadata automatically → dashboards + per-metric alerts (`alert if cost > $10 in 1h`) with zero code.
+- **Dagster+ Insights** — promote the numeric metadata (`cost_usd`, `latency_ms`, `tokens_total`, `n_llm_calls`) into custom metrics from the Dagster+ UI (a few clicks, no code). Once promoted, dashboards + per-metric alerts follow — no separate metrics-export pipeline to build.
 - **Per-op Dagster kinds** — filter the whole catalog to "show me every `debate` step" or "every `route` step" across every pipeline.
 - **Time-travel to any partition** — the demo ships 3 dates, each = different question, each = independently browsable decision.
 - **Deploying to Dagster+ Serverless** — relative paths, ephemeral filesystem story, how to swap file sinks for warehouse `table_sinks` for durable outputs.

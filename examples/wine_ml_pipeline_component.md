@@ -266,7 +266,7 @@ post_processing:
 **What partitioning gives you** — the "why Dagster" story for ML:
 
 - **Every retrain is a browsable artifact.** Click `customer_churn_metrics` → the partitions strip shows every daily rebuild. Click any partition → its accuracy, precision, recall, F1, ROC-AUC as inline metadata. Compare `2026-08-05` (before the feature launch) to `2026-08-06` (after) — is the model still good?
-- **Per-partition cost tracking.** `warehouse_query` SQL execution + training time land as materialization metadata. Dagster+ Insights turns these into a "cost per rebuild over time" dashboard.
+- **Per-partition cost tracking.** `warehouse_query` SQL execution + training time land as materialization metadata. In Dagster+, promote those numeric fields into Insights custom metrics via the UI to get a "cost per rebuild over time" dashboard + alert rules.
 - **Backfill any date range.** `dg launch --assets '*' --partition-range 2026-08-01...2026-08-07` retrains the whole week. Each partition is independent.
 - **`{partition_key}` in every string field.** Source SQL. Model save path. Table names (if you want per-day tables) OR `partition_column:` (Pattern B — one table, one column tags each row's partition).
 - **Pattern A vs. Pattern B for table_sinks:**

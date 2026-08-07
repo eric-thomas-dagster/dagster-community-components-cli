@@ -41,14 +41,14 @@ Click `research_bot_debated` in the catalog. See **every prior materialization**
 
 In Prefect, all of this is a `run.log` you `grep`.
 
-### 2. Numeric metadata → Dagster+ Insights automatically
+### 2. Numeric metadata → Dagster+ Insights (promote via UI, few clicks)
 
-Because `cost_usd`, `latency_ms`, `tokens_total`, `n_llm_calls` are typed **numeric** metadata (`FloatMetadataValue` / `IntMetadataValue`), Dagster+ Insights automatically turns them into:
+Because `cost_usd`, `latency_ms`, `tokens_total`, `n_llm_calls` are typed **numeric** metadata (`FloatMetadataValue` / `IntMetadataValue`), you can **promote any of them into a Dagster+ Insights custom metric** — a few clicks in the UI, no code — and then:
 
-- **Custom metrics** dashboards — plot median pipeline cost over time, per-step latency histograms.
-- **Alerts** — "alert if any pipeline's cost exceeds $0.10 per partition" in the UI, no code.
+- **Custom metrics dashboards** — plot median pipeline cost over time, per-step latency histograms.
+- **Alerts** — configured on the custom metric in the UI ("alert if any pipeline's cost exceeds $0.10 per partition").
 
-In Prefect, that's a manual export → Grafana → alertmanager pipeline you build.
+In Prefect, you'd first instrument the numeric values yourself, then build the whole export → Grafana → alertmanager pipeline before you could even define the alert.
 
 ### 3. Per-op kinds — filter the whole catalog by pipeline op
 
@@ -138,7 +138,7 @@ dagster-cloud serverless deploy-python-executable \
   ```
   Same `api_key_env_var: OPENAI_API_KEY` in the YAML; the deploy pipeline injects it.
 
-**In the Dagster+ UI post-deploy:** every partition's materialization + full metadata (cost, latency, tokens, router reasoning, arbitrator reasoning, critique history) is browsable in the asset catalog. Dagster+ Insights automatically consumes the numeric metadata (`cost_usd`, `latency_ms`, `tokens_total`) as custom metrics — dashboardable per pipeline, per step, per partition, with alerts.
+**In the Dagster+ UI post-deploy:** every partition's materialization + full metadata (cost, latency, tokens, router reasoning, arbitrator reasoning, critique history) is browsable in the asset catalog. Dagster+ Insights users can **promote the numeric metadata** (`cost_usd`, `latency_ms`, `tokens_total`) into custom metrics from the UI — once promoted, dashboards per pipeline / per step / per partition + alert rules follow.
 
 ## When to reach for this vs. the narrow AI components
 
