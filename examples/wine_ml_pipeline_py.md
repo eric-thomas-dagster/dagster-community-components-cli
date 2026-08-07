@@ -207,5 +207,6 @@ Both shapes call the *same* component classes with the *same* validation. Mix th
 ## See also
 
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline, YAML shape (per-component `defs.yaml`).
+- [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — same pipeline as one Python file, no components (pure Dagster + raw `@dg.asset` + inline pandas/sklearn — most Prefect-familiar).
 - [`titanic_complete.md`](titanic_complete.md) — larger ML pipeline (12 components) on the Titanic dataset.
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.
