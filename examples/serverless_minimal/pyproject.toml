@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "hello"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["dagster>=1.10", "dagster-cloud"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/hello"]
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "hello"

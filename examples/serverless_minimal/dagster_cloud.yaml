@@ -1,0 +1,4 @@
+locations:
+  - location_name: hello
+    code_source:
+      module_name: hello.definitions

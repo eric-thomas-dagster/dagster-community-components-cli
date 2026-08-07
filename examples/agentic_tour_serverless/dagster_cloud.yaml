@@ -1,0 +1,4 @@
+locations:
+  - location_name: agentic_tour
+    code_source:
+      module_name: agentic_tour.definitions
