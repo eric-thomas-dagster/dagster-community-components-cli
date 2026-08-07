@@ -12,6 +12,30 @@ Plus meaningful differentiators Prefect can't cleanly match: mixed-agent deploym
 
 Before the deploy commands, the deps-versioning story matters — it's the biggest "will this actually work for my prod use case?" question. Here's the honest comparison, checked against Prefect's own docs:
 
+### Terminology alignment first — "deployment" means different things
+
+- **Prefect "deployment"** = one flow's config (schedule + parameters + `pip_packages`). Every deployment in the same Managed pool shares the same `prefecthq/prefect:3-latest` base image.
+- **Dagster+ "deployment"** = the top-level environment (`prod`, `staging`, or a branch deployment for a PR). Multiple **code locations** live inside one deployment.
+
+So mapping the concepts fairly:
+
+| | Prefect Managed | Dagster+ Serverless |
+|---|---|---|
+| Top-level environment | Workspace | Deployment (`prod`, `staging`, branch-deployment/*) |
+| Isolated unit that runs code | Deployment (one flow) | Code location (one pex bundle) |
+| Dagster / Prefect base version | Fixed to `prefecthq/prefect:3-latest` (customer cannot override) | **Whatever the customer pins** in each code location's `pyproject.toml` (`dagster>=1.10`, `dagster==1.10.15`, etc.) |
+| Version isolation across units | `pip_packages` per deployment, but shared base image | **Full hermetic pex per code location** — each can pin a completely different Python + Dagster + pandas + everything |
+
+**The differentiator that matters for SE conversations:**
+
+> "In Dagster+ Serverless, different code locations in the same deployment can run completely different versions of any package — including Dagster itself. Your `prod` deployment can host `location_A` running `dagster==1.10 + pandas==1.5.3` alongside `location_B` running `dagster==1.13 + pandas==2.2`. Same UI, same run history, fully isolated pex bundles.
+>
+> Prefect Managed has no equivalent — the base image is pinned per pool. Different bases means different pools, or leaving Managed for Docker workers."
+
+**And**: Dagster+ doesn't dictate a Dagster version to you. Use `dagster==1.10.15` for a stable code location, `dagster==1.13.17` for a bleeding-edge one — the deployment doesn't care.
+
+
+
 | Scenario | Prefect Managed | Dagster+ Serverless (pex) | Dagster+ Hybrid runner |
 |---|---|---|---|
 | **Add a package** | `pip_packages: [pandas]` in deployment config | Add to `pyproject.toml` `dependencies` — baked into pex at deploy time | Add to flows repo's `requirements.txt` (Tier 1) OR rebuild runner (Tier 2) |
