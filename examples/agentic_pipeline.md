@@ -1,10 +1,10 @@
 # Agentic Pipeline (AgenticPipelineComponent)
 
-**One YAML file. Whole 5-step agentic workflow. Every step is a first-class Dagster asset with typed metadata.**
+**One YAML file. Whole 5-step agentic workflow. Every step is a first-class Dagster asset with typed metadata — partitioned across 3 distinct questions.**
 
 The sibling of `ml_pipeline` for the LLM domain. `source: + steps: + outputs:` shape you already know from `polars_pipeline` / `warehouse_pipeline` / `pyspark_pipeline` / `ml_pipeline`. Five ops in v1: `llm_call`, `route`, `debate`, `critique_loop`, `synthesize`.
 
-**Setup script:** [`setup_agentic_pipeline_demo.sh`](./setup_agentic_pipeline_demo.sh) — scaffolds a full Dagster project + installs the component + writes a `defs.yaml` running all 5 ops end-to-end. `bash setup_agentic_pipeline_demo.sh` and `uv run dg dev`.
+**Setup script:** [`setup_agentic_pipeline_demo.sh`](./setup_agentic_pipeline_demo.sh) — scaffolds a full Dagster project + installs the component + writes a `defs.yaml` running all 5 ops end-to-end, partitioned across 3 dates with a different question per partition. `bash setup_agentic_pipeline_demo.sh` and `uv run dg dev`.
 
 ## What the demo shows
 
@@ -56,33 +56,89 @@ Every asset gets its op as a `kind` tag. `research_bot_debated` has kinds `[llm,
 
 Now `dg list defs --kinds debate` shows every debate step across every pipeline in your org — impossible without an assets graph.
 
-### 4. Time-travel to any partition
+### 4. Time-travel to any partition — the demo actually does this
 
-`{partition_key}` in your source text / URL / file path templates at compute time. Add partitions via `post_processing:`:
+This demo ships partitioned across 3 dates (`2026-08-05`, `2026-08-06`, `2026-08-07`), each reading a **different question** from `questions/{partition_key}.txt`. Sinks land in `out/{partition_key}/` — one directory per partition.
+
+**Backfill all 3 partitions** (~$0.003 total):
+
+```bash
+uv run dg launch --assets '*' --partition 2026-08-05
+uv run dg launch --assets '*' --partition 2026-08-06
+uv run dg launch --assets '*' --partition 2026-08-07
+```
+
+**In the UI:**
+
+- Click `research_bot_debated` → the partitions strip at the top shows all 3 dates.
+- Click any one → its materialization metadata: cost, latency, tokens, model fingerprint, arbitrator_reasoning, all_proposals — the full audit trail for **that specific decision on that specific partition**.
+- Compare `2026-08-05` (transformer attention question) vs. `2026-08-06` (RNN comparison) vs. `2026-08-07` (RAG question). The router may pick differently, cost varies, arbitrator reasoning is fresh per partition.
+
+That's the story you can't get from a job runner: an agent decision is a **first-class, per-partition, browsable artifact**, not a line in a log.
+
+**How the partitioning is declared** — one `post_processing:` block at the bottom of `defs.yaml`:
 
 ```yaml
 post_processing:
   assets:
-    - target: "*"
+    - target: "*"        # every asset the component emits
       attributes:
-        partitions_def: {type: daily, start_date: "2026-01-01"}
+        partitions_def:
+          type: static
+          partition_keys: ["2026-08-05", "2026-08-06", "2026-08-07"]
 ```
 
-Now every day's materialization is independently browsable. "What did the router pick for `2026-03-05`?" — one click on the partition, no log-search.
+Swap `type: static` for `type: daily` (with `start_date`) if you want a rolling daily backfill window instead. The `{partition_key}` templating in `source.path` + `text_sinks.path` + `json_sinks.path` already works — nothing else changes.
 
 ### 5. Lineage — pipeline connects to your data graph
 
 Change `source: {kind: literal, ...}` to `source: {kind: upstream_asset, upstream_asset_key: my_data}` and the pipeline shows up as a downstream node of your existing data asset. Prefect flows have no such graph.
 
-## Where the sinks land
+## Where the sinks land (per-partition)
 
-The demo writes three files to `<project>/out/`:
+Each partition writes three files under `<project>/out/{partition_key}/`:
 
-- **`final_answer.txt`** — the final synthesized answer (from `text_sinks`)
-- **`debate_transcript.json`** — full debate step dict: all proposals + arbitrator reasoning + cost + latency + winner index (from `json_sinks`)
-- **`critique_history.json`** — full critique step dict: drafter/critic iteration history + models + cost (from `json_sinks`)
+```
+out/
+├── 2026-08-05/
+│   ├── final_answer.txt          # synthesized final response
+│   ├── debate_transcript.json    # all proposals + arbitrator reasoning + cost + winner
+│   └── critique_history.json     # drafter/critic iteration transcript
+├── 2026-08-06/
+│   └── ...
+└── 2026-08-07/
+    └── ...
+```
 
-All paths are `{partition_key}`-templated when the pipeline is partitioned.
+Every partition is independently browsable — filesystem AND asset catalog.
+
+## Deploying to Dagster+ Serverless
+
+The `defs.yaml` uses **relative paths** (`questions/{partition_key}.txt`, `out/{partition_key}/...`) so the same file works locally AND on Dagster+ Serverless. Absolute `$PROJECT_ABS/...` paths would bake local `/tmp/...` into the YAML and hard-fail on the Serverless container.
+
+**One-time deploy:**
+
+```bash
+dagster-cloud serverless deploy-python-executable \
+  --location-name agentic-pipeline \
+  --package-name <your_pkg> \
+  --python-version 3.12
+```
+
+(See [`session_serverless_deploy_learnings`](https://github.com/eric-thomas-dagster/dagster-community-components-cli) for the five gotchas hit deploying uvx-create-dagster projects to Serverless.)
+
+**What changes on Serverless:**
+
+- **Questions ship with the code** — the `questions/*.txt` files bundle into the deploy package. Relative paths resolve inside the container.
+- **Filesystem sinks are ephemeral** — `out/{partition_key}/...` writes work per-run inside the container but disappear when the run finishes. **Not a problem** — all decision data (cost, arbitrator reasoning, all proposals, critique history) is already durably stored in the asset materialization metadata. That's what you browse post-deploy anyway. The filesystem sinks are convenience for local iteration.
+- **For durable sink outputs across runs**, swap `text_sinks` / `json_sinks` for `table_sinks` writing to a warehouse. Same YAML, different sink type. Adds a warehouse resource; every partition's decision lands in an analytics-friendly table.
+- **`OPENAI_API_KEY`** — set as a Dagster+ Serverless location env var:
+  ```
+  dagster-cloud config secrets set --location-name agentic-pipeline OPENAI_API_KEY sk-...
+  ```
+  Same `api_key_env_var: OPENAI_API_KEY` in the YAML; the deploy pipeline injects it.
+
+**In the Dagster+ UI post-deploy:** every partition's materialization + full metadata (cost, latency, tokens, router reasoning, arbitrator reasoning, critique history) is browsable in the asset catalog. Dagster+ Insights automatically consumes the numeric metadata (`cost_usd`, `latency_ms`, `tokens_total`) as custom metrics — dashboardable per pipeline, per step, per partition, with alerts.
 
 ## When to reach for this vs. the narrow AI components
 

@@ -210,6 +210,73 @@ attributes:
 
 Wire `snowflake` in the top-level `definitions.py` as a `SnowflakeResource` or the community `snowflake_resource`. That's it — the component reads from Snowflake, runs XGBoost, writes predictions back to Snowflake.
 
+## Partitioning — the production pattern
+
+The wine demo above materializes as a single asset — appropriate for a shape-reference demo where the source URL is static. **In prod, ML pipelines rebuild per period** (daily snapshot, hourly retrain, etc.), and every rebuild should be a first-class browsable materialization. This is where partitioning + the assets model matters.
+
+**Real prod shape** — daily-partitioned, warehouse-connected, per-partition sinks:
+
+```yaml
+type: dagster_community_components.MLPipelineComponent
+attributes:
+  asset_name_prefix: customer_churn
+
+  source:
+    kind: warehouse_query
+    resource_key: snowflake
+    # {partition_key} substitutes at compute time — each partition reads its own snapshot.
+    sql: |
+      SELECT customer_id, tenure_months, monthly_charges, total_charges,
+             support_tickets, is_active, churned
+      FROM analytics.customer_features
+      WHERE snapshot_date = '{partition_key}'
+
+  target_column: churned
+  feature_columns: [tenure_months, monthly_charges, total_charges, support_tickets, is_active]
+
+  steps:
+    - {id: imputed, op: impute, strategy: median}
+    - {id: scaled,  op: scale, method: standard}
+    - {id: split,   op: split, test_size: 0.2, stratify_column: churned, random_state: 42}
+    - {id: trained, op: train, sklearn_class: "xgboost.XGBClassifier",
+                    task_type: classification, params: {n_estimators: 500, max_depth: 6}}
+    - {id: preds,   op: predict_proba, model: trained, input: scaled}
+    - {id: metrics, op: evaluate,     model: trained, input: preds, task_type: classification}
+    - {id: imp,     op: importance,   model: trained}
+    - {id: saved,   op: save_model,   model: trained,
+                    path: "/models/churn_{partition_key}.joblib"}
+
+  outputs:
+    assets: [preds, metrics, imp, saved]
+    table_sinks:
+      # Pattern B — single table, partition_column tags every row with the partition key.
+      # Analytics queries stay clean: WHERE snapshot_date = '2026-08-05'.
+      - {from: preds, resource_key: snowflake, table: churn_predictions,
+         schema: ml_output, partition_column: snapshot_date, if_exists: append}
+
+post_processing:
+  assets:
+    - target: "*"
+      attributes:
+        partitions_def: {type: daily, start_date: "2026-01-01"}
+        # optional — eagerly re-materialize when the source snapshot updates
+        automation_condition: "{{ dg.AutomationCondition.eager() }}"
+```
+
+**What partitioning gives you** — the "why Dagster" story for ML:
+
+- **Every retrain is a browsable artifact.** Click `customer_churn_metrics` → the partitions strip shows every daily rebuild. Click any partition → its accuracy, precision, recall, F1, ROC-AUC as inline metadata. Compare `2026-08-05` (before the feature launch) to `2026-08-06` (after) — is the model still good?
+- **Per-partition cost tracking.** `warehouse_query` SQL execution + training time land as materialization metadata. Dagster+ Insights turns these into a "cost per rebuild over time" dashboard.
+- **Backfill any date range.** `dg launch --assets '*' --partition-range 2026-08-01...2026-08-07` retrains the whole week. Each partition is independent.
+- **`{partition_key}` in every string field.** Source SQL. Model save path. Table names (if you want per-day tables) OR `partition_column:` (Pattern B — one table, one column tags each row's partition).
+- **Pattern A vs. Pattern B for table_sinks:**
+  - **A** — `table: "predictions_{partition_key}"` → per-partition tables. Good when you need physical isolation.
+  - **B** — `partition_column: snapshot_date` → one table, one column with the partition value on every row. Better for analytics (single query, `WHERE snapshot_date = ...`).
+
+**The wine demo (this walkthrough) is intentionally unpartitioned** — it's a shape reference against a static UCI URL. Adding daily partitions to a fixed dataset would just re-fetch the same CSV per day. When you swap `kind: url` for `kind: warehouse_query` with a real snapshot column, partitioning becomes trivial (add the `post_processing:` block, put `{partition_key}` in the SQL — that's it).
+
+For a live end-to-end partitioned agentic pipeline demo (same `post_processing:` machinery, different domain), see [`agentic_pipeline.md`](./agentic_pipeline.md) — 3 daily partitions, each = different LLM question, browse per-partition decisions.
+
 ## Standardization example — three org pipelines, same shape
 
 ```yaml

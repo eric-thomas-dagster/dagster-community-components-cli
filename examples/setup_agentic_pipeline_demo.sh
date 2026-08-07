@@ -1,23 +1,27 @@
 #!/usr/bin/env bash
-# agentic_pipeline — one YAML declares a whole 5-step agentic workflow.
+# agentic_pipeline — one YAML declares a whole 5-step agentic workflow,
+# PARTITIONED across 3 distinct questions.
 #
 # Shows off:
 #   - All 5 ops (llm_call, route, debate, critique_loop, synthesize) in one pipeline
 #   - Per-step assets with rich typed metadata: cost_usd (Float), latency_ms (Int),
 #     tokens_total (Int), model_fingerprint (Text), materialized_at (Timestamp), op (Text)
 #   - Per-step Dagster kinds: route/debate/critique_loop/synthesize/llm_call
-#     — filterable in the asset catalog
-#   - text_sinks + json_sinks writing per-partition-aware output files
+#   - text_sinks + json_sinks with {partition_key}-templated paths
+#   - **Static partitions** — 3 distinct questions become 3 browsable per-partition
+#     materializations. Time-travel to any decision is one click.
 #
 # The "Why Dagster" story this demo proves:
 #   1. Every step's decision (router pick, arbitrator reasoning, critique history)
-#      is a browsable asset materialization — no log-grepping.
+#      is a browsable asset materialization per partition — no log-grepping.
 #   2. cost_usd + latency_ms + tokens_total are typed numeric metadata →
 #      Dagster+ Insights turns them into dashboards + alerts for free.
 #   3. `dagster/kind/<op>` on every asset means "show me every debate step"
 #      is one catalog filter across the whole org.
+#   4. Backfilling 3 partitions materializes 3 independent agent decisions,
+#      each browsable via the partition selector.
 #
-# Total cost: ~$0.001 per full-pipeline run (all gpt-4o-mini, ~10 LLM calls).
+# Total cost: ~$0.003 for a full 3-partition backfill (all gpt-4o-mini, ~30 LLM calls).
 
 set -eo pipefail
 
@@ -47,8 +51,23 @@ CLI="uvx --from dagster-community-components-cli dagster-component"
 echo ">>> Installing agentic_pipeline component"
 $CLI add agentic_pipeline --auto-install >/dev/null 2>&1
 
-# All sink paths stay INSIDE $PROJECT_ABS — Windows-portable.
-mkdir -p "$PROJECT_ABS/out"
+# Questions ship inside the project so they deploy with the code to
+# Dagster+ Serverless. Sinks land in project-relative `out/` — durable
+# locally, ephemeral in Serverless (see defs.yaml comments).
+mkdir -p "$PROJECT_ABS/questions" "$PROJECT_ABS/out"
+
+echo ">>> Writing per-partition question files (3 partitions, 3 distinct questions)"
+cat > "$PROJECT_ABS/questions/2026-08-05.txt" <<'EOF'
+Explain in 3-4 sentences how attention works in transformer language models.
+EOF
+
+cat > "$PROJECT_ABS/questions/2026-08-06.txt" <<'EOF'
+Compare RNNs and Transformers for sequence modeling — what did Transformers actually change and why?
+EOF
+
+cat > "$PROJECT_ABS/questions/2026-08-07.txt" <<'EOF'
+What is retrieval-augmented generation and when should you reach for it over fine-tuning?
+EOF
 
 cat > "src/$PKG/defs/agentic_pipeline/defs.yaml" <<EOF
 type: $PKG.components.agentic_pipeline.component.AgenticPipelineComponent
@@ -56,9 +75,14 @@ attributes:
   asset_name_prefix: research_bot
   group_name: agents
 
+  # Source reads a per-partition question file. Path is RELATIVE to the
+  # project root — files ship with the project when deploying to Dagster+
+  # Serverless. Absolute local paths (\$PROJECT_ABS/...) would bake the
+  # local /tmp/... into the YAML and break on Serverless.
+  # {partition_key} templates at compute time.
   source:
-    kind: literal
-    text: "Explain in 3-4 sentences how attention works in transformer language models."
+    kind: file
+    path: "questions/{partition_key}.txt"
 
   steps:
     # 1) simplest op — one LLM call over source text
@@ -137,11 +161,36 @@ attributes:
 
   outputs:
     assets: [baseline, routed, refined, debated, final]
+    # RELATIVE paths — same YAML works locally + Dagster+ Serverless.
+    # (Absolute /tmp/... paths would bake local machine paths into the YAML
+    # and fail on Serverless. Also: block style — not inline {} — because
+    # flow-mapping {} conflicts with {partition_key} templates in values.)
+    #
+    # On Serverless, filesystem sinks are ephemeral (per-run container).
+    # For durable outputs across runs, swap text/json sinks for table_sinks
+    # into a warehouse — the interesting decision data is already in the
+    # materialization metadata regardless.
     text_sinks:
-      - {from: final, path: $PROJECT_ABS/out/final_answer.txt}
+      - from: final
+        path: "out/{partition_key}/final_answer.txt"
     json_sinks:
-      - {from: debated, path: $PROJECT_ABS/out/debate_transcript.json}
-      - {from: refined, path: $PROJECT_ABS/out/critique_history.json}
+      - from: debated
+        path: "out/{partition_key}/debate_transcript.json"
+      - from: refined
+        path: "out/{partition_key}/critique_history.json"
+
+# post_processing overrides make every emitted asset partitioned.
+# Same partitions_def across all 5 assets → they materialize together per partition.
+post_processing:
+  assets:
+    - target: "*"
+      attributes:
+        partitions_def:
+          type: static
+          partition_keys:
+            - "2026-08-05"
+            - "2026-08-06"
+            - "2026-08-07"
 EOF
 
 cat <<MSG
@@ -149,17 +198,31 @@ cat <<MSG
 >>> Setup complete. Next:
 
   cd $PROJECT_DIR
-  uv run dg dev
+  uv run dg dev                                     # open UI at http://localhost:3000
 
-Open http://localhost:3000 and:
-  - Materialize the assets (research_bot_baseline / _routed / _refined / _debated / _final).
-  - Click any asset → Materialization tab → see cost_usd, latency_ms, tokens_total,
-    model_fingerprint, materialized_at, router_reasoning, arbitrator_reasoning, etc.
-  - Rerun the assets → each new materialization is browsable with its own metadata.
-    That is the "browse decision history" story you can't get from a job runner.
+Or backfill all 3 partitions headlessly (~\$0.003 total):
 
-Sink files land at:
-  $PROJECT_ABS/out/final_answer.txt
-  $PROJECT_ABS/out/debate_transcript.json
-  $PROJECT_ABS/out/critique_history.json
+  uv run dg launch --assets '*' --partition 2026-08-05
+  uv run dg launch --assets '*' --partition 2026-08-06
+  uv run dg launch --assets '*' --partition 2026-08-07
+
+Then in the UI:
+  - Click research_bot_debated → the partitions strip shows all 3 dates,
+    each with independent metadata (cost_usd, arbitrator_reasoning, all_proposals).
+  - This is the "time-travel to any decision" story — no log-grepping.
+
+Per-partition sinks land at (relative to project dir):
+  out/2026-08-05/final_answer.txt
+  out/2026-08-06/final_answer.txt
+  out/2026-08-07/final_answer.txt
+  (+ debate_transcript.json + critique_history.json in each partition dir)
+
+Deploying to Dagster+ Serverless? The defs.yaml uses RELATIVE paths so
+the same file works on Serverless — questions/ ships with the code,
+text/json sinks land inside the run container (ephemeral). For durable
+outputs across runs, replace text_sinks / json_sinks with table_sinks
+targeting a warehouse. All decision metadata (router pick, arbitrator
+reasoning, cost, latency, tokens) is already in each asset's
+materialization metadata regardless of sinks — that's what you actually
+want to browse post-deploy anyway.
 MSG
