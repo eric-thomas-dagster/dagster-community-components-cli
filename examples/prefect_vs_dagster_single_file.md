@@ -137,6 +137,6 @@ All in ONE Dagster+ UI. All in one unified asset catalog. All in one run history
 
 ## Verified
 
-- **[`serverless_minimal/`](./serverless_minimal/)** deployed to `ericthomas-dagster.dagster.cloud/prod` (location: `hello`) — 2026-08-07 ✓
+- **[`serverless_minimal/`](./serverless_minimal/)** deployed to a private Dagster+ prod deployment (location: `hello`) — 2026-08-07 ✓
 - **[`dg_deploy_one_file.sh`](./lib/dg_deploy_one_file.sh)** deployed to same (location: `cli-verify`) — 2026-08-07 ✓, proving the CLI wrapper matches raw-command results
 - **Auto-detect deps + `--from github` flags** verified via dry-run against real GitHub raw URLs ✓

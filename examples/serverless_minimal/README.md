@@ -38,7 +38,7 @@ def shout(hello: str) -> str:
 defs = dg.Definitions(assets=[hello, shout])
 ```
 
-Zero external dependencies. No API keys. No env vars required.
+The asset code needs no external services and no third-party API keys. Deployment itself still needs a Dagster+ token (via `dagster-cloud config setup` — same one-time step you'd do for any Serverless deploy).
 
 ## Run locally
 
@@ -77,7 +77,7 @@ uvx --with pex --from dagster-cloud-cli dagster-cloud serverless deploy-python-e
 
 Takes ~2 minutes. Uploads a pex bundle to your Dagster+ workspace; the Serverless agent picks it up + syncs.
 
-**Verified deploy** — this exact project was deployed 2026-08-07 to `ericthomas-dagster.dagster.cloud/prod` (location name `hello`). Agent sync confirmed. See [../single_file_serverless.md](../single_file_serverless.md) for the deploy log.
+**Verified deploy** — this exact project was deployed 2026-08-07 to a private Dagster+ prod deployment (location name `hello`). Agent sync confirmed. See [../single_file_serverless.md](../single_file_serverless.md) for the deploy log.
 
 ## What this proves
 

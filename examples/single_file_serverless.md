@@ -7,19 +7,19 @@
 - **One `.py` file → one deploy command → one live code location in Dagster+.**
 - **No Docker.** `dagster-cloud serverless deploy-python-executable` builds a **pex** — a self-contained Python zipapp — and uploads it straight to Dagster+. No Docker Desktop, no container registry, no image push. (Docker only enters if you're on Hybrid or you need custom base OS libs.)
 - **~2 minutes end-to-end** from `bash dg-deploy my_flow.py` to a running location in `dagster.cloud/prod`.
-- **Zero credentials required** for the demos we ship. The story below works with just `dagster-cloud config setup` — no API keys, no vended-product accounts.
+- **No vended-product credentials beyond your Dagster+ token.** You always need a Dagster+ account + user API token + deployment name (cached once via `dagster-cloud config setup`). The demos below add nothing on top of that — no OpenAI key, no AWS credentials, no third-party accounts.
 
 ## Deploy verified, live at prod right now
 
-Three locations shipped 2026-08-07 to `ericthomas-dagster.dagster.cloud/prod`. All zero-external-key. All via pex, no Docker touched:
+Three locations shipped 2026-08-07 to a private Dagster+ prod deployment. Each was deployed via pex (no Docker) and needs only the Dagster+ token itself — no vended-product API keys on top:
 
 | Location | Project | What it is |
 |---|---|---|
 | **`hello`** | [`serverless_minimal/`](./serverless_minimal/) | The floor — 2 stdlib assets, 3 files, ~30 lines of boilerplate. |
-| **`data-engineering`** | [`data_engineering_serverless/`](./data_engineering_serverless/) | Real 5-asset HN pipeline (fetch → transform → aggregate → DuckDB sink). No API keys. |
+| **`data-engineering`** | [`data_engineering_serverless/`](./data_engineering_serverless/) | Real 5-asset HN pipeline (fetch → transform → aggregate → DuckDB sink). No additional API keys. |
 | **`cli-verify`** | ad-hoc `my_flow.py` deployed via CLI wrapper | Proves the wrapper produces identical output to the raw command. |
 
-All three visible at https://ericthomas-dagster.dagster.cloud/prod/locations. Zero external services required to make them run.
+Deploy logs available on request. No third-party services needed at runtime — the fetches go to public unauthenticated APIs.
 
 ## The minimum footprint — 3 files
 
@@ -192,11 +192,11 @@ For a detailed comparison including where each tool wins (Prefect: `flow.serve()
 ✓ dg_deploy_one_file.sh         --dry-run + auto-detect deps (pandas/sklearn→scikit-learn) + --from GitHub fetch → all working
 ```
 
-**Deployed to Dagster+ Serverless prod (`ericthomas-dagster.dagster.cloud/prod`, 2026-08-07):**
+**Deployed to a Dagster+ Serverless prod deployment (2026-08-07):**
 ```
 ✓ location: hello              via raw `dagster-cloud serverless deploy-python-executable`  (agent sync confirmed)
 ✓ location: cli-verify         via `bash dg-deploy cli_verify.py --location-name cli-verify` (agent sync confirmed)
 ✓ location: data-engineering   via raw `dagster-cloud serverless deploy-python-executable`  (agent sync confirmed)
 ```
 
-All three visible at https://ericthomas-dagster.dagster.cloud/prod/locations. **All three deploys shipped a pex bundle. Zero Docker touched.** The `cli-verify` deploy specifically proves the wrapper produces identical output to the raw command — the Prefect-parity ergonomics are real.
+**All three deploys shipped a pex bundle. Zero Docker touched.** The `cli-verify` deploy specifically proves the wrapper produces identical output to the raw command — the Prefect-parity ergonomics are real. (The specific Dagster+ deployment used for validation is private; deploy logs available on request.)

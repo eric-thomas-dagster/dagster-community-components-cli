@@ -177,7 +177,7 @@ hybrid_git_runner/
 ## Verified
 
 - **Component subclass loads:** `HybridRunnerComponent(ScriptGithubComponent)` — inherits all fields, overrides `use_local=False` + `airflow_auto_install=False` + `prefect_auto_install=False`.
-- **Deploy verified from serverless artifacts side** — same `deploy-docker` command shape shipped 7 locations to `ericthomas-dagster.dagster.cloud/prod` on 2026-08-03. This project uses the same pattern.
+- **Deploy verified from serverless artifacts side** — same `deploy-docker` command shape shipped 7 locations to a private Dagster+ prod deployment on 2026-08-03. This project uses the same pattern.
 - **Live Hybrid deploy** — pending (no Hybrid agent running yet at time of write). The build + push + deploy-docker sequence is standard; the same CLI is used by the Serverless projects (validated 2026-08-07: locations `hello` + `cli-verify` on prod).
 
 ## Related

@@ -10,10 +10,11 @@ one file. Deploy with:
         --module-name data_engineering.definitions \\
         --python-version 3.12
 
-Zero credentials required at deploy or runtime. Assets fetch from the
-public Hacker News API (Firebase-backed, unauthenticated) and land in a
-project-relative DuckDB file — durable locally, ephemeral on Serverless
-(swap the sink for a warehouse `table_sinks` for production).
+Beyond the Dagster+ token itself (needed for any deploy), no vended-
+product credentials required at deploy or runtime. Assets fetch from
+the public Hacker News API (Firebase-backed, unauthenticated) and land
+in a project-relative DuckDB file — durable locally, ephemeral on
+Serverless (swap the sink for a warehouse `table_sinks` for production).
 
 ## Pipeline shape
 
