@@ -37,6 +37,23 @@ Contains the **"Why Dagster (not just a job runner)"** section — the sharpest 
 
 ---
 
+## The rest of the pipeline-component family
+
+The three walkthroughs above cover ML + agentic. The pattern extends to four more execution engines — same `source: + steps: + outputs:` YAML idiom, different backend:
+
+| Component | Domain | Execution engine | Walkthrough |
+|---|---|---|---|
+| `ml_pipeline` | ML training + evaluation | sklearn / XGBoost / LightGBM | ← covered above |
+| `agentic_pipeline` | LLM / agent workflows | LiteLLM (100+ providers) | ← covered above |
+| `polars_pipeline` | DataFrame transforms | polars lazy engine — filter/projection fusion, parallel exec inside one asset | [polars_pipeline.md](./polars_pipeline.md) |
+| `pyspark_pipeline` | Big-data DataFrame transforms | PySpark / Catalyst — predicate pushdown, join reordering, cluster-scale execution | [pyspark_pipeline.md](./pyspark_pipeline.md) |
+| `snowpark_pipeline` | Warehouse-native DataFrame ops | Snowpark — lazy chain compiles to ONE Snowflake SQL statement, no data flows through Python | [snowpark_pipeline.md](./snowpark_pipeline.md) |
+| `warehouse_pipeline` | SQL CTE chain | Any warehouse (Snowflake / BigQuery / Redshift / Postgres / DuckDB) — multi-step compiled to ONE CTAS | [warehouse_native_pipeline.md](./warehouse_native_pipeline.md) |
+
+**Why the whole family matters:** one YAML shape means governance / review / CI templates transfer across ML, transforms, warehouse SQL, and agentic workflows. Learn the pattern once — apply it to every domain that has a "source → chained steps → sinks" story.
+
+---
+
 ## Runnable demos
 
 Both demos scaffold a fresh Dagster project + install the component + write a working `defs.yaml`. `dg dev` opens the Dagster UI at `http://localhost:3000` where you can browse the asset graph and click to materialize.
