@@ -45,6 +45,8 @@ git push origin main                                           # runner picks up
 
 Matches Prefect Method 2 (git-driven Managed pool) exactly once the runner is up. Runner image is deployed ONCE; new flows in the target repo appear on the next code-location load — no rebuild, no image push per iteration. See [`hybrid_git_runner/`](./hybrid_git_runner/) for the full walkthrough.
 
+**⚠️ Status:** This path is DESIGN-VERIFIED, not runtime-verified. No Hybrid agent has been deployed against a test Dagster+ deployment yet, and the prebuilt image referenced above (`ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest`) has not been published. See the [Testing this end-to-end](./hybrid_git_runner/README.md#testing-this-end-to-end) section of the runner README for the concrete steps required to run first live verification.
+
 ### Side-by-side (all three options)
 
 | Aspect | Prefect Cloud (Managed) | Dagster+ Serverless (CLI wrapper) | **Dagster+ Hybrid (git-runner)** |

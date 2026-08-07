@@ -1,5 +1,11 @@
 # hybrid_git_runner — Deploy once. Iterate with `git push`.
 
+> **⚠️ Status: DESIGN-VERIFIED, NOT RUNTIME-VERIFIED.**
+> - Component subclass loads correctly (verified locally).
+> - `deploy.sh` scaffolds + emits the right `deploy-docker` command shape.
+> - **BUT**: no end-to-end test against a live Hybrid agent has been run yet — no such agent is currently deployed. And the prebuilt image referenced in Mode 1 (`ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest`) has NOT been built + pushed yet. Anyone trying Mode 1 today gets a 404. Modes 2 (BYO --registry) and 3 (--image) require a Hybrid agent + a real image before they can be validated.
+> - See [Testing this end-to-end](#testing-this-end-to-end) for the concrete steps required to run the first live verification. Estimate: ~30 min of one-time infra setup on the account holder's side.
+
 **A "runner container" for Dagster+ Hybrid.** Deploy it ONCE to your Hybrid agent; from then on, iterate by pushing `.py` flows to a git repo the runner watches. No Docker rebuild per iteration. Same ergonomics as Prefect's Managed pool — you push code, the platform runs it.
 
 Wraps [`ScriptGithubComponent`](https://github.com/eric-thomas-dagster/script_scheduling_and_orchestration/blob/main/script_orchestrator/README.md) (a `StateBackedComponent` that clones a git repo + parses Airflow DAGs / Prefect flows / plain Python scripts) in a light subclass tuned for the Hybrid runner pattern.
@@ -174,11 +180,67 @@ hybrid_git_runner/
 | Multi-deployment topology | Prefect workspaces (separate accounts) | Same runner image, different env vars per deployment | **Same runner image, different env vars per deployment** |
 | Branch deployments | Manual per-PR setup | Manual per-PR setup | **Auto — Dagster+ spins up branch deployment; env vars route to PR branch** |
 
+## Testing this end-to-end
+
+This project is **NOT yet runtime-verified.** Here's what an end-to-end test would take:
+
+**Prereqs (one-time, ~30 min):**
+
+1. **A Hybrid agent running on your Dagster+ deployment.** Simplest: docker-compose. From Dagster+ docs:
+   ```bash
+   # In your Dagster+ deployment settings, generate an agent token.
+   # Then on any host with Docker:
+   docker run -d \
+     -v /var/run/docker.sock:/var/run/docker.sock \
+     -e DAGSTER_CLOUD_AGENT_TOKEN=<your-agent-token> \
+     -e DAGSTER_CLOUD_URL=https://YOUR-ORG.dagster.cloud/prod \
+     dagster/dagster-cloud-agent:latest \
+     dagster-cloud-agent run
+   ```
+   Once the agent is up, verify in Dagster+ UI under **Agents** — should show "Running." (K8s or ECS alternatives exist; docker-compose is fastest for validation.)
+
+2. **A container registry with push access.** GHCR is easiest (auto-provisioned per GitHub user/org, free for public images):
+   ```bash
+   # One-time GHCR auth:
+   echo $GITHUB_PAT | docker login ghcr.io -u YOUR_GITHUB_USER --password-stdin
+   ```
+
+3. **A flows repo** (public, or with `GITHUB_TOKEN` for private). Point at anything you want the runner to load. If you want a starter, copy `example_flows_repo/` from this project into a new git repo.
+
+**Verification run (~10 min):**
+
+```bash
+cd hybrid_git_runner/
+
+# Mode 2: build locally + push to your registry + deploy to Dagster+
+./deploy.sh --registry ghcr.io/YOUR_USER/hybrid-git-runner \
+            --location-name hybrid-runner-test
+
+# In Dagster+ UI:
+#   Deployment settings → Code locations → hybrid-runner-test → Environment variables:
+#     SCRIPTS_REPO_URL=https://github.com/YOUR_USER/YOUR_FLOWS_REPO
+#     SCRIPTS_REPO_BRANCH=main
+#     SCRIPTS_DIR=flows
+
+# The agent pulls the image, launches it, ScriptGithubComponent clones
+# your flows repo, and emits Dagster assets for each .py under flows/.
+
+# Verify: the location loads (green in UI), assets appear in catalog,
+# `dg launch --location hybrid-runner-test --assets '*'` from your
+# local machine materializes them.
+```
+
+**Once that first run succeeds**, we can:
+- Push the runner image to `ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest` (public) so Mode 1 (`./deploy.sh` with no args) works out of the box for everyone.
+- Update this README's status banner from "design-verified" to "runtime-verified."
+- Ship the walkthrough as an external-facing story.
+
 ## Verified
 
-- **Component subclass loads:** `HybridRunnerComponent(ScriptGithubComponent)` — inherits all fields, overrides `use_local=False` + `airflow_auto_install=False` + `prefect_auto_install=False`.
-- **Deploy verified from serverless artifacts side** — same `deploy-docker` command shape shipped 7 locations to a private Dagster+ prod deployment on 2026-08-03. This project uses the same pattern.
-- **Live Hybrid deploy** — pending (no Hybrid agent running yet at time of write). The build + push + deploy-docker sequence is standard; the same CLI is used by the Serverless projects (validated 2026-08-07: locations `hello` + `cli-verify` on prod).
+- **Component subclass loads:** `HybridRunnerComponent(ScriptGithubComponent)` — inherits all fields, overrides `use_local=False` + `airflow_auto_install=False` + `prefect_auto_install=False`. ✓
+- **`deploy.sh` scaffolds + emits correct commands:** dry-run tested — all 3 modes emit the expected `dagster-cloud serverless deploy-docker ...` invocation. ✓
+- **`deploy-docker` command shape** — validated separately: same command shape shipped 7 locations to a private Dagster+ prod deployment on 2026-08-03 (Serverless projects with docker deploys).
+- **Live Hybrid deploy — NOT YET RUN.** See [Testing this end-to-end](#testing-this-end-to-end) above for what's needed. Blocker: no Hybrid agent running on any test Dagster+ deployment yet.
 
 ## Related
 

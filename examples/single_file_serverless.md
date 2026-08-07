@@ -180,7 +180,7 @@ For a detailed comparison including where each tool wins (Prefect: `flow.serve()
 ## Additional examples
 
 - **[`agentic_tour_serverless/`](./agentic_tour_serverless/)** — same 3-file layout, but `definitions.py` bundles 4 LLM/agentic pipelines using `AgenticPipelineComponent`. **Requires `OPENAI_API_KEY`** as a location env var. Useful if you're specifically evaluating Dagster for AI workloads.
-- **[`hybrid_git_runner/`](./hybrid_git_runner/)** — the Hybrid single-file answer. Deploy a runner container ONCE; iterate on flows by pushing to a git repo the runner watches. Docker enters here (Hybrid needs it) but only for the one-time runner image; iteration is `git push`.
+- **[`hybrid_git_runner/`](./hybrid_git_runner/)** — the Hybrid single-file answer. Deploy a runner container ONCE; iterate on flows by pushing to a git repo the runner watches. Docker enters here (Hybrid needs it) but only for the one-time runner image; iteration is `git push`. **⚠️ Design-verified, NOT runtime-verified yet** — no Hybrid agent has been deployed against a test Dagster+ deployment. See the project README's "Testing this end-to-end" section for the concrete steps required to run first live verification (~30 min of one-time infra setup).
 
 ## Verified
 
