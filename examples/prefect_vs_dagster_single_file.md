@@ -8,6 +8,21 @@ Plus meaningful differentiators Prefect can't cleanly match: mixed-agent deploym
 
 ## The honest comparison
 
+## The dependency-version story (confirmed against Prefect docs)
+
+Before the deploy commands, the deps-versioning story matters — it's the biggest "will this actually work for my prod use case?" question. Here's the honest comparison, checked against Prefect's own docs:
+
+| Scenario | Prefect Managed | Dagster+ Serverless (pex) | Dagster+ Hybrid runner |
+|---|---|---|---|
+| **Add a package** | `pip_packages: [pandas]` in deployment config | Add to `pyproject.toml` `dependencies` — baked into pex at deploy time | Add to flows repo's `requirements.txt` (Tier 1) OR rebuild runner (Tier 2) |
+| **Pin a specific version** | `pip_packages: ["pandas==1.5.3"]` — installed on top of the base image | `dependencies = ["pandas==1.5.3"]` in `pyproject.toml` — **your version is what pex ships**, no base-image conflict | `pandas==1.5.3` in `requirements.txt` — installed on top of the runner image (may conflict with baked-in `pandas` if downgrade needed) |
+| **Version conflicts with the base image** | Prefect docs: **"we recommend using another type of work pool"** — i.e., leave Managed for Docker | **Not possible** — pex bundle IS the deploy. Each Serverless deploy is its own hermetic environment. | Same tradeoff as Prefect Managed. Escape hatch: `./deploy.sh --registry your-reg/name` rebuilds the runner with your pins. |
+| **Total control (bring your own image)** | Docker work pool (not Managed) | N/A (pex is the model) | `./deploy.sh --registry your-reg/name` |
+
+**The Serverless-pex advantage:** because every deploy is its own pex bundle, there's **no shared base image and therefore no version-conflict problem to solve**. Your `pyproject.toml` pins are what ship. Prefect Managed has to reconcile customer `pip_packages` against the fixed `prefecthq/prefect:3-latest` base image; Dagster+ Serverless doesn't have that reconciliation problem at all.
+
+For Hybrid, both platforms hit the same fundamental tradeoff (shared image + overlay), and both use the same escape hatch (rebuild the image with your own registry). Our runner ships with common data-eng packages pre-baked (pandas / sqlalchemy / duckdb / boto3 / s3fs / gcsfs / adlfs / psycopg2 / pymysql / prefect / airflow) via the `script_orchestrator` transitive deps, so most flows just work without an overlay. Explicit `requirements.txt`-at-load-time support is proposed for Tier 1 (currently designed, not yet implemented in the subclass).
+
 ### Prefect Cloud — Method 2 (Managed Serverless)
 
 ```bash

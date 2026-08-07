@@ -17,6 +17,24 @@ dependencies = [
     "gitpython",
     "pydantic",
     "python-dotenv",
+
+    # Batteries-included: common data-eng packages so most flows work
+    # without rebuilding the runner image. For anything not here, users
+    # override --registry and rebuild, or ship `requirements.txt` in
+    # their flows repo (auto-installed at code-location load if present).
+    #
+    # NOTE: script-orchestrator transitively pulls in pandas, pyarrow,
+    # sqlalchemy, requests, prefect, airflow, dask/distributed, redis,
+    # tabulate, beautifulsoup4 — so those don't need to be listed here.
+    "duckdb",
+    "boto3",
+    "s3fs",
+    "gcsfs",
+    "adlfs",
+    "psycopg2-binary",
+    "pymysql",
+    "openpyxl",
+    "httpx",
 ]
 
 [tool.hatch.metadata]
