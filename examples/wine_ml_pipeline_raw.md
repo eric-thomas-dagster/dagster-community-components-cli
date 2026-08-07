@@ -4,17 +4,19 @@
 
 **Same pipeline as [`wine_ml_pipeline.md`](wine_ml_pipeline.md) and [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md), zero community components** — every step is a raw `@dg.asset`-decorated function with inline pandas/scikit-learn code. This is the most familiar shape for teams coming from Prefect (`@flow` + `@task`) or Airflow's TaskFlow API.
 
-## The three variants — pick your shape
+## The five variants — pick your shape
 
-Same ML pipeline, three shapes:
+Same ML pipeline, five shapes:
 
-| Variant | Wiring | LOC | When to reach for it |
-|---|---|---|---|
-| [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) *(this one)* | Raw `@dg.asset` funcs, inline pandas/sklearn | ~180 | Prefect-familiar. Full control, no abstractions. Team is comfortable maintaining ML plumbing per-project. |
-| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | Community components, Python instantiation | ~90 | Same wiring style as raw, but delegates the pandas/sklearn boilerplate to tested components. |
-| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | Community components, YAML `defs.yaml` files | ~9 YAML files, ~15 lines each | Declarative. Analysts / SREs / non-Python-first teams edit config, not code. |
+| Variant | Wiring | Best when |
+|---|---|---|
+| [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) *(this one)* | Raw `@dg.asset` funcs, inline pandas/sklearn | Simplest; everything at asset grain — most Prefect-familiar |
+| [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) | Same shape but the multi-asset body calls plain Python helper funcs | Same Dagster surface; helpers are unit-testable without touching Dagster |
+| [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) | `@op` + `@graph_multi_asset` — sub-steps have first-class typed I/O | Sub-steps deserve Dagster tracking (typed I/O, per-op retries, cross-asset reuse) |
+| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | Community components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
+| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | Community components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
 
-**All three run the same graph and produce byte-identical CSVs.** The choice is purely about the shape your team prefers to maintain.
+**All five run the same graph and produce byte-identical CSVs.** The choice is purely about the shape your team prefers to maintain.
 
 ## Pipeline
 
@@ -238,7 +240,10 @@ The **content** is identical — same fit params, same output columns, same file
 
 ## See also
 
-- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components + Python instantiation.
-- [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML `defs.yaml` files.
+- [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) — same as raw, but the multi-asset body calls plain Python helper funcs.
+- [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same shape with @op + @graph_multi_asset — first-class typed I/O per step.
+- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python instantiation).
+- [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML defs.yaml files.
 - [`titanic_complete.md`](titanic_complete.md) — larger ML pipeline (12 components) on the Titanic dataset.
+- [`airports_cluster.md`](airports_cluster.md) — unsupervised ML variant (k-means clustering).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

@@ -44,7 +44,9 @@ uv run dg launch --assets '*'
 ## See also
 
 - [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline as one Python file (community components, no YAML).
-- [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — same pipeline as one Python file, no components (pure Dagster + raw `@dg.asset` + inline pandas/sklearn — most Prefect-familiar).
-- [`titanic_complete.md`](titanic_complete.md) — same-shape ML walkthrough (ingest → transform → classifier → CSV) on the Titanic dataset.
+- [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — same pipeline as one Python file, no components (pure Dagster + inline).
+- [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same pipeline with @op-decomposed model stage inside a @graph_multi_asset.
+- [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) — same pipeline with plain-Python-helper decomposition (no @op, no graph).
+- [`titanic_complete.md`](titanic_complete.md) — larger ML pipeline (12 components) on the Titanic dataset.
 - [`airports_cluster.md`](airports_cluster.md) — unsupervised ML variant (k-means clustering).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.
