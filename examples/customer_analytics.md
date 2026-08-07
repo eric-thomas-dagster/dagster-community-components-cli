@@ -47,4 +47,4 @@ uv run dg dev   # http://localhost:3000
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+Browse the [walkthrough index](README.md) for related demos across every component family.

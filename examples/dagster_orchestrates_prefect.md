@@ -120,4 +120,4 @@ Set `PREFECT_API_KEY` in your shell before `dg dev`. Everything else stays the s
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+Browse the [walkthrough index](README.md) for related demos across every component family.

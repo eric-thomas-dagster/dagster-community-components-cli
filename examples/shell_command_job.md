@@ -44,4 +44,4 @@ adds a fake catalog entry that drifts from reality every run.
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+Browse the [walkthrough index](README.md) for related demos across every component family.

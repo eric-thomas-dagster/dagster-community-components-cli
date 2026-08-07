@@ -8,12 +8,19 @@ Builds a more substantial ML pipeline than the existing wine_demo:
   - cross_validation to verify model stability across folds
   - three CSV sinks
 
-Pipeline (8 components, all autoloaded by `dg`):
-                         ┌─→ create_samples ─┐
-                         │                    ├─→ decision_tree (predictions)        → CSV
-    file_ingestion ─→ feature_scaler ──┐ │
-                         │                  ├┴→ decision_tree (feature_importance)   → CSV
-                         └────────────────→ cross_validation                          → CSV
+Pipeline (6 components, all autoloaded by `dg`):
+
+```
+file_ingestion
+      │
+      ▼
+feature_scaler
+      │
+      ├──▶ create_samples ──▶ decision_tree_model ──┬──▶ CSV (predictions)
+      │                                             └──▶ CSV (feature_importance)
+      │
+      └──▶ cross_validation ─────────────────────────────▶ CSV (cv_scores)
+```
 
 ## Components used
 
@@ -36,4 +43,6 @@ uv run dg launch --assets '*'
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+- [`titanic_complete.md`](titanic_complete.md) — same-shape ML walkthrough (ingest → transform → classifier → CSV) on the Titanic dataset.
+- [`airports_cluster.md`](airports_cluster.md) — unsupervised ML variant (k-means clustering).
+- [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

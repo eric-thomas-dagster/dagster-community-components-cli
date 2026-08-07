@@ -76,4 +76,4 @@ In `freshness_slo/defs.yaml`, lower `max_age_minutes` to `1` → freshness fails
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+Browse the [walkthrough index](README.md) for related demos across every component family.

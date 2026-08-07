@@ -84,4 +84,4 @@ For document parsing (forms / tables / structured), use `document_ai_extractor` 
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+Browse the [walkthrough index](README.md) for related demos across every component family.

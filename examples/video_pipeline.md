@@ -86,4 +86,4 @@ ls -la /tmp/video_demo_audio/     # 2 WAVs
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+Browse the [walkthrough index](README.md) for related demos across every component family.

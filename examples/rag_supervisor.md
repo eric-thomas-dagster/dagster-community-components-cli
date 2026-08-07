@@ -99,4 +99,4 @@ Every asset is browsable in `dg dev`. Click the plan → see the reasoning. Clic
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+Browse the [walkthrough index](README.md) for related demos across every component family.

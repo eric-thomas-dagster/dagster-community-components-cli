@@ -85,4 +85,4 @@ def workday_workers(workday: WorkdayResource) -> pd.DataFrame:
 
 ## See also
 
-<!-- TODO: link related walkthroughs -->
+Browse the [walkthrough index](README.md) for related demos across every component family.
