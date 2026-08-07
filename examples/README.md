@@ -9,6 +9,16 @@ Each demo:
 
 The demos are grouped by what they need to run.
 
+## Curated tours (start here)
+
+Meta walkthroughs that index the highest-value demos + tell a story across them:
+
+| Tour | Purpose |
+|---|---|
+| **[Pipeline components tour](pipeline_components_tour.md)** | The `MLPipelineComponent` + `AgenticPipelineComponent` + sibling `polars_pipeline` / `pyspark_pipeline` / `snowpark_pipeline` / `warehouse_pipeline` family — one YAML shape across six execution engines. Reading path: wine_ml → wine_ml_pipeline_component → agentic_pipeline. Best 45-minute tour for the "one YAML, whole pipeline" story. |
+| **[Single-file → Dagster+ Serverless](single_file_serverless.md)** | The absolute minimum footprint (3 files, ~30 lines of boilerplate) via the [`serverless_minimal/`](./serverless_minimal/) + [`agentic_tour_serverless/`](./agentic_tour_serverless/) projects. Also documents [`lib/dg_deploy_one_file.sh`](./lib/dg_deploy_one_file.sh) — a CLI wrapper that closes the gap to Prefect's single-file ergonomics: `bash dg-deploy my_flow.py` auto-detects deps + supports `--from user/repo/path.py` GitHub fetch. Two locations deployed to prod 2026-08-07 verifying end-to-end. |
+| **[Prefect vs. Dagster+ Serverless — the single-file story](prefect_vs_dagster_single_file.md)** | Honest side-by-side. Where each wins (Prefect: `flow.serve()`, first-party CLI; Dagster+: assets model, Insights metrics, partitions, lineage, ~960 community components). Both deploy in ~2 min with the wrapper. |
+
 ## Start here
 
 The ten demos that best answer *"why Dagster on top of my existing stack?"*. Each has been live-validated end-to-end. Skim these first; the depth tables below hold the long tail (~200 more).

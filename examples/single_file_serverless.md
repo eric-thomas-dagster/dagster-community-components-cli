@@ -92,33 +92,44 @@ If you have a bare `.py` and want to deploy it Prefect-style without hand-writin
 # You have ONE file:
 $ cat my_flow.py
 import dagster as dg
+import pandas as pd
 
 @dg.asset
-def hello():
-    return "hi"
+def hello() -> pd.DataFrame:
+    return pd.DataFrame({"greeting": ["hi"]})
 
 defs = dg.Definitions(assets=[hello])
 
 # Deploy it:
 $ curl -sL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/dg_deploy_one_file.sh > dg-deploy
-$ bash dg-deploy my_flow.py --location-name my-flow
+$ bash dg-deploy my_flow.py
 ```
 
-What it does under the hood:
-1. Creates `my_flow_serverless_scaffold/` next to your file.
-2. Writes `pyproject.toml` + `dagster_cloud.yaml` + moves your `.py` to `src/my_flow/definitions.py`.
-3. Runs `dagster-cloud serverless deploy-python-executable ...` from inside the scaffold.
-4. Cleans up (or pass `--keep-scaffold` to keep it for iteration).
+That's it. The wrapper detects `pandas` from the `import` statement and auto-adds it to deps — no `--deps` flag needed. Location name defaults to the basename (`my_flow`). Under the hood:
 
-**Options:**
+1. Creates `my_flow_serverless_scaffold/` next to your file.
+2. Parses your `.py`'s imports, filters stdlib, adds non-stdlib deps to `pyproject.toml` (with `sklearn`→`scikit-learn`, `PIL`→`Pillow`, `bs4`→`beautifulsoup4` type mappings applied).
+3. Writes `dagster_cloud.yaml` + moves your `.py` to `src/my_flow/definitions.py`.
+4. Runs `dagster-cloud serverless deploy-python-executable ...` from inside the scaffold.
+5. Cleans up (or pass `--keep-scaffold` to keep it for iteration).
+
+**All options**:
 
 ```bash
 bash dg-deploy my_flow.py \
-    --location-name my-flow \                  # (default: basename of .py)
-    --deps 'litellm requests pandas' \         # extra deps beyond dagster + dagster-cloud
-    --python-version 3.12 \                    # (default: 3.12)
-    --dry-run \                                # scaffold + print command, don't deploy
-    --keep-scaffold                            # don't rm -rf the scaffold after deploy
+    --location-name my-flow \                      # (default: basename of .py)
+    --deps 'extra1 extra2' \                       # append explicit deps to auto-detected
+    --no-auto-deps \                               # skip import parsing (only use --deps)
+    --python-version 3.12 \                        # (default: 3.12)
+    --dry-run \                                    # scaffold + print command, don't deploy
+    --keep-scaffold                                # don't rm -rf the scaffold after deploy
+```
+
+Or fetch a `.py` from a public GitHub repo (matches Prefect's `--from user/repo` shape):
+
+```bash
+bash dg-deploy --from user/repo/path/to/my_flow.py --location-name my-flow
+bash dg-deploy --from user/repo/path/to/my_flow.py --branch dev             # override main
 ```
 
 Requires you've done `dagster-cloud config setup` once (caches org + deployment + token in `~/.config/dagster_cloud/`).
@@ -151,20 +162,30 @@ Same `pyproject.toml`, same `dagster_cloud.yaml`, same one deploy command. 14 pa
 
 | Metric | Prefect Cloud | Dagster+ Serverless |
 |---|---|---|
-| Files to write | 1 (`my_flow.py`) | 3 (with `dg-deploy-one-file` CLI: **1**) |
-| Deploy command | `prefect deploy` | `dagster-cloud serverless deploy-python-executable ...` (with CLI: `bash dg-deploy my_flow.py`) |
+| Files to write | 1 (`my_flow.py`) | 3 raw / **1 with CLI wrapper** |
+| Deploy command | `prefect deploy my_flow.py:flow --from user/repo --name X` | `bash dg-deploy my_flow.py` |
+| Deps declaration | Auto-detected + `pip_packages:` override | **Auto-detected + `--deps` override** |
+| Pull from GitHub | `--from user/repo` | **`--from user/repo/path/file.py`** |
 | One-time setup | Cloud login + work pool + block config | `dagster-cloud config setup` (~30s) |
-| Deps declaration | `requirements.txt` OR `prefect.yaml pull` | `pyproject.toml` `dependencies` OR `--deps` flag on CLI |
 | Env vars on deploy | Cloud UI or `prefect deployment set-env` | Cloud UI (Deployment settings → Env vars) |
 
-**With the `dg-deploy-one-file` CLI**, the user-facing footprint matches Prefect: one `.py` file, one deploy command. The extra boilerplate is generated + hidden.
+**With the `dg-deploy-one-file` CLI**, the user-facing footprint matches Prefect: one `.py` file, one deploy command, auto-detected deps, optional GitHub fetch. The extra boilerplate is generated + hidden.
 
-## Verified locally
+For a detailed comparison of what each tool wins on (Prefect: `flow.serve()`, first-party CLI; Dagster+: assets model, Insights metrics, partitions, lineage, ~960 community components), see [`prefect_vs_dagster_single_file.md`](./prefect_vs_dagster_single_file.md).
 
+## Verified
+
+**Local:**
 ```
 ✓ serverless_minimal/          dg check defs + dg launch --assets '*' → RUN_SUCCESS
-✓ agentic_tour_serverless/     dg check defs + dg launch --assets investment_memo_recommendation --partition NVDA → RUN_SUCCESS (17.24s, real OpenAI call)
-✓ dg_deploy_one_file.sh        --dry-run mode verified with a hand-written my_flow.py test file
+✓ agentic_tour_serverless/     dg check defs + dg launch investment_memo_recommendation --partition NVDA → RUN_SUCCESS (17.24s, real OpenAI call)
+✓ dg_deploy_one_file.sh        --dry-run + auto-detect deps (pandas/sklearn→scikit-learn) + --from GitHub fetch → all working
 ```
 
-Serverless deploy itself validated separately (7 code locations shipped to `ericthomas-dagster.dagster.cloud/prod` on 2026-08-03 via the same `deploy-python-executable` pattern).
+**Deployed to Dagster+ Serverless (`ericthomas-dagster.dagster.cloud/prod`, 2026-08-07):**
+```
+✓ location: hello              deployed via raw dagster-cloud serverless deploy-python-executable  (agent sync confirmed)
+✓ location: cli-verify         deployed via bash dg-deploy cli_verify.py --location-name cli-verify (agent sync confirmed)
+```
+
+Both locations visible at https://ericthomas-dagster.dagster.cloud/prod/locations. The `cli-verify` deploy proves the CLI wrapper produces identical deploy output to the raw command — the Prefect-parity ergonomics are real.
