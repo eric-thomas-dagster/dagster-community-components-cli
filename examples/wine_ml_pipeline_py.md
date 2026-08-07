@@ -2,6 +2,8 @@
 
 > ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
+> 🧭 **Not sure which variant to pick?** See [`wine_ml.md`](wine_ml.md) — the shape-selector index for all six wine variants with pros / cons and a decision tree.
+
 **Same pipeline as [`wine_ml_pipeline.md`](wine_ml_pipeline.md), one Python file, no YAML.** Community components can be defined in *either* YAML (via `defs.yaml`) *or* pure Python by instantiating the class directly. This walkthrough shows the Python shape — useful for teams migrating from single-script frameworks (Prefect, Airflow decorators, Luigi) who prefer everything visible in one file.
 
 ## Pipeline

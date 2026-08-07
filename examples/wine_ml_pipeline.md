@@ -1,6 +1,8 @@
 # Wine ML Pipeline demo
 > ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
+> 🧭 **Not sure which variant to pick?** See [`wine_ml.md`](wine_ml.md) — the shape-selector index for all six wine variants with pros / cons and a decision tree.
+
 Builds a more substantial ML pipeline than the existing wine_demo:
   - feature scaling (standardize the 11 chemistry features)
   - train/test split via create_samples

@@ -2,6 +2,8 @@
 
 > ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
+> 🧭 **Not sure which variant to pick?** See [`wine_ml.md`](wine_ml.md) — the shape-selector index for all six wine variants with pros / cons and a decision tree.
+
 **Fifth variant of the wine trilogy** — same 6-step pipeline as [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md), but the model stage decomposes into **plain undecorated Python helper functions** called from a single `@multi_asset` body. No `@op`s, no graph-backed asset, no framework surface beyond `@dg.asset` / `@dg.multi_asset` — just idiomatic Python code organization.
 
 ## The five variants — pick your shape

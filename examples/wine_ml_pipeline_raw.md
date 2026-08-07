@@ -2,6 +2,8 @@
 
 > ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
+> 🧭 **Not sure which variant to pick?** See [`wine_ml.md`](wine_ml.md) — the shape-selector index for all six wine variants with pros / cons and a decision tree.
+
 **Same pipeline as [`wine_ml_pipeline.md`](wine_ml_pipeline.md) and [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md), zero community components** — every step is a raw `@dg.asset`-decorated function with inline pandas/scikit-learn code. This is the most familiar shape for teams coming from Prefect (`@flow` + `@task`) or Airflow's TaskFlow API.
 
 ## The five variants — pick your shape

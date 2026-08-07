@@ -2,6 +2,8 @@
 
 > ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
+> 🧭 **Not sure which variant to pick?** See [`wine_ml.md`](wine_ml.md) — the shape-selector index for all six wine variants with pros / cons and a decision tree.
+
 **Sixth variant of the wine pipeline** — same 6-step logic as the others, but only the *actual deliverables* are Dagster assets. Everything else (scaling, splitting, training, cross-validation, CSV writing) is a plain Python function called from inside a single `@dg.multi_asset` body. This is the closest shape to a Prefect flow: one entry point, many function calls, few first-class artifacts.
 
 ## Why this shape
