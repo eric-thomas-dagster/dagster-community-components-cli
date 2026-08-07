@@ -121,7 +121,7 @@ Every non-component variant is a point on a **2D grid**:
 
 **Start with [`_component`](wine_ml_pipeline_component.md).** It's the standardization play. Every ML pipeline in the org uses the same shape. Reviewers, tests, and CI all benefit. The single-YAML surface handles warehouse ingest + table sinks + 14+ feature-engineering ops + 5 model types + any sklearn/XGBoost/LightGBM estimator via `sklearn_class:`.
 
-Reach for the other variants when the component doesn't fit — bespoke feature engineering not covered by the op menu, per-stage tracking required for regulatory audit, or you're not using the community-components library at all.
+**When the component doesn't cover something you need, extend it — don't abandon it.** Add a new op to `component.py`, subclass to override behavior, or fork the file and add fields. The one-YAML shape is the base you customize on top of. The other variants in this shape selector aren't fallbacks — they're **references** that show what the component compresses under the hood. Read them to understand the pattern; use `_component` as the starting point for real work.
 
 ### Demo arc for a Prefect audience
 
