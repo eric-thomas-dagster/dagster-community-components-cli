@@ -1,27 +1,38 @@
-# Single-file → Dagster+ Serverless
+# Single-file → Dagster+ Serverless (pex, no Docker)
 
-**Prefect deploys need one `.py` file. Dagster+ Serverless needs three files.** This walkthrough shows the absolute floor — plus a CLI tool that scaffolds those three files from your single `.py` and deploys with one command, so the ergonomics land in the same place as Prefect.
+**Prefect deploys one `.py` file. Dagster+ Serverless does the same — as a pex bundle, no Docker, no image registry.** This is the overarching doc for the single-file Serverless story: what deploys look like, what the minimum footprint is, and where the CLI wrapper closes the last ergonomics gap to Prefect.
 
-Three concrete artifacts in this repo:
+## The punchline
 
-1. **[`serverless_minimal/`](./serverless_minimal/)** — the floor. Two assets, three files, no components. Deployable to Dagster+ Serverless as-is.
-2. **[`agentic_tour_serverless/`](./agentic_tour_serverless/)** — the ceiling. Four `AgenticPipelineComponent` pipelines (debate + route + critique_loop + synthesize), 14 partitions, all in one `definitions.py`. Same three-file footprint.
-3. **[`lib/dg_deploy_one_file.sh`](./lib/dg_deploy_one_file.sh)** — the CLI. Takes any single `.py` with `defs = dg.Definitions(...)`, scaffolds the three files around it, and deploys.
+- **One `.py` file → one deploy command → one live code location in Dagster+.**
+- **No Docker.** `dagster-cloud serverless deploy-python-executable` builds a **pex** — a self-contained Python zipapp — and uploads it straight to Dagster+. No Docker Desktop, no container registry, no image push. (Docker only enters if you're on Hybrid or you need custom base OS libs.)
+- **~2 minutes end-to-end** from `bash dg-deploy my_flow.py` to a running location in `dagster.cloud/prod`.
+- **Zero credentials required** for the demos we ship. The story below works with just `dagster-cloud config setup` — no API keys, no vended-product accounts.
 
-## The minimum footprint
+## Deploy verified, live at prod right now
 
-Three files. That's it.
+Three locations shipped 2026-08-07 to `ericthomas-dagster.dagster.cloud/prod`. All zero-external-key. All via pex, no Docker touched:
+
+| Location | Project | What it is |
+|---|---|---|
+| **`hello`** | [`serverless_minimal/`](./serverless_minimal/) | The floor — 2 stdlib assets, 3 files, ~30 lines of boilerplate. |
+| **`data-engineering`** | [`data_engineering_serverless/`](./data_engineering_serverless/) | Real 5-asset HN pipeline (fetch → transform → aggregate → DuckDB sink). No API keys. |
+| **`cli-verify`** | ad-hoc `my_flow.py` deployed via CLI wrapper | Proves the wrapper produces identical output to the raw command. |
+
+All three visible at https://ericthomas-dagster.dagster.cloud/prod/locations. Zero external services required to make them run.
+
+## The minimum footprint — 3 files
 
 ```
 serverless_minimal/
 ├── src/hello/
-│   ├── __init__.py               (empty — 0 lines)
+│   ├── __init__.py               (empty)
 │   └── definitions.py            (your code — 12 lines here)
-├── pyproject.toml                (16 lines)
+├── pyproject.toml                (16 lines, all boilerplate)
 └── dagster_cloud.yaml            (4 lines)
 ```
 
-**`src/hello/definitions.py`** (12 lines, mostly your own code):
+**`src/hello/definitions.py`** (your actual code):
 
 ```python
 import dagster as dg
@@ -40,7 +51,7 @@ def shout(hello: str) -> str:
 defs = dg.Definitions(assets=[hello, shout])
 ```
 
-**`pyproject.toml`** (16 lines — all boilerplate):
+**`pyproject.toml`** (all boilerplate):
 
 ```toml
 [build-system]
@@ -63,7 +74,7 @@ directory_type = "project"
 root_module = "hello"
 ```
 
-**`dagster_cloud.yaml`** (4 lines):
+**`dagster_cloud.yaml`** (location manifest):
 
 ```yaml
 locations:
@@ -72,23 +83,20 @@ locations:
       module_name: hello.definitions
 ```
 
-**Deploy** (one command, assuming `dagster-cloud config setup` was done once):
+**Deploy** (one command — pex bundle, no Docker involved):
 
 ```bash
-cd serverless_minimal
 uvx --with pex --from dagster-cloud-cli dagster-cloud serverless deploy-python-executable . \
     --location-name hello \
     --module-name hello.definitions \
     --python-version 3.12
 ```
 
-That's Dagster's floor: **3 files, ~30 lines of boilerplate around your actual asset code, 1 deploy command. Zero Docker.** Serverless deploys are a pex bundle — a self-contained Python executable — uploaded straight to Dagster+. No Docker Desktop, no container registry, no image build. `deploy-python-executable` is the whole story.
+That's the whole story. **3 files, ~30 lines of boilerplate around your code, 1 deploy command.**
 
-(Docker enters the picture ONLY if you're on Dagster+ Hybrid, or if you have a Serverless workload that needs custom OS libs baked into the runtime. For 95% of single-file demos, pex is all you need.)
+## Prefect-parity via the CLI wrapper
 
-## The CLI wrapper — one-file ergonomics
-
-If you have a bare `.py` and want to deploy it Prefect-style without hand-writing the scaffold, use [`lib/dg_deploy_one_file.sh`](./lib/dg_deploy_one_file.sh):
+If hand-writing the 3-file scaffold every time feels like too much boilerplate vs. Prefect's `prefect deploy`, use [`lib/dg_deploy_one_file.sh`](./lib/dg_deploy_one_file.sh) — it takes any single `.py` with `defs = dg.Definitions(...)` at module scope and auto-generates the scaffold + deploys:
 
 ```bash
 # You have ONE file:
@@ -107,13 +115,11 @@ $ curl -sL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
 $ bash dg-deploy my_flow.py
 ```
 
-That's it. The wrapper detects `pandas` from the `import` statement and auto-adds it to deps — no `--deps` flag needed. Location name defaults to the basename (`my_flow`). Under the hood:
-
-1. Creates `my_flow_serverless_scaffold/` next to your file.
-2. Parses your `.py`'s imports, filters stdlib, adds non-stdlib deps to `pyproject.toml` (with `sklearn`→`scikit-learn`, `PIL`→`Pillow`, `bs4`→`beautifulsoup4` type mappings applied).
-3. Writes `dagster_cloud.yaml` + moves your `.py` to `src/my_flow/definitions.py`.
-4. Runs `dagster-cloud serverless deploy-python-executable ...` from inside the scaffold.
-5. Cleans up (or pass `--keep-scaffold` to keep it for iteration).
+The wrapper:
+1. **Auto-detects deps** by parsing `import` statements. `pandas` is detected here without a `--deps` flag; `sklearn` → `scikit-learn`, `PIL` → `Pillow`, `bs4` → `beautifulsoup4`, etc.
+2. Scaffolds `src/my_flow/definitions.py` + `pyproject.toml` + `dagster_cloud.yaml` in a temp dir.
+3. Runs `dagster-cloud serverless deploy-python-executable ...` from the scaffold.
+4. Cleans up (or pass `--keep-scaffold` to inspect / iterate).
 
 **All options**:
 
@@ -127,67 +133,70 @@ bash dg-deploy my_flow.py \
     --keep-scaffold                                # don't rm -rf the scaffold after deploy
 ```
 
-Or fetch a `.py` from a public GitHub repo (matches Prefect's `--from user/repo` shape):
+**Or fetch a `.py` from a public GitHub repo** (matches Prefect's `--from user/repo`):
 
 ```bash
 bash dg-deploy --from user/repo/path/to/my_flow.py --location-name my-flow
-bash dg-deploy --from user/repo/path/to/my_flow.py --branch dev             # override main
+bash dg-deploy --from user/repo/path/to/my_flow.py --branch dev
 ```
 
-Requires you've done `dagster-cloud config setup` once (caches org + deployment + token in `~/.config/dagster_cloud/`).
+## Real content — data engineering, no LLMs, no keys
 
-## What the ceiling looks like — same footprint, real content
+The `hello` example proves the mechanics. [`data_engineering_serverless/`](./data_engineering_serverless/) is what a realistic Serverless pipeline looks like in the same 3-file layout:
 
-[`agentic_tour_serverless/`](./agentic_tour_serverless/) is the same three-file layout, but `definitions.py` bundles four full agentic pipelines (~250 lines of pipeline config) using `AgenticPipelineComponent` instances:
+```
+hn_top_story_ids ─► hn_stories ─┬─► hn_leaderboard    (top 20 by score → CSV)
+                                 ├─► hn_domains        (top 20 domains → CSV)
+                                 └─► hn_warehouse      (DuckDB fact table)
+```
 
-| Pipeline | Op | Partitions | Purpose |
-|---|---|---|---|
-| `investment_memo_recommendation` | `debate` | 3 tickers | Bull / bear / neutral analysts → committee chair picks |
-| `support_triage_routed` | `route` | 5 ticket types | Router picks technical / billing / product / account specialist |
-| `press_release_polished` | `critique_loop` | 3 launches | Drafter → editor → drafter × 2 iterations |
-| `framework_brief_briefing` | `synthesize` | 3 frameworks | 4 angle-specific analyses → CTO briefing |
+5 assets, all in one `definitions.py`. Fetches from the public Hacker News API (no auth). ~20-second local materialization. Deploys as a pex bundle — same command as `hello`. **No API keys anywhere.** Rich typed metadata per asset (row counts, fetch latency, top-N inline markdown previews, path metadata on sinks). This is the primary reference for "what does a Serverless-deployed pipeline actually look like in production shape?"
 
-Same `pyproject.toml`, same `dagster_cloud.yaml`, same one deploy command. 14 partitions, ~35 LLM calls per full backfill, ~$0.02 total on gpt-4o-mini.
+## One-time setup
 
-## Deploy prereqs (one-time)
+Before your first deploy:
 
-1. **Dagster+ organization** with a `prod` deployment.
-2. **User API token** at `Deployment Settings → Tokens → Create user token`. Export as `DAGSTER_CLOUD_API_TOKEN`.
-3. **One-time CLI config**:
-   ```bash
-   dagster-cloud config setup
-   # prompts for org name + deployment name; caches to ~/.config/dagster_cloud/
-   ```
-4. **Set `OPENAI_API_KEY`** (for the agentic tour) as a location env var in the Dagster+ UI: Deployment settings → Environment variables → add `OPENAI_API_KEY`.
+1. **Dagster+ organization** with a `prod` deployment (or your custom deployment name).
+2. **User API token** — Deployment settings → Tokens → Create user token.
+3. **`dagster-cloud config setup`** — interactive prompt that caches org + deployment + token in `~/.config/dagster_cloud/config.yaml`. Every subsequent `dagster-cloud` command finds this automatically.
+
+That's it. No work pools to configure, no blocks to register, no runtime containers to provision.
 
 ## Prefect comparison
 
-| Metric | Prefect Cloud | Dagster+ Serverless |
-|---|---|---|
-| Files to write | 1 (`my_flow.py`) | 3 raw / **1 with CLI wrapper** |
-| Deploy command | `prefect deploy my_flow.py:flow --from user/repo --name X` | `bash dg-deploy my_flow.py` |
-| Deps declaration | Auto-detected + `pip_packages:` override | **Auto-detected + `--deps` override** |
-| Pull from GitHub | `--from user/repo` | **`--from user/repo/path/file.py`** |
-| One-time setup | Cloud login + work pool + block config | `dagster-cloud config setup` (~30s) |
-| Env vars on deploy | Cloud UI or `prefect deployment set-env` | Cloud UI (Deployment settings → Env vars) |
+| | Prefect Cloud (Managed) | Dagster+ Serverless (pex) | Dagster+ Serverless (CLI wrapper) |
+|---|---|---|---|
+| Files to write | 1 (`my_flow.py`) | 3 (`definitions.py` + `pyproject.toml` + `dagster_cloud.yaml`) | **1** (wrapper generates the other 2) |
+| Deploy command | `prefect deploy my_flow.py:flow --from user/repo --name X` | `dagster-cloud serverless deploy-python-executable . --location-name X --module-name my_flow.definitions ...` | **`bash dg-deploy my_flow.py`** |
+| Deps declaration | Auto-detected + `pip_packages:` override | Explicit in `pyproject.toml` | **Auto-detected from imports + `--deps` override** |
+| Runtime bundling | Fetched from GitHub at run time | pex bundle uploaded at deploy time (no Docker) | pex bundle (via wrapper) |
+| Custom OS libs? | No (unless in a custom worker) | Not without Hybrid | Not without Hybrid |
+| Pull from GitHub | `--from user/repo` | Manual git clone before deploy | **`--from user/repo/path/file.py`** |
 
-**With the `dg-deploy-one-file` CLI**, the user-facing footprint matches Prefect: one `.py` file, one deploy command, auto-detected deps, optional GitHub fetch. The extra boilerplate is generated + hidden.
+With the wrapper, the user-facing footprint matches Prefect exactly: one `.py`, one deploy command, auto-detected deps, optional GitHub fetch. **The 3-file scaffold is generated + hidden.**
 
-For a detailed comparison of what each tool wins on (Prefect: `flow.serve()`, first-party CLI; Dagster+: assets model, Insights metrics, partitions, lineage, ~960 community components), see [`prefect_vs_dagster_single_file.md`](./prefect_vs_dagster_single_file.md).
+For a detailed comparison including where each tool wins (Prefect: `flow.serve()`, first-party CLI ubiquity; Dagster+: assets model, Insights metrics, partitions, lineage, ~960 community components), see [`prefect_vs_dagster_single_file.md`](./prefect_vs_dagster_single_file.md).
+
+## Additional examples
+
+- **[`agentic_tour_serverless/`](./agentic_tour_serverless/)** — same 3-file layout, but `definitions.py` bundles 4 LLM/agentic pipelines using `AgenticPipelineComponent`. **Requires `OPENAI_API_KEY`** as a location env var. Useful if you're specifically evaluating Dagster for AI workloads.
+- **[`hybrid_git_runner/`](./hybrid_git_runner/)** — the Hybrid single-file answer. Deploy a runner container ONCE; iterate on flows by pushing to a git repo the runner watches. Docker enters here (Hybrid needs it) but only for the one-time runner image; iteration is `git push`.
 
 ## Verified
 
 **Local:**
 ```
-✓ serverless_minimal/          dg check defs + dg launch --assets '*' → RUN_SUCCESS
-✓ agentic_tour_serverless/     dg check defs + dg launch investment_memo_recommendation --partition NVDA → RUN_SUCCESS (17.24s, real OpenAI call)
-✓ dg_deploy_one_file.sh        --dry-run + auto-detect deps (pandas/sklearn→scikit-learn) + --from GitHub fetch → all working
+✓ serverless_minimal/           dg check defs + dg launch --assets '*' → RUN_SUCCESS
+✓ data_engineering_serverless/  dg check defs + dg launch --assets '*' → RUN_SUCCESS (20s, 5 assets, real HN data)
+✓ agentic_tour_serverless/      dg check defs + dg launch investment_memo_recommendation --partition NVDA → RUN_SUCCESS (17.24s, real OpenAI call)
+✓ dg_deploy_one_file.sh         --dry-run + auto-detect deps (pandas/sklearn→scikit-learn) + --from GitHub fetch → all working
 ```
 
-**Deployed to Dagster+ Serverless (`ericthomas-dagster.dagster.cloud/prod`, 2026-08-07):**
+**Deployed to Dagster+ Serverless prod (`ericthomas-dagster.dagster.cloud/prod`, 2026-08-07):**
 ```
-✓ location: hello              deployed via raw dagster-cloud serverless deploy-python-executable  (agent sync confirmed)
-✓ location: cli-verify         deployed via bash dg-deploy cli_verify.py --location-name cli-verify (agent sync confirmed)
+✓ location: hello              via raw `dagster-cloud serverless deploy-python-executable`  (agent sync confirmed)
+✓ location: cli-verify         via `bash dg-deploy cli_verify.py --location-name cli-verify` (agent sync confirmed)
+✓ location: data-engineering   via raw `dagster-cloud serverless deploy-python-executable`  (agent sync confirmed)
 ```
 
-Both locations visible at https://ericthomas-dagster.dagster.cloud/prod/locations. The `cli-verify` deploy proves the CLI wrapper produces identical deploy output to the raw command — the Prefect-parity ergonomics are real.
+All three visible at https://ericthomas-dagster.dagster.cloud/prod/locations. **All three deploys shipped a pex bundle. Zero Docker touched.** The `cli-verify` deploy specifically proves the wrapper produces identical output to the raw command — the Prefect-parity ergonomics are real.
