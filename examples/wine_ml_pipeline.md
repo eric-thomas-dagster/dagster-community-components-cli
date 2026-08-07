@@ -52,4 +52,5 @@ uv run dg launch --assets '*'
 - [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) — same pipeline with plain-Python-helper decomposition (no @op, no graph).
 - [`titanic_complete.md`](titanic_complete.md) — larger ML pipeline (12 components) on the Titanic dataset.
 - [`airports_cluster.md`](airports_cluster.md) — unsupervised ML variant (k-means clustering).
+- [`wine_ml_pipeline_component.md`](wine_ml_pipeline_component.md) — same pipeline as ONE MLPipelineComponent (single YAML, standardized ML shape).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

@@ -173,4 +173,5 @@ defs = dg.Definitions(
 - [`wine_ml.md`](wine_ml.md) — the shape-selector index (2D grid: asset granularity × decomposition style).
 - [`wine_ml_pipeline_minimal.md`](wine_ml_pipeline_minimal.md) — same 3-asset shape but with plain Python helpers instead of `@op`s.
 - [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same `@op`+`@graph_multi_asset` shape but with 8 assets (per-stage tracking).
+- [`wine_ml_pipeline_component.md`](wine_ml_pipeline_component.md) — same pipeline as ONE MLPipelineComponent (single YAML, standardized ML shape).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

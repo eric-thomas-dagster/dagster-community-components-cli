@@ -154,4 +154,5 @@ Same tests aren't possible against `_raw`-style inline logic without either (a) 
 - [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same shape but helpers are `@dg.op` functions inside a `@dg.graph_multi_asset`.
 - [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python instantiation).
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML `defs.yaml` files.
+- [`wine_ml_pipeline_component.md`](wine_ml_pipeline_component.md) — same pipeline as ONE MLPipelineComponent (single YAML, standardized ML shape).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

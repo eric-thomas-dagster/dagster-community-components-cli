@@ -131,6 +131,9 @@ curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_wine_ml_pipeline_ops_demo.sh          | bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_wine_ml_pipeline_py_demo.sh           | bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_wine_ml_pipeline_demo.sh              | bash
+
+# One-component variant (the standardized ML shape — reach for this in orgs)
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_wine_ml_pipeline_component_demo.sh    | bash
 ```
 
 Then `cd <dir> && uv run dg dev` → http://localhost:3000 → click Materialize all.

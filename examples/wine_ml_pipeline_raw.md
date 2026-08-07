@@ -249,4 +249,5 @@ The **content** is identical — same fit params, same output columns, same file
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML defs.yaml files.
 - [`titanic_complete.md`](titanic_complete.md) — larger ML pipeline (12 components) on the Titanic dataset.
 - [`airports_cluster.md`](airports_cluster.md) — unsupervised ML variant (k-means clustering).
+- [`wine_ml_pipeline_component.md`](wine_ml_pipeline_component.md) — same pipeline as ONE MLPipelineComponent (single YAML, standardized ML shape).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

@@ -245,4 +245,5 @@ In the UI: **3 nodes** (wine_raw, wine_model_outputs which shows two output bran
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via community components (YAML).
 - [`wine_ml_pipeline_ops_minimal.md`](wine_ml_pipeline_ops_minimal.md) — same 3-asset shape but with `@op`+`@graph_multi_asset` for typed sub-step composition.
 - [`wine_ml_pipeline_py_minimal.md`](wine_ml_pipeline_py_minimal.md) — same 3-asset shape but with a `FileIngestionComponent` for the ingest stage.
+- [`wine_ml_pipeline_component.md`](wine_ml_pipeline_component.md) — same pipeline as ONE MLPipelineComponent (single YAML, standardized ML shape).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

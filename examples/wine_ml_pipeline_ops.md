@@ -265,4 +265,5 @@ Ops also compose across graph assets — you can reuse the same `train_model` op
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML `defs.yaml` files.
 - [Dagster docs — passing data between assets](https://docs.dagster.io/guides/build/assets/passing-data-between-assets) — deeper on the IO manager story that connects asset outputs to downstream inputs.
 - [`wine_ml_pipeline_ops_minimal.md`](wine_ml_pipeline_ops_minimal.md) — same `@op`+`@graph_multi_asset` style but with only 3 assets (compressed).
+- [`wine_ml_pipeline_component.md`](wine_ml_pipeline_component.md) — same pipeline as ONE MLPipelineComponent (single YAML, standardized ML shape).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.
