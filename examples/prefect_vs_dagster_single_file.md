@@ -2,7 +2,9 @@
 
 **Prefect's pitch:** one `.py` file, one `prefect deploy` command, done. **Where's Dagster+?**
 
-Answer: **matched, twice.** Dagster+ has two paths to Prefect-parity single-file ergonomics — one for Serverless, one for Hybrid — plus meaningful differentiators Prefect can't match (mixed-agent deployments, branch deployments per PR, first-class assets/lineage/metadata across all of them).
+Answer: **matched, twice, both without Docker.** Dagster+ Serverless single-file deploys are a **pex bundle** — a self-contained Python executable, no container image, no registry, no Docker Desktop. `deploy-python-executable` uploads the pex straight to Dagster+ and runs it. For Hybrid, we've built a git-runner pattern that also skips per-iteration image builds (one runner container deployed once; iterate by pushing to a git repo it watches).
+
+Plus meaningful differentiators Prefect can't cleanly match: mixed-agent deployments, branch deployments per PR, first-class assets/lineage/metadata across all of them.
 
 ## The honest comparison
 

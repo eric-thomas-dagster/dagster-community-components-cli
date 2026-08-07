@@ -82,7 +82,9 @@ uvx --with pex --from dagster-cloud-cli dagster-cloud serverless deploy-python-e
     --python-version 3.12
 ```
 
-That's Dagster's floor: **3 files, ~30 lines of boilerplate around your actual asset code, 1 deploy command.**
+That's Dagster's floor: **3 files, ~30 lines of boilerplate around your actual asset code, 1 deploy command. Zero Docker.** Serverless deploys are a pex bundle — a self-contained Python executable — uploaded straight to Dagster+. No Docker Desktop, no container registry, no image build. `deploy-python-executable` is the whole story.
+
+(Docker enters the picture ONLY if you're on Dagster+ Hybrid, or if you have a Serverless workload that needs custom OS libs baked into the runtime. For 95% of single-file demos, pex is all you need.)
 
 ## The CLI wrapper — one-file ergonomics
 

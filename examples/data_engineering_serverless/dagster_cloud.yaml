@@ -1,0 +1,4 @@
+locations:
+  - location_name: data_engineering
+    code_source:
+      module_name: data_engineering.definitions
