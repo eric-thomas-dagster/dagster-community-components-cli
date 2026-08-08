@@ -114,24 +114,54 @@ dev:      SCRIPTS_REPO_URL=https://github.com/co/flows  SCRIPTS_REPO_BRANCH=dev
 
 Each deployment's runner independently clones its branch on load and emits its own asset graph. `prod` and `staging` can have different asset lineage if the branches have different flow files. State (via `StateBackedComponent`) is namespaced per deployment — no cross-contamination.
 
-## Branch deployments — PR previews get a real per-PR runner
+## Branch deployments — PR previews
 
-When someone opens a PR against your flows repo, Dagster+ auto-creates an ephemeral **branch deployment** (usually named after the branch or PR number, e.g., `pr-42`). The branch deployment can point the runner at the PR's branch:
+Dagster+ auto-spins up branch deployments per PR against your Dagster project repo. The runner supports this out of the box for the common "everything in one repo" pattern, and points at a documented workaround for the more advanced "separate flows repo" pattern.
 
+### Scenario A — flows repo IS your Dagster project repo (auto-detected ✓)
+
+Simplest case: your `hybrid_git_runner` YAML lives in the same git repo as your flows. PR against that repo → Dagster+ creates a branch deployment → runner container receives `DAGSTER_CLOUD_IS_BRANCH_DEPLOYMENT=1` and `DAGSTER_CLOUD_GIT_BRANCH=<PR-branch>`.
+
+The runner **auto-detects this** and uses the PR's branch name to fetch flows, so the branch deployment shows the flows-from-that-PR. Prod deployment continues fetching the configured branch (usually `main`). Nothing extra to wire.
+
+Field: `match_branch_deployment: bool = True` (default; set to `false` to disable and always use the configured branch).
+
+### Scenario B — flows repo is separate from your Dagster project repo
+
+Common at scale: your Dagster project (with the runner defs.yaml) is one repo (`co/dagster-runner`); your flows are in another (`co/flows`). Cleaner separation of concerns, but Dagster+'s branch-deployment feature natively fires on PRs against the *Dagster project* repo — a PR against the flows repo doesn't automatically get a preview.
+
+**Honest framing:** this is really a Dagster+ product gap that should be closed natively — "branch deployments should fire on PRs against any repo the deployment references, not just the Dagster project repo." Filing that as a product request. Until then, every team ends up building the same 30-line GitHub Action.
+
+**What the tooling here reduces in the meantime:** the [`lib/dg_deploy.sh --hybrid`](../lib/dg_deploy.sh) CLI already handles the "deploy runner + push flow + set env vars" flow in one command. The Scenario B automation — wiring a flows-repo PR to a Dagster+ branch deployment — is a natural extension. Sketch of the GH Action that closes the last gap until the product supports it natively (drop into `.github/workflows/dagster-preview.yml` in your flows repo):
+
+```yaml
+name: Dagster+ preview
+on:
+  pull_request:
+    types: [opened, synchronize, closed]
+jobs:
+  branch-deployment:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: dagster-io/dagster-cloud-action/actions/utils/create_branch_deployment@v0.1
+        with:
+          organization_id: ${{ vars.DAGSTER_CLOUD_ORG_ID }}
+          deployment: prod
+          api_token: ${{ secrets.DAGSTER_CLOUD_API_TOKEN }}
+          # Point the runner in the branch deployment at THIS PR's branch of the flows.
+          extra_args: |
+            --env SCRIPTS_REPO_BRANCH=${{ github.head_ref }}
 ```
-branch_deployment (pr-42):
-  SCRIPTS_REPO_URL=https://github.com/co/flows
-  SCRIPTS_REPO_BRANCH=feature-xyz          # ← matches the PR branch
-```
 
-The result: **every PR gets a preview code location with the PR's flows loaded**. Reviewers can materialize assets from the PR branch without merging. When the PR merges, the branch deployment tears down automatically.
+Once that's wired: PR opened → branch deployment created with the PR's branch as the flows source → reviewers materialize assets against the PR's code → PR closes → branch deployment tears down. Same "flip a checkbox" ergonomics as Scenario A.
 
-Two ways to wire this:
+**Net:** Scenario B ships today as a documented pattern with a working GH Action snippet — setup is one-time per flows repo, after which per-PR previews are automatic. Longer-term, this belongs in the product: Dagster+ branch deployments should natively support PRs against a linked flows repo, not require a customer-owned GH Action. Filed as product feedback.
 
-1. **Manually** — set the branch deployment's env vars in the Dagster+ UI when the branch deployment spins up.
-2. **Automatically via CI** — GitHub Action / CI job sets the env vars when the branch deployment is created. Dagster+ exposes the PR branch name in the deployment context; a small script writes it into the location env vars.
+### Regardless of scenario
 
-Either way, **the runner image is the same**. What changes is the branch it clones.
+- **Same runner image** across prod / staging / dev / branch deployments — only env vars differ.
+- **State is namespaced per deployment** — a branch deployment's state doesn't bleed into prod.
+- **Tear-down is automatic** — when the branch deployment closes, everything it materialized goes with it. No cleanup needed.
 
 ## Mixed agents — Serverless + Hybrid in the same deployment
 

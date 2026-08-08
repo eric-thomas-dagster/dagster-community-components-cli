@@ -69,7 +69,28 @@ class HybridRunnerComponent(ScriptGithubComponent):
     # explicit schedule/sensor to refresh state).
     eagerly_compute_state: bool = True
 
+    # When running in a Dagster+ branch deployment, prefer the PR's
+    # branch name (from DAGSTER_CLOUD_GIT_BRANCH) over the configured
+    # SCRIPTS_REPO_BRANCH — so the branch deployment shows the flows
+    # from the PR's version of the flows repo. Only works when the
+    # flows repo IS your Dagster project repo (Scenario A); for
+    # separate flows-repo setups (Scenario B), custom GitHub Actions
+    # → Dagster+ Branch Deployments API wiring is required. See README.
+    match_branch_deployment: bool = True
+
     def build_defs(self, context):  # type: ignore[override]
+        # If we're in a branch deployment, override the configured
+        # repo_branch with the PR's branch — makes the branch
+        # deployment show the flows from the PR's code state.
+        if self.match_branch_deployment:
+            resolved = _resolve_branch_for_deployment(self.repo_branch)
+            if resolved != self.repo_branch:
+                logger.info(
+                    f"[HybridRunner] branch deployment detected — using "
+                    f"repo branch {resolved!r} instead of {self.repo_branch!r}"
+                )
+                self.repo_branch = resolved
+
         # Dep install first — needed BEFORE ScriptGithubComponent parses
         # any flow files (which may import the newly-installed packages).
         if self.install_flow_requirements and not self.use_local:
@@ -84,36 +105,67 @@ class HybridRunnerComponent(ScriptGithubComponent):
         return super().build_defs(context)
 
 
+def _resolve_branch_for_deployment(configured_branch: str) -> str:
+    """When running in a Dagster+ branch deployment, prefer the PR's
+    branch name over the location's configured branch — so a PR against
+    the Dagster project repo shows the flows from THAT PR's version of
+    the flows repo (assumes flows-repo IS the Dagster project repo — the
+    "Scenario A" pattern documented in the README).
+
+    Env vars Dagster+ sets on the code-location container:
+      DAGSTER_CLOUD_IS_BRANCH_DEPLOYMENT   "1" if this is a branch deployment
+      DAGSTER_CLOUD_GIT_BRANCH             the PR's branch name
+
+    Falls back to the configured branch if either is missing (i.e. we're
+    running in prod, or Dagster+ didn't populate the branch env var).
+    """
+    if os.environ.get("DAGSTER_CLOUD_IS_BRANCH_DEPLOYMENT") != "1":
+        return configured_branch
+    pr_branch = os.environ.get("DAGSTER_CLOUD_GIT_BRANCH", "").strip()
+    return pr_branch or configured_branch
+
+
 def _eagerly_compute_state(*, component, context) -> None:
     """Compute the ScriptGithubComponent's state directly on first container
     start, so the code location emits assets immediately rather than
     waiting for a manual state-refresh action. Best-effort — a failure
-    logs a warning but doesn't kill the code-location load (parent's
-    build_defs will still run; the location will show up empty until
-    the customer triggers state refresh manually).
+    logs a warning but doesn't kill the code-location load.
+
+    Uses the StateBackedComponent's own `refresh_state` method (async)
+    so state ends up in the exact location the base class expects to
+    read from — avoids "I wrote state to X, but the parent looks at Y"
+    path-mismatch bugs.
     """
+    import asyncio
+
     try:
-        from dagster.components.utils.defs_state import DefsStateConfig
+        from dagster.components.utils.project_paths import get_local_state_path
     except ImportError:
-        DefsStateConfig = None  # type: ignore[assignment]
+        get_local_state_path = None  # type: ignore[assignment]
 
     try:
-        # StateBackedComponent stores state at a path defined by its
-        # defs_state config. For the local_filesystem default, that's
-        # a dir under the project's .dagster_home or /tmp.
-        state_dir = Path("/opt/dagster/dagster_home/component_state/hybrid_runner")
-        state_dir.mkdir(parents=True, exist_ok=True)
-        state_file = state_dir / "scripts_state.json"
+        # Determine project_root the same way StateBackedComponent does.
+        # In our Docker container Dagster's WORKDIR is /opt/dagster/app;
+        # ComponentLoadContext exposes a project_root but not on every
+        # version — fall back to the WORKDIR.
+        project_root = Path(os.environ.get("DAGSTER_APP_DIR", "/opt/dagster/app"))
 
-        if state_file.exists():
-            logger.info("[HybridRunner] state already cached, skipping eager compute")
-            return
+        # Short-circuit if state is already computed (subsequent container
+        # restarts should reuse the cached state, not re-clone every time).
+        if get_local_state_path is not None:
+            key = component.defs_state_config.key
+            state_path = get_local_state_path(key, project_root)
+            if state_path.exists():
+                logger.info(f"[HybridRunner] state already cached at {state_path}")
+                return
 
         logger.info("[HybridRunner] no state cached — computing on first load…")
-        component.write_state_to_path(state_file)
-        logger.info(f"[HybridRunner] state cached at {state_file}")
+        # refresh_state is async — run it synchronously here since build_defs
+        # is sync. This blocks until the git clone + parse completes.
+        version = asyncio.run(component.refresh_state(project_root=project_root))
+        logger.info(f"[HybridRunner] state computed (version={version})")
     except Exception as e:
-        logger.warning(f"[HybridRunner] eager state compute failed: {e}")
+        logger.warning(f"[HybridRunner] eager state compute failed: {e}", exc_info=True)
 
 
 def _install_flow_requirements(
