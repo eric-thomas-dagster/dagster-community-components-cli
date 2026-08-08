@@ -59,18 +59,61 @@ class HybridRunnerComponent(ScriptGithubComponent):
     # image (--registry mode) than allow runtime installs.
     install_flow_requirements: bool = True
 
+    # Eagerly compute state on first container start (rather than
+    # waiting for a manual state-refresh action). Without this, a
+    # fresh runner container loads but the code location has no assets
+    # until the customer clicks "Refresh state" in the UI. With this,
+    # the first startup clones the flows repo + emits assets directly.
+    # Turn off if you have a large flows repo where the clone would
+    # slow container startup unacceptably (and you prefer to wire an
+    # explicit schedule/sensor to refresh state).
+    eagerly_compute_state: bool = True
+
     def build_defs(self, context):  # type: ignore[override]
-        # Do the flow-repo dep install BEFORE delegating to parent, so
-        # whatever the parent's asset-emission code imports has the right
-        # versions available. Only runs when install_flow_requirements=True
-        # AND we're pointed at a real repo (not use_local).
+        # Dep install first — needed BEFORE ScriptGithubComponent parses
+        # any flow files (which may import the newly-installed packages).
         if self.install_flow_requirements and not self.use_local:
             _install_flow_requirements(
                 repo_url=self.repo_url,
                 repo_branch=self.repo_branch,
                 github_token=self.github_token,
             )
+        # Eager-compute state so a fresh container start = assets appear.
+        if self.eagerly_compute_state and not self.use_local:
+            _eagerly_compute_state(component=self, context=context)
         return super().build_defs(context)
+
+
+def _eagerly_compute_state(*, component, context) -> None:
+    """Compute the ScriptGithubComponent's state directly on first container
+    start, so the code location emits assets immediately rather than
+    waiting for a manual state-refresh action. Best-effort — a failure
+    logs a warning but doesn't kill the code-location load (parent's
+    build_defs will still run; the location will show up empty until
+    the customer triggers state refresh manually).
+    """
+    try:
+        from dagster.components.utils.defs_state import DefsStateConfig
+    except ImportError:
+        DefsStateConfig = None  # type: ignore[assignment]
+
+    try:
+        # StateBackedComponent stores state at a path defined by its
+        # defs_state config. For the local_filesystem default, that's
+        # a dir under the project's .dagster_home or /tmp.
+        state_dir = Path("/opt/dagster/dagster_home/component_state/hybrid_runner")
+        state_dir.mkdir(parents=True, exist_ok=True)
+        state_file = state_dir / "scripts_state.json"
+
+        if state_file.exists():
+            logger.info("[HybridRunner] state already cached, skipping eager compute")
+            return
+
+        logger.info("[HybridRunner] no state cached — computing on first load…")
+        component.write_state_to_path(state_file)
+        logger.info(f"[HybridRunner] state cached at {state_file}")
+    except Exception as e:
+        logger.warning(f"[HybridRunner] eager state compute failed: {e}")
 
 
 def _install_flow_requirements(
