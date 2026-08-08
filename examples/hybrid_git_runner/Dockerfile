@@ -20,6 +20,16 @@ COPY src/ ./src/
 RUN pip install --no-cache-dir --upgrade pip \
     && pip install --no-cache-dir -e .
 
+# Workaround for upstream bug: script_orchestrator's top-level __init__.py
+# chain tries to open a config file at import time (from its own project
+# layout, not something downstream projects have). This blows up any
+# `from script_orchestrator.* import ...`. Empty out the offending
+# init files so submodule imports work. Track upstream fix at:
+# https://github.com/eric-thomas-dagster/script_scheduling_and_orchestration
+RUN find /usr/local/lib/python3.12/site-packages/script_orchestrator -maxdepth 3 -name "__init__.py" \
+    -path "*/defs/*" -exec sh -c 'echo "" > "$1"' _ {} \; \
+    && echo "" > /usr/local/lib/python3.12/site-packages/script_orchestrator/__init__.py
+
 # Dagster's convention — dagster-cloud looks for definitions at this
 # module path per the dagster_cloud.yaml `code_source.module_name`.
 ENV DAGSTER_HOME=/opt/dagster/dagster_home

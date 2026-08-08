@@ -2,13 +2,7 @@ locations:
   - location_name: hybrid_git_runner
     code_source:
       module_name: hybrid_git_runner.definitions
-    container_context:
-      k8s:
-        env_vars:
-          # These are examples. Set the actual values on the Dagster+ code
-          # location's Environment variables page instead — that way the
-          # same runner image ships to prod / staging / dev with different
-          # git repos + branches, no image rebuilds.
-          - SCRIPTS_REPO_URL=https://github.com/YOUR_ORG/YOUR_FLOWS_REPO
-          - SCRIPTS_REPO_BRANCH=main
-          - SCRIPTS_DIR=flows
+    # agent_queue routes this location to a Hybrid agent listening on
+    # that queue — keeps this location off any Serverless agents in
+    # the same deployment.
+    agent_queue: hybrid-test
