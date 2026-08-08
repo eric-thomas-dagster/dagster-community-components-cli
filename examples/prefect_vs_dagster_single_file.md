@@ -84,7 +84,7 @@ git push origin main                                           # runner picks up
 
 Matches Prefect Method 2 (git-driven Managed pool) exactly once the runner is up. Runner image is deployed ONCE; new flows in the target repo appear on the next code-location load — no rebuild, no image push per iteration. See [`hybrid_git_runner/`](./hybrid_git_runner/) for the full walkthrough.
 
-**Status:** Prebuilt image publicly available at `ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest` (verified anonymous pull 2026-08-07). Live end-to-end verification against a Hybrid agent is still pending. See the [Testing this end-to-end](./hybrid_git_runner/README.md#testing-this-end-to-end) section of the runner README for the ~30 min one-time infra setup needed to close that loop.
+**Status:** Prebuilt image publicly at `ghcr.io/eric-thomas-dagster/hybrid-git-runner:latest` (verified anonymous pull 2026-08-07). **Hybrid deploy mechanic verified live 2026-08-07** — Docker Hybrid agent pulled the public image, launched a container against the `prod` deployment, Dagster+ marked the location "Updated successfully." Open detail: `StateBackedComponent` state refresh is what actually populates the flows-repo clone + emits assets — separate action from the deploy itself. See the [runner README](./hybrid_git_runner/README.md) for the full verification log.
 
 ### Side-by-side (all three options)
 
