@@ -149,17 +149,29 @@ fi
 INPUT_FILES=()
 if [ -z "$INPLACE" ]; then
     if [ -d "$SOURCE" ]; then
+        # Recurse up to 5 levels deep — covers realistic multi-file layouts
+        # (flat, one-subfolder, small-package-tree) without going wild. Skip
+        # __pycache__, hidden dirs (.venv, .git, .tox, …), and __init__.py
+        # files (those get regenerated).
         while IFS= read -r f; do
             INPUT_FILES+=("$f")
-        done < <(find "$SOURCE" -maxdepth 1 -type f -name "*.py" | sort)
+        done < <(find "$SOURCE" \
+            -maxdepth 5 \
+            -type f -name "*.py" \
+            -not -path '*/__pycache__/*' \
+            -not -path '*/.*/*' \
+            -not -name '__init__.py' \
+            | sort)
         if [ ${#INPUT_FILES[@]} -eq 0 ]; then
             echo "✗ No .py files found in $SOURCE (and no pyproject.toml or dagster_cloud.yaml either)"
             exit 1
         fi
         BASENAME=$(basename "$SOURCE")
+        SOURCE_ROOT="$SOURCE"
     else
         INPUT_FILES=("$SOURCE")
         BASENAME=$(basename "$SOURCE" .py)
+        SOURCE_ROOT=""
     fi
     # Sanitize name for use as Python module.
     MODULE_NAME=$(echo "$BASENAME" | tr -- '-. ' '___')
@@ -169,7 +181,7 @@ fi
 # ── In-place branches skip the scaffold ───────────────────────────
 if [ "$INPLACE" = "dg-native" ]; then
     echo ">>> Detected existing dg-native project at $INPLACE_DIR"
-    echo "    Using it as-is (pyproject.toml [tool.dg.project] found)"
+    echo "    Deploying in place (no scaffold, no clobber)."
     if [ -n "$HYBRID" ]; then
         # Ensure build.yaml exists with the registry the user asked for.
         if [ -f "$INPLACE_DIR/build.yaml" ]; then
@@ -178,7 +190,7 @@ if [ "$INPLACE" = "dg-native" ]; then
                 echo "⚠ build.yaml registry is '$EXISTING_REG', --registry was '$REGISTRY' → using existing"
             fi
         else
-            echo "    build.yaml missing — writing one with registry: $REGISTRY"
+            echo "    ✎ Writing $INPLACE_DIR/build.yaml (registry: $REGISTRY) — only new file created"
             echo "registry: $REGISTRY" > "$INPLACE_DIR/build.yaml"
         fi
     fi
@@ -187,7 +199,12 @@ if [ "$INPLACE" = "dg-native" ]; then
 
 elif [ "$INPLACE" = "legacy" ]; then
     echo ">>> Detected legacy dagster_cloud.yaml at $INPLACE_DIR"
-    echo "    Migrating to modern [tool.dg.project] + build.yaml pattern…"
+    echo "    MUTATING your files (see summary below):"
+    echo "      ✎ pyproject.toml   (append [tool.dg] + [tool.dg.project] block)"
+    echo "      ✎ build.yaml       (write — new file)"
+    echo "      ↻ dagster_cloud.yaml → dagster_cloud.yaml.legacy-bak  (renamed, backup preserved)"
+    echo "    On any failure the .legacy-bak is restored automatically."
+    echo ""
     # Backup first — never mutate user files without a safety net.
     cp "$INPLACE_DIR/dagster_cloud.yaml" "$INPLACE_DIR/dagster_cloud.yaml.legacy-bak"
     # Translate.
@@ -332,24 +349,77 @@ PYEOF
 fi
 COMBINED_DEPS=$(printf '%s\n%s\n' "$AUTO_DETECTED_DEPS" "$EXTRA_DEPS" | tr ' ' '\n' | { grep -v '^$' || true; } | sort -u)
 
+# ── Warn on version-pin conflicts within COMBINED_DEPS ──────────────
+# If two entries specify the same package with different pins (e.g.
+# `pandas==1.5.3` and `pandas>=2.0`), pip will error at install time —
+# surface the conflict here with a clear message.
+if command -v python3 >/dev/null 2>&1; then
+    _CONFLICTS=$(python3 - <<PYEOF
+import re, sys
+deps = """$COMBINED_DEPS""".strip().splitlines()
+buckets = {}
+for d in deps:
+    d = d.strip()
+    if not d:
+        continue
+    m = re.match(r'([A-Za-z0-9_.\-]+)(.*)$', d)
+    if not m:
+        continue
+    name, spec = m.group(1).lower().replace("_", "-"), m.group(2).strip()
+    buckets.setdefault(name, set()).add(spec or "(unpinned)")
+conflicts = {n: sorted(s) for n, s in buckets.items() if len(s) > 1}
+for n, s in conflicts.items():
+    print(f"{n}: {s}")
+PYEOF
+    )
+    if [ -n "$_CONFLICTS" ]; then
+        echo "⚠ Conflicting deps detected — pip will error at install:"
+        echo "$_CONFLICTS" | sed 's/^/    /'
+        echo "  Resolve by editing --deps or (in dg-native mode) your pyproject.toml."
+        echo ""
+    fi
+fi
+
 # ── Scaffold (loose-file path only) ────────────────────────────────
 if [ -z "$INPLACE" ]; then
-SCAFFOLD_DIR="${MODULE_NAME}_scaffold"
-echo ">>> Scaffolding $SCAFFOLD_DIR/ from $SOURCE"
+# Default scaffold in $TMPDIR (deterministic per module name — same input →
+# same location, easy to re-inspect). Only put it in cwd when the user asks
+# to iterate on the scaffold (--keep-scaffold) or run `dg dev` locally (--dev).
+# Never pollutes the user's git repo unless they opt in.
+if [ -n "$KEEP_SCAFFOLD" ]; then
+    SCAFFOLD_DIR="./${MODULE_NAME}_scaffold"
+else
+    SCAFFOLD_DIR="${TMPDIR:-/tmp}/dg-deploy-${MODULE_NAME}"
+fi
+echo ">>> Scaffolding at $SCAFFOLD_DIR/ from $SOURCE"
 rm -rf "$SCAFFOLD_DIR"
 mkdir -p "$SCAFFOLD_DIR/src/$MODULE_NAME/user_defs"
 touch "$SCAFFOLD_DIR/src/$MODULE_NAME/__init__.py"
 touch "$SCAFFOLD_DIR/src/$MODULE_NAME/user_defs/__init__.py"
 
-# Copy user files.
+# Copy user files, preserving relative paths (so nested subfolders survive).
 for f in "${INPUT_FILES[@]}"; do
-    cp "$f" "$SCAFFOLD_DIR/src/$MODULE_NAME/user_defs/"
+    if [ -n "$SOURCE_ROOT" ]; then
+        rel="${f#$SOURCE_ROOT/}"
+    else
+        rel=$(basename "$f")
+    fi
+    target="$SCAFFOLD_DIR/src/$MODULE_NAME/user_defs/$rel"
+    mkdir -p "$(dirname "$target")"
+    cp "$f" "$target"
 done
+# Every subdirectory under user_defs/ needs __init__.py so it's a proper
+# Python subpackage — cross-file imports (from .other import x) and
+# pkgutil.walk_packages recursion both depend on this.
+find "$SCAFFOLD_DIR/src/$MODULE_NAME/user_defs" -type d -exec touch {}/__init__.py \;
 
-# definitions.py — imports every module in user_defs/, merges their `defs`.
+# definitions.py — walks EVERY module under user_defs/ (any depth), merges
+# their `defs` objects. Uses walk_packages so nested subfolders are picked
+# up automatically; each file gets imported with its full dotted name so
+# cross-file imports (from .other import x) resolve correctly.
 cat > "$SCAFFOLD_DIR/src/$MODULE_NAME/definitions.py" <<PYEOF
-"""Auto-generated by dg-deploy. Loads every .py under user_defs/ and
-merges their \`defs = dg.Definitions(...)\` module-scope objects into
+"""Auto-generated by dg-deploy. Walks every .py under user_defs/ (recursively)
+and merges their \`defs = dg.Definitions(...)\` module-scope objects into
 one Definitions for this code location."""
 import importlib
 import pkgutil
@@ -360,20 +430,29 @@ from $MODULE_NAME import user_defs
 
 _defs_list = []
 _skipped = []
-for _, name, _ in pkgutil.iter_modules(user_defs.__path__):
-    module = importlib.import_module(f"$MODULE_NAME.user_defs.{name}")
+_errored = []
+_prefix = "$MODULE_NAME.user_defs."
+for _, name, is_pkg in pkgutil.walk_packages(user_defs.__path__, prefix=_prefix):
+    if is_pkg:
+        # subpackage __init__.py — usually empty; a Definitions here would
+        # still be picked up if present, but the module itself is fine to skip.
+        continue
+    try:
+        module = importlib.import_module(name)
+    except Exception as exc:
+        _errored.append(f"{name}: {type(exc).__name__}: {exc}")
+        continue
     if hasattr(module, "defs") and isinstance(module.defs, dg.Definitions):
         _defs_list.append(module.defs)
     else:
         _skipped.append(name)
 
-if _skipped:
+if _skipped or _errored:
     import sys
-    print(
-        f"[dg-deploy scaffold] skipped modules (no module-scope \`defs = dg.Definitions(...)\`): "
-        f"{_skipped}",
-        file=sys.stderr,
-    )
+    if _skipped:
+        print(f"[dg-deploy] skipped (no \`defs = dg.Definitions(...)\`): {_skipped}", file=sys.stderr)
+    if _errored:
+        print(f"[dg-deploy] import errors: {_errored}", file=sys.stderr)
 
 defs = dg.Definitions.merge(*_defs_list) if _defs_list else dg.Definitions()
 PYEOF
@@ -634,9 +713,13 @@ fi
 (cd "$SCAFFOLD_DIR" && "${DG_INVOCATION[@]}" "${DEPLOY_ARGS[@]}")
 
 echo ""
-if [ -z "$KEEP_SCAFFOLD" ]; then
-    echo ">>> Cleaning up scaffold (--keep-scaffold to preserve for iteration)"
+# Don't rm INPLACE dirs (dg-native / legacy migration) — those are the user's
+# own project directory. Only sweep up the scaffold when we created it.
+if [ -z "$KEEP_SCAFFOLD" ] && [ -z "$INPLACE" ]; then
+    echo ">>> Cleaning up scaffold at $SCAFFOLD_DIR/  (--keep-scaffold to preserve)"
     rm -rf "$SCAFFOLD_DIR"
+elif [ -n "$INPLACE" ]; then
+    :  # in-place — nothing to clean, no message needed
 else
     echo ">>> Scaffold preserved at $SCAFFOLD_DIR/"
 fi
