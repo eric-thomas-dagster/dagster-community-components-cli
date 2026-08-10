@@ -264,6 +264,39 @@ Everything else is passed through as-is. AST detects module names only — no ve
 
 **When even explicit files aren't enough** (private git URLs with authentication, complex extras, per-Python-version markers): use `--dry-run --keep-scaffold` to generate the scaffold once, hand-edit `pyproject.toml`, then re-deploy from that dir (which now hits the "existing dg-native project" auto-detect path — no scaffold overwrite).
 
+## How dependencies flow through the layers
+
+A Python project has *five* places deps can live. Which one matters depends on what you're doing. **`pyproject.toml [project] dependencies` is the single source of truth for deploys.** Everything else derives from it or is for local dev.
+
+| Layer | What it holds | When it matters | Who writes it |
+|---|---|---|---|
+| `pyproject.toml [project] dependencies` | Declared deps + version constraints | **Deploy-time** — the ONLY source of truth for both pex (Serverless) and docker (Hybrid) | You (or `uv add`, or the wrapper in scaffold mode) |
+| `requirements.txt` | Alternative to pyproject deps | Deploy-time IF present AND no `[project] dependencies` (older projects). Wrapper reads it and uses as authoritative. | You |
+| `uv.lock` / `poetry.lock` | Resolved, hash-pinned versions of every transitive dep | Local reproducibility (`uv sync` → identical `.venv` everywhere). **Not read by the pex builder** — pex resolves fresh from PyPI at deploy time using pyproject constraints. | `uv sync` / `poetry lock` |
+| `.venv/` | Actually-installed packages for local dev | **Local dev only** (`dg dev`, running scripts, IDE type-checking). Never uploaded to Dagster+. | `uv sync` |
+| `Dockerfile` (Hybrid only) | Container-build instructions | Deploy-time for Hybrid. Typically just `pip install -e .` off pyproject, plus any OS-level libs (`apt-get install libpq-dev`, custom CA certs) that pex can't provide. | You (wrapper writes a minimal one if missing) |
+
+**What each deploy path actually installs from:**
+
+- **Serverless (pex):** pex builder reads `[project] dependencies` from your `pyproject.toml`, resolves fresh from PyPI, bakes deps + your source into a self-contained zipapp. `.venv` and `uv.lock` play no role — pex re-resolves from your pyproject constraints. If your Dockerfile has `RUN pip install extra-thing`, Serverless doesn't see it.
+- **Hybrid (docker):** `dg plus deploy` builds your `Dockerfile`. If it does `pip install -e .`, the container gets whatever your pyproject declares. If it also does `RUN pip install extra-thing`, that's in the container too. **Hybrid Dockerfile is the escape hatch** for anything pyproject can't express — OS libs, private index URLs, system dependencies.
+- **Local `dg dev`:** uses `.venv`, which `uv sync` populated from `pyproject.toml` + `uv.lock`. Not involved in deploys.
+
+**What the wrapper does with all of this:**
+
+- **Reads** `pyproject.toml` / `requirements.txt` (in that priority) to detect what deps to declare. Falls back to AST auto-detect only when neither is present.
+- **Writes** the deps list into a scaffold's `pyproject.toml` (loose-file mode). Never rewrites your existing pyproject in in-place mode.
+- **Guards** against the one common gap in fresh `uvx create-dagster` scaffolds: missing `dagster-cloud` in deps.
+- **Never touches** `.venv`, `uv.lock`, `poetry.lock`, or your `Dockerfile`. Preserved as-is if they exist.
+
+**Practical rules of thumb:**
+
+1. **Add a dep:** `uv add pkg` in your project root — writes pyproject.toml + uv.lock + .venv atomically. That one command is what both local dev and deploy see.
+2. **Pin a version:** `uv add 'pkg==1.5.3'` — pyproject records the constraint, uv.lock records the resolved version, pex resolves fresh from the constraint at deploy.
+3. **Local works, deploy fails:** check `pyproject.toml [project] dependencies` first — that's what the deploy sees. If a dep is in your `.venv` but not in pyproject, deploy can't know about it (`uv add` fixes this).
+4. **Serverless can't install my system lib** (e.g., `libpq5`, custom CA cert bundle, TLS-linked binary): switch to `--hybrid` and add a `RUN apt-get install ...` line to your Dockerfile. That's the whole reason Hybrid exists.
+5. **Don't hand-edit `.venv` or `uv.lock`** — regenerate via `uv sync`. Both files are derived; edits get overwritten and the deploy path doesn't read them anyway.
+
 ## Hybrid agent pre-check
 
 Before starting a Docker build (~5 min), `dg-deploy --hybrid` queries `{ agents { status metadata { key value } } }` on the target deployment and prints one of:
