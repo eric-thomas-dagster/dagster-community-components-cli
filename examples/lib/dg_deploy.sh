@@ -16,6 +16,10 @@
 # have `defs = dg.Definitions(...)` at module scope — the scaffold's
 # definitions.py imports each one and merges them.
 #
+# Uses the modern `dg plus deploy` CLI under the hood (session-based, safe
+# by default — no destructive workspace-mirror behavior). Not the legacy
+# `dagster-cloud` CLI.
+#
 # Usage:
 #
 #   # Serverless — auto-detects deps + builds pex + deploys.
@@ -33,7 +37,7 @@
 #
 # Options (common):
 #   --location-name NAME     Code location name (default: basename of .py / folder)
-#   --deployment NAME        Dagster+ deployment (default: whatever's in ~/.config/dagster_cloud)
+#   --deployment NAME        Dagster+ deployment (default: whatever's in ~/.config/dg or $DAGSTER_CLOUD_DEPLOYMENT)
 #   --agent-queue NAME       Route location to a specific Hybrid agent queue
 #   --deps 'pkg1 pkg2'       Extra deps beyond auto-detected imports
 #   --no-auto-deps           Skip import-based auto-detection
@@ -43,11 +47,17 @@
 #
 # Options (--hybrid only):
 #   --registry URL           REQUIRED. E.g. ghcr.io/user/name or acr/gcr/ecr equivalent.
-#   --tag TAG                Image tag (default: git short SHA or 'latest')
 #
 # Requires:
-#   - `dagster-cloud config setup` done once (org + deployment + token cached)
-#   - For --hybrid: local docker + push access to --registry
+#   - `dg plus login` done once (org + deployment + token cached), or DAGSTER_CLOUD_API_TOKEN + DAGSTER_CLOUD_ORGANIZATION exported.
+#   - For --hybrid: local docker + push access to --registry.
+#   - For --hybrid: a Hybrid agent serving the target queue. Every code
+#     location is aligned to an agent — no matching agent means the location
+#     lands in an error state until one comes online. The CLI doesn't deploy
+#     agents (they're your infrastructure — Docker / ECS / K8s / Azure). Pick
+#     a runtime + follow: https://docs.dagster.io/deployment/dagster-plus/hybrid
+#     The wrapper pre-checks and warns if no agent is running for the target
+#     queue so you find out before the Docker build burns.
 
 set -eo pipefail
 
@@ -55,7 +65,6 @@ SOURCE=""
 HYBRID=""
 LOCATION_NAME=""
 REGISTRY=""
-TAG=""
 AGENT_QUEUE=""
 DEPLOYMENT=""
 EXTRA_DEPS=""
@@ -75,7 +84,6 @@ while [ $# -gt 0 ]; do
         --hybrid) HYBRID=1; shift ;;
         --location-name) LOCATION_NAME="$2"; shift 2 ;;
         --registry) REGISTRY="$2"; shift 2 ;;
-        --tag) TAG="$2"; shift 2 ;;
         --agent-queue) AGENT_QUEUE="$2"; shift 2 ;;
         --deployment) DEPLOYMENT="$2"; shift 2 ;;
         --deps) EXTRA_DEPS="$2"; shift 2 ;;
@@ -106,7 +114,6 @@ fi
 # ── Determine input shape ───────────────────────────────────────────
 INPUT_FILES=()
 if [ -d "$SOURCE" ]; then
-    # Folder input — collect all .py files (non-recursive; user files should be flat)
     while IFS= read -r f; do
         INPUT_FILES+=("$f")
     done < <(find "$SOURCE" -maxdepth 1 -type f -name "*.py" | sort)
@@ -124,15 +131,6 @@ fi
 MODULE_NAME=$(echo "$BASENAME" | tr -- '-. ' '___')
 [ -z "$LOCATION_NAME" ] && LOCATION_NAME="$BASENAME"
 
-# ── Resolve tag (Hybrid only) ───────────────────────────────────────
-if [ -n "$HYBRID" ] && [ -z "$TAG" ]; then
-    if git rev-parse --short HEAD >/dev/null 2>&1; then
-        TAG=$(git rev-parse --short HEAD)
-    else
-        TAG="latest"
-    fi
-fi
-
 # ── Auto-detect deps from imports ───────────────────────────────────
 AUTO_DETECTED_DEPS=""
 if [ "$AUTO_DEPS" = "1" ] && command -v python3 >/dev/null 2>&1; then
@@ -141,7 +139,7 @@ if [ "$AUTO_DEPS" = "1" ] && command -v python3 >/dev/null 2>&1; then
 emit non-stdlib top-level module names (one per line)."""
 import ast, sys
 
-BASE_DEPS = {"dagster", "dagster_cloud", "dagster_cloud_cli"}
+BASE_DEPS = {"dagster", "dagster_cloud", "dagster_cloud_cli", "dagster_dg_cli"}
 IMPORT_TO_PIP = {
     "sklearn": "scikit-learn",
     "cv2": "opencv-python",
@@ -224,7 +222,8 @@ if _skipped:
 defs = dg.Definitions.merge(*_defs_list) if _defs_list else dg.Definitions()
 PYEOF
 
-# pyproject.toml.
+# pyproject.toml — `dg plus deploy` reads [tool.dg.project] (code
+# location + defs module), and [tool.dg.build] (registry for Hybrid).
 {
     cat <<TOMLEOF
 [build-system]
@@ -260,21 +259,21 @@ directory_type = "project"
 
 [tool.dg.project]
 root_module = "$MODULE_NAME"
+code_location_target_module = "$MODULE_NAME.definitions"
+code_location_name = "$LOCATION_NAME"
 TOMLEOF
+    [ -n "$AGENT_QUEUE" ] && echo "agent_queue = \"$AGENT_QUEUE\""
 } > "$SCAFFOLD_DIR/pyproject.toml"
 
-# dagster_cloud.yaml.
-{
-    cat <<YAMLEOF
-locations:
-  - location_name: $LOCATION_NAME
-    code_source:
-      module_name: $MODULE_NAME.definitions
+# build.yaml (Hybrid only) — `dg plus deploy` reads registry + Dockerfile
+# location from here. Not pyproject.toml.
+if [ -n "$HYBRID" ]; then
+    cat > "$SCAFFOLD_DIR/build.yaml" <<YAMLEOF
+registry: $REGISTRY
 YAMLEOF
-    [ -n "$AGENT_QUEUE" ] && echo "    agent_queue: $AGENT_QUEUE"
-} > "$SCAFFOLD_DIR/dagster_cloud.yaml"
+fi
 
-# Dockerfile (Hybrid only).
+# Dockerfile (Hybrid only) — sits at project root, `dg plus deploy` finds it.
 if [ -n "$HYBRID" ]; then
     cat > "$SCAFFOLD_DIR/Dockerfile" <<DOCKEREOF
 FROM python:$PYTHON_VERSION-slim
@@ -296,69 +295,170 @@ echo "✓ Scaffold ready:"
 echo "    src/$MODULE_NAME/user_defs/    ← ${#INPUT_FILES[@]} file(s)"
 echo "    src/$MODULE_NAME/definitions.py  (auto-generated, merges user defs)"
 echo "    pyproject.toml"
-echo "    dagster_cloud.yaml"
-[ -n "$HYBRID" ] && echo "    Dockerfile"
+if [ -n "$HYBRID" ]; then
+    echo "    build.yaml"
+    echo "    Dockerfile"
+fi
 if [ -n "$COMBINED_DEPS" ]; then
     echo "    deps: dagster, dagster-cloud,"
     while IFS= read -r dep; do [ -n "$dep" ] && echo "          $dep"; done <<< "$COMBINED_DEPS"
 fi
 echo ""
 
-# ── Deploy ──────────────────────────────────────────────────────────
-if [ -z "$HYBRID" ]; then
-    # ── Serverless: build pex + upload ─────────────────────────────
-    DEPLOY_CMD="uvx --with pex --from dagster-cloud-cli dagster-cloud serverless deploy-python-executable . --location-name $LOCATION_NAME --module-name $MODULE_NAME.definitions --python-version $PYTHON_VERSION"
-    [ -n "$DEPLOYMENT" ] && DEPLOY_CMD="$DEPLOY_CMD --deployment $DEPLOYMENT"
-    if [ -n "$DRY_RUN" ]; then
-        echo "(dry-run) to deploy:"
-        echo "  cd $SCAFFOLD_DIR && $DEPLOY_CMD"
-        exit 0
-    fi
-    echo ">>> Deploying to Dagster+ Serverless (pex, no Docker)…"
-    (cd "$SCAFFOLD_DIR" && $DEPLOY_CMD)
+# ── Auth: forward legacy dagster_cloud config to dg if needed ──────
+# `dg plus deploy` looks at ~/.dagster_cloud_cli/config or ~/.config/dg.toml.
+# If the user still has the older ~/.config/dagster_cloud/config.yaml (from
+# the legacy `dagster-cloud` CLI), read it once and export the values as env
+# vars so we don't force a config migration. Skipped if DAGSTER_CLOUD_API_TOKEN
+# is already exported.
+LEGACY_CFG="$HOME/.config/dagster_cloud/config.yaml"
+if [ -z "$DAGSTER_CLOUD_API_TOKEN" ] && [ -f "$LEGACY_CFG" ] && command -v python3 >/dev/null 2>&1; then
+    eval "$(python3 - "$LEGACY_CFG" <<'PYEOF'
+import sys, re, shlex
+try:
+    text = open(sys.argv[1]).read()
+except Exception:
+    sys.exit(0)
+def pick(key):
+    m = re.search(rf'^{key}\s*:\s*(.+)$', text, re.MULTILINE)
+    return m.group(1).strip().strip('"').strip("'") if m else None
+tok = pick("api_token") or pick("user_token")
+org = pick("organization")
+dep = pick("deployment") or pick("default_deployment")
+url = pick("url")
+if tok: print(f"export DAGSTER_CLOUD_API_TOKEN={shlex.quote(tok)}")
+if org: print(f"export DAGSTER_CLOUD_ORGANIZATION={shlex.quote(org)}")
+if dep: print(f"export _DGDEPLOY_LEGACY_DEPLOYMENT={shlex.quote(dep)}")
+if url: print(f"export _DGDEPLOY_LEGACY_URL={shlex.quote(url)}")
+PYEOF
+    )"
+fi
+
+# ── Hybrid agent pre-check ─────────────────────────────────────────
+# Code locations in Hybrid land on whichever agent picks up their queue.
+# If no Hybrid agent is running, the image gets pushed + the location gets
+# registered, but nothing runs it. Query the deployment before we start
+# 5 minutes of Docker work — better to warn early than to build+push into
+# a void.
+if [ -n "$HYBRID" ] && [ -n "$DAGSTER_CLOUD_API_TOKEN" ] && [ -n "$DAGSTER_CLOUD_ORGANIZATION" ] && command -v python3 >/dev/null 2>&1; then
+    _AGENT_CHECK_DEPLOYMENT="${DEPLOYMENT:-${_DGDEPLOY_LEGACY_DEPLOYMENT:-prod}}"
+    _AGENT_CHECK_URL="${_DGDEPLOY_LEGACY_URL:-https://${DAGSTER_CLOUD_ORGANIZATION}.dagster.plus}"
+    _AGENT_STATUS=$(
+        DAGSTER_CLOUD_API_TOKEN="$DAGSTER_CLOUD_API_TOKEN" \
+        _DEPLOYMENT="$_AGENT_CHECK_DEPLOYMENT" \
+        _URL="$_AGENT_CHECK_URL" \
+        _WANT_QUEUE="$AGENT_QUEUE" \
+        python3 - <<'PYEOF' 2>/dev/null || true
+"""Query Dagster+ GraphQL for running non-Serverless agents on the target
+deployment. Print one of: OK, NO_AGENTS, QUEUE_MISMATCH."""
+import json, os, sys, urllib.request
+
+url = os.environ["_URL"].rstrip("/") + "/" + os.environ["_DEPLOYMENT"] + "/graphql"
+req = urllib.request.Request(
+    url,
+    data=json.dumps({"query": "{ agents { status metadata { key value } } }"}).encode(),
+    headers={
+        "Content-Type": "application/json",
+        "Dagster-Cloud-Api-Token": os.environ["DAGSTER_CLOUD_API_TOKEN"],
+    },
+)
+try:
+    resp = json.loads(urllib.request.urlopen(req, timeout=10).read())
+except Exception:
+    sys.exit(0)  # skip check on any error
+agents = (resp.get("data") or {}).get("agents") or []
+hybrid_queues = []
+for a in agents:
+    if a.get("status") != "RUNNING":
+        continue
+    meta = {m["key"]: m["value"] for m in a.get("metadata", [])}
+    typ = meta.get("type", "").strip('"')
+    if "Serverless" in typ:  # skip built-in Serverless agent
+        continue
+    try:
+        qs = json.loads(meta.get("queues", "[]"))
+        hybrid_queues += qs
+    except Exception:
+        pass
+want = os.environ.get("_WANT_QUEUE", "")
+if not hybrid_queues:
+    print("NO_AGENTS")
+elif want and want not in hybrid_queues:
+    print(f"QUEUE_MISMATCH|{','.join(sorted(set(hybrid_queues)))}")
+else:
+    print(f"OK|{','.join(sorted(set(hybrid_queues)))}")
+PYEOF
+    )
+    case "${_AGENT_STATUS%%|*}" in
+        NO_AGENTS)
+            echo "⚠ No running Hybrid agent on '$_AGENT_CHECK_DEPLOYMENT'."
+            echo "  Every code location is served by an agent — with none running, this"
+            echo "  location will be pushed + registered but sit in an error state until"
+            echo "  an agent comes online serving its queue."
+            echo "  Deploy one before or after this deploy (all runtimes documented here):"
+            echo "    https://docs.dagster.io/deployment/dagster-plus/hybrid"
+            echo ""
+            ;;
+        QUEUE_MISMATCH)
+            _HAVE_QUEUES="${_AGENT_STATUS#*|}"
+            echo "⚠ --agent-queue '$AGENT_QUEUE' isn't served by any running agent."
+            echo "  Running Hybrid agent queues: $_HAVE_QUEUES"
+            echo "  Location will register but stay in an error state until an agent picks"
+            echo "  up '$AGENT_QUEUE'. Either drop --agent-queue (routes to default), or"
+            echo "  bring up an agent configured for '$AGENT_QUEUE'."
+            echo ""
+            ;;
+        OK)
+            _HAVE_QUEUES="${_AGENT_STATUS#*|}"
+            echo "✓ Hybrid agent running (queues: $_HAVE_QUEUES)"
+            echo ""
+            ;;
+    esac
+fi
+
+# ── Deploy via `dg plus deploy` ─────────────────────────────────────
+# Session-based, safe by default. No destructive workspace-mirror.
+DEPLOY_ARGS=(plus deploy -y)
+if [ -n "$HYBRID" ]; then
+    DEPLOY_ARGS+=(--agent-type hybrid --build-strategy docker)
 else
-    # ── Hybrid: docker build + push + deploy-docker ────────────────
-    IMAGE="$REGISTRY:$TAG"
-    echo ">>> Building Docker image: $IMAGE"
+    DEPLOY_ARGS+=(--agent-type serverless --build-strategy python-executable)
+fi
+DEPLOY_ARGS+=(--python-version "$PYTHON_VERSION")
+
+# Deployment resolution: explicit flag > legacy config > dg's own default.
+if [ -n "$DEPLOYMENT" ]; then
+    DEPLOY_ARGS+=(--deployment "$DEPLOYMENT")
+elif [ -n "$_DGDEPLOY_LEGACY_DEPLOYMENT" ]; then
+    DEPLOY_ARGS+=(--deployment "$_DGDEPLOY_LEGACY_DEPLOYMENT")
+fi
+
+# We shell out via `uvx --from dagster-dg-cli dg` so the caller doesn't
+# need dg preinstalled. Same UX shape as before. For Serverless we also
+# `--with pex` because dg shells out to `python -m pex` when building the
+# pex bundle (`dg plus deploy --build-strategy python-executable`).
+DG_INVOCATION=(uvx --from dagster-dg-cli)
+[ -z "$HYBRID" ] && DG_INVOCATION+=(--with pex)
+DG_INVOCATION+=(dg)
+
+if [ -n "$DRY_RUN" ]; then
+    echo "(dry-run) to deploy:"
+    echo "  cd $SCAFFOLD_DIR && ${DG_INVOCATION[*]} ${DEPLOY_ARGS[*]}"
+    exit 0
+fi
+
+if [ -n "$HYBRID" ]; then
     if ! command -v docker >/dev/null 2>&1; then
-        echo "✗ docker not found. Install Docker Desktop / colima / podman."
+        echo "✗ docker not found. --hybrid needs Docker to build+push the image."
+        echo "  Install Docker Desktop / colima / podman."
         exit 1
     fi
-    if [ -n "$DRY_RUN" ]; then
-        echo "(dry-run) to deploy:"
-        echo "  cd $SCAFFOLD_DIR"
-        echo "  docker build -t $IMAGE ."
-        echo "  docker push $IMAGE"
-        echo "  uvx --from dagster-cloud-cli dagster-cloud serverless deploy-docker . --image $IMAGE --location-name $LOCATION_NAME${DEPLOYMENT:+ --deployment $DEPLOYMENT}"
-        exit 0
-    fi
-    (cd "$SCAFFOLD_DIR" && docker build --platform linux/amd64 -t "$IMAGE" .)
-    echo ">>> Pushing $IMAGE"
-    docker push "$IMAGE"
-    echo ">>> Registering location with Dagster+…"
-    # Use `deployment add-location` (adds OR updates, one location at a
-    # time) — NOT `sync-locations`, which is destructive (would delete
-    # any location not present in the workspace file).
-    #
-    # We pass --from with a mini one-location yaml so agent_queue and
-    # container_context extensibility work; add-location's flat CLI
-    # args don't cover those.
-    LOCATION_FILE=$(mktemp -t dg_deploy_loc.XXXXXX)
-    trap "rm -f $LOCATION_FILE" EXIT
-    {
-        cat <<YAMLEOF
-locations:
-  - location_name: $LOCATION_NAME
-    image: $IMAGE
-    code_source:
-      module_name: $MODULE_NAME.definitions
-YAMLEOF
-        [ -n "$AGENT_QUEUE" ] && echo "    agent_queue: $AGENT_QUEUE"
-    } > "$LOCATION_FILE"
-    ADD_ARGS=(deployment add-location --from "$LOCATION_FILE" --location-load-timeout 300)
-    [ -n "$DEPLOYMENT" ] && ADD_ARGS+=(--deployment "$DEPLOYMENT")
-    uvx --from dagster-cloud-cli dagster-cloud "${ADD_ARGS[@]}"
+    echo ">>> Deploying to Dagster+ Hybrid via \`dg plus deploy\` (docker build+push+register)…"
+else
+    echo ">>> Deploying to Dagster+ Serverless via \`dg plus deploy\` (pex build+upload)…"
 fi
+
+(cd "$SCAFFOLD_DIR" && "${DG_INVOCATION[@]}" "${DEPLOY_ARGS[@]}")
 
 echo ""
 if [ -z "$KEEP_SCAFFOLD" ]; then
