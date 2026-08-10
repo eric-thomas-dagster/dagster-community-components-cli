@@ -16,6 +16,13 @@
 # have `defs = dg.Definitions(...)` at module scope — the scaffold's
 # definitions.py imports each one and merges them.
 #
+# Or, if the input directory ALREADY has a project config, the wrapper
+# uses it instead of scaffolding:
+#   - pyproject.toml with [tool.dg.project]  → deploy in place (dg-native)
+#   - dagster_cloud.yaml (legacy CLI)        → auto-migrate to
+#     [tool.dg.project] + build.yaml (original saved as .legacy-bak),
+#     then deploy. Multi-location yaml migrates the FIRST location only.
+#
 # Uses the modern `dg plus deploy` CLI under the hood (session-based, safe
 # by default — no destructive workspace-mirror behavior). Not the legacy
 # `dagster-cloud` CLI.
@@ -111,29 +118,167 @@ if [ -n "$HYBRID" ] && [ -z "$REGISTRY" ]; then
     exit 1
 fi
 
-# ── Determine input shape ───────────────────────────────────────────
-INPUT_FILES=()
+# ── Detect existing project shape ───────────────────────────────────
+# Three cases:
+#   1. dg-native project (pyproject.toml with [tool.dg.project]) → deploy in place
+#   2. Legacy dagster_cloud.yaml project (no [tool.dg.project]) → migrate then deploy
+#   3. Loose .py file(s) → scaffold + deploy (default)
+INPLACE=""
+INPLACE_DIR=""
 if [ -d "$SOURCE" ]; then
-    while IFS= read -r f; do
-        INPUT_FILES+=("$f")
-    done < <(find "$SOURCE" -maxdepth 1 -type f -name "*.py" | sort)
-    if [ ${#INPUT_FILES[@]} -eq 0 ]; then
-        echo "✗ No .py files found in $SOURCE"
-        exit 1
+    if [ -f "$SOURCE/pyproject.toml" ] && grep -qE '^\[tool\.dg\.project\]' "$SOURCE/pyproject.toml"; then
+        INPLACE="dg-native"
+        INPLACE_DIR="$SOURCE"
+    elif [ -f "$SOURCE/dagster_cloud.yaml" ]; then
+        INPLACE="legacy"
+        INPLACE_DIR="$SOURCE"
     fi
-    BASENAME=$(basename "$SOURCE")
-else
-    INPUT_FILES=("$SOURCE")
-    BASENAME=$(basename "$SOURCE" .py)
 fi
 
-# Sanitize name for use as Python module.
-MODULE_NAME=$(echo "$BASENAME" | tr -- '-. ' '___')
-[ -z "$LOCATION_NAME" ] && LOCATION_NAME="$BASENAME"
+# ── Determine input shape (for the scaffold path) ──────────────────
+INPUT_FILES=()
+if [ -z "$INPLACE" ]; then
+    if [ -d "$SOURCE" ]; then
+        while IFS= read -r f; do
+            INPUT_FILES+=("$f")
+        done < <(find "$SOURCE" -maxdepth 1 -type f -name "*.py" | sort)
+        if [ ${#INPUT_FILES[@]} -eq 0 ]; then
+            echo "✗ No .py files found in $SOURCE (and no pyproject.toml or dagster_cloud.yaml either)"
+            exit 1
+        fi
+        BASENAME=$(basename "$SOURCE")
+    else
+        INPUT_FILES=("$SOURCE")
+        BASENAME=$(basename "$SOURCE" .py)
+    fi
+    # Sanitize name for use as Python module.
+    MODULE_NAME=$(echo "$BASENAME" | tr -- '-. ' '___')
+    [ -z "$LOCATION_NAME" ] && LOCATION_NAME="$BASENAME"
+fi
 
-# ── Auto-detect deps from imports ───────────────────────────────────
+# ── In-place branches skip the scaffold ───────────────────────────
+if [ "$INPLACE" = "dg-native" ]; then
+    echo ">>> Detected existing dg-native project at $INPLACE_DIR"
+    echo "    Using it as-is (pyproject.toml [tool.dg.project] found)"
+    if [ -n "$HYBRID" ]; then
+        # Ensure build.yaml exists with the registry the user asked for.
+        if [ -f "$INPLACE_DIR/build.yaml" ]; then
+            EXISTING_REG=$(grep -E '^registry:' "$INPLACE_DIR/build.yaml" | head -1 | awk '{print $2}' | tr -d '"' || echo "")
+            if [ -n "$EXISTING_REG" ] && [ "$EXISTING_REG" != "$REGISTRY" ]; then
+                echo "⚠ build.yaml registry is '$EXISTING_REG', --registry was '$REGISTRY' → using existing"
+            fi
+        else
+            echo "    build.yaml missing — writing one with registry: $REGISTRY"
+            echo "registry: $REGISTRY" > "$INPLACE_DIR/build.yaml"
+        fi
+    fi
+    SCAFFOLD_DIR="$INPLACE_DIR"
+    KEEP_SCAFFOLD=1  # never rm -rf a user's own project
+
+elif [ "$INPLACE" = "legacy" ]; then
+    echo ">>> Detected legacy dagster_cloud.yaml at $INPLACE_DIR"
+    echo "    Migrating to modern [tool.dg.project] + build.yaml pattern…"
+    # Backup first — never mutate user files without a safety net.
+    cp "$INPLACE_DIR/dagster_cloud.yaml" "$INPLACE_DIR/dagster_cloud.yaml.legacy-bak"
+    # Translate.
+    _MIGRATED=$(uvx --with pyyaml --quiet python - "$INPLACE_DIR" "$REGISTRY" <<'PYEOF'
+"""Read legacy dagster_cloud.yaml, translate first location's fields into
+[tool.dg.project] block + build.yaml. Prints paths of written/updated
+files (one per line) for the shell to display."""
+import os, re, sys
+import yaml
+
+proj_dir, cli_registry = sys.argv[1], sys.argv[2]
+with open(f"{proj_dir}/dagster_cloud.yaml") as f:
+    cfg = yaml.safe_load(f) or {}
+locations = cfg.get("locations") or []
+if not locations:
+    print("ERR:no locations found in dagster_cloud.yaml", file=sys.stderr)
+    sys.exit(1)
+if len(locations) > 1:
+    print(f"WARN:{len(locations)} locations found; using only the first ('{locations[0].get('location_name')}')", file=sys.stderr)
+loc = locations[0]
+location_name = loc.get("location_name") or ""
+code_source = loc.get("code_source") or {}
+module_name = code_source.get("module_name") or ""
+python_file = code_source.get("python_file") or ""
+package_name = code_source.get("package_name") or ""
+image = loc.get("image") or ""
+agent_queue = loc.get("agent_queue") or ""
+
+if not location_name:
+    print("ERR:location has no location_name", file=sys.stderr); sys.exit(1)
+if not (module_name or python_file or package_name):
+    print("ERR:location has no code_source.module_name / python_file / package_name", file=sys.stderr); sys.exit(1)
+
+# Derive root_module. If module_name is "pkg.definitions" → pkg. Else use package_name or a slug of location_name.
+if module_name:
+    root_module = module_name.split(".")[0]
+    target_module = module_name
+elif package_name:
+    root_module = package_name
+    target_module = f"{package_name}.definitions"
+else:
+    root_module = re.sub(r"[^a-z0-9_]", "_", location_name.lower())
+    target_module = None  # python_file case — dg won't handle this cleanly; user must convert
+
+# Append to (or create) pyproject.toml [tool.dg.project].
+pyproject_path = f"{proj_dir}/pyproject.toml"
+existing = ""
+if os.path.exists(pyproject_path):
+    with open(pyproject_path) as f: existing = f.read()
+if re.search(r"^\[tool\.dg\.project\]", existing, re.MULTILINE):
+    print("ERR:[tool.dg.project] already present — this project isn't actually legacy", file=sys.stderr)
+    sys.exit(1)
+
+block = ["", "[tool.dg]", 'directory_type = "project"', "", "[tool.dg.project]",
+         f'root_module = "{root_module}"',
+         f'code_location_name = "{location_name}"']
+if target_module: block.append(f'code_location_target_module = "{target_module}"')
+if agent_queue:   block.append(f'agent_queue = "{agent_queue}"')
+block.append("")
+with open(pyproject_path, "a" if existing else "w") as f:
+    if not existing:
+        f.write('[project]\nname = "%s"\nversion = "0.1.0"\nrequires-python = ">=3.10"\ndependencies = ["dagster>=1.10", "dagster-cloud"]\n' % root_module)
+    f.write("\n".join(block))
+print(f"UPDATED:{pyproject_path}")
+
+# build.yaml — extract registry from `image` field (image = registry:tag) or use --registry.
+registry = ""
+if image and ":" in image:
+    registry = image.rsplit(":", 1)[0]
+elif image:
+    registry = image
+elif cli_registry:
+    registry = cli_registry
+if registry:
+    build_path = f"{proj_dir}/build.yaml"
+    with open(build_path, "w") as f:
+        f.write(f"registry: {registry}\n")
+    print(f"WROTE:{build_path}")
+
+# Rename original.
+os.rename(f"{proj_dir}/dagster_cloud.yaml", f"{proj_dir}/dagster_cloud.yaml.legacy-bak")
+print(f"BACKED_UP:{proj_dir}/dagster_cloud.yaml → dagster_cloud.yaml.legacy-bak")
+if python_file and not target_module:
+    print("WARN:legacy used python_file — dg needs code_location_target_module. Edit pyproject.toml manually to point at your module.", file=sys.stderr)
+PYEOF
+)
+    _MIG_STATUS=$?
+    echo "$_MIGRATED"
+    if [ "$_MIG_STATUS" -ne 0 ]; then
+        # Restore backup on failure.
+        [ -f "$INPLACE_DIR/dagster_cloud.yaml.legacy-bak" ] && mv "$INPLACE_DIR/dagster_cloud.yaml.legacy-bak" "$INPLACE_DIR/dagster_cloud.yaml"
+        echo "✗ Migration failed — restored original dagster_cloud.yaml. Fix the issue and rerun."
+        exit 1
+    fi
+    SCAFFOLD_DIR="$INPLACE_DIR"
+    KEEP_SCAFFOLD=1
+fi
+
+# ── Auto-detect deps from imports (scaffold path only) ─────────────
 AUTO_DETECTED_DEPS=""
-if [ "$AUTO_DEPS" = "1" ] && command -v python3 >/dev/null 2>&1; then
+if [ -z "$INPLACE" ] && [ "$AUTO_DEPS" = "1" ] && command -v python3 >/dev/null 2>&1; then
     AUTO_DETECTED_DEPS=$(python3 - "${INPUT_FILES[@]}" <<'PYEOF'
 """Parse .py files, extract top-level import statements, filter stdlib,
 emit non-stdlib top-level module names (one per line)."""
@@ -177,7 +322,8 @@ PYEOF
 fi
 COMBINED_DEPS=$(printf '%s\n%s\n' "$AUTO_DETECTED_DEPS" "$EXTRA_DEPS" | tr ' ' '\n' | { grep -v '^$' || true; } | sort -u)
 
-# ── Scaffold ────────────────────────────────────────────────────────
+# ── Scaffold (loose-file path only) ────────────────────────────────
+if [ -z "$INPLACE" ]; then
 SCAFFOLD_DIR="${MODULE_NAME}_scaffold"
 echo ">>> Scaffolding $SCAFFOLD_DIR/ from $SOURCE"
 rm -rf "$SCAFFOLD_DIR"
@@ -304,6 +450,7 @@ if [ -n "$COMBINED_DEPS" ]; then
     while IFS= read -r dep; do [ -n "$dep" ] && echo "          $dep"; done <<< "$COMBINED_DEPS"
 fi
 echo ""
+fi  # end scaffold-only block
 
 # ── Auth: forward legacy dagster_cloud config to dg if needed ──────
 # `dg plus deploy` looks at ~/.dagster_cloud_cli/config or ~/.config/dg.toml.
