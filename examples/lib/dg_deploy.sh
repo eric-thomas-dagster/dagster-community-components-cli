@@ -336,11 +336,15 @@ else
     echo ">>> Pushing $IMAGE"
     docker push "$IMAGE"
     echo ">>> Registering location with Dagster+…"
-    # Use sync-locations with a workspace.yaml that points at our pre-built
-    # image. `deploy-docker` insists on building + pushing to Dagster+'s own
-    # ECR — the wrong pattern when we already have our own image.
-    LOCATION_WORKSPACE=$(mktemp -t dg_deploy_ws.XXXXXX)
-    trap "rm -f $LOCATION_WORKSPACE" EXIT
+    # Use `deployment add-location` (adds OR updates, one location at a
+    # time) — NOT `sync-locations`, which is destructive (would delete
+    # any location not present in the workspace file).
+    #
+    # We pass --from with a mini one-location yaml so agent_queue and
+    # container_context extensibility work; add-location's flat CLI
+    # args don't cover those.
+    LOCATION_FILE=$(mktemp -t dg_deploy_loc.XXXXXX)
+    trap "rm -f $LOCATION_FILE" EXIT
     {
         cat <<YAMLEOF
 locations:
@@ -350,10 +354,10 @@ locations:
       module_name: $MODULE_NAME.definitions
 YAMLEOF
         [ -n "$AGENT_QUEUE" ] && echo "    agent_queue: $AGENT_QUEUE"
-    } > "$LOCATION_WORKSPACE"
-    SYNC_ARGS=(deployment sync-locations --workspace "$LOCATION_WORKSPACE" --location-load-timeout 300)
-    [ -n "$DEPLOYMENT" ] && SYNC_ARGS+=(--deployment "$DEPLOYMENT")
-    uvx --from dagster-cloud-cli dagster-cloud "${SYNC_ARGS[@]}"
+    } > "$LOCATION_FILE"
+    ADD_ARGS=(deployment add-location --from "$LOCATION_FILE" --location-load-timeout 300)
+    [ -n "$DEPLOYMENT" ] && ADD_ARGS+=(--deployment "$DEPLOYMENT")
+    uvx --from dagster-cloud-cli dagster-cloud "${ADD_ARGS[@]}"
 fi
 
 echo ""
