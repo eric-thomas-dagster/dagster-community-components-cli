@@ -84,9 +84,37 @@ Local dev: same wrapper, `--dev` flag → scaffolds + boots `dg dev` at http://l
 
 Fetch: `curl -sL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/dg_deploy.sh > dg-deploy`
 
-### [`deploy_to_dagster_plus.sh`](./deploy_to_dagster_plus.sh) (demo-oriented)
+### [`deploy_to_dagster_plus.sh`](./deploy_to_dagster_plus.sh) (interactive onboarder) — full walkthrough: [`deploy_to_dagster_plus.md`](./deploy_to_dagster_plus.md)
 
-Sister script for the community-components demo library. Takes a demo name (`setup_<demo>_demo.sh` output), configures build artifacts, deploys. Aimed at people who've curled a demo and want it live in ~60 seconds. See [`deploy_to_dagster_plus.md`](./deploy_to_dagster_plus.md).
+Interactive 7-step onboarder for a full dg project (typically a `setup_<demo>_demo.sh` output). Runs `dg plus login` if unconfigured, scaffolds CI workflows via `dg plus deploy configure`, creates a CI API token for GitHub Actions, greps your source for env-var references (`EnvVar()` / `os.environ[]` / `*_env_var:` / `${env:X}`) and prompts you to set values via `dg plus create env`, then runs `dg plus deploy`. Every step gates on Y/n so you can approve or skip.
+
+### `dg_deploy.sh` vs `deploy_to_dagster_plus.sh` — which one?
+
+Both drive `dg plus deploy`. Different shape, different audience:
+
+| Question | `dg_deploy.sh` | `deploy_to_dagster_plus.sh` |
+|---|---|---|
+| Do you have loose `.py` files? | ✓ scaffolds them | ✗ project must exist |
+| Do you have `dagster_cloud.yaml`? | ✓ auto-migrates | ✗ won't touch it |
+| Want local dev via same command? | ✓ `--dev` | ✗ |
+| Want a one-shot local run? | ✓ `--run` | ✗ |
+| Want to fetch from GitHub inline? | ✓ `--from user/repo/…` | ✗ |
+| First-time onboard to a Dagster+ org (login + CI + env vars)? | Assumes you're set up | ✓ walks you through |
+| Want interactive Y/n prompts at each step? | ✗ non-interactive | ✓ 7 gated steps |
+| Want CI/CD workflows scaffolded (`.github/workflows/*.yml`)? | ✗ | ✓ via `dg plus deploy configure` |
+| Want a CI API token created for GitHub Actions? | ✗ | ✓ via `dg plus create ci-api-token` |
+| Want env vars auto-detected + provisioned in Dagster+? | ✗ | ✓ greps source + prompts + `dg plus create env` |
+| Want a one-command redeploy? | ✓ same command, non-interactive | ✓ (skips already-done steps) |
+| Prefect-parity ergonomics for a `.py`? | ✓ | ✗ different audience |
+
+**Rule of thumb:**
+
+- **New `.py` file or iterating** → `dg_deploy.sh` (curl-and-go, one command)
+- **Curled a demo, want it live in ~60s with everything wired up** → `deploy_to_dagster_plus.sh` (interactive, full setup)
+- **Real project, first time deploying** → `deploy_to_dagster_plus.sh` (does login + CI + env vars in one flow)
+- **Real project, iterating** → either works; `dg_deploy.sh` if you don't need CI touched, `deploy_to_dagster_plus.sh` if you want the guided path
+
+Not a decision that matters much on run #2 onward — `dg plus deploy` in your project directory is the common surface both wrap. The scripts differ in what they set up around it.
 
 ## Scenario matrix
 
