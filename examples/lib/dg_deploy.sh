@@ -42,7 +42,12 @@
 #   # Deploy to a specific Dagster+ deployment (default: prod).
 #   ./dg-deploy my_flow.py --deployment staging
 #
+#   # Local dev — same scaffold, no deploy. `dg dev` on http://localhost:3000.
+#   ./dg-deploy my_flow.py --dev
+#   ./dg-deploy flows/     --dev
+#
 # Options (common):
+#   --dev                    Scaffold + `dg dev` locally instead of deploying (UI at :3000)
 #   --location-name NAME     Code location name (default: basename of .py / folder)
 #   --deployment NAME        Dagster+ deployment (default: whatever's in ~/.config/dg or $DAGSTER_CLOUD_DEPLOYMENT)
 #   --agent-queue NAME       Route location to a specific Hybrid agent queue
@@ -50,7 +55,7 @@
 #   --no-auto-deps           Skip import-based auto-detection
 #   --python-version VER     (default: 3.12)
 #   --dry-run                Print commands, don't execute
-#   --keep-scaffold          Don't rm -rf the scaffold after deploy
+#   --keep-scaffold          Don't rm -rf the scaffold after deploy (implicit with --dev)
 #
 # Options (--hybrid only):
 #   --registry URL           REQUIRED. E.g. ghcr.io/user/name or acr/gcr/ecr equivalent.
@@ -70,6 +75,7 @@ set -eo pipefail
 
 SOURCE=""
 HYBRID=""
+DEV=""
 LOCATION_NAME=""
 REGISTRY=""
 AGENT_QUEUE=""
@@ -89,6 +95,7 @@ fi
 while [ $# -gt 0 ]; do
     case "$1" in
         --hybrid) HYBRID=1; shift ;;
+        --dev) DEV=1; KEEP_SCAFFOLD=1; shift ;;
         --location-name) LOCATION_NAME="$2"; shift 2 ;;
         --registry) REGISTRY="$2"; shift 2 ;;
         --agent-queue) AGENT_QUEUE="$2"; shift 2 ;;
@@ -561,6 +568,22 @@ PYEOF
             echo ""
             ;;
     esac
+fi
+
+# ── --dev short-circuit: run `dg dev` locally, no deploy ───────────
+if [ -n "$DEV" ]; then
+    DG_DEV_INVOCATION=(uvx --from dagster-dg-cli --with dagster --with dagster-webserver dg)
+    if [ -n "$DRY_RUN" ]; then
+        echo "(dry-run) to run locally:"
+        echo "  cd $SCAFFOLD_DIR && ${DG_DEV_INVOCATION[*]} dev"
+        exit 0
+    fi
+    echo ">>> Launching \`dg dev\` locally at $SCAFFOLD_DIR/"
+    echo "    UI: http://localhost:3000  (Ctrl-C to stop)"
+    echo "    Scaffold preserved — edit files + reload the browser to iterate."
+    echo ""
+    (cd "$SCAFFOLD_DIR" && "${DG_DEV_INVOCATION[@]}" dev)
+    exit 0
 fi
 
 # ── Deploy via `dg plus deploy` ─────────────────────────────────────

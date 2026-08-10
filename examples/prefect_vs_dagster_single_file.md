@@ -65,11 +65,11 @@ Prefect fetches the .py from your GitHub repo at runtime, executes in Prefect Ma
 ```bash
 # 1. Write my_flow.py
 # 2. Deploy:
-bash dg_deploy_one_file.sh my_flow.py                          # local file
-bash dg_deploy_one_file.sh --from user/repo/path/file.py       # pull from GitHub
+bash dg_deploy.sh my_flow.py                          # local file
+bash dg_deploy.sh --from user/repo/path/file.py       # pull from GitHub
 ```
 
-Same shape as Prefect. `dg_deploy_one_file.sh` auto-scaffolds the boilerplate, auto-detects Python deps from imports, and calls `dagster-cloud serverless deploy-python-executable ...` under the hood.
+Same shape as Prefect. `dg_deploy.sh` auto-scaffolds the boilerplate, auto-detects Python deps from imports, and calls `dg plus deploy` (session-based, safe by default) under the hood. Local dev is the same command with `--dev`: scaffold + `dg dev` on http://localhost:3000, no deploy.
 
 ### Dagster+ path B — Hybrid with the git-runner (`hybrid_git_runner`)
 
@@ -143,13 +143,13 @@ uvx prefect-cloud deploy my_flow.py:hello_world --from user/repo --name test-flo
 ### Dagster+ Serverless (with wrapper)
 
 ```bash
-# One-time: sign up at dagster.cloud, run `dagster-cloud config setup`.
+# One-time: sign up at dagster.cloud, run `dg plus login`.
 # Then:
-curl -sL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/dg_deploy_one_file.sh > dg-deploy
+curl -sL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/dg_deploy.sh > dg-deploy
 bash dg-deploy my_flow.py --location-name test-location
 ```
 
-Both deploy in ~2 minutes. Both give you a Cloud URL with the flow / assets visible + runnable.
+Both deploy in ~2 minutes. Both give you a Cloud URL with the flow / assets visible + runnable. To iterate locally first: `bash dg-deploy my_flow.py --dev` opens the same asset UI at http://localhost:3000 (no deploy).
 
 ## Where to start
 
@@ -159,7 +159,7 @@ If you're evaluating both, the honest recommendation is:
 
 2. **Then try `agentic_tour_serverless/`** — 4 pipelines, 14 partitions, real content. Watch how per-partition metadata + Insights + lineage all work without extra setup. [`agentic_tour_serverless/`](./agentic_tour_serverless/)
 
-3. **Then try `dg_deploy_one_file.sh`** — with a single-file `.py` of your own. Prove the Prefect-parity Serverless ergonomics for yourself. [`lib/dg_deploy_one_file.sh`](./lib/dg_deploy_one_file.sh)
+3. **Then try `dg_deploy.sh`** — with a single-file `.py` of your own. Prove the Prefect-parity Serverless ergonomics for yourself. [`lib/dg_deploy.sh`](./lib/dg_deploy.sh)
 
 4. **If you need Hybrid** — try `hybrid_git_runner/`. Deploy the runner container ONCE, then iterate on flows via `git push`. Matches Prefect's Method 2 git-driven pattern exactly. [`hybrid_git_runner/`](./hybrid_git_runner/)
 
@@ -179,5 +179,5 @@ All in ONE Dagster+ UI. All in one unified asset catalog. All in one run history
 ## Verified
 
 - **[`serverless_minimal/`](./serverless_minimal/)** deployed to a private Dagster+ prod deployment (location: `hello`) — 2026-08-07 ✓
-- **[`dg_deploy_one_file.sh`](./lib/dg_deploy_one_file.sh)** deployed to same (location: `cli-verify`) — 2026-08-07 ✓, proving the CLI wrapper matches raw-command results
+- **[`dg_deploy.sh`](./lib/dg_deploy.sh)** deployed to same (location: `cli-verify`) — 2026-08-07 ✓, proving the CLI wrapper matches raw-command results
 - **Auto-detect deps + `--from github` flags** verified via dry-run against real GitHub raw URLs ✓
