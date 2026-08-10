@@ -130,6 +130,29 @@ bash dg-deploy my_flow.py --dev
 
 Scaffolds + boots `dg dev` at http://localhost:3000. Scaffold is preserved (implicit `--keep-scaffold`), so you can edit files + reload the browser to iterate. Ctrl-C to stop.
 
+### One-shot local run (no deploy, no UI)
+
+```bash
+bash dg-deploy my_flow.py --run
+```
+
+Scaffolds + runs `dg launch --assets '*'` once, prints the materialization log, exits. Same detected deps as the deploy path, so what runs here is what would deploy. Fast — no UI startup, no agent, no dev server. Useful for smoke-testing before a deploy or CI-executing a one-off flow.
+
+Cleans up the scaffold after unless `--keep-scaffold` is set. Exit code propagates from `dg launch`.
+
+### Fetch from GitHub (Prefect `--from user/repo` parity)
+
+```bash
+bash dg-deploy --from user/repo/path/to/my_flow.py
+bash dg-deploy --from user/repo/path/to/my_flow.py --branch dev
+bash dg-deploy --from user/repo/path/to/my_flow.py --run                          # + one-shot run
+bash dg-deploy --from user/repo/path/to/my_flow.py --hybrid --registry ghcr.io/…  # + Hybrid deploy
+```
+
+Fetches from `https://raw.githubusercontent.com/user/repo/<branch>/path/to/my_flow.py` to a tmp file, then runs the wrapper against it as if it were local. Combines with `--dev` / `--run` / `--hybrid` / any other flag. Public repos only.
+
+The first two segments of `--from` are the GitHub user + repo; everything after is the path inside the repo. `--branch` overrides `main`.
+
 ### Serverless deploy (pex, no Docker)
 
 ```bash

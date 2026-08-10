@@ -49,8 +49,17 @@
 #   ./dg-deploy my_flow.py --dev
 #   ./dg-deploy flows/     --dev
 #
+#   # One-shot local run — materialize every asset once, no deploy, no dev UI.
+#   ./dg-deploy my_flow.py --run
+#
+#   # Fetch a .py from a public GitHub repo (Prefect --from parity).
+#   ./dg-deploy --from user/repo/path/to/flow.py [--branch main]
+#
 # Options (common):
 #   --dev                    Scaffold + `dg dev` locally instead of deploying (UI at :3000)
+#   --run                    Scaffold + `dg launch --assets '*'` once, print output, exit
+#   --from user/repo/PATH    Fetch a .py from public GitHub raw before deploying
+#   --branch NAME            (with --from) branch to fetch from (default: main)
 #   --location-name NAME     Code location name (default: basename of .py / folder)
 #   --deployment NAME        Dagster+ deployment (default: whatever's in ~/.config/dg or $DAGSTER_CLOUD_DEPLOYMENT)
 #   --agent-queue NAME       Route location to a specific Hybrid agent queue
@@ -79,6 +88,9 @@ set -eo pipefail
 SOURCE=""
 HYBRID=""
 DEV=""
+RUN=""
+FROM=""
+BRANCH="main"
 LOCATION_NAME=""
 REGISTRY=""
 AGENT_QUEUE=""
@@ -100,6 +112,9 @@ while [ $# -gt 0 ]; do
     case "$1" in
         --hybrid) HYBRID=1; shift ;;
         --dev) DEV=1; KEEP_SCAFFOLD=1; shift ;;
+        --run) RUN=1; shift ;;
+        --from) FROM="$2"; shift 2 ;;
+        --branch) BRANCH="$2"; shift 2 ;;
         --location-name) LOCATION_NAME="$2"; LOCATION_NAME_EXPLICIT=1; shift 2 ;;
         --registry) REGISTRY="$2"; shift 2 ;;
         --agent-queue) AGENT_QUEUE="$2"; shift 2 ;;
@@ -114,12 +129,57 @@ while [ $# -gt 0 ]; do
     esac
 done
 
+# ── --from user/repo/path/to/file.py: fetch from GitHub raw ────────
+# Prefect-parity: `prefect deploy my_flow.py:flow --from user/repo`. Our
+# shape is `--from user/repo/path/to/file.py` — first two segments are the
+# GitHub user + repo, remainder is the path inside the repo. Fetches to a
+# tmp file and uses it as SOURCE for the rest of the wrapper. Branch defaults
+# to main; override with --branch.
+if [ -n "$FROM" ]; then
+    if ! command -v curl >/dev/null 2>&1; then
+        echo "✗ --from requires curl (not installed)."
+        exit 1
+    fi
+    _USER=$(echo "$FROM" | cut -d/ -f1)
+    _REPO=$(echo "$FROM" | cut -d/ -f2)
+    _PATH=$(echo "$FROM" | cut -d/ -f3-)
+    if [ -z "$_USER" ] || [ -z "$_REPO" ] || [ -z "$_PATH" ]; then
+        echo "✗ --from expects user/repo/path/to/file.py"
+        echo "  Got: '$FROM'"
+        exit 1
+    fi
+    _RAW_URL="https://raw.githubusercontent.com/${_USER}/${_REPO}/${BRANCH}/${_PATH}"
+    _TMP_FILE=$(mktemp -t "dg_deploy_from_$(basename "$_PATH").XXXXXX.py")
+    echo ">>> Fetching $_RAW_URL"
+    if ! curl -fsSL -o "$_TMP_FILE" "$_RAW_URL"; then
+        echo "✗ Fetch failed (HTTP != 200 or network error)."
+        echo "  Check that:"
+        echo "    - the repo is public"
+        echo "    - the path is correct (user/repo/path/to/file.py)"
+        echo "    - branch '$BRANCH' exists (override with --branch <name>)"
+        rm -f "$_TMP_FILE"
+        exit 1
+    fi
+    # Preserve the source basename so the code location name is meaningful
+    # (not "tmpXXXXX"). Rename the temp file to the original basename.
+    _TMP_DIR=$(dirname "$_TMP_FILE")
+    _REAL_NAME=$(basename "$_PATH")
+    mv "$_TMP_FILE" "$_TMP_DIR/$_REAL_NAME"
+    SOURCE="$_TMP_DIR/$_REAL_NAME"
+    trap "rm -f '$SOURCE'" EXIT
+    echo "    → cached at $SOURCE"
+fi
+
 if [ -z "$SOURCE" ] || [ ! -e "$SOURCE" ]; then
     echo "usage: $0 path/to/file.py [options]"
     echo "  or:  $0 path/to/flows_folder/ [options]"
+    echo "  or:  $0 --from user/repo/path/to/file.py [--branch main]"
     echo ""
     echo "  Serverless (default): $0 my_flow.py"
     echo "  Hybrid:               $0 my_flow.py --hybrid --registry ghcr.io/USER/name"
+    echo "  Local dev:            $0 my_flow.py --dev"
+    echo "  One-shot run:         $0 my_flow.py --run"
+    echo "  Fetch from GitHub:    $0 --from user/repo/path/to/flow.py"
     exit 1
 fi
 
@@ -740,6 +800,32 @@ if [ -n "$DEV" ]; then
     echo ""
     (cd "$SCAFFOLD_DIR" && "${DG_DEV_INVOCATION[@]}" dev)
     exit 0
+fi
+
+# ── --run short-circuit: one-shot `dg launch --assets '*'`, no deploy ──
+# Materialize every asset defined in the scaffold once, print output, exit.
+# The `--with` flags mirror the detected/explicit deps so the scaffold's
+# assets can actually run. PYTHONPATH=src puts the scaffold's package on
+# the import path without a `uv sync` step.
+if [ -n "$RUN" ]; then
+    _RUN_WITH=(--with dagster)
+    if [ -n "$COMBINED_DEPS" ]; then
+        while IFS= read -r dep; do
+            [ -n "$dep" ] && _RUN_WITH+=(--with "$dep")
+        done <<< "$COMBINED_DEPS"
+    fi
+    if [ -n "$DRY_RUN" ]; then
+        echo "(dry-run) to run locally:"
+        echo "  cd $SCAFFOLD_DIR && PYTHONPATH=src uvx --from dagster-dg-cli ${_RUN_WITH[*]} dg launch --assets '*'"
+        exit 0
+    fi
+    echo ">>> One-shot local run of every asset in $SCAFFOLD_DIR/"
+    (cd "$SCAFFOLD_DIR" && PYTHONPATH=src uvx --from dagster-dg-cli "${_RUN_WITH[@]}" dg launch --assets '*')
+    _RUN_STATUS=$?
+    if [ -z "$KEEP_SCAFFOLD" ] && [ -z "$INPLACE" ]; then
+        rm -rf "$SCAFFOLD_DIR"
+    fi
+    exit $_RUN_STATUS
 fi
 
 # ── Deploy via `dg plus deploy` ─────────────────────────────────────
