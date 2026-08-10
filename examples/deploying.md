@@ -72,7 +72,7 @@ The CLI that Dagster+ ships. Run from any project directory with `pyproject.toml
 
 Docs: <https://docs.dagster.io/deployment/dagster-plus>. Install: `uvx --from dagster-dg-cli dg` (no persistent install needed).
 
-### [`lib/dg_deploy.sh`](./lib/dg_deploy.sh) (the wrapper) — full reference: [`lib/dg_deploy.md`](./lib/dg_deploy.md)
+### [`lib/dg_deploy.sh`](./lib/dg_deploy.sh) (the wrapper) — full reference: [`dg_deploy.md`](./dg_deploy.md)
 
 Ergonomic wrapper for three scenarios:
 

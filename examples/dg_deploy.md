@@ -2,7 +2,7 @@
 
 Ergonomic wrapper for [`dg plus deploy`](https://docs.dagster.io/deployment/dagster-plus). Takes a single `.py` file, a folder of `.py` files, or an existing project directory and gets it running — either live on Dagster+ (Serverless pex or Hybrid docker) or locally via `dg dev`.
 
-For the umbrella "how does deploying to Dagster+ work" doc, see [../deploying.md](../deploying.md). This doc is the CLI reference.
+For the umbrella "how does deploying to Dagster+ work" doc, see [deploying.md](./deploying.md). This doc is the CLI reference.
 
 ## Install
 
@@ -370,8 +370,8 @@ bash dg-deploy my_flow.py             # re-deploy — same command; ~2 min for S
 
 ## See also
 
-- **[../deploying.md](../deploying.md)** — umbrella doc: concepts, scenario matrix, FAQ.
-- **[../single_file_serverless.md](../single_file_serverless.md)** — the Serverless (pex) story with worked examples.
-- **[../prefect_vs_dagster_single_file.md](../prefect_vs_dagster_single_file.md)** — honest side-by-side comparison with Prefect.
-- **[../hybrid_git_runner/README.md](../hybrid_git_runner/README.md)** — one specific Hybrid pattern (deploy runner once, iterate via `git push`).
-- **Source**: [`dg_deploy.sh`](./dg_deploy.sh).
+- **[deploying.md](./deploying.md)** — umbrella doc: concepts, scenario matrix, FAQ.
+- **[single_file_serverless.md](./single_file_serverless.md)** — the Serverless (pex) story with worked examples.
+- **[prefect_vs_dagster_single_file.md](./prefect_vs_dagster_single_file.md)** — honest side-by-side comparison with Prefect.
+- **[hybrid_git_runner/README.md](./hybrid_git_runner/README.md)** — one specific Hybrid pattern (deploy runner once, iterate via `git push`).
+- **Source**: [`lib/dg_deploy.sh`](./lib/dg_deploy.sh).

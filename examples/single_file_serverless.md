@@ -90,7 +90,7 @@ That's the whole story. **2 files, ~30 lines of boilerplate around your code, 1 
 
 ## Prefect-parity via the CLI wrapper
 
-If hand-writing the 2-file scaffold every time feels like too much boilerplate vs. Prefect's `prefect deploy`, use [`lib/dg_deploy.sh`](./lib/dg_deploy.sh) (full CLI reference at [`lib/dg_deploy.md`](./lib/dg_deploy.md)) — it takes any single `.py` (or folder of `.py` files) with `defs = dg.Definitions(...)` at module scope and auto-generates the scaffold + deploys:
+If hand-writing the 2-file scaffold every time feels like too much boilerplate vs. Prefect's `prefect deploy`, use [`lib/dg_deploy.sh`](./lib/dg_deploy.sh) (full CLI reference at [`dg_deploy.md`](./dg_deploy.md)) — it takes any single `.py` (or folder of `.py` files) with `defs = dg.Definitions(...)` at module scope and auto-generates the scaffold + deploys:
 
 ```bash
 # You have ONE file:
