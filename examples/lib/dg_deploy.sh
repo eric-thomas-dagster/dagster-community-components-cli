@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 # dg-deploy — one .py file (or folder) → one Dagster+ code location.
 #
+# Full CLI reference (rendered markdown): ./dg_deploy.md
+# Umbrella deploy concept doc:            ../deploying.md
+#
 # Two modes, one CLI:
 #
 #   Serverless (default): builds a pex bundle from your code + pyproject

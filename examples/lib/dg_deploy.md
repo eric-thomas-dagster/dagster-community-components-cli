@@ -1,0 +1,201 @@
+# `dg-deploy` — CLI reference
+
+Ergonomic wrapper for [`dg plus deploy`](https://docs.dagster.io/deployment/dagster-plus). Takes a single `.py` file, a folder of `.py` files, or an existing project directory and gets it running — either live on Dagster+ (Serverless pex or Hybrid docker) or locally via `dg dev`.
+
+For the umbrella "how does deploying to Dagster+ work" doc, see [../deploying.md](../deploying.md). This doc is the CLI reference.
+
+## Install
+
+No install — just fetch and run.
+
+```bash
+curl -sL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/lib/dg_deploy.sh > dg-deploy
+bash dg-deploy --help
+```
+
+Requires `bash`, `python3` (system), and `uvx`. Docker is only needed for `--hybrid`.
+
+## Three input shapes
+
+`dg-deploy` auto-detects what you're pointing at:
+
+| You point at | Wrapper does |
+|---|---|
+| A single `.py` file (`my_flow.py`) | Scaffold `<name>_scaffold/` with `pyproject.toml` + `definitions.py` merging your file, deploy from it |
+| A folder of `.py` files (`flows/`) | Same as above, `definitions.py` merges every `.py` in the folder |
+| A directory with existing `[tool.dg.project]` in `pyproject.toml` | Detect + deploy in place (skip scaffold, never clobber your files) |
+| A directory with legacy `dagster_cloud.yaml` (no `[tool.dg.project]`) | Auto-migrate → write `[tool.dg.project]` + `build.yaml`, back up original as `.legacy-bak`, then deploy |
+
+Every `.py` you pass (or that lives in the folder) must have `defs = dg.Definitions(...)` at module scope. The scaffold's auto-generated `definitions.py` imports each one and merges them via `dg.Definitions.merge(*)`.
+
+## Common recipes
+
+### Local dev (no deploy)
+
+```bash
+bash dg-deploy my_flow.py --dev
+```
+
+Scaffolds + boots `dg dev` at http://localhost:3000. Scaffold is preserved (implicit `--keep-scaffold`), so you can edit files + reload the browser to iterate. Ctrl-C to stop.
+
+### Serverless deploy (pex, no Docker)
+
+```bash
+bash dg-deploy my_flow.py
+```
+
+Auto-detects deps, builds a pex bundle, uploads via `dg plus deploy --build-strategy python-executable`. ~2 min end-to-end.
+
+### Hybrid deploy (Docker image on your registry)
+
+```bash
+bash dg-deploy my_flow.py --hybrid --registry ghcr.io/USER/my-flow
+```
+
+Requires:
+- Local Docker (Desktop / colima / podman)
+- Push access to `--registry` (already logged in via `docker login`)
+- At least one Hybrid agent running on the target deployment (wrapper pre-checks + warns if not; docs: <https://docs.dagster.io/deployment/dagster-plus/hybrid>)
+
+### Existing dg-native project
+
+```bash
+cd myproj && bash dg-deploy .
+# or equivalently:
+bash dg-deploy path/to/myproj/
+```
+
+Detects `[tool.dg.project]` in your pyproject.toml. Skips scaffold, deploys in place, doesn't touch your files. For Hybrid, writes `build.yaml` with `--registry` only if it's missing; warns if the existing one disagrees.
+
+### Legacy `dagster_cloud.yaml` migration
+
+```bash
+bash dg-deploy path/to/legacyproj/
+```
+
+Detects `dagster_cloud.yaml` without `[tool.dg.project]`. Auto-migrates the first location's `location_name`, `code_source.module_name` (or `python_file` / `package_name`), `image`, and `agent_queue` into a new `[tool.dg.project]` block in pyproject.toml plus a `build.yaml` file. Original saved as `dagster_cloud.yaml.legacy-bak`. If anything fails, the backup is restored automatically. Multi-location YAMLs migrate the FIRST location only + warn.
+
+### Deploy to a non-`prod` deployment
+
+```bash
+bash dg-deploy my_flow.py --deployment staging
+```
+
+If `--deployment` is unset, the wrapper picks up whatever's in your `dg plus login` config (or the legacy `~/.config/dagster_cloud/config.yaml`).
+
+### Force specific deps
+
+```bash
+bash dg-deploy my_flow.py --deps 'pandas==1.5.3 psycopg2-binary'
+```
+
+Merged with auto-detected imports. Written into the scaffold's `pyproject.toml [project] dependencies`. To skip auto-detection entirely and use only `--deps`: add `--no-auto-deps`.
+
+## All options
+
+```
+--dev                    Scaffold + `dg dev` locally instead of deploying (UI at :3000).
+                         Implies --keep-scaffold.
+--hybrid                 Docker + push to your registry. Requires --registry.
+--registry URL           Where to push the Hybrid image. E.g. ghcr.io/USER/name.
+                         Required for --hybrid.
+--location-name NAME     Code location name (default: basename of .py or folder).
+--deployment NAME        Dagster+ deployment (default: from `dg plus login` config
+                         or $DAGSTER_CLOUD_DEPLOYMENT).
+--agent-queue NAME       Route location to a specific Hybrid agent queue.
+--deps 'pkg1 pkg2'       Extra deps beyond auto-detected imports.
+--no-auto-deps           Skip AST import parsing; only use --deps.
+--python-version VER     (default: 3.12)
+--dry-run                Print commands, don't execute (still writes scaffold for inspection).
+--keep-scaffold          Don't rm -rf the scaffold after deploy.
+-h, --help               Print this reference.
+```
+
+## Auth
+
+`dg plus deploy` (under the hood) looks in this order:
+
+1. `DAGSTER_CLOUD_API_TOKEN` + `DAGSTER_CLOUD_ORGANIZATION` env vars
+2. `~/.config/dg.toml` (modern `dg plus login` output)
+3. `~/.dagster_cloud_cli/config` (legacy)
+
+**If you have `~/.config/dagster_cloud/config.yaml`** (the older `dagster-cloud` CLI location), `dg-deploy` auto-forwards the token / org / deployment / url from that file as env vars into the subprocess. You don't have to migrate configs.
+
+Fresh setup: `uvx --from dagster-dg-cli dg plus login`.
+
+## Auto-detected dependencies
+
+The wrapper parses your `.py` for top-level `import` / `from …` statements, filters stdlib, and emits a dep list. It maps ~10 common name mismatches:
+
+| Import | Pip name |
+|---|---|
+| `sklearn` | `scikit-learn` |
+| `cv2` | `opencv-python` |
+| `PIL` | `Pillow` |
+| `yaml` | `pyyaml` |
+| `bs4` | `beautifulsoup4` |
+| `dateutil` | `python-dateutil` |
+| `psycopg2` | `psycopg2-binary` |
+| `MySQLdb` | `mysqlclient` |
+| `google.cloud.bigquery` | `google-cloud-bigquery` |
+| `google.cloud.storage` | `google-cloud-storage` |
+
+Everything else is passed through as-is. Baseline `dagster` + `dagster-cloud` are always included.
+
+**When auto-detect isn't enough** (private git URLs, version pins, extras, environment markers): use `--dry-run --keep-scaffold` to generate the scaffold once, then hand-edit `pyproject.toml` and re-deploy from that dir (which now hits the "existing dg-native project" auto-detect path — no scaffold overwrite).
+
+## Hybrid agent pre-check
+
+Before starting a Docker build (~5 min), `dg-deploy --hybrid` queries `{ agents { status metadata { key value } } }` on the target deployment and prints one of:
+
+- **`✓ Hybrid agent running (queues: hybrid-test)`** — proceed.
+- **`⚠ --agent-queue 'X' isn't served by any running agent`** — proceed, but the code location will land in an error state until an agent picks up the queue. Either drop `--agent-queue` (routes to `default`) or bring up an agent configured for `X`.
+- **`⚠ No running Hybrid agent detected on '<deployment>'`** — proceed, but nothing will pick up the image until you deploy an agent. Docs pointer inline.
+
+The wrapper never spins up an agent — agents are your infrastructure (Docker / ECS / K8s / Azure). See <https://docs.dagster.io/deployment/dagster-plus/hybrid>.
+
+## Iteration loop
+
+Local:
+```bash
+bash dg-deploy my_flow.py --dev       # Ctrl-C to stop
+# edit my_flow.py
+# reload browser (dg dev auto-reloads code)
+```
+
+Deploy:
+```bash
+bash dg-deploy my_flow.py             # first deploy
+# edit my_flow.py
+bash dg-deploy my_flow.py             # re-deploy — same command; ~2 min for Serverless
+```
+
+## Troubleshooting
+
+**"No module named pex"** during Serverless deploy — the wrapper adds `--with pex` to the uvx invocation for you. If you're calling `dg plus deploy` directly, you need `uvx --from dagster-dg-cli --with pex dg plus deploy ...`.
+
+**"Unrecognized field at `tool.dg`: build"** — you have `[tool.dg.build]` in pyproject.toml. That section doesn't exist in dg. For Hybrid, use a `build.yaml` file at project root with `registry: <url>`. The wrapper writes it for you.
+
+**"tr: illegal option -- ."** — you're on BSD `tr` (macOS default). The wrapper uses `tr -- '-. ' '___'` to be BSD-compatible. If you see this, you probably invoked something else — check.
+
+**"grep: (standard input): No such file or directory"** — likely a `set -eo pipefail` trap from an upstream pipe. Wrapped in `{ grep -v '^' || true; }` guards where needed.
+
+**Location stays LOADING for >10 min after deploy** — Serverless cold pex build; usually 2-5 min. Check `https://<org>.dagster.cloud/<deployment>/locations` for the error trace. Common causes: missing dep (add via `--deps`), import-time side effect (env var missing), Python version mismatch (`--python-version 3.11`).
+
+**Location stays in error state (Hybrid)** — most common cause is no agent serving the queue. `dg-deploy --hybrid` pre-warns; if you missed it, check Dagster+ UI → Agents tab.
+
+## What the wrapper does NOT do
+
+- **Doesn't deploy agents.** Hybrid agents are your infra; the wrapper just checks that one's running.
+- **Doesn't manage env vars or secrets.** Set those in Dagster+ UI or via `dg plus secrets`.
+- **Doesn't set up schedules or sensors.** Those live in your `Definitions(...)` — schedule as `@schedule`, sensor as `@sensor`, or via `dg scaffold`.
+- **Doesn't create branch deployments.** Dagster+ auto-creates them per PR against a connected repo. `dg plus deploy` detects the git branch and targets the right one automatically.
+- **Doesn't do anything destructive.** Sessions from `dg plus deploy` are additive/updates; no `sync-locations`-style workspace-mirror behavior that could delete other locations.
+
+## See also
+
+- **[../deploying.md](../deploying.md)** — umbrella doc: concepts, scenario matrix, FAQ.
+- **[../single_file_serverless.md](../single_file_serverless.md)** — the Serverless (pex) story with worked examples.
+- **[../prefect_vs_dagster_single_file.md](../prefect_vs_dagster_single_file.md)** — honest side-by-side comparison with Prefect.
+- **[../hybrid_git_runner/README.md](../hybrid_git_runner/README.md)** — one specific Hybrid pattern (deploy runner once, iterate via `git push`).
+- **Source**: [`dg_deploy.sh`](./dg_deploy.sh).
