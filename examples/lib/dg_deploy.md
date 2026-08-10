@@ -149,7 +149,7 @@ Requires:
 - Push access to `--registry` (already logged in via `docker login`)
 - At least one Hybrid agent running on the target deployment (wrapper pre-checks + warns if not; docs: <https://docs.dagster.io/deployment/dagster-plus/hybrid>)
 
-### Existing dg-native project
+### Existing dg-native project (including full `uvx create-dagster` projects)
 
 ```bash
 cd myproj && bash dg-deploy .
@@ -157,7 +157,15 @@ cd myproj && bash dg-deploy .
 bash dg-deploy path/to/myproj/
 ```
 
-Detects `[tool.dg.project]` in your pyproject.toml. Skips scaffold, deploys in place, doesn't touch your files. For Hybrid, writes `build.yaml` with `--registry` only if it's missing; warns if the existing one disagrees.
+Detects `[tool.dg.project]` in your pyproject.toml. Skips scaffold, deploys in place, doesn't touch your files. Works with:
+
+- Projects created by `uvx create-dagster project` — the canonical modern layout with `src/<pkg>/definitions.py` using `load_from_defs_folder`, `src/<pkg>/defs/` for components, `src/<pkg>/components/` for custom component types.
+- Any project with `[tool.dg.project] root_module = "..."` in `pyproject.toml` — the wrapper doesn't care about layout beyond that.
+- Multi-defs projects (multiple assets / schedules / sensors / jobs / components loaded via `load_from_defs_folder` or hand-composed in `definitions.py`).
+
+The wrapper never touches your `pyproject.toml`, `definitions.py`, `src/`, `Dockerfile`, `container_context.yaml`, or `.venv/`. For Hybrid it only writes `build.yaml` if missing (warns if the existing one's registry disagrees with `--registry`).
+
+**The code location name comes from your `pyproject.toml`** — either `[tool.dg.project] code_location_name = "..."` if set, or derived from `root_module` otherwise. The wrapper can't rename in-place without mutating your pyproject.toml; if you need a different name for a one-off deploy (e.g. a personal branch), edit `code_location_name` first. (Note: `dg plus deploy --location-name` SELECTS among multiple locations in a workspace — it does not rename.)
 
 ### Legacy `dagster_cloud.yaml` migration
 

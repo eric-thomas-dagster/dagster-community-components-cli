@@ -95,11 +95,12 @@ if [ $# -gt 0 ] && [ "${1:0:2}" != "--" ]; then
     shift
 fi
 
+LOCATION_NAME_EXPLICIT=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --hybrid) HYBRID=1; shift ;;
         --dev) DEV=1; KEEP_SCAFFOLD=1; shift ;;
-        --location-name) LOCATION_NAME="$2"; shift 2 ;;
+        --location-name) LOCATION_NAME="$2"; LOCATION_NAME_EXPLICIT=1; shift 2 ;;
         --registry) REGISTRY="$2"; shift 2 ;;
         --agent-queue) AGENT_QUEUE="$2"; shift 2 ;;
         --deployment) DEPLOYMENT="$2"; shift 2 ;;
@@ -182,6 +183,21 @@ fi
 if [ "$INPLACE" = "dg-native" ]; then
     echo ">>> Detected existing dg-native project at $INPLACE_DIR"
     echo "    Deploying in place (no scaffold, no clobber)."
+    # `uvx create-dagster project` doesn't include `dagster-cloud` in the
+    # default deps — but the pex/docker build path needs it. Warn early
+    # with a clear fix rather than letting the deploy fail 30s in with a
+    # cryptic "dagster_cloud package dependency was expected but not
+    # found" ValueError from the pex builder.
+    if ! grep -qE '(^|[",\s])dagster-cloud[">=<~,\s]|^dagster-cloud$' "$INPLACE_DIR/pyproject.toml"; then
+        echo ""
+        echo "⚠ pyproject.toml doesn't list \`dagster-cloud\` as a dependency."
+        echo "  The pex/docker build for Dagster+ requires it. Add via:"
+        echo "    cd $INPLACE_DIR && uv add dagster-cloud"
+        echo "  (or hand-edit [project] dependencies to include \"dagster-cloud\")"
+        echo "  Then re-run dg-deploy. Not auto-adding — that would mutate your pyproject.toml."
+        echo ""
+        exit 1
+    fi
     if [ -n "$HYBRID" ]; then
         # Ensure build.yaml exists with the registry the user asked for.
         if [ -f "$INPLACE_DIR/build.yaml" ]; then
@@ -741,6 +757,26 @@ if [ -n "$DEPLOYMENT" ]; then
     DEPLOY_ARGS+=(--deployment "$DEPLOYMENT")
 elif [ -n "$_DGDEPLOY_LEGACY_DEPLOYMENT" ]; then
     DEPLOY_ARGS+=(--deployment "$_DGDEPLOY_LEGACY_DEPLOYMENT")
+fi
+
+# NOTE: `dg plus deploy --location-name` SELECTS which locations to
+# deploy in a multi-location workspace — it does NOT rename a location.
+# In loose-file mode, the location name lives in the scaffold's
+# pyproject.toml `[tool.dg.project] code_location_name` which we write.
+# In in-place mode, it lives in the user's own pyproject.toml — the
+# wrapper can't rename without mutating their file. If they want a
+# different name for one deploy, they need to edit code_location_name
+# (or use the scaffold path). We warn if a mismatch is detected.
+if [ -n "$LOCATION_NAME_EXPLICIT" ] && [ -n "$INPLACE" ]; then
+    _EXISTING_LOC=$(grep -E '^code_location_name' "$INPLACE_DIR/pyproject.toml" 2>/dev/null \
+        | head -1 | sed -E 's/^code_location_name[[:space:]]*=[[:space:]]*"?([^"]*)"?.*$/\1/')
+    if [ -n "$_EXISTING_LOC" ] && [ "$_EXISTING_LOC" != "$LOCATION_NAME" ]; then
+        echo "⚠ --location-name '$LOCATION_NAME' can't override the project's own"
+        echo "  code_location_name = \"$_EXISTING_LOC\" from pyproject.toml. Edit"
+        echo "  pyproject.toml (or use the scaffold path with a loose .py) if you"
+        echo "  need a different name. Deploying as '$_EXISTING_LOC'."
+        echo ""
+    fi
 fi
 
 # We shell out via `uvx --from dagster-dg-cli dg` so the caller doesn't
