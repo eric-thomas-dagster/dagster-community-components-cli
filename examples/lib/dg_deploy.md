@@ -215,9 +215,25 @@ Merged with auto-detected imports. Written into the scaffold's `pyproject.toml [
 
 Fresh setup: `uvx --from dagster-dg-cli dg plus login`.
 
-## Auto-detected dependencies
+## Dependencies — where they come from
 
-The wrapper parses your `.py` for top-level `import` / `from …` statements, filters stdlib, and emits a dep list. It maps ~10 common name mismatches:
+The wrapper resolves deps in this order (highest priority first). It stops at the first explicit source it finds and skips AST parsing:
+
+| Priority | Source | When it's used |
+|---|---|---|
+| 1 | `--deps 'pkg1 pkg2'` | Always additive — appended on top of whatever else is found |
+| 2 | `requirements.txt` in the input dir | If present. Standard pip-freeze format: version pins, extras, environment markers all preserved. Inline `#` comments + blank lines stripped. `-r other.txt` recursion NOT followed (inline it or use `--deps`). |
+| 3 | `pyproject.toml [project] dependencies` in the input dir | If present + no requirements.txt. Requires Python 3.11+ (`tomllib`) or `tomli`. `dagster` / `dagster-cloud` baseline entries are filtered out (they're always added). |
+| 4 | AST auto-detection (default fallback) | Only when no explicit source found and `--no-auto-deps` isn't set. Parses your `.py` for top-level `import` / `from …` statements, filters stdlib. |
+
+**"Input dir" means:** the folder for `bash dg-deploy flows/`, or the .py file's parent for `bash dg-deploy my_flow.py` (i.e., we look next to the file, not in cwd).
+
+The wrapper prints which source it used up front:
+```
+>>> Using explicit deps from requirements.txt at flows/ — skipping AST auto-detect
+```
+
+**AST auto-detection** — when it runs (no explicit source or explicit `--no-auto-deps` NOT set), it maps the ~10 common import→pip name mismatches:
 
 | Import | Pip name |
 |---|---|
@@ -232,9 +248,13 @@ The wrapper parses your `.py` for top-level `import` / `from …` statements, fi
 | `google.cloud.bigquery` | `google-cloud-bigquery` |
 | `google.cloud.storage` | `google-cloud-storage` |
 
-Everything else is passed through as-is. Baseline `dagster` + `dagster-cloud` are always included.
+Everything else is passed through as-is. AST detects module names only — no version pins. Baseline `dagster` + `dagster-cloud` are always included regardless of source.
 
-**When auto-detect isn't enough** (private git URLs, version pins, extras, environment markers): use `--dry-run --keep-scaffold` to generate the scaffold once, then hand-edit `pyproject.toml` and re-deploy from that dir (which now hits the "existing dg-native project" auto-detect path — no scaffold overwrite).
+**Why prefer explicit files?** They carry version pins the AST can't produce. If you've already declared your deps in `requirements.txt` or `pyproject.toml`, you get exactly those versions in the deploy — no guesswork.
+
+**Version-pin conflicts within the merged list** (e.g. `--deps 'pandas==1.5.3'` while pyproject already pins `pandas>=2.0`): the wrapper prints a `⚠ Conflicting deps detected` warning up front listing the specs — pip would error at install regardless, better to know before the 5-minute build.
+
+**When even explicit files aren't enough** (private git URLs with authentication, complex extras, per-Python-version markers): use `--dry-run --keep-scaffold` to generate the scaffold once, hand-edit `pyproject.toml`, then re-deploy from that dir (which now hits the "existing dg-native project" auto-detect path — no scaffold overwrite).
 
 ## Hybrid agent pre-check
 

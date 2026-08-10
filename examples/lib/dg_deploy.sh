@@ -54,8 +54,8 @@
 #   --location-name NAME     Code location name (default: basename of .py / folder)
 #   --deployment NAME        Dagster+ deployment (default: whatever's in ~/.config/dg or $DAGSTER_CLOUD_DEPLOYMENT)
 #   --agent-queue NAME       Route location to a specific Hybrid agent queue
-#   --deps 'pkg1 pkg2'       Extra deps beyond auto-detected imports
-#   --no-auto-deps           Skip import-based auto-detection
+#   --deps 'pkg1 pkg2'       Extra deps to add (always appended, on top of any explicit or detected source)
+#   --no-auto-deps           Skip AST import parsing when no explicit deps source found
 #   --python-version VER     (default: 3.12)
 #   --dry-run                Print commands, don't execute
 #   --keep-scaffold          Don't rm -rf the scaffold after deploy (implicit with --dev)
@@ -303,9 +303,67 @@ PYEOF
     KEEP_SCAFFOLD=1
 fi
 
-# ── Auto-detect deps from imports (scaffold path only) ─────────────
+# ── Dep resolution: explicit files first, AST fallback ─────────────
+# Precedence (highest → lowest):
+#   1. --deps 'pkg1 pkg2'                    (always additive on top)
+#   2. requirements.txt in the input dir     (authoritative — skip AST)
+#   3. pyproject.toml [project] dependencies (authoritative — skip AST)
+#   4. AST auto-detection                    (fallback)
+# Explicit sources are preferred because they carry version pins the AST
+# can't produce and match what the user has already declared.
+EXPLICIT_DEPS=""
+DEPS_SOURCE=""
+if [ -z "$INPLACE" ]; then
+    if [ -d "$SOURCE" ]; then
+        DEP_SEARCH_DIR="$SOURCE"
+    else
+        DEP_SEARCH_DIR="$(dirname "$SOURCE")"
+    fi
+    if [ -f "$DEP_SEARCH_DIR/requirements.txt" ]; then
+        # Read requirements.txt: strip comments + blanks + inline-# comments
+        # + `-r other.txt` recurse directives (unsupported here — user should
+        # inline). Preserve version pins as-is.
+        EXPLICIT_DEPS=$(sed -E 's/[[:space:]]*#.*$//' "$DEP_SEARCH_DIR/requirements.txt" \
+            | grep -vE '^\s*(-r|-c|--|$)' \
+            | sed -E 's/^[[:space:]]+|[[:space:]]+$//g' \
+            | grep -v '^$' \
+            | sort -u)
+        DEPS_SOURCE="requirements.txt at $DEP_SEARCH_DIR/"
+    elif [ -f "$DEP_SEARCH_DIR/pyproject.toml" ] && command -v python3 >/dev/null 2>&1; then
+        EXPLICIT_DEPS=$(python3 - "$DEP_SEARCH_DIR/pyproject.toml" <<'PYEOF' 2>/dev/null || true
+"""Extract [project] dependencies from pyproject.toml. Requires tomllib
+(Python 3.11+) or the tomli fallback; silently no-ops if neither."""
+import sys
+try:
+    import tomllib
+except ImportError:
+    try:
+        import tomli as tomllib
+    except ImportError:
+        sys.exit(0)
+try:
+    with open(sys.argv[1], "rb") as f:
+        data = tomllib.load(f)
+except Exception:
+    sys.exit(0)
+BASE = {"dagster", "dagster-cloud"}
+for dep in data.get("project", {}).get("dependencies", []) or []:
+    # Skip the baseline (we always add these); rest pass through with pins.
+    name = dep.split("[")[0].split("=")[0].split(">")[0].split("<")[0].split("~")[0].split(";")[0].strip().lower()
+    if name not in BASE:
+        print(dep)
+PYEOF
+        )
+        [ -n "$EXPLICIT_DEPS" ] && DEPS_SOURCE="pyproject.toml [project.dependencies] at $DEP_SEARCH_DIR/"
+    fi
+    if [ -n "$EXPLICIT_DEPS" ]; then
+        echo ">>> Using explicit deps from $DEPS_SOURCE — skipping AST auto-detect"
+    fi
+fi
+
+# AST auto-detect: only if no explicit source AND --no-auto-deps not set.
 AUTO_DETECTED_DEPS=""
-if [ -z "$INPLACE" ] && [ "$AUTO_DEPS" = "1" ] && command -v python3 >/dev/null 2>&1; then
+if [ -z "$INPLACE" ] && [ -z "$EXPLICIT_DEPS" ] && [ "$AUTO_DEPS" = "1" ] && command -v python3 >/dev/null 2>&1; then
     AUTO_DETECTED_DEPS=$(python3 - "${INPUT_FILES[@]}" <<'PYEOF'
 """Parse .py files, extract top-level import statements, filter stdlib,
 emit non-stdlib top-level module names (one per line)."""
@@ -347,7 +405,7 @@ for m in extern:
 PYEOF
     )
 fi
-COMBINED_DEPS=$(printf '%s\n%s\n' "$AUTO_DETECTED_DEPS" "$EXTRA_DEPS" | tr ' ' '\n' | { grep -v '^$' || true; } | sort -u)
+COMBINED_DEPS=$(printf '%s\n%s\n%s\n' "$EXPLICIT_DEPS" "$AUTO_DETECTED_DEPS" "$EXTRA_DEPS" | tr ' ' '\n' | { grep -v '^$' || true; } | sort -u)
 
 # ── Warn on version-pin conflicts within COMBINED_DEPS ──────────────
 # If two entries specify the same package with different pins (e.g.
