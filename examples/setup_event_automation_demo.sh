@@ -75,8 +75,8 @@ PY
 
 echo ">>> Writing the automation (event → webhook, cron → webhook)"
 mkdir -p "src/$PKG/defs/automations"
-cat > "src/$PKG/defs/automations/defs.yaml" <<'YAML'
-type: dagster_community_components.EventAutomationComponent
+cat > "src/$PKG/defs/automations/defs.yaml" <<YAML
+type: $PKG.components.event_automation.component.EventAutomationComponent
 attributes:
   name: demo_alert_on_failure_plus_heartbeat
   description: |
@@ -102,8 +102,8 @@ YAML
 
 echo ">>> Writing an alerting variant that would go live with real credentials"
 mkdir -p "src/$PKG/defs/alerting_example"
-cat > "src/$PKG/defs/alerting_example/defs.yaml" <<'YAML'
-type: dagster_community_components.EventAutomationComponent
+cat > "src/$PKG/defs/alerting_example/defs.yaml" <<YAML
+type: $PKG.components.event_automation.component.EventAutomationComponent
 attributes:
   name: production_alert_shape
   description: |

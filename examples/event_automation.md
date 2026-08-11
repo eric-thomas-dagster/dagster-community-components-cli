@@ -22,7 +22,7 @@ Two automations in one YAML shape each.
 `src/<pkg>/defs/automations/defs.yaml`:
 
 ```yaml
-type: dagster_community_components.EventAutomationComponent
+type: <your_pkg>.components.event_automation.component.EventAutomationComponent
 attributes:
   name: demo_alert_on_failure_plus_heartbeat
   default_status: RUNNING
@@ -46,7 +46,7 @@ attributes:
 The same shape you'd ship to prod — Slack + PagerDuty alerting via env-var-driven webhooks:
 
 ```yaml
-type: dagster_community_components.EventAutomationComponent
+type: <your_pkg>.components.event_automation.component.EventAutomationComponent
 attributes:
   name: production_alert_shape
   default_status: STOPPED
