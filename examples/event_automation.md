@@ -85,7 +85,7 @@ uv run dg dev
 5. The `run_status_0` sensor ticks within ~30s of the failure and POSTs to `https://httpbin.org/post`. Click into its **Tick History** to see the sensor evaluation timeline.
 6. The `schedule_1` sensor ticks every minute, hitting `https://httpbin.org/post` with `event_type=schedule`.
 
-## Trigger + action catalog (16 triggers, 17 actions)
+## Trigger + action catalog (22 triggers, 17 actions)
 
 Every automation is `when: [triggers…]` OR-composition + `then: [actions…]` all-run-sequentially. Compound triggers (`all_of` + `any_of`, one level of nesting) support real AND/OR logic.
 
@@ -103,7 +103,13 @@ Every automation is `when: [triggers…]` OR-composition + `then: [actions…]` 
 | `asset_check_failed` | Named asset check evaluated FAILURE |
 | `metric_threshold` | Numeric metadata crossed a threshold (gt/gte/lt/lte/eq/neq) |
 | `absence` | Dead-man's switch: no materialization in `max_gap_minutes` |
-| `log_pattern` | Regex match on run log lines (`user_message` field of event logs) |
+| `log_pattern` | Regex match on run log lines (events / stdout / stderr — covers K8s / ECS container output) |
+| `daemon_heartbeat` | Dagster daemon / Dagster+ agent stopped heartbeating |
+| `code_location_status` | Code location failed to load / stuck loading / errored |
+| `run_startup_slow` | Run took too long from creation to STARTED (compute spinup) |
+| `asset_observation` | AssetObservation event emitted (distinct from materialization) |
+| `step_error` | Op step raised an exception (step-level, not run-level; fires N times per multi-error run) |
+| `metadata_match` | Materialization/observation carries specific metadata key=value (or key/regex) |
 | `asset_value_change` | Numeric metadata Δ across two consecutive materializations |
 | `backfill_status` | Partition backfill entered a state (COMPLETED/FAILED/CANCELED/REQUESTED) |
 | `sensor_failing` | Target sensor failed N consecutive ticks (meta-observability) |
@@ -235,6 +241,73 @@ then:
   - type: sns
     topic_arn: "arn:aws:sns:us-east-1:12345:dagster-events"
     message_template: "Ingest: {message}"
+```
+
+**Full observability stack (7 triggers → PagerDuty):**
+
+```yaml
+when:
+  - type: code_location_status
+    on_status: UNHEALTHY
+  - type: run_startup_slow
+    max_startup_seconds: 120
+  - type: daemon_heartbeat
+    max_seconds_since_heartbeat: 90
+  - type: asset_observation
+    asset_keys: [external_status]
+  - type: step_error
+    exception_pattern: "OOMKilled|Timeout"
+  - type: metadata_match
+    asset_key: hourly_summary
+    metadata_key: quality_grade
+    regex: "poor|failed"
+  - type: log_pattern
+    pattern: "OOMKilled|SegFault|Panic"
+    sources: [events, stdout, stderr]
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: error
+    summary_template: "OBSERVABILITY: {event_type} — {message}"
+```
+
+**Agent / daemon heartbeat (Dagster+ Hybrid K8s / ECS agent died):**
+
+```yaml
+when:
+  - type: daemon_heartbeat
+    max_seconds_since_heartbeat: 120
+then:
+  - type: opsgenie
+    api_key_env_var: OPSGENIE_KEY
+    priority: P1
+    message_template: "Agent stopped heartbeating: {status}"
+```
+
+**Code location deploy failure:**
+
+```yaml
+when:
+  - type: code_location_status
+    on_status: ERROR
+    location_name_pattern: "prod-.*"
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_URL
+    message: "🚨 Deploy failure: {message}"
+```
+
+**Container OOM via stderr scan (log_pattern with compute logs):**
+
+```yaml
+when:
+  - type: log_pattern
+    pattern: "OOMKilled|killed as memory limit"
+    sources: [events, stderr]     # catches K8s/ECS oomkill traces
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: error
 ```
 
 **OOM detection via log_pattern:**
