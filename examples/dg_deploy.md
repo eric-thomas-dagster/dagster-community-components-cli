@@ -198,6 +198,28 @@ bash dg-deploy path/to/legacyproj/
 
 Detects `dagster_cloud.yaml` without `[tool.dg.project]`. Auto-migrates the first location's `location_name`, `code_source.module_name` (or `python_file` / `package_name`), `image`, and `agent_queue` into a new `[tool.dg.project]` block in pyproject.toml plus a `build.yaml` file. Original saved as `dagster_cloud.yaml.legacy-bak`. If anything fails, the backup is restored automatically. Multi-location YAMLs migrate the FIRST location only + warn.
 
+### CI-safe mode (`--no-mutate`)
+
+```bash
+bash dg-deploy . --no-mutate --deployment prod       # e.g. inside GitHub Actions
+```
+
+Guarantees zero writes to your project directory. Aliases: `--ci`, `--strict`. Legal to combine with any other flag.
+
+Hard-errors if the wrapper would otherwise:
+
+- **Migrate a legacy `dagster_cloud.yaml`** — prints "run without `--no-mutate` locally to migrate, commit the result, then re-run in CI"
+- **Write a missing `build.yaml`** for Hybrid dg-native — prints "commit a `build.yaml` with `registry: <url>` before running in CI"
+
+Non-mutating paths still work: loose `.py` scaffolds to `$TMPDIR` (not cwd), dg-native Serverless deploys without touching anything, dg-native Hybrid with an existing `build.yaml` deploys without touching anything. Your working directory is guaranteed clean after — `git status` returns nothing.
+
+Recommended GitHub Actions shape:
+
+```yaml
+- uses: actions/checkout@v4
+- run: bash dg-deploy . --no-mutate --deployment prod
+```
+
 ### Deploy to a non-`prod` deployment
 
 ```bash
@@ -231,6 +253,11 @@ Merged with auto-detected imports. Written into the scaffold's `pyproject.toml [
 --python-version VER     (default: 3.12)
 --dry-run                Print commands, don't execute (still writes scaffold for inspection).
 --keep-scaffold          Don't rm -rf the scaffold after deploy.
+--no-mutate, --ci, --strict
+                         Hard-error if any file in the project dir would be written
+                         or mutated. Refuses legacy dagster_cloud.yaml migration and
+                         refuses to create a missing build.yaml. Scaffold to $TMPDIR
+                         still works. Recommended for CI.
 -h, --help               Print this reference.
 ```
 

@@ -68,6 +68,13 @@
 #   --python-version VER     (default: 3.12)
 #   --dry-run                Print commands, don't execute
 #   --keep-scaffold          Don't rm -rf the scaffold after deploy (implicit with --dev)
+#   --no-mutate | --ci | --strict
+#                            Hard-error if any file in the project dir would be
+#                            written or mutated. Refuses legacy dagster_cloud.yaml
+#                            migration and refuses to create a missing build.yaml.
+#                            Scaffold to $TMPDIR still works — the guarantee is
+#                            "no changes to your working directory". Recommended
+#                            for CI (GitHub Actions, GitLab, etc.).
 #
 # Options (--hybrid only):
 #   --registry URL           REQUIRED. E.g. ghcr.io/user/name or acr/gcr/ecr equivalent.
@@ -99,6 +106,7 @@ EXTRA_DEPS=""
 AUTO_DEPS=1
 DRY_RUN=""
 KEEP_SCAFFOLD=""
+NO_MUTATE=""
 PYTHON_VERSION="3.12"
 
 # First positional arg is the .py path or folder.
@@ -124,6 +132,7 @@ while [ $# -gt 0 ]; do
         --python-version) PYTHON_VERSION="$2"; shift 2 ;;
         --dry-run) DRY_RUN=1; shift ;;
         --keep-scaffold) KEEP_SCAFFOLD=1; shift ;;
+        --no-mutate|--ci|--strict) NO_MUTATE=1; shift ;;
         -h|--help) grep '^#' "$0" | cut -c 3-; exit 0 ;;
         *) echo "unknown option: $1"; exit 1 ;;
     esac
@@ -266,6 +275,12 @@ if [ "$INPLACE" = "dg-native" ]; then
                 echo "⚠ build.yaml registry is '$EXISTING_REG', --registry was '$REGISTRY' → using existing"
             fi
         else
+            if [ -n "$NO_MUTATE" ]; then
+                echo "✗ --no-mutate: build.yaml missing at $INPLACE_DIR/build.yaml"
+                echo "  Commit a build.yaml with \`registry: $REGISTRY\` before running in CI,"
+                echo "  or drop --no-mutate for one-off local deploys."
+                exit 1
+            fi
             echo "    ✎ Writing $INPLACE_DIR/build.yaml (registry: $REGISTRY) — only new file created"
             echo "registry: $REGISTRY" > "$INPLACE_DIR/build.yaml"
         fi
@@ -275,6 +290,16 @@ if [ "$INPLACE" = "dg-native" ]; then
 
 elif [ "$INPLACE" = "legacy" ]; then
     echo ">>> Detected legacy dagster_cloud.yaml at $INPLACE_DIR"
+    if [ -n "$NO_MUTATE" ]; then
+        echo "✗ --no-mutate: legacy migration would mutate your files."
+        echo "  Run without --no-mutate locally to migrate:"
+        echo "    - append [tool.dg] + [tool.dg.project] to pyproject.toml"
+        echo "    - write build.yaml"
+        echo "    - rename dagster_cloud.yaml → dagster_cloud.yaml.legacy-bak"
+        echo "  Then commit the result and re-run in CI (which will hit the"
+        echo "  dg-native path with no mutations)."
+        exit 1
+    fi
     echo "    MUTATING your files (see summary below):"
     echo "      ✎ pyproject.toml   (append [tool.dg] + [tool.dg.project] block)"
     echo "      ✎ build.yaml       (write — new file)"
