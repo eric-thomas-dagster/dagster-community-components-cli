@@ -1,6 +1,6 @@
 # Event Automation — Prefect-Automations shape as one Dagster component
 
-Prefect users get to wire triggers → actions in one YAML/UI object — no Python, no separate sensors and schedules and run-status handlers to keep in sync. Dagster has all the underlying primitives (`@sensor`, `@run_status_sensor`, `AutomationCondition`, freshness policies, asset checks, `RunsFilter`, event log storage, compute log manager, daemon status, workspace snapshots) but they're all Python-first and scattered across separate APIs. This demo shows the `EventAutomationComponent` — one YAML surface that collapses **22 trigger types** and **17 action types** into a single component, with real Dagster sensors under the covers.
+Prefect users get to wire triggers → actions in one YAML/UI object — no Python, no separate sensors and schedules and run-status handlers to keep in sync. Dagster has all the underlying primitives (`@sensor`, `@run_status_sensor`, `AutomationCondition`, freshness policies, asset checks, `RunsFilter`, event log storage, compute log manager, daemon status, workspace snapshots) but they're all Python-first and scattered across separate APIs. This demo shows the `EventAutomationComponent` — one YAML surface that collapses **35 trigger types** and **17 action types** into a single component, with real Dagster sensors under the covers.
 
 **The full trigger surface** (grouped by category):
 
@@ -153,7 +153,7 @@ attributes:
 6. The `schedule_1` sensor ticks every minute, hitting `https://httpbin.org/post` with `event_type=schedule`.
 7. Toggle any of the platform-observability sensors to RUNNING to see their tick history — most will `SkipReason` on a clean cluster (nothing stale, no OOMs), which is the correct signal. Trigger a real failure by killing the daemon process, breaking a code location's imports, or launching a run that OOMs to see them fire.
 
-## Trigger + action catalog (22 triggers, 17 actions)
+## Trigger + action catalog (35 triggers, 17 actions)
 
 Every automation is `when: [triggers…]` OR-composition + `then: [actions…]` all-run-sequentially. Compound triggers (`all_of` + `any_of`, one level of nesting) support real AND/OR logic.
 
@@ -178,6 +178,19 @@ Every automation is `when: [triggers…]` OR-composition + `then: [actions…]` 
 | `asset_observation` | AssetObservation event emitted (distinct from materialization) |
 | `step_error` | Op step raised an exception (step-level, not run-level; fires N times per multi-error run) |
 | `metadata_match` | Materialization/observation carries specific metadata key=value (or key/regex) |
+| `hook_fired` | `@success_hook` / `@failure_hook` executed (per-op, distinct from step_error) |
+| `asset_partition_materialized` | Specific asset **partition** materialized (partition_key or partition_key_pattern) |
+| `run_reexecution` | Run was re-executed (retry audit trail) |
+| `asset_wipe` | Materialization history wiped (destructive audit) |
+| `config_override` | Run launched with non-default config (change-tracking) |
+| `tag_set` | Run carries specific tag key/value (audit + routing) |
+| `unhandled_exception` | Run-level unhandled exception (infrastructure crash, distinct from step_error) |
+| `asset_check_severity` | Asset check at WARN vs ERROR (separates severity handling) |
+| `op_output` | Specific op yielded output (STEP_OUTPUT event) |
+| `materialization_planned` | Pre-materialization event (warm caches, pre-provision downstream) |
+| `asset_check_started` | Asset check evaluation started (pair with timer for "slow check" alerts) |
+| `insights_metric` | **Dagster+ only.** Insights custom metric crossed threshold via GraphQL |
+| `dagster_plus_audit` | **Dagster+ only.** Audit log event (RBAC, config, secrets) via GraphQL |
 | `asset_value_change` | Numeric metadata Δ across two consecutive materializations |
 | `backfill_status` | Partition backfill entered a state (COMPLETED/FAILED/CANCELED/REQUESTED) |
 | `sensor_failing` | Target sensor failed N consecutive ticks (meta-observability) |
