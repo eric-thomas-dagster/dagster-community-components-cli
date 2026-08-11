@@ -1,6 +1,24 @@
 # Event Automation — Prefect-Automations shape as one Dagster component
 
-Prefect users get to wire triggers → actions in one YAML/UI object — no Python, no separate sensors and schedules and run-status handlers to keep in sync. Dagster has all the underlying primitives (`@sensor`, `@run_status_sensor`, `AutomationCondition`, freshness policies, asset checks) but they're Python-first. This demo shows the `EventAutomationComponent` — one YAML surface that collapses common trigger-action patterns into a single component, with real Dagster sensors under the covers.
+Prefect users get to wire triggers → actions in one YAML/UI object — no Python, no separate sensors and schedules and run-status handlers to keep in sync. Dagster has all the underlying primitives (`@sensor`, `@run_status_sensor`, `AutomationCondition`, freshness policies, asset checks, `RunsFilter`, event log storage, compute log manager, daemon status, workspace snapshots) but they're all Python-first and scattered across separate APIs. This demo shows the `EventAutomationComponent` — one YAML surface that collapses **22 trigger types** and **17 action types** into a single component, with real Dagster sensors under the covers.
+
+**The full trigger surface** (grouped by category):
+
+- **Run lifecycle** — `run_status`, `run_duration`, `run_stuck`, `run_startup_slow`
+- **Asset events** — `asset_materialized`, `asset_observation`, `asset_check_failed`
+- **Data quality** — `metric_threshold`, `metadata_match`, `asset_value_change`, `freshness_violation`, `absence`
+- **Platform health** — `daemon_heartbeat`, `code_location_status`, `sensor_failing`, `concurrency_hit`
+- **Errors + logs** — `step_error`, `log_pattern` (events + stdout + stderr — catches K8s / ECS / Docker container output)
+- **External** — `schedule`, `http_poll`, `sqs_poll`
+- **Composite** — `all_of`, `any_of` (AND / OR, one level of nesting)
+
+**The full action surface:**
+
+- **Dagster runs** — `materialize`, `launch_job`, `cancel_run`, `retry_run`, `toggle_sensor`, `toggle_schedule`
+- **Alerts** — `slack`, `pagerduty`, `opsgenie`, `discord`, `teams`, `mattermost`, `email`
+- **External** — `webhook`, `sns`, `sqs`, `emit_event`
+
+Full field-level docs + more recipes in the component's [README](https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/sensors/event_automation/README.md). Comprehensive pytest suite (56 tests) at [`sensors/event_automation/tests/`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/event_automation/tests).
 
 ## Setup
 
@@ -15,7 +33,7 @@ Then open <http://localhost:3000>.
 
 ## What the demo does
 
-Two automations in one YAML shape each.
+Three automations in one YAML shape each.
 
 ### `demo_alert_on_failure_plus_heartbeat`
 
@@ -74,16 +92,66 @@ export PAGERDUTY_ROUTING_KEY='...'
 uv run dg dev
 ```
 
+### `platform_observability_tour` (STOPPED by default)
+
+Reference automation exercising the six platform-health triggers in one YAML. Same STOPPED-by-default rationale — no real credentials needed to inspect the shape in the UI. Load it into `dg dev` to see six sensors emitted (one per trigger) all pointing at the same webhook.
+
+```yaml
+type: <your_pkg>.components.event_automation.component.EventAutomationComponent
+attributes:
+  name: platform_observability_tour
+  description: |
+    Reference wiring for platform-health signals: daemon / agent
+    heartbeat, code location deploys, slow compute startup, step errors,
+    metadata state, and container log patterns (K8s / ECS / Docker
+    stdout+stderr). Left STOPPED — set the webhook env var and toggle to
+    RUNNING in the UI to activate.
+  default_status: STOPPED
+  when:
+    - type: daemon_heartbeat
+      max_seconds_since_heartbeat: 120
+    - type: code_location_status
+      on_status: UNHEALTHY
+    - type: run_startup_slow
+      max_startup_seconds: 120
+    - type: step_error
+      exception_pattern: "OOMKilled|TimeoutError"
+    - type: metadata_match
+      asset_key: hourly_summary
+      metadata_key: quality_grade
+      regex: "poor|failed"
+    - type: log_pattern
+      pattern: "OOMKilled|SegFault|Panic"
+      sources: [events, stdout, stderr]
+  then:
+    - type: webhook
+      url: "https://httpbin.org/post"
+      method: POST
+      headers:
+        X-Automation-Source: platform-observability-tour
+      body_template: >
+        {"event":"{event_type}","status":"{status}",
+         "job":"{job_name}","message":"{message}"}
+```
+
 ## Watch it fire
 
 1. Open <http://localhost:3000>
 2. Navigate to **Jobs → `job_that_fails`**
 3. Click **Materialize** (or Launch Run) — it fails on purpose
-4. Navigate to **Sensors** tab. You'll see two sensors from the automation:
-   - `demo_alert_on_failure_plus_heartbeat__run_status_0` (the FAILURE watcher)
-   - `demo_alert_on_failure_plus_heartbeat__schedule_1` (the cron heartbeat)
+4. Navigate to **Sensors** tab. The setup script emits 8 sensors across the three automations:
+   - `demo_alert_on_failure_plus_heartbeat__run_status_0` (the FAILURE watcher — RUNNING)
+   - `demo_alert_on_failure_plus_heartbeat__schedule_1` (the cron heartbeat — RUNNING)
+   - `production_alert_shape__run_status_0` (Slack + PagerDuty on failure — STOPPED)
+   - `platform_observability_tour__daemon_heartbeat_0` (agent / daemon watch — STOPPED)
+   - `platform_observability_tour__code_location_status_1` (deploy failure — STOPPED)
+   - `platform_observability_tour__run_startup_slow_2` (compute spinup — STOPPED)
+   - `platform_observability_tour__step_error_3` (step-level OOM / Timeout — STOPPED)
+   - `platform_observability_tour__metadata_match_4` (quality_grade regex — STOPPED)
+   - `platform_observability_tour__log_pattern_5` (events + stdout + stderr scan — STOPPED)
 5. The `run_status_0` sensor ticks within ~30s of the failure and POSTs to `https://httpbin.org/post`. Click into its **Tick History** to see the sensor evaluation timeline.
 6. The `schedule_1` sensor ticks every minute, hitting `https://httpbin.org/post` with `event_type=schedule`.
+7. Toggle any of the platform-observability sensors to RUNNING to see their tick history — most will `SkipReason` on a clean cluster (nothing stale, no OOMs), which is the correct signal. Trigger a real failure by killing the daemon process, breaking a code location's imports, or launching a run that OOMs to see them fire.
 
 ## Trigger + action catalog (22 triggers, 17 actions)
 

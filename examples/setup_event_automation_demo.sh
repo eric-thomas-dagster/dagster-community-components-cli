@@ -126,6 +126,46 @@ attributes:
       dedup_key_template: "prod-failure:{job_name}"
 YAML
 
+echo ">>> Writing a platform-observability reference automation (6 platform-health triggers)"
+mkdir -p "src/$PKG/defs/platform_observability"
+cat > "src/$PKG/defs/platform_observability/defs.yaml" <<YAML
+type: $PKG.components.event_automation.component.EventAutomationComponent
+attributes:
+  name: platform_observability_tour
+  description: |
+    Reference automation: 6 platform-health triggers in one YAML.
+    daemon/agent heartbeat, code location deploys, slow compute startup,
+    step errors, metadata state, and container log patterns (K8s / ECS /
+    Docker stdout+stderr). Left STOPPED — no real credentials needed to
+    inspect the shape in the UI. Toggle to RUNNING to activate.
+  default_status: STOPPED
+  when:
+    - type: daemon_heartbeat
+      max_seconds_since_heartbeat: 120
+    - type: code_location_status
+      on_status: UNHEALTHY
+    - type: run_startup_slow
+      max_startup_seconds: 120
+    - type: step_error
+      exception_pattern: "OOMKilled|TimeoutError"
+    - type: metadata_match
+      asset_key: hourly_summary
+      metadata_key: quality_grade
+      regex: "poor|failed"
+    - type: log_pattern
+      pattern: "OOMKilled|SegFault|Panic"
+      sources: [events, stdout, stderr]
+  then:
+    - type: webhook
+      url: "https://httpbin.org/post"
+      method: POST
+      headers:
+        X-Automation-Source: platform-observability-tour
+      body_template: >
+        {"event":"{event_type}","status":"{status}",
+         "job":"{job_name}","message":"{message}"}
+YAML
+
 cat <<MSG
 
 >>> Setup complete.
@@ -133,8 +173,13 @@ cat <<MSG
 Next steps:
   cd $PROJECT_DIR
   uv run dg check defs                    # validate everything loads
-  uv run dg list defs                     # see 2 sensors + 2 jobs
+  uv run dg list defs                     # see 8 sensors + 2 jobs
   uv run dg dev                           # open http://localhost:3000
+
+3 automations shipped:
+  - demo_alert_on_failure_plus_heartbeat   (RUNNING — run_status + schedule)
+  - production_alert_shape                 (STOPPED — Slack + PagerDuty on failure)
+  - platform_observability_tour            (STOPPED — 6 platform-health triggers)
 
 To watch the automation fire end-to-end:
   1. Open the UI + navigate to Jobs → job_that_fails
