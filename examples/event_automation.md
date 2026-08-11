@@ -447,6 +447,63 @@ then:
     job_name_filter: heavy_batch
 ```
 
+**Throttled alerts (silence strategy — cooldown + hourly cap):**
+
+```yaml
+when:
+  - type: run_status
+    status: FAILURE
+    throttle:
+      min_seconds_between_fires: 300      # 5 min cooldown
+      max_per_hour: 4                     # cap at 4/hr per job
+      dedup_key_template: "{job_name}"
+      strategy: silence
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: error
+```
+
+**Summarize noisy failures into one alert per window:**
+
+```yaml
+when:
+  - type: log_pattern
+    pattern: "OOMKilled|MemoryError"
+    throttle:
+      strategy: summarize
+      flush_after_seconds: 600            # 10 min buffer
+      dedup_key_template: "{job_name}"
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_URL
+    message: "{message}"                  # gets [Nx in last window] prefix
+```
+
+**LLM decides whether to page:**
+
+```yaml
+when:
+  - type: freshness_violation
+    asset_keys: [hourly_summary]
+    max_age_minutes: 60
+    throttle:
+      strategy: llm
+      llm_provider: openai
+      llm_model: gpt-4o-mini
+      llm_api_key_env_var: OPENAI_API_KEY
+      llm_prompt_template: |
+        You are the on-call engineer.
+        Alert: {message}
+        Recent: {recent}
+        Consider business hours + recurrence. Answer YES: <reason> or NO: <reason>.
+      llm_decision_cache_seconds: 300
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: warning
+```
+
 **Metric threshold → email:**
 
 ```yaml
