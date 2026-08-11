@@ -85,7 +85,7 @@ uv run dg dev
 5. The `run_status_0` sensor ticks within ~30s of the failure and POSTs to `https://httpbin.org/post`. Click into its **Tick History** to see the sensor evaluation timeline.
 6. The `schedule_1` sensor ticks every minute, hitting `https://httpbin.org/post` with `event_type=schedule`.
 
-## Trigger + action catalog (11 triggers, 17 actions)
+## Trigger + action catalog (16 triggers, 17 actions)
 
 Every automation is `when: [triggers…]` OR-composition + `then: [actions…]` all-run-sequentially. Compound triggers (`all_of` + `any_of`, one level of nesting) support real AND/OR logic.
 
@@ -103,6 +103,11 @@ Every automation is `when: [triggers…]` OR-composition + `then: [actions…]` 
 | `asset_check_failed` | Named asset check evaluated FAILURE |
 | `metric_threshold` | Numeric metadata crossed a threshold (gt/gte/lt/lte/eq/neq) |
 | `absence` | Dead-man's switch: no materialization in `max_gap_minutes` |
+| `log_pattern` | Regex match on run log lines (`user_message` field of event logs) |
+| `asset_value_change` | Numeric metadata Δ across two consecutive materializations |
+| `backfill_status` | Partition backfill entered a state (COMPLETED/FAILED/CANCELED/REQUESTED) |
+| `sensor_failing` | Target sensor failed N consecutive ticks (meta-observability) |
+| `concurrency_hit` | Active-run count > threshold, optional tag filter |
 | `sqs_poll` | Poll an AWS SQS queue, fire per message |
 | `all_of` | AND compound (all sub-triggers fire within `within_seconds`) |
 | `any_of` | OR compound (nested inside `all_of` only) |
@@ -230,6 +235,62 @@ then:
   - type: sns
     topic_arn: "arn:aws:sns:us-east-1:12345:dagster-events"
     message_template: "Ingest: {message}"
+```
+
+**OOM detection via log_pattern:**
+
+```yaml
+when:
+  - type: log_pattern
+    pattern: "OOMKilled|OutOfMemoryError|Killed process"
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: error
+    summary_template: "OOM in {job_name}"
+```
+
+**Revenue drop via asset_value_change:**
+
+```yaml
+when:
+  - type: asset_value_change
+    asset_key: daily_revenue
+    metadata_key: total
+    direction: decrease
+    min_delta_pct: 20              # fires on 20%+ drop
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_URL
+    message: "📉 Revenue dropped: {message}"
+```
+
+**Broken-sensor detection (meta-observability):**
+
+```yaml
+when:
+  - type: sensor_failing
+    target_sensor_name: kafka_ingest_sensor
+    consecutive_failures: 5
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: warning
+    summary_template: "kafka_ingest_sensor failing 5 ticks"
+```
+
+**Concurrency overload guardrail:**
+
+```yaml
+when:
+  - type: concurrency_hit
+    max_queued: 100
+    tag_key: dagster/job
+    tag_value: heavy_batch
+then:
+  - type: cancel_run
+    which: all_matching
+    job_name_filter: heavy_batch
 ```
 
 **Metric threshold → email:**
