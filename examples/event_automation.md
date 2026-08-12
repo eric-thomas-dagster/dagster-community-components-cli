@@ -706,6 +706,39 @@ then:
     webhook_url_env_var: SLACK_WEBHOOK
 ```
 
+**Chained materialization on partition events (single- and multi-dim):**
+
+```yaml
+# Single-dim: when a source partition lands, materialize the derived asset for the same partition
+when:
+  - type: asset_partition_materialized
+    asset_keys: [source_events]
+then:
+  - type: materialize
+    asset_keys: [derived_events]
+    partition_key: "{partition_key}"          # from triggering event
+
+---
+
+# Multi-dim: dict-form partition_key; each dimension templated from the event
+when:
+  - type: asset_partition_materialized
+    asset_keys: [regional_revenue]
+    partition_key:
+      region: "us"                            # only fire for US partitions
+then:
+  - type: materialize
+    asset_keys: [regional_revenue_downstream]
+    partition_key:
+      date: "{partition_date}"
+      region: "{partition_region}"
+  - type: slack
+    webhook_url_env_var: SLACK_WEBHOOK
+    message: "{asset_key} landed for date={partition_date} region={partition_region}"
+```
+
+Trigger tokens include `{partition_key}` (whole key as string) plus `{partition_<dim>}` per dimension for `MultiPartitionsDefinition`-shaped events.
+
 **Run tag + job-name-glob filters — target the right runs without one automation per job:**
 
 ```yaml
