@@ -504,6 +504,123 @@ then:
     severity: warning
 ```
 
+**Escalate — Slack first, PagerDuty after 3 fires, page execs after 10:**
+
+```yaml
+when:
+  - type: run_status
+    status: FAILURE
+    throttle:
+      strategy: escalate
+      dedup_key_template: "{job_name}"
+      escalation_ladder:
+        - after_fires: 0
+          action_indices: [0]           # just Slack
+        - after_fires: 3
+          action_indices: [0, 1]        # Slack + PagerDuty
+        - after_fires: 10
+          action_indices: [0, 1, 2]     # Slack + PD + email execs
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_WEBHOOK
+    message: "🟡 {job_name} failed — {message}"
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+  - type: email
+    smtp_host_env_var: SMTP_HOST
+    smtp_user_env_var: SMTP_USER
+    smtp_password_env_var: SMTP_PASSWORD
+    from_addr: alerts@company.com
+    to: [execs@company.com]
+    subject: "🔴 {job_name} — repeated failures"
+```
+
+**Auto-resolve — pair every down-alert with an up-alert:**
+
+```yaml
+when:
+  - type: http_poll
+    url: https://api.example.com/health
+    interval_seconds: 60
+    status_matches: 5xx
+    throttle:
+      strategy: auto_resolve
+      min_seconds_between_fires: 60
+      auto_resolve_message: "✅ API healthy — was down {duration_seconds}s ({fire_count} fires)"
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_WEBHOOK
+    message: "{event_type}: {message}"       # 🟥 first fire, ✅ resolve fire
+```
+
+**Business hours + maintenance windows — nights/weekends silence:**
+
+```yaml
+when:
+  - type: run_status
+    status: FAILURE
+    throttle:
+      business_hours_only: "09:00-18:00 America/New_York mon,tue,wed,thu,fri"
+      maintenance_windows:
+        - from_ts: "2024-01-15T02:00:00Z"
+          to_ts: "2024-01-15T06:00:00Z"
+          reason: "Q1 warehouse rebuild"
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+```
+
+**Retry-aware step failures — don't page on attempts a RetryPolicy will retry:**
+
+```yaml
+# Ops with a RetryPolicy raise STEP_FAILURE on every attempt. Without
+# only_final_failures, you'd get paged 3× for a transient error that
+# Dagster's retry recovers automatically on attempt 4.
+when:
+  - type: step_error
+    step_key_pattern: ".*extract.*"
+    only_final_failures: true       # only fire after all retries exhausted
+    throttle:
+      min_seconds_between_fires: 300
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+```
+
+`run_status: FAILURE` already fires only on terminal runs, so this flag is specific to step-level failure events.
+
+**Root-cause suppression — if the daemon is down, skip all the downstream noise:**
+
+```yaml
+# The root cause sensor
+when:
+  - type: daemon_heartbeat
+    stale_after_seconds: 120
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: critical
+
+---
+
+# Every dependent alert suppresses itself when the daemon sensor fired recently
+when:
+  - type: run_status
+    status: FAILURE
+    throttle:
+      correlation_suppress_sensors: ["daemon_heartbeat"]
+      correlation_within_seconds: 300
+  - type: freshness_violation
+    asset_keys: [customers, orders]
+    max_age_minutes: 60
+    throttle:
+      correlation_suppress_sensors: ["daemon_heartbeat"]
+      correlation_within_seconds: 300
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_WEBHOOK
+```
+
 **Metric threshold → email:**
 
 ```yaml
@@ -534,6 +651,86 @@ then:
   - type: webhook
     url: "https://uptime.example.com/hourly-heartbeat"
     method: GET
+```
+
+**Dedicated alerts code location — one location watches all your prod locations:**
+
+```yaml
+# In your alerts_location/src/alerts_location/defs/prod_failures/defs.yaml:
+type: dagster_community_components.EventAutomationComponent
+attributes:
+  name: prod_run_failures
+  when:
+    - type: run_status
+      status: FAILURE
+      monitored_locations: [prod_ingest, prod_analytics, prod_ml]
+      run_tags:
+        priority: P0
+  then:
+    - type: pagerduty
+      routing_key_env_var: PD_KEY
+```
+
+Set `monitored_locations` on `run_status` / `run_duration` triggers so this location's sensors observe run events from other locations. Other trigger types (asset-based, event-log-based, external polling) work cross-location without configuration because they read the shared event log directly.
+
+**Asset-selection targeting — group / tag / kind / glob:**
+
+```yaml
+# Alert on freshness violations for the gold-tier layer
+when:
+  - type: freshness_violation
+    asset_keys: "group:marts and tag:tier=gold"
+    max_age_minutes: 60
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+
+---
+
+# Watch every dbt asset for observations
+when:
+  - type: asset_observation
+    asset_keys: "kind:dbt"
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_WEBHOOK
+
+---
+
+# Fnmatch glob across a partition family
+when:
+  - type: asset_materialized
+    asset_keys: "marts/*"
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_WEBHOOK
+```
+
+**Run tag + job-name-glob filters — target the right runs without one automation per job:**
+
+```yaml
+# Fire only on P0 prod-tagged runs
+when:
+  - type: run_status
+    status: FAILURE
+    job_name_pattern: "prod_*"
+    run_tags:
+      priority: P0
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+
+---
+
+# Different escalation for team=data-platform vs team=ml
+when:
+  - type: run_status
+    status: FAILURE
+    run_tags:
+      team: data-platform
+then:
+  - type: slack
+    webhook_url_env_var: DATA_TEAM_SLACK
 ```
 
 ## Why vs Dagster+ native alerting
