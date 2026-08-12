@@ -2,14 +2,15 @@
 
 Prefect users get to wire triggers → actions in one YAML/UI object — no Python, no separate sensors and schedules and run-status handlers to keep in sync. Dagster has all the underlying primitives (`@sensor`, `@run_status_sensor`, `AutomationCondition`, freshness policies, asset checks, `RunsFilter`, event log storage, compute log manager, daemon status, workspace snapshots) but they're all Python-first and scattered across separate APIs. This demo shows the `EventAutomationComponent` — one YAML surface that collapses **35 trigger types** and **17 action types** into a single component, with real Dagster sensors under the covers.
 
-**The full trigger surface** (grouped by category):
+**The full trigger surface** (35 leaf triggers + 2 compound, grouped by category):
 
-- **Run lifecycle** — `run_status`, `run_duration`, `run_stuck`, `run_startup_slow`
-- **Asset events** — `asset_materialized`, `asset_observation`, `asset_check_failed`
-- **Data quality** — `metric_threshold`, `metadata_match`, `asset_value_change`, `freshness_violation`, `absence`
-- **Platform health** — `daemon_heartbeat`, `code_location_status`, `sensor_failing`, `concurrency_hit`
-- **Errors + logs** — `step_error`, `log_pattern` (events + stdout + stderr — catches K8s / ECS / Docker container output)
+- **Run lifecycle** — `run_status`, `run_duration`, `run_stuck`, `run_startup_slow`, `run_reexecution`
+- **Asset events** — `asset_materialized`, `asset_observation`, `asset_partition_materialized`, `materialization_planned`, `asset_check_failed`, `asset_check_severity`, `asset_check_started`, `asset_wipe`
+- **Data quality** — `metric_threshold`, `metadata_match`, `asset_value_change`, `freshness_violation`, `absence`, `insights_metric` (Dagster+)
+- **Platform health** — `daemon_heartbeat`, `code_location_status`, `sensor_failing`, `concurrency_hit`, `backfill_status`
+- **Errors + logs** — `step_error`, `log_pattern` (events + stdout + stderr — catches K8s / ECS / Docker container output), `unhandled_exception`, `op_output`, `hook_fired`
 - **External** — `schedule`, `http_poll`, `sqs_poll`
+- **Audit / RBAC** — `config_override`, `tag_set`, `dagster_plus_audit` (Dagster+)
 - **Composite** — `all_of`, `any_of` (AND / OR, one level of nesting)
 
 **The full action surface:**
