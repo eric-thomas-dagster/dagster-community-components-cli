@@ -18,7 +18,16 @@ Prefect users get to wire triggers → actions in one YAML/UI object — no Pyth
 - **Alerts** — `slack`, `pagerduty`, `opsgenie`, `discord`, `teams`, `mattermost`, `email`
 - **External** — `webhook`, `sns`, `sqs`, `emit_event`
 
-Full field-level docs + more recipes in the component's [README](https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/sensors/event_automation/README.md). Comprehensive pytest suite (56 tests) at [`sensors/event_automation/tests/`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/event_automation/tests).
+**The full throttle / noise-reduction surface** (opt-in `throttle:` block on any trigger):
+
+- **Rate limiting** — `min_seconds_between_fires` (cooldown), `max_per_hour` (rolling cap), `dedup_key_template` (per-key state scoping)
+- **Strategies** — `silence` (default, drop over-limit fires), `summarize` (buffer + fire one "N events" summary), `first_last` (fire endpoints, drop middle), `llm` (OpenAI / Anthropic decides YES/NO with cached decisions), `escalate` (fire count → subset of actions: Slack at #1, +PagerDuty at #3, +execs at #10), `auto_resolve` (pairs each fire with a synthetic "resolved" event on staleness)
+- **Suppression gates** — `business_hours_only` ('09:00-17:00 America/New_York mon,tue,wed,thu,fri'), `maintenance_windows` (list of ISO8601 quiet periods), `correlation_suppress_sensors` (if root-cause sensor fired recently, skip downstream noise)
+- **Retry awareness** — `only_final_failures: true` on `step_error` (skips attempts a `RetryPolicy` will retry)
+
+**Targeting** — `asset_keys` accepts Dagster asset-selection strings (`group:X`, `tag:foo=bar`, `kind:Y`, `is:external`, `marts/*` glob) in addition to explicit lists. Run-based triggers accept `job_name_pattern` (fnmatch) and `run_tags` (dict of required tag key=value). `run_status` / `run_duration` accept `monitored_locations` for cross-code-location targeting — deploy one dedicated alerts location that watches every prod location.
+
+Full field-level docs + more recipes in the component's [README](https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/sensors/event_automation/README.md). Comprehensive pytest suite (120 tests) at [`sensors/event_automation/tests/`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/sensors/event_automation/tests).
 
 ## Setup
 
