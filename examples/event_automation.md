@@ -655,9 +655,9 @@ then:
 
 ```yaml
 # Fire when the DAILY AVERAGE of row_count over the last 7 days drops below 100.
-# Distinct from metric_threshold — that fires on a single materialization crossing.
-# This queries Dagster+ Insights (Victoria Metrics under the hood) for the
-# aggregated trend.
+# Distinct from metric_threshold — that fires on a single materialization
+# crossing. This queries Dagster+ Insights (Victoria Metrics under the hood)
+# for the aggregated trend.
 when:
   - type: insights_metric
     metric_name: hourly_summary.row_count       # promoted via Insights UI
@@ -670,30 +670,50 @@ then:
   - type: slack
     webhook_url_env_var: SLACK_WEBHOOK
     message: "📉 Weekly avg row_count dropped below 100 — investigate upstream"
-```
 
-Same shape for Dagster+ built-in metrics (`__DAGSTER_CREDITS_USED_MINUTES` for spend, `dagster_cloud.freshness_pass_percentage` for freshness SLA rollups). Get the exact metric names from the Insights UI or the `queryableMetrics` GraphQL introspection.
+---
+
+# Scope via Dagster asset-selection syntax — server-side via
+# reportingMetricsByAssetSelection. Covers group / tag / kind / key targeting.
+when:
+  - type: insights_metric
+    metric_name: __DAGSTER_CREDITS_USED_MINUTES  # Dagster+ built-in
+    asset_selection: "group:marts and tag:tier=gold"
+    granularity: WEEKLY
+    aggregation: SUM
+    lookback_hours: 720                          # 30 days
+    comparison: gt
+    threshold: 500                               # >500 credits/week for gold marts
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: warning
+```
 
 **Dagster+ audit log — react to RBAC / secret / config changes (SOC2 / SIEM):**
 
+Dagster+ Alerts does NOT cover audit-log events — this trigger fills the gap. Filters push down server-side (verified live).
+
 ```yaml
-# Dagster+ Alerts doesn't cover audit-log events. This is the programmatic
-# hook — feed audit changes to the security team, a SIEM, or a compliance log.
+# Secret rotation across all deployments → security-team Slack + SIEM webhook
 when:
   - type: dagster_plus_audit
-    event_type_pattern: "permission.*grant|role.*change"    # regex on event type
-    actor_pattern: ".*"                                     # any actor
+    event_types:                             # server-side, exact enum match
+      - CREATE_SECRET
+      - UPDATE_SECRET
+      - DELETE_SECRET
+    is_branch_deployment: false              # main deployments only
 then:
   - type: slack
     webhook_url_env_var: SECURITY_SLACK_WEBHOOK
-    message: "🔐 Dagster+ RBAC change: {event_type} by {actor} on {deployment}"
+    message: "🔐 Secret change: {audit_event_type} by {actor} on {deployment}"
   - type: webhook
     url: "https://siem.internal/dagster-audit"
     method: POST
     body_template: |
       {
         "source": "dagster_plus",
-        "event_type": "{event_type}",
+        "event_type": "{audit_event_type}",
         "actor": "{actor}",
         "deployment": "{deployment}",
         "timestamp": "{timestamp}"
@@ -701,17 +721,35 @@ then:
 
 ---
 
-# Alert only on prod secret rotations
+# Prod RBAC change → PagerDuty (SOC2 attestation trail)
 when:
   - type: dagster_plus_audit
-    event_type_pattern: "secret.*"
-    deployment: prod
+    event_types:
+      - CHANGE_USER_PERMISSIONS
+      - CHANGE_SERVICE_USER_PERMISSIONS
+      - CREATE_SERVICE_TOKEN
+      - REVOKE_SERVICE_TOKEN
+    deployment_names: ["prod"]
 then:
   - type: pagerduty
-    routing_key_env_var: PD_KEY
+    routing_key_env_var: SECURITY_PD_KEY
     severity: warning
-    summary_template: "Prod secret changed: {event_type} by {actor}"
+    summary_template: "Prod RBAC change: {audit_event_type} by {actor}"
+
+---
+
+# Alert on prod code-location changes (deploy tracking)
+when:
+  - type: dagster_plus_audit
+    event_types: [CREATE_CODE_LOCATION, UPDATE_CODE_LOCATION, DELETE_CODE_LOCATION]
+    deployment_names: ["prod"]
+then:
+  - type: slack
+    webhook_url_env_var: DEVOPS_SLACK_WEBHOOK
+    message: "🚀 {actor} did {audit_event_type} on prod"
 ```
+
+**Full list of the 42 audit event types** (verified via live GraphQL introspection): RBAC (`CHANGE_USER_PERMISSIONS`, `CREATE_SERVICE_USER`, `CHANGE_SERVICE_USER_PERMISSIONS`, etc.), tokens (`CREATE_USER_TOKEN`, `CREATE_AGENT_TOKEN`, `CREATE_SERVICE_TOKEN`, etc.), secrets (`CREATE_SECRET`, `UPDATE_SECRET`, `DELETE_SECRET`), deployments (`CREATE_DEPLOYMENT`, `UPDATE_DEPLOYMENT_SETTINGS`), code locations (`CREATE_CODE_LOCATION`, `UPDATE_CODE_LOCATION`, `REDEPLOY_SERVERLESS_AGENT`), automation (`UPDATE_SCHEDULE`, `UPDATE_SENSOR`, `SET_AUTO_MATERIALIZE_PAUSED`, `LAUNCH_RUN`, `LAUNCH_BACKFILL`), alerts (`MODIFY_ALERT_POLICIES`, `SET_ALERT_POLICY_MUTE_UNTIL`), org changes, auth (`LOG_IN`). Full list in the component README.
 
 Requires a Dagster+ API token with audit-log read permission (`DAGSTER_CLOUD_API_TOKEN` env var). Org is auto-detected from `DAGSTER_CLOUD_ORGANIZATION`.
 
