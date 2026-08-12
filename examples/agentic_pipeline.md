@@ -20,7 +20,7 @@ Total cost per full run: **~$0.001** (all `gpt-4o-mini`, ~10 LLM calls). Ideal f
 
 ## Why Dagster (not just a job runner)
 
-Any tool can execute a chain of LLM calls. Prefect can. A bash script can. What Dagster does that they don't:
+Any tool can execute a chain of LLM calls. Any workflow engine can. A bash script can. What Dagster does that they don't:
 
 ### 1. Every step is a versioned asset — browsable, not log-grepable
 
@@ -39,7 +39,7 @@ Click `research_bot_debated` in the catalog. See **every prior materialization**
 | `debated__arbitrator_reasoning` | Text — "Proposal 1 is more precise because..." |
 | `debated__proposals` | JSON — every proposal in full, model per proposal |
 
-In Prefect, all of this is a `run.log` you `grep`.
+In a job-based orchestrator, all of this is a `run.log` you `grep`.
 
 ### 2. Numeric metadata → Dagster+ Insights (promote via UI, few clicks)
 
@@ -48,7 +48,7 @@ Because `cost_usd`, `latency_ms`, `tokens_total`, `n_llm_calls` are typed **nume
 - **Custom metrics dashboards** — plot median pipeline cost over time, per-step latency histograms.
 - **Alerts** — configured on the custom metric in the UI ("alert if any pipeline's cost exceeds $0.10 per partition").
 
-In Prefect, you'd first instrument the numeric values yourself, then build the whole export → Grafana → alertmanager pipeline before you could even define the alert.
+Without typed metadata on the platform, you'd first instrument the numeric values yourself, then build the whole export → Grafana → alertmanager pipeline before you could even define the alert.
 
 ### 3. Per-op kinds — filter the whole catalog by pipeline op
 
@@ -92,7 +92,7 @@ Swap `type: static` for `type: daily` (with `start_date`) if you want a rolling 
 
 ### 5. Lineage — pipeline connects to your data graph
 
-Change `source: {kind: literal, ...}` to `source: {kind: upstream_asset, upstream_asset_key: my_data}` and the pipeline shows up as a downstream node of your existing data asset. Prefect flows have no such graph.
+Change `source: {kind: literal, ...}` to `source: {kind: upstream_asset, upstream_asset_key: my_data}` and the pipeline shows up as a downstream node of your existing data asset. Job-based flows have no such graph.
 
 ## Where the sinks land (per-partition)
 
