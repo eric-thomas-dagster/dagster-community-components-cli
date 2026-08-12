@@ -1,6 +1,6 @@
 # Event Automation — Prefect-Automations shape as one Dagster component
 
-Prefect users get to wire triggers → actions in one YAML/UI object — no Python, no separate sensors and schedules and run-status handlers to keep in sync. Dagster has all the underlying primitives (`@sensor`, `@run_status_sensor`, `AutomationCondition`, freshness policies, asset checks, `RunsFilter`, event log storage, compute log manager, daemon status, workspace snapshots) but they're all Python-first and scattered across separate APIs. This demo shows the `EventAutomationComponent` — one YAML surface that collapses **35 trigger types** and **17 action types** into a single component, with real Dagster sensors under the covers.
+Prefect users get to wire triggers → actions in one YAML/UI object — no Python, no separate sensors and schedules and run-status handlers to keep in sync. Dagster has all the underlying primitives (`@sensor`, `@run_status_sensor`, `AutomationCondition`, freshness policies, asset checks, `RunsFilter`, event log storage, compute log manager, daemon status, workspace snapshots) but they're all Python-first and scattered across separate APIs. This demo shows the `EventAutomationComponent` — one YAML surface that collapses **35 trigger types** and **27 action types** into a single component, with real Dagster sensors under the covers.
 
 **The full trigger surface** (35 leaf triggers + 2 compound, grouped by category):
 
@@ -13,11 +13,12 @@ Prefect users get to wire triggers → actions in one YAML/UI object — no Pyth
 - **Audit / RBAC** — `config_override`, `tag_set`, `dagster_plus_audit` (Dagster+)
 - **Composite** — `all_of`, `any_of` (AND / OR, one level of nesting)
 
-**The full action surface:**
+**The full action surface** (27 total):
 
 - **Dagster runs** — `materialize`, `launch_job`, `cancel_run`, `retry_run`, `toggle_sensor`, `toggle_schedule`
 - **Alerts** — `slack`, `pagerduty`, `opsgenie`, `discord`, `teams`, `mattermost`, `email`
 - **External** — `webhook`, `sns`, `sqs`, `emit_event`
+- **Ops / self-healing** — `reload_code_location`, `refresh_defs_state`, `set_concurrency_limit`, `free_concurrency_slots`, `set_auto_materialize_paused`, `mute_alert_policy`, `resume_backfill`, `cancel_backfill`, `reexecute_backfill`, `add_dynamic_partition` (Dagster+ GraphQL mutations + instance-API — enables self-healing pipeline patterns)
 
 **The full throttle / noise-reduction surface** (opt-in `throttle:` block on any trigger):
 
@@ -763,6 +764,154 @@ then:
   - type: webhook
     url: "https://uptime.example.com/hourly-heartbeat"
     method: GET
+```
+
+**Self-healing: auto-reload a broken code location:**
+
+```yaml
+# Detect a broken code location and auto-reload it. If the underlying issue
+# was transient (dependency install race, network blip on deploy), the
+# reload recovers on its own — no on-call ticket needed. If it fails
+# repeatedly, the escalate throttle bumps to a page.
+when:
+  - type: code_location_status
+    state: ERROR
+    throttle:
+      strategy: escalate
+      escalation_ladder:
+        - after_fires: 0                       # first fire — just reload
+          action_indices: [0]
+        - after_fires: 2                       # after 2 fires — also Slack
+          action_indices: [0, 1]
+        - after_fires: 4                       # after 4 fires — page on-call
+          action_indices: [0, 1, 2]
+then:
+  - type: reload_code_location
+    location_name: "{location_name}"           # from trigger tokens
+  - type: slack
+    webhook_url_env_var: SLACK_WEBHOOK
+    message: "🔄 Auto-reloaded {location_name} (attempt after error)"
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    summary_template: "Code location {location_name} still broken after 4 reload attempts"
+```
+
+**Self-healing: unstick concurrency slots + retry the stuck run:**
+
+```yaml
+when:
+  - type: run_stuck
+    max_running_seconds: 3600                  # 1 hour = stuck
+then:
+  - type: free_concurrency_slots
+    run_id: "{run_id}"                         # from trigger tokens
+  - type: cancel_run
+    which: triggering
+  - type: retry_run
+```
+
+**Scheduled scaling: bump pool limits during business hours, drop overnight:**
+
+```yaml
+# Ramp up at 9am ET
+when:
+  - type: schedule
+    cron: "0 9 * * mon-fri"
+    execution_timezone: "America/New_York"
+then:
+  - type: set_concurrency_limit
+    concurrency_key: snowflake_pool
+    limit: 50
+
+---
+
+# Ramp down at 6pm ET
+when:
+  - type: schedule
+    cron: "0 18 * * mon-fri"
+    execution_timezone: "America/New_York"
+then:
+  - type: set_concurrency_limit
+    concurrency_key: snowflake_pool
+    limit: 10
+```
+
+**Cost-spike breaker: freeze auto-materialize when Insights credits cross threshold:**
+
+```yaml
+when:
+  - type: insights_metric
+    metric_name: __DAGSTER_CREDITS_USED_MINUTES
+    aggregation: SUM
+    granularity: DAILY
+    lookback_hours: 24
+    comparison: gt
+    threshold: 1000                            # >1000 credits in a day
+then:
+  - type: set_auto_materialize_paused
+    paused: true
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    summary_template: "🚨 Cost breaker tripped — AutoMaterialize paused"
+```
+
+**Backfill remediation: auto-retry failed backfills once, then escalate:**
+
+```yaml
+when:
+  - type: backfill_status
+    status: FAILED
+    throttle:
+      strategy: escalate
+      dedup_key_template: "{run_id}"           # per-backfill state
+      escalation_ladder:
+        - after_fires: 0                       # first failure — auto-retry
+          action_indices: [0]
+        - after_fires: 1                       # second failure — page
+          action_indices: [1]
+then:
+  - type: reexecute_backfill
+    backfill_id: "{run_id}"                    # backfill_status trigger puts backfill id in run_id token
+    from_failure: true
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    summary_template: "Backfill {run_id} failed twice — manual intervention needed"
+```
+
+**Mute Dagster+ Alerts during scheduled maintenance:**
+
+```yaml
+# Saturday 2am — mute noisy Dagster+ Alerts policy for 4 hours
+when:
+  - type: schedule
+    cron: "0 2 * * sat"
+then:
+  - type: mute_alert_policy
+    alert_policy_id: "prod-freshness-policy"
+    mute_for_seconds: 14400                    # 4 hours
+  - type: slack
+    webhook_url_env_var: OPS_SLACK_WEBHOOK
+    message: "🔇 Muted prod-freshness alerts for maintenance window (4h)"
+```
+
+**Add a dynamic partition when a new file lands:**
+
+```yaml
+# HTTP-poll a manifest endpoint; when it says a new file dropped,
+# register the partition + materialize downstream in one shot.
+when:
+  - type: http_poll
+    url: "https://api.example.com/manifest/latest"
+    interval_seconds: 300
+    condition: value_change
+    json_path: "$.latest_partition_key"
+then:
+  - type: add_dynamic_partition
+    partitions_def_name: hourly_events
+    partition_key: "{json_value}"              # from the http_poll response
+  - type: materialize
+    asset_keys: [event_summary]
+    partition_key: "{json_value}"
 ```
 
 **Dedicated alerts code location — one location watches all your prod locations:**
