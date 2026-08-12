@@ -651,6 +651,70 @@ then:
     body_template: "{asset_key} row_count dropped below 100: {message}"
 ```
 
+**Insights time-window aggregate — alert on trend shape, not single events:**
+
+```yaml
+# Fire when the DAILY AVERAGE of row_count over the last 7 days drops below 100.
+# Distinct from metric_threshold — that fires on a single materialization crossing.
+# This queries Dagster+ Insights (Victoria Metrics under the hood) for the
+# aggregated trend.
+when:
+  - type: insights_metric
+    metric_name: hourly_summary.row_count       # promoted via Insights UI
+    granularity: DAILY                          # HOURLY | DAILY | WEEKLY | MONTHLY
+    aggregation: AVERAGE                        # SUM | AVERAGE | MIN | MAX
+    lookback_hours: 168                         # 7 days
+    comparison: lt
+    threshold: 100
+then:
+  - type: slack
+    webhook_url_env_var: SLACK_WEBHOOK
+    message: "📉 Weekly avg row_count dropped below 100 — investigate upstream"
+```
+
+Same shape for Dagster+ built-in metrics (`__DAGSTER_CREDITS_USED_MINUTES` for spend, `dagster_cloud.freshness_pass_percentage` for freshness SLA rollups). Get the exact metric names from the Insights UI or the `queryableMetrics` GraphQL introspection.
+
+**Dagster+ audit log — react to RBAC / secret / config changes (SOC2 / SIEM):**
+
+```yaml
+# Dagster+ Alerts doesn't cover audit-log events. This is the programmatic
+# hook — feed audit changes to the security team, a SIEM, or a compliance log.
+when:
+  - type: dagster_plus_audit
+    event_type_pattern: "permission.*grant|role.*change"    # regex on event type
+    actor_pattern: ".*"                                     # any actor
+then:
+  - type: slack
+    webhook_url_env_var: SECURITY_SLACK_WEBHOOK
+    message: "🔐 Dagster+ RBAC change: {event_type} by {actor} on {deployment}"
+  - type: webhook
+    url: "https://siem.internal/dagster-audit"
+    method: POST
+    body_template: |
+      {
+        "source": "dagster_plus",
+        "event_type": "{event_type}",
+        "actor": "{actor}",
+        "deployment": "{deployment}",
+        "timestamp": "{timestamp}"
+      }
+
+---
+
+# Alert only on prod secret rotations
+when:
+  - type: dagster_plus_audit
+    event_type_pattern: "secret.*"
+    deployment: prod
+then:
+  - type: pagerduty
+    routing_key_env_var: PD_KEY
+    severity: warning
+    summary_template: "Prod secret changed: {event_type} by {actor}"
+```
+
+Requires a Dagster+ API token with audit-log read permission (`DAGSTER_CLOUD_API_TOKEN` env var). Org is auto-detected from `DAGSTER_CLOUD_ORGANIZATION`.
+
 **Cron + webhook (heartbeat pattern):**
 
 ```yaml
