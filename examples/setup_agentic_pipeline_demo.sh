@@ -48,25 +48,48 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing agentic_pipeline component"
-$CLI add agentic_pipeline --auto-install >/dev/null 2>&1
+echo ">>> Installing components: synthetic_prompt_generator + agentic_pipeline"
+$CLI add synthetic_prompt_generator --auto-install >/dev/null 2>&1
+$CLI add agentic_pipeline             --auto-install >/dev/null 2>&1
 
-# Questions ship inside the project so they deploy with the code to
-# Dagster+ Serverless. Sinks land in project-relative `out/` — durable
-# locally, ephemeral in Serverless (see defs.yaml comments).
-mkdir -p "$PROJECT_ABS/questions" "$PROJECT_ABS/out"
+# The CLI drops a copy of each component's example.yaml at
+# src/$PKG/defs/<name>/defs.yaml. We're writing our own defs.yaml under
+# defs/prompts/ (with topic-based partitioning), so remove the CLI's
+# auto-installed defs so dg check doesn't scan two conflicting shapes.
+rm -rf "src/$PKG/defs/synthetic_prompt_generator"
 
-echo ">>> Writing per-partition question files (3 partitions, 3 distinct questions)"
-cat > "$PROJECT_ABS/questions/2026-08-05.txt" <<'EOF'
-Explain in 3-4 sentences how attention works in transformer language models.
-EOF
+# Sinks land in project-relative `out/` — durable locally, ephemeral in
+# Serverless (see defs.yaml comments below).
+mkdir -p "$PROJECT_ABS/out"
 
-cat > "$PROJECT_ABS/questions/2026-08-06.txt" <<'EOF'
-Compare RNNs and Transformers for sequence modeling — what did Transformers actually change and why?
-EOF
-
-cat > "$PROJECT_ABS/questions/2026-08-07.txt" <<'EOF'
-What is retrieval-augmented generation and when should you reach for it over fine-tuning?
+echo ">>> Writing prompt-source defs.yaml (SyntheticPromptGeneratorComponent, Mode D)"
+mkdir -p "src/$PKG/defs/prompts"
+cat > "src/$PKG/defs/prompts/defs.yaml" <<EOF
+# SyntheticPromptGeneratorComponent — Mode D (COMPOSED, no LLM).
+#
+# Emits a str-valued asset named research_prompts. Static partitions = the
+# topics list. Each partition materializes to one prompt string composed
+# deterministically from the levers below. Seed=42 → reproducible bit-for-bit.
+#
+# The downstream AgenticPipelineComponent picks this up via
+# source: {kind: upstream_asset, upstream_asset_key: research_prompts}.
+# Dagster stitches the partitioned dependency automatically.
+type: $PKG.components.synthetic_prompt_generator.component.SyntheticPromptGeneratorComponent
+attributes:
+  asset_name: research_prompts
+  group_name: prompts
+  topics:
+    - attention
+    - transformer_vs_rnn
+    - retrieval_augmented_generation
+  # v1.5 levers — pure Python, no LLM cost:
+  persona: engineer          # opener: "Cover attention for someone who ships production systems."
+  style: technical           # word choice: "Include the actual technical detail..."
+  length: medium             # ~250 words
+  format_hint: paragraphs    # requested answer format
+  depth: intermediate        # assumed reader background
+  seed: 42                   # deterministic composition
+  # count_per_topic: 3       # uncomment to emit 3 variants per topic (9 partitions total)
 EOF
 
 cat > "src/$PKG/defs/agentic_pipeline/defs.yaml" <<EOF
@@ -75,14 +98,13 @@ attributes:
   asset_name_prefix: research_bot
   group_name: agents
 
-  # Source reads a per-partition question file. Path is RELATIVE to the
-  # project root — files ship with the project when deploying to Dagster+
-  # Serverless. Absolute local paths (\$PROJECT_ABS/...) would bake the
-  # local /tmp/... into the YAML and break on Serverless.
-  # {partition_key} templates at compute time.
+  # Source is now the upstream research_prompts asset — no on-disk question
+  # files needed. Dagster wires the partitioned dependency automatically
+  # (both this and research_prompts share the same 3 topic partitions).
+  # Serverless-safe: no files to ship, no path issues.
   source:
-    kind: file
-    path: "questions/{partition_key}.txt"
+    kind: upstream_asset
+    upstream_asset_key: research_prompts
 
   steps:
     # 1) simplest op — one LLM call over source text
@@ -179,8 +201,9 @@ attributes:
       - from: refined
         path: "out/{partition_key}/critique_history.json"
 
-# post_processing overrides make every emitted asset partitioned.
-# Same partitions_def across all 5 assets → they materialize together per partition.
+# post_processing overrides make every pipeline-emitted asset partitioned
+# on the SAME topics as the upstream research_prompts asset — Dagster then
+# wires per-partition dependencies automatically.
 post_processing:
   assets:
     - target: "*"
@@ -188,9 +211,9 @@ post_processing:
         partitions_def:
           type: static
           partition_keys:
-            - "2026-08-05"
-            - "2026-08-06"
-            - "2026-08-07"
+            - attention
+            - transformer_vs_rnn
+            - retrieval_augmented_generation
 EOF
 
 cat <<MSG
@@ -202,27 +225,33 @@ cat <<MSG
 
 Or backfill all 3 partitions headlessly (~\$0.003 total):
 
-  uv run dg launch --assets '*' --partition 2026-08-05
-  uv run dg launch --assets '*' --partition 2026-08-06
-  uv run dg launch --assets '*' --partition 2026-08-07
+  uv run dg launch --assets '*' --partition attention
+  uv run dg launch --assets '*' --partition transformer_vs_rnn
+  uv run dg launch --assets '*' --partition retrieval_augmented_generation
 
 Then in the UI:
-  - Click research_bot_debated → the partitions strip shows all 3 dates,
+  - Click research_bot_debated → partitions strip shows all 3 topics,
     each with independent metadata (cost_usd, arbitrator_reasoning, all_proposals).
-  - This is the "time-travel to any decision" story — no log-grepping.
+  - Click research_prompts (the upstream) → see the composed prompt for
+    each topic. Iterate on prompts by editing the levers in
+    prompts/defs.yaml (persona / style / length / format_hint / depth);
+    no code, no on-disk question files.
+  - Bump count_per_topic in prompts/defs.yaml to emit multiple variants
+    per topic (partition keys become {topic}__v0 / {topic}__v1 / ...) —
+    great for eval sweeps.
 
 Per-partition sinks land at (relative to project dir):
-  out/2026-08-05/final_answer.txt
-  out/2026-08-06/final_answer.txt
-  out/2026-08-07/final_answer.txt
+  out/attention/final_answer.txt
+  out/transformer_vs_rnn/final_answer.txt
+  out/retrieval_augmented_generation/final_answer.txt
   (+ debate_transcript.json + critique_history.json in each partition dir)
 
 Deploying to Dagster+ Serverless? The defs.yaml uses RELATIVE paths so
-the same file works on Serverless — questions/ ships with the code,
-text/json sinks land inside the run container (ephemeral). For durable
-outputs across runs, replace text_sinks / json_sinks with table_sinks
-targeting a warehouse. All decision metadata (router pick, arbitrator
-reasoning, cost, latency, tokens) is already in each asset's
-materialization metadata regardless of sinks — that's what you actually
-want to browse post-deploy anyway.
+the same file works on Serverless — the prompt-generator component
+composes prompts in-process (no files ship), text/json sinks land inside
+the run container (ephemeral). For durable outputs across runs, replace
+text_sinks / json_sinks with table_sinks targeting a warehouse. All
+decision metadata is already in each asset's materialization metadata
+regardless of sinks — that's what you actually want to browse
+post-deploy anyway.
 MSG
