@@ -80,6 +80,7 @@ The full depth catalog by what-it-needs-to-run follows.
   - [AI / NLP — via Vercel AI Gateway (one key, any provider)](#ai--nlp--via-vercel-ai-gateway-one-key-any-provider)
   - [RAG (retrieval-augmented generation)](#rag-retrieval-augmented-generation)
   - [Cloud observability + enterprise SaaS](#cloud-observability--enterprise-saas)
+  - [SaaS upsert — resource + sink pattern](#saas-upsert--resource--sink-pattern)
   - [Durable workflow orchestration (Temporal)](#durable-workflow-orchestration-temporal)
 - [Azure (subscription required)](#azure-subscription-required)
   - [Storage + lakehouse](#storage--lakehouse)
@@ -405,6 +406,16 @@ Governed metrics as first-class Dagster assets, plus the "Cube as LLM safety lay
 | [Precisely Connect ETL](precisely_validation.md) | `precisely_job_sensor` | Sensor-only — Precisely owns the run, Dagster fires `RunRequest` on terminal SUCCESS via the documented Job Status endpoint |
 | [Compute Log Managers — Splunk + OTel](compute_log_managers.md) | `SplunkComputeLogManager`, `OtlpComputeLogManager`, `TeeComputeLogManager` | **Instance-level** infra (`dagster.yaml`) — not a defs.yaml component. Routes op stdout/stderr to Splunk HEC + OTel Collector in parallel via Tee. Live-validated: 22 events on each path. |
 | [Vercel Deployment](vercel_deployment.md) | `vercel_deployment_sensor`, `external_vercel_deployment` | Poll Vercel `/v6/deployments` for terminal READY, emit `AssetObservation` with commit SHA / branch / URL. Downstream Dagster assets gate on production being live. Live-validated. |
+
+### SaaS upsert — resource + sink pattern
+
+The reshape pattern for CRUD-shaped SaaS APIs (no orchestration primitive to trigger). Each vendor gets: (a) a rich `_resource` with read + write convenience methods, plus (b) a purpose-built upsert sink that mirrors a DataFrame into the vendor's data. Demos are structurally identical — DataFrame seed → resource → upsert sink → verify — so they read as a family.
+
+| Demo | Components | Highlights |
+|---|---|---|
+| [Notion reshape](notion_reshape.md) | `notion_resource`, `notion_database_upsert`, `notion_page_sync`, `inline_dataframe` | 19-method resource (search / query / create / update / append blocks / add comment / upload file), 2 sinks: multi-row DB upsert (keyed by any property, type-aware serialization) + single-page property patch (with optional markdown body replace). Handles Notion's 2025 API `databases → data_sources` split transparently. 3 back-to-back runs, 0 duplicates. |
+| [GitHub reshape](github_reshape.md) | `github_resource`, `github_issue_upsert`, `inline_dataframe` | 21-method resource (issues / PRs / workflows / releases / comments / dispatch). Sink upserts DataFrame → issues keyed by a body-embedded `<!-- dagster-key: X -->` HTML comment (survives title edits). Supports GitHub Enterprise via `api_base_url`. 3 back-to-back runs, all `0 created, 5 updated`. |
+| [Jira reshape](jira_reshape.md) | `jira_resource`, `jira_issue_upsert`, `inline_dataframe` | 16-method resource (issues / JQL search / transitions by name / comments / projects / users). Sink upserts DataFrame → issues keyed by a `dagsterkey-<value>` label so JQL filters server-side. Plain strings auto-wrapped into Atlassian Document Format. Uses the new `POST /search/jql` endpoint (Atlassian retired the old `GET /search` in 2025). 2 back-to-back runs, 0 duplicates. |
 
 ### Durable workflow orchestration (Temporal)
 
