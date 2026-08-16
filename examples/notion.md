@@ -1,4 +1,4 @@
-# Notion Reshape — Resource + Sinks Pattern
+# Notion — DataFrame → Notion DB + KPI Sync
 
 **Components:**
 - `NotionResourceComponent` (`resources/notion_resource`)
@@ -6,7 +6,7 @@
 - `NotionPageSyncComponent` (`assets/sinks/notion_page_sync`)
 - `InlineDataframeComponent` (`assets/sources/inline_dataframe`)
 
-**Script:** [`setup_notion_reshape_demo.sh`](./setup_notion_reshape_demo.sh)
+**Script:** [`setup_notion_demo.sh`](./setup_notion_demo.sh)
 **Cost:** $0 (Notion API is free within rate limits)
 **Duration:** ~15 seconds from cold to green
 **Validated:** 2026-08-15 (RUN_SUCCESS end-to-end; 5 DB rows + 4 page props patched, verified via Notion API. Idempotency also verified — three consecutive runs produced no duplicates, second and third runs both showed `0 created, 5 updated`.)
@@ -119,7 +119,7 @@ The `query_database`, `iter_query_database`, and DB write methods transparently 
 ```bash
 export NOTION_TOKEN=secret_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 export NOTION_PARENT_PAGE_ID=3b318b92e46280ed81fbe57953414122   # page shared with the integration
-./setup_notion_reshape_demo.sh
+./setup_notion_demo.sh
 ```
 
 The script scaffolds a Dagster project, creates two scratch DBs under your parent page, wires the four assets, materializes the pipeline, and verifies content actually landed in Notion via the API.

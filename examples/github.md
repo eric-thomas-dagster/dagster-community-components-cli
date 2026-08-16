@@ -1,11 +1,11 @@
-# GitHub Reshape — Resource + Sink Pattern
+# GitHub — DataFrame → GitHub Issues Upsert
 
 **Components:**
 - `GithubResourceComponent` (`resources/github_resource`)
 - `GitHubIssueUpsertComponent` (`assets/sinks/github_issue_upsert`)
 - `InlineDataframeComponent` (`assets/sources/inline_dataframe`)
 
-**Script:** [`setup_github_reshape_demo.sh`](./setup_github_reshape_demo.sh)
+**Script:** [`setup_github_demo.sh`](./setup_github_demo.sh)
 **Cost:** $0 (GitHub REST API is free within the 5000/hr authenticated rate limit)
 **Duration:** ~30 seconds from cold to green (including a 10s wait for GitHub to index new issues)
 **Validated:** 2026-08-15 (RUN_SUCCESS end-to-end against `eric-thomas-dagster/scratch`. Three back-to-back runs all showed `0 created, 5 updated`; final state confirmed 5 unique keys with correct open/closed states — no duplicates.)
@@ -14,7 +14,7 @@
 
 ## What it demonstrates
 
-Same reshape pattern as the [Notion demo](./notion_reshape.md), applied to a second SaaS API with no orchestration primitive: a rich `_resource` with convenience methods + a purpose-built `_upsert` sink component.
+Applies the same resource + sink pattern as the [Notion demo](./notion.md) to a second SaaS API with no orchestration primitive: a rich `_resource` with convenience methods + a purpose-built `_upsert` sink component.
 
 Replaces the old `github_workspace` component (which enumerated repos × workflows and was really just multi-repo ingestion in workspace clothing).
 
@@ -83,7 +83,7 @@ Supports GitHub Enterprise Server via the `api_base_url` field. Auto-paginates v
 ```bash
 export GITHUB_TOKEN=ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX
 export GITHUB_REPO=my-user/scratch-repo
-./setup_github_reshape_demo.sh
+./setup_github_demo.sh
 ```
 
 The script scaffolds a Dagster project, materializes the pipeline twice with a 10-second gap between runs, and verifies the outcome via the GitHub API. The gap exists because GitHub's issue-list endpoint is **eventually consistent** — brand-new issues take a few seconds to appear via `/repos/{owner}/{name}/issues`. Real pipelines run minutes apart and never hit this; the demo intentionally re-runs to prove idempotency, which is why it waits.

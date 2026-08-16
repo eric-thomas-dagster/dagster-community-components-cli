@@ -1,11 +1,11 @@
-# Jira Reshape — Resource + Sink Pattern
+# Jira — DataFrame → Jira Issues Upsert
 
 **Components:**
 - `JiraResourceComponent` (`resources/jira_resource`)
 - `JiraIssueUpsertComponent` (`assets/sinks/jira_issue_upsert`)
 - `InlineDataframeComponent` (`assets/sources/inline_dataframe`)
 
-**Script:** [`setup_jira_reshape_demo.sh`](./setup_jira_reshape_demo.sh)
+**Script:** [`setup_jira_demo.sh`](./setup_jira_demo.sh)
 **Cost:** $0 (Jira Cloud free tier — 10 users, no time limit)
 **Duration:** ~30 seconds from cold to green (including a 10s wait for JQL indexing)
 **Validated:** 2026-08-15 (RUN_SUCCESS end-to-end against a fresh `dagsterlabs-team-*.atlassian.net` workspace + `SE` project. Both runs showed `0 created, 5 updated` after initial creation, then cleanup transitioned all 5 to Done.)
@@ -14,7 +14,7 @@
 
 ## What it demonstrates
 
-Same reshape pattern as [Notion](./notion_reshape.md) and [GitHub](./github_reshape.md), applied to a third SaaS API with no orchestration primitive: a rich `_resource` with convenience methods + a purpose-built `_upsert` sink.
+Applies the same resource + sink pattern as [Notion](./notion.md) and [GitHub](./github.md) to a third SaaS API with no orchestration primitive: a rich `_resource` with convenience methods + a purpose-built `_upsert` sink.
 
 Replaces the old `jira_workspace` component (which enumerated projects × boards — dlt-shaped multi-project ingestion in workspace clothing).
 
@@ -83,7 +83,7 @@ export JIRA_EMAIL=you@company.com
 export JIRA_API_TOKEN=ATATT3xFf...
 export JIRA_BASE_URL=https://your-workspace.atlassian.net
 export JIRA_PROJECT_KEY=SCRATCH
-./setup_jira_reshape_demo.sh
+./setup_jira_demo.sh
 ```
 
 The script scaffolds a Dagster project, materializes the pipeline twice with a 10-second gap between runs (JQL indexing has a few-second delay for brand-new issues), and verifies via the Jira API. Cleanup at the end transitions every `dagster-demo`-labeled issue to Done.
