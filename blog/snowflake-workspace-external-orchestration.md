@@ -197,6 +197,98 @@ The workspace threads these through the underlying `SnowflakeResource`,
 which supports every session parameter and warehouse-routing option
 `dagster-snowflake` already exposes.
 
+## This is a catalog. You still have to wire lineage across the seam.
+
+Everything above sells the workspace as *observation + orchestration*. That's
+half-true. The workspace is really a **catalog** — it makes every Snowflake
+object visible in Dagster and gives you a way to trigger the ones that
+have a native `RUN` / `REFRESH`. The interesting orchestration, the reason
+customers care about running Dagster at all, is at the **seams**:
+
+- A dlt job on AWS lands 3 million rows in S3 → I want Snowpipe to
+  pick them up → I want a Snowflake task to run against the loaded data
+  → then I want a Databricks job to consume the task's output.
+- Or the reverse: a Snowflake task refreshes → I want to fire a
+  webhook, kick off a dbt Cloud job, publish to Kafka, retrain an
+  MLflow model, whatever.
+
+The workspace itself does none of that. It gives you the assets; you
+still have to declare the **cross-boundary lineage** and the
+**automation condition** that fires when an upstream materializes.
+
+Two mechanisms make this work in a workspace-based project.
+
+### 1. Per-asset `deps:` overrides
+
+Every enumerated Snowflake object accepts per-asset customization via
+`assets_by_name` — including `deps:` that point at assets *outside* the
+workspace. So a Snowflake task can declare it depends on a dlt-ingested
+S3 asset:
+
+```yaml
+type: dagster_community_components.SnowflakeWorkspaceComponent
+attributes:
+  workspace:
+    account: {env: SNOWFLAKE_ACCOUNT}
+    # …
+  import_tasks: true
+  assets_by_name:
+    DG_DAILY_ORDERS_ROLLUP:
+      # This task's Dagster asset now shows the dlt asset as an
+      # upstream — lineage graph, Dagster+ Insights, launchpad
+      # backfills, everything treats them as one DAG.
+      deps:
+        - raw_events_dlt_ingest
+      automation_condition: "{{ dg.AutomationCondition.eager() }}"
+```
+
+The `automation_condition` is the part that actually *fires* the task
+when the dlt ingest materializes. `eager()` is the simplest: run this
+asset the moment any upstream materializes. Read the
+`AutomationCondition` docs for the more surgical options
+(`on_missing`, `on_cron`, `any_deps_updated_within`, etc.).
+
+### 2. Downstream assets that depend on the workspace's Snowflake assets
+
+The reverse direction — Snowflake task completes → fire a Databricks
+job — works the same way, just from the other side. The Databricks
+asset declares the workspace-enumerated Snowflake task as its upstream:
+
+```yaml
+type: dagster_databricks.DatabricksTaskComponent
+attributes:
+  task_key: refresh_reporting_layer
+  cluster: {existing_cluster_id: "…"}
+  deps:
+    # This is a Dagster asset key. The workspace enumerates the
+    # Snowflake task as `snowflake/dagster_demo/staging/DG_DAILY_ORDERS_ROLLUP`
+    # — grab that key from the Dagster UI and paste it here.
+    - "snowflake/dagster_demo/staging/DG_DAILY_ORDERS_ROLLUP"
+  automation_condition: "{{ dg.AutomationCondition.eager() }}"
+```
+
+When the Snowflake task finishes (whether Dagster ran it via
+`EXECUTE TASK` or Snowflake's own schedule fired it and the workspace's
+sensor observed the completion), the Databricks task fires
+automatically.
+
+### Why this isn't the workspace's job
+
+You could imagine a version of `SnowflakeWorkspaceComponent` that
+somehow auto-wires cross-boundary lineage — inspect Snowflake's
+`OBJECT_DEPENDENCIES` view, scan your other components for matching
+external asset keys, and stitch. It'd be tempting. It'd also be wrong.
+The cross-boundary story is *your project's* — which dlt job feeds
+which Snowflake table, which Databricks cluster runs which downstream
+transform, when a task refresh should cascade eagerly vs. wait for a
+cron — that's business logic, not catalog metadata. The workspace's
+job is to surface the Snowflake side reliably; declaring the seams is
+on you.
+
+The upside: you write the wiring **once, in YAML**, using the same
+`deps:` + `automation_condition` mechanism you'd use for any Dagster
+asset. No custom sensors. No polling loops. No boilerplate.
+
 ## The `translation:` hook — for when you need more
 
 Sometimes the default asset-key shape (`db.schema.object_name`) or the
