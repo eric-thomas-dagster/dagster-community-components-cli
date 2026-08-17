@@ -1,3 +1,10 @@
+---
+title: "Not every SaaS integration should be a workspace"
+date: 2026-08-16
+author: Eric Thomas
+description: "A design essay on when to build a `_workspace` component, when to build a `_resource + _sink` pair, and how to tell the difference. Includes the taxonomy behind the community-components reshape of Notion, GitHub, Jira, and PagerDuty."
+---
+
 # Not every SaaS integration should be a workspace
 
 *A design essay on when to build a `_workspace` component, when to build a

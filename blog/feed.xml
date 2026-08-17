@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Dagster Community Components — Blog</title>
+    <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/blog</link>
+    <description>Long-form posts from Eric Thomas on the Dagster community components registry — design essays, component tours, honest retrospectives.</description>
+    <language>en-us</language>
+    <lastBuildDate>Mon, 17 Aug 2026 20:25:46 +0000</lastBuildDate>
+    <atom:link href="https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>One YAML, every Snowflake object: how the community `snowflake_workspace` component turns Snowflake into a Dagster catalog</title>
+      <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/blog/snowflake-workspace-external-orchestration.md</link>
+      <guid isPermaLink="false">https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/snowflake-workspace-external-orchestration.md</guid>
+      <pubDate>Mon, 17 Aug 2026 00:00:00 +0000</pubDate>
+      <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Eric Thomas</dc:creator>
+      <description>A tour of the `snowflake_workspace` component — 11+ Snowflake object types as Dagster assets, every Snowflake-native event as a trigger, and Snowflake stays exactly where it is.</description>
+    </item>
+    <item>
+      <title>Not every SaaS integration should be a workspace</title>
+      <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/blog/not-every-saas-is-a-workspace.md</link>
+      <guid isPermaLink="false">https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/not-every-saas-is-a-workspace.md</guid>
+      <pubDate>Sun, 16 Aug 2026 00:00:00 +0000</pubDate>
+      <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Eric Thomas</dc:creator>
+      <description>A design essay on when to build a `_workspace` component, when to build a `_resource + _sink` pair, and how to tell the difference. Includes the taxonomy behind the community-components reshape of Notion, GitHub, Jira, and PagerDuty.</description>
+    </item>
+  </channel>
+</rss>
