@@ -289,6 +289,21 @@ The upside: you write the wiring **once, in YAML**, using the same
 `deps:` + `automation_condition` mechanism you'd use for any Dagster
 asset. No custom sensors. No polling loops. No boilerplate.
 
+### The full runnable example
+
+The
+[**`examples/snowflake_workspace.md`**](https://dagster-component-ui.vercel.app/examples/snowflake_workspace)
+walkthrough is the reference implementation — a single bootstrap
+(`seed.sh` + `bootstrap.sh`) provisions a complete Snowflake data
+platform + Dagster project where every Snowflake primitive appears in
+one connected lineage graph: RAW → dynamic tables → tasks → marts,
+with `automation_condition_applicator` running `eager` on
+tasks/procs/MVs/snowpipes/Iceberg and `on_cron` for root tasks.
+About 30 assets, all cross-wired, deployable to Dagster+ Serverless
+via [`deploy_to_dagster_plus.sh`](https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples/deploy_to_dagster_plus.sh)
+as-is. Read it if you want a working project to copy the
+`assets_by_name.<task>.deps + automation_condition` shape from.
+
 ## The `translation:` hook — for when you need more
 
 Sometimes the default asset-key shape (`db.schema.object_name`) or the
