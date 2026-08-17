@@ -89,11 +89,34 @@ Eleven-plus object types, all under the same `import_*` flag pattern:
 | External table | `import_external_tables` | `ALTER EXTERNAL TABLE <name> REFRESH` |
 | Alert | `import_alerts` | Observable — polls `SHOW ALERTS` state + `ALERT_HISTORY` |
 | Openflow flow | `import_openflow_flows` | Observable — reads flow telemetry from `SNOWFLAKE.TELEMETRY.EVENTS` |
-| Table / view | `import_tables` / `import_views` | Configurable per object — `observable` (row_count polling), `asset` (CTAS on materialize), or `virtual` (lineage-only, zero Dagster overhead) |
+| Table / view | `import_tables` / `import_views` | *Not recommended for most cases — see below.* Configurable per object as `observable` / `asset` / `virtual`. |
 
 Multiply that across a real Snowflake account and you're looking at
 50-500 Dagster assets from a component definition that fits on a phone
 screen.
+
+### A word on `import_tables` and `import_views`
+
+I'd usually recommend **leaving these off**. Regular tables and views
+aren't orchestration primitives — there's no `EXECUTE`, no
+`REFRESH`, no server-side event Dagster can key off. The best we can
+do is poll `INFORMATION_SCHEMA.TABLES.ROW_COUNT` every N minutes, which
+is a lot of API traffic for a lineage node that mostly just sits there.
+
+The observable-source pattern that `import_tables: true` produces is
+genuinely useful, but it belongs at the **edges** of a pipeline — a
+source table you don't own (an upstream landing table you're watching
+for new rows) or a sink table someone else consumes (where you want the
+downstream freshness check to fire). It's less useful in the middle of
+a graph you already control end-to-end via tasks + dynamic tables +
+Snowpipes.
+
+If you have a specific handful of tables you *do* want as observable
+sources or lineage-only virtual assets, use the single-object
+`snowflake_iceberg_table` / `snowflake_time_travel_asset` /
+`external_snowflake_table` components — targeted, one-per-declaration,
+no bulk enumeration cost. That's the right tool for the "watch this
+specific landing table" pattern.
 
 ## The questions that keep coming up
 
