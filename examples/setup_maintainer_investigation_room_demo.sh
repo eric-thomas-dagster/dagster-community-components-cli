@@ -394,10 +394,14 @@ attributes:
     - mir_report
   dynamic_partitions_name: mir_investigations
   partition_key_template: "{owner}/{repo}#{issue_number}"
+  # Every field has a default so the Dagster launchpad's config form
+  # renders all three pre-populated (required-int-no-default fields
+  # sometimes get skipped by the launchpad's auto-scaffolder). Users
+  # overwrite what they need; the defaults are just a starting point.
   config_schema:
     owner:        {type: str, default: dagster-io}
     repo:         {type: str, default: dagster}
-    issue_number: {type: int}
+    issue_number: {type: int, default: ${DAGSTER_ISSUE_NUM}}
   tags:
     purpose: ai-triage-launcher
 EOF
