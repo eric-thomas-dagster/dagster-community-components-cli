@@ -881,18 +881,63 @@ def sync_deps(
 @click.option(
     "--no-copilot", "skip_copilot", is_flag=True, help="Skip .github/copilot-instructions.md.",
 )
+@click.option(
+    "--no-entry-point",
+    "skip_entry_point",
+    is_flag=True,
+    help=(
+        "Skip auto-injection of the `dagster_dg_cli.registry_modules` "
+        "entry point into pyproject.toml. Without the entry point, the "
+        "Dagster UI's Components tab won't list your project's components "
+        "even though `dg list components` shows them."
+    ),
+)
+@click.option(
+    "--no-install",
+    "skip_install",
+    is_flag=True,
+    help="Skip auto editable-install of the project into the venv.",
+)
+@click.option(
+    "--auto-install",
+    is_flag=True,
+    help="Skip the confirmation prompt on the editable install.",
+)
+@click.option(
+    "--manager",
+    type=click.Choice(["auto", "uv", "pip"]),
+    default="auto",
+    show_default=True,
+    help="Package manager for the editable install.",
+)
 def init(
     target_dir: str | None,
     force: bool,
     skip_claude: bool,
     skip_cursor: bool,
     skip_copilot: bool,
+    skip_entry_point: bool,
+    skip_install: bool,
+    auto_install: bool,
+    manager: str,
 ) -> None:
-    """Drop AI-tool config files (CLAUDE.md, .cursorrules, copilot-instructions.md) into a project.
+    """Drop AI-tool config files + wire up the Dagster UI's Components tab.
 
-    Makes Claude / Cursor / Copilot aware of the community components registry so they
-    suggest `dagster-component search/add` when the user asks integration questions
-    instead of writing components from scratch.
+    Two things happen (both idempotent):
+
+    1. Writes CLAUDE.md / .cursorrules / .github/copilot-instructions.md so
+       AI assistants know about the community components registry.
+
+    2. In a create-dagster project, injects the
+       `dagster_dg_cli.registry_modules` entry point into pyproject.toml
+       AND runs `uv pip install -e .` (or `pip install -e .`) so the
+       project's custom components show up in the Dagster UI's Components
+       tab. Without this step, `dg list components` sees them but the UI
+       doesn't — which has bit customers for months.
+
+    Skip individual steps with `--no-claude` / `--no-cursor` / `--no-copilot`
+    / `--no-entry-point` / `--no-install`. Use `--auto-install` to skip the
+    editable-install confirmation prompt.
     """
     if target_dir:
         root = Path(target_dir).resolve()
@@ -923,9 +968,171 @@ def init(
         written += 1
 
     console.print(
-        f"\n[green]Done.[/green] Wrote {written}, skipped {skipped}. "
+        f"\n[green]✓[/green] AI-tool config: wrote {written}, skipped {skipped}. "
         "Reload Claude / Cursor for the new instructions to take effect."
     )
+
+    # ── Entry point + editable install for create-dagster projects ────
+    if not skip_entry_point:
+        _ensure_registry_entry_point(root, skip_install=skip_install, auto_install=auto_install, manager=manager)
+
+
+def _ensure_registry_entry_point(
+    project_root: Path,
+    *,
+    skip_install: bool,
+    auto_install: bool,
+    manager: str,
+) -> None:
+    """Add the `dagster_dg_cli.registry_modules` entry point to pyproject.toml
+    and (optionally) editable-install the project so it registers.
+
+    Without this: `dg list components` sees the project's custom components
+    (via `[tool.dg.project].registry_modules` in pyproject.toml), BUT the
+    Dagster webserver's Components tab does NOT (it reads Python entry
+    points, not tool.dg config). Result: customers wonder why their
+    scaffolded components never appear in the UI — for months.
+    """
+    import tomllib
+
+    pyproject_path = project_root / "pyproject.toml"
+    if not pyproject_path.exists():
+        return  # not a Python project; skip silently
+
+    try:
+        cfg = tomllib.loads(pyproject_path.read_text())
+    except Exception:  # noqa: BLE001
+        return
+
+    tool_dg_project = cfg.get("tool", {}).get("dg", {}).get("project", {})
+    root_module = tool_dg_project.get("root_module")
+    if not root_module:
+        # Not a create-dagster project — nothing to wire up.
+        return
+
+    console.print(f"\n[bold]Wiring up the Dagster UI's Components tab[/bold]")
+
+    # Step 1: inject the entry point section if it's not already there.
+    existing_ep = (
+        cfg.get("project", {})
+        .get("entry-points", {})
+        .get("dagster_dg_cli.registry_modules", {})
+    )
+    entry_point_key = root_module.replace(".", "_")
+    already_registered = existing_ep.get(entry_point_key) == root_module
+
+    if already_registered:
+        console.print(
+            f"  [dim]·[/dim] Entry point already present: "
+            f"[dim]{entry_point_key} = {root_module}[/dim]"
+        )
+        wrote_entry_point = False
+    else:
+        _write_registry_entry_point(pyproject_path, entry_point_key, root_module)
+        console.print(
+            f"  [green]✓[/green] Added entry point to pyproject.toml: "
+            f"[dim][project.entry-points.\"dagster_dg_cli.registry_modules\"] "
+            f"{entry_point_key} = \"{root_module}\"[/dim]"
+        )
+        wrote_entry_point = True
+
+    # Step 2: editable install (needs to run whether we just wrote the
+    # entry point OR it was already there — the venv may not have the
+    # package installed at all, in which case entry points aren't
+    # visible even if declared).
+    if skip_install:
+        console.print(
+            "  [yellow]·[/yellow] Skipping editable install (--no-install). "
+            "You'll need to run `uv pip install -e .` manually before the "
+            "Components tab picks up your project."
+        )
+        return
+
+    do_install = auto_install or wrote_entry_point or click.confirm(
+        "  Editable-install this project into the venv? "
+        "(needed for Dagster UI to see the entry point)",
+        default=True,
+    )
+    if not do_install:
+        return
+
+    rc = _editable_install_project(project_root, manager=manager)
+    if rc == 0:
+        console.print(
+            f"  [green]✓[/green] Editable install complete. "
+            "Restart `dg dev` — the Components tab will show your project's components."
+        )
+    else:
+        err.print(
+            f"  [yellow]⚠[/yellow] Editable install exited {rc}. Resolve manually:\n"
+            f"     cd {project_root} && uv pip install -e ."
+        )
+
+
+def _write_registry_entry_point(pyproject_path: Path, ep_key: str, ep_value: str) -> None:
+    """Insert / update the `[project.entry-points."dagster_dg_cli.registry_modules"]`
+    section in pyproject.toml. Uses tomlkit if available for round-trip
+    formatting; falls back to naive text append if not.
+    """
+    try:
+        import tomlkit
+
+        doc = tomlkit.parse(pyproject_path.read_text())
+        project = doc.setdefault("project", tomlkit.table())
+        entry_points = project.setdefault("entry-points", tomlkit.table())
+        # sub-tables live at "entry-points" → "dagster_dg_cli.registry_modules"
+        # tomlkit represents dotted keys in the section header; the sub-table
+        # is a nested table.
+        section = entry_points.setdefault(
+            "dagster_dg_cli.registry_modules", tomlkit.table()
+        )
+        section[ep_key] = ep_value
+        pyproject_path.write_text(tomlkit.dumps(doc))
+    except ImportError:
+        # No tomlkit — do a plain text append (won't preserve comments
+        # in the file but does the job for a fresh scaffold).
+        block = (
+            f"\n[project.entry-points.\"dagster_dg_cli.registry_modules\"]\n"
+            f"{ep_key} = \"{ep_value}\"\n"
+        )
+        with pyproject_path.open("a") as fh:
+            fh.write(block)
+
+
+def _editable_install_project(project_root: Path, *, manager: str) -> int:
+    """Run `uv pip install -e .` (or `pip install -e .`) in the project root.
+
+    Reuses `install_requirements`'s manager-detection but points at the
+    project root as the sole 'package' to install editable.
+    """
+    import subprocess
+    import shutil
+
+    if manager == "auto":
+        manager = "uv" if shutil.which("uv") else "pip"
+
+    if manager == "uv":
+        # `uv pip install -e .` — but uv needs to know which venv to
+        # target when we're not inside one. If VIRTUAL_ENV isn't set,
+        # try to find `.venv/` in the project root.
+        env = None
+        import os
+        if not os.environ.get("VIRTUAL_ENV") and (project_root / ".venv").exists():
+            env = {**os.environ, "VIRTUAL_ENV": str(project_root / ".venv")}
+        console.print(f"  → uv pip install -e . [dim](in {project_root})[/dim]")
+        proc = subprocess.run(
+            ["uv", "pip", "install", "-e", ".", "--no-deps"],
+            cwd=str(project_root),
+            env=env,
+        )
+        return proc.returncode
+    else:
+        console.print(f"  → pip install -e . [dim](in {project_root})[/dim]")
+        proc = subprocess.run(
+            [sys.executable, "-m", "pip", "install", "-e", ".", "--no-deps"],
+            cwd=str(project_root),
+        )
+        return proc.returncode
 
 
 # ── helpers ────────────────────────────────────────────────────────────────────
