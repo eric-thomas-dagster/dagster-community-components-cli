@@ -993,7 +993,23 @@ def _ensure_registry_entry_point(
     points, not tool.dg config). Result: customers wonder why their
     scaffolded components never appear in the UI — for months.
     """
-    import tomllib
+    # tomllib is stdlib in 3.11+; on 3.10 fall back to tomli, then tomlkit.
+    try:
+        import tomllib  # type: ignore[import-not-found]
+    except ImportError:
+        try:
+            import tomli as tomllib  # type: ignore[import-not-found,no-redef]
+        except ImportError:
+            try:
+                import tomlkit  # type: ignore[import-not-found]
+
+                class tomllib:  # noqa: N801
+                    @staticmethod
+                    def loads(s: str) -> dict:
+                        return dict(tomlkit.parse(s))
+            except ImportError:
+                # No TOML parser available — skip the auto-wire-up.
+                return
 
     pyproject_path = project_root / "pyproject.toml"
     if not pyproject_path.exists():
