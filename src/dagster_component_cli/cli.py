@@ -650,6 +650,219 @@ def update(
                 console.print("[green]✓[/green] Dependencies installed")
 
 
+# ── sync-deps ──────────────────────────────────────────────────────────────────
+
+
+@main.command("sync-deps")
+@click.option(
+    "--project-dir",
+    "-p",
+    default=".",
+    help="Path to the Dagster project (default: cwd).",
+)
+@click.option(
+    "--dry-run",
+    is_flag=True,
+    help="List missing deps but do not install them.",
+)
+@click.option(
+    "--auto-install",
+    is_flag=True,
+    help="Install missing deps without prompting.",
+)
+@click.option(
+    "--manager",
+    type=click.Choice(["auto", "uv", "pip"]),
+    default="auto",
+    show_default=True,
+    help="Package manager to use for install.",
+)
+@click.pass_context
+def sync_deps(
+    ctx: click.Context,
+    project_dir: str,
+    dry_run: bool,
+    auto_install: bool,
+    manager: str,
+) -> None:
+    """Install pip deps for every component picked in a project's defs.yaml files.
+
+    Walks `src/*/defs/**/defs.yaml` (or `defs/**/defs.yaml` in plain layout),
+    parses each `type:` line to identify community components, resolves each
+    to its manifest entry, reads `agent_hints.requires_pip`, and installs any
+    packages not already importable in the current environment.
+
+    Use whenever a defs.yaml was hand-written or Claude-Code-composed (i.e.
+    without `dagster-component add`) — this closes the "component picked
+    but pip deps not installed" gap. Also useful after any `defs.yaml` edit
+    that added a new component type.
+    """
+    import importlib.util as _ilu
+    import re as _re
+
+    project_root = Path(project_dir).resolve()
+    if not project_root.exists():
+        err.print(f"[red]✗[/red] Project dir not found: {project_root}")
+        sys.exit(1)
+
+    # Find every defs.yaml under src/**/defs/ (canonical layout) OR
+    # under defs/ (plain layout).
+    _seen: set[Path] = set()
+    defs_yamls: list[Path] = []
+    for base in [project_root / "src", project_root]:
+        if not base.exists():
+            continue
+        for p in base.rglob("defs.yaml"):
+            # Skip .venv / .local_defs_state / anything under __pycache__
+            parts = p.parts
+            if any(part in {".venv", "__pycache__", ".local_defs_state", "node_modules"} for part in parts):
+                continue
+            if p in _seen:
+                continue
+            _seen.add(p)
+            defs_yamls.append(p)
+
+    if not defs_yamls:
+        err.print(f"[yellow]![/yellow] No defs.yaml files found under {project_root}.")
+        sys.exit(0)
+
+    console.print(f"Found {len(defs_yamls)} defs.yaml file(s):")
+    for p in defs_yamls:
+        console.print(f"  • [dim]{p.relative_to(project_root)}[/dim]")
+
+    # Extract `type:` values. Two shapes in the wild:
+    #   dagster_community_components.FooComponent
+    #   my_proj.components.foo_bar.component.FooBarComponent (split-canonical)
+    #
+    # For the split-canonical form, the `<id>` segment IS the manifest id.
+    # For the flat form, resolve via reverse-lookup on the class name
+    # against the manifest's `component_type` field — more robust than
+    # a naive snake_case conversion (which mangles multi-word suffixes
+    # like FilesystemMonitorSensorComponent → filesystem_monitor).
+    registry: Registry = ctx.obj["registry"]
+
+    # Reverse index: short class name → manifest id. Snake-case conversion
+    # can be ambiguous for compound suffixes (FilesystemMonitorSensorComponent
+    # → filesystem_monitor_sensor, but the real id is filesystem_monitor),
+    # so we compute all reasonable candidates for each manifest entry and
+    # match by class-name key.
+    def _snake(name: str) -> str:
+        s1 = _re.sub(r"(.)([A-Z][a-z]+)", r"\1_\2", name)
+        return _re.sub(r"([a-z0-9])([A-Z])", r"\1_\2", s1).lower()
+
+    def _id_to_candidate_class_names(cid: str, cname_field: str | None) -> list[str]:
+        """Every plausible class name a `type:` line might use for this id."""
+        variants: list[str] = []
+        # PascalCase of the id, with common suffixes
+        pascal = "".join(w.capitalize() for w in cid.split("_"))
+        for suf in ("Component", "SensorComponent", "PipelineComponent", "ResourceComponent", "IOManagerComponent"):
+            variants.append(pascal + suf)
+        # The manifest's `name` field, spaces stripped
+        if cname_field:
+            variants.append(cname_field.replace(" ", "") + "Component")
+        return variants
+
+    _class_to_id: dict[str, str] = {}
+    for _c in registry.components:
+        for _cls in _id_to_candidate_class_names(_c["id"], _c.get("name")):
+            _class_to_id.setdefault(_cls, _c["id"])
+
+    picked_ids: set[str] = set()
+    for yaml_path in defs_yamls:
+        try:
+            content = yaml_path.read_text()
+        except OSError:
+            continue
+        for m in _re.finditer(r"^\s*type\s*:\s*([^\s#]+)", content, _re.MULTILINE):
+            type_val = m.group(1).strip()
+            if type_val.startswith("dagster_community_components."):
+                cls_name = type_val.rsplit(".", 1)[-1]
+                if cls_name in _class_to_id:
+                    picked_ids.add(_class_to_id[cls_name])
+            elif ".components." in type_val and type_val.endswith("Component"):
+                parts = type_val.split(".")
+                if "components" in parts:
+                    idx = parts.index("components")
+                    if idx + 1 < len(parts):
+                        picked_ids.add(parts[idx + 1])
+
+    if not picked_ids:
+        console.print("\n[yellow]![/yellow] No community-component types detected in the defs.yaml files.")
+        sys.exit(0)
+
+    console.print(f"\nComponents detected ({len(picked_ids)}):")
+    for cid in sorted(picked_ids):
+        console.print(f"  • {cid}")
+
+    # Aggregate requires_pip across all picked components.
+    all_required: set[str] = set()
+    unresolved: set[str] = set()
+    for cid in sorted(picked_ids):
+        component = registry.get(cid)
+        if not component:
+            unresolved.add(cid)
+            continue
+        req = (component.get("agent_hints") or {}).get("requires_pip") or []
+        if isinstance(req, str):
+            req = [req]
+        for r in req:
+            all_required.add(r)
+
+    if unresolved:
+        console.print(
+            f"\n[yellow]![/yellow] {len(unresolved)} component(s) not found in the "
+            f"registry (may be local-only): {sorted(unresolved)}"
+        )
+
+    if not all_required:
+        console.print("\n[green]✓[/green] No pip deps declared by any picked component.")
+        sys.exit(0)
+
+    # Filter to only what's NOT importable.
+    def _strip_pip_spec(pkg: str) -> str:
+        name = _re.split(r"[<>=!~;\[\s]", pkg.strip(), maxsplit=1)[0]
+        return name.replace("-", "_")
+
+    missing: list[str] = []
+    already: list[str] = []
+    for pkg in sorted(all_required):
+        mod = _strip_pip_spec(pkg)
+        try:
+            spec = _ilu.find_spec(mod)
+        except Exception:  # noqa: BLE001
+            spec = None
+        if spec is None:
+            missing.append(pkg)
+        else:
+            already.append(pkg)
+
+    if already:
+        console.print(f"\n[dim]Already installed ({len(already)}):[/dim]")
+        for p in already:
+            console.print(f"  [dim]• {p}[/dim]")
+    if not missing:
+        console.print("\n[green]✓[/green] All declared deps are already installed.")
+        sys.exit(0)
+
+    console.print(f"\nMissing dependencies ({len(missing)}):")
+    for p in missing:
+        console.print(f"  • {p}")
+
+    if dry_run:
+        console.print("\n[dim](dry-run — skipping install)[/dim]")
+        sys.exit(0)
+
+    if auto_install or click.confirm(
+        "\nInstall these into the current environment?", default=True
+    ):
+        rc = install_requirements(missing, manager=manager)
+        if rc != 0:
+            err.print(f"[yellow]⚠[/yellow] pip install exited with code {rc}. Resolve manually:")
+            err.print(f"   pip install {' '.join(missing)}")
+            sys.exit(1)
+        console.print(f"[green]✓[/green] Installed {len(missing)} package(s)")
+
+
 # ── init ───────────────────────────────────────────────────────────────────────
 
 
