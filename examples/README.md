@@ -60,6 +60,22 @@ The ten demos that best answer *"why Dagster on top of my existing stack?"*. Eac
 | **[Maintainer Investigation Room — the "AI agentic-orchestration" pattern, Dagster-honest](maintainer_investigation_room.md)** | Direct counter-demo of Prefect's Aug-13 pre-MVP agentic-workflows Loom. Single-YAML `AgenticPipelineComponent` v2: GitHub MCP fetch (via the new `mcp_call` op) → 4 typed-input specialists → 6-input `preliminary` synthesize → skeptic → 4-input `decision` synthesize → maintainer-facing report, gated on a human-signed JSON token. Every port is an asset key — downstream dbt / warehouse assets depend on them, Insights alerts key off the approval check. Ships with a zero-to-something test: a fresh Claude Code session with only `CLAUDE.md` installed composed a validating defs.yaml from an NL prompt in one pass. | ~$0.03 |
 | **[Typed named inputs — the "any op joins from any prior op by port name" primitive](typed_named_inputs.md)** | The v2 wiring shape that makes the maintainer-investigation demo work. Adds `inputs: {port_name: {from: step_id} \| {literal: value}}` to every text-emitting op in `AgenticPipelineComponent`. Each port becomes a `{port_name}` placeholder in `prompt_template` + `system_prompt` (and, for `mcp_call`, in string `tool_args`). Direct visual match to Prefect's execution-plan node-with-typed-ports shape, on Dagster's substrate where every port becomes a queryable asset key. Backward-compat: `source: <id>` and `sources: [<ids>]` still work. | — |
 
+## Agentic pipeline demos — same shape, two authoring paths
+
+Three canonical patterns × two ways to author each (hand-typed YAML
+vs. `PlannedCatalogAgentComponent` NL prompt). Same substrate, same
+asset keys, different UX for who writes the plan.
+
+| Pattern | Hand-authored (Claude Code writes defs.yaml) | PCA-authored (LLM planner at prepare time) |
+|---|---|---|
+| **5-step research chain** (baseline → critique → 2 rewrites → synthesize) | [`agentic_pipeline.md`](agentic_pipeline.md) + [`setup_agentic_pipeline_demo.sh`](setup_agentic_pipeline_demo.sh) | [`pca_research_bot.md`](pca_research_bot.md) + [`setup_pca_research_bot_demo.sh`](setup_pca_research_bot_demo.sh) |
+| **3-analyst debate + arbitrator** (bull / bear / neutral, per-ticker partitions) | [`agentic_debate.md`](agentic_debate.md) + [`setup_agentic_debate_demo.sh`](setup_agentic_debate_demo.sh) | [`pca_investment_memo.md`](pca_investment_memo.md) + [`setup_pca_investment_memo_demo.sh`](setup_pca_investment_memo_demo.sh) |
+| **AI maintainer investigation room** (GitHub MCP + fan-out + typed joins + human approval) | [`maintainer_investigation_room.md`](maintainer_investigation_room.md) + [`setup_maintainer_investigation_room_demo.sh`](setup_maintainer_investigation_room_demo.sh) | [`pca_maintainer.md`](pca_maintainer.md) + [`setup_pca_maintainer_demo.sh`](setup_pca_maintainer_demo.sh) |
+
+Each row is the same asset shape, authored two ways. Pick the row that
+matches your use case, then pick the authoring column that matches your
+team's UX preference.
+
 The full depth catalog by what-it-needs-to-run follows.
 
 ## Table of contents
