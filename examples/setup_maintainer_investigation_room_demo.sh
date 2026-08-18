@@ -407,7 +407,11 @@ attributes:
 EOF
 ok "wrote launcher/defs.yaml (PartitionedAssetLauncherJobComponent — config-driven entry point)"
 
-# 4c) HumanApprovalGateComponent — sign-off before the report ships
+# 4c) HumanApprovalGateComponent — sign-off before the report ships.
+# Partitioned on the SAME DynamicPartitionsDefinition the pipeline uses,
+# so every triage has its OWN approval token file
+# (approvals/dagster-io_dagster#30000.json — `/` in the composite key is
+# sanitized to `_` so it lands as one filename, not a nested path).
 mkdir -p "src/$PKG/defs/report_approval"
 cat > "src/$PKG/defs/report_approval/defs.yaml" <<EOF
 type: dagster_community_components.HumanApprovalGateComponent
@@ -415,19 +419,22 @@ attributes:
   asset_name: report_approval
   upstream_asset_key: mir_report
   approval_dir: "$APPROVAL_DIR"
-  default_approval_key: default
+  partition_type: dynamic
+  dynamic_partition_name: mir_investigations
   group_name: investigation
   kinds: [human, approval]
   description: |
-    Human sign-off before the triage report ships. Always materializes;
-    the asset check 'approved' carries the state. Reads
-    approvals/default.json:
+    Human sign-off before the triage report ships. Partitioned per
+    investigation, so each issue has its own approval token file.
+    Always materializes; the asset check 'approved' carries the state.
+    Filename is <partition_key>.json with `/` sanitized to `_` —
+    e.g. approvals/dagster-io_dagster#30000.json:
       - missing              → check passed=False (WARN), status=approval_pending
       - {"approved": false}  → check passed=False (ERROR), rejection reason
       - {"approved": true}   → check passed=True, report passes through
                                 with approver + reason in metadata
 EOF
-ok "wrote report_approval/defs.yaml (HumanApprovalGateComponent)"
+ok "wrote report_approval/defs.yaml (HumanApprovalGateComponent — partitioned per investigation)"
 
 # 4d) FilesystemMonitorSensorComponent — auto-progress on token drop
 mkdir -p "src/$PKG/defs/approval_watcher"
@@ -492,18 +499,27 @@ echo "────────────────────────�
 echo
 
 # --- 7. approval flow -----------------------------------------------------
-info "materializing report_approval WITHOUT a token — asset materializes but check 'approved' fails (approval_pending)…"
-uv run dagster asset materialize --select report_approval -m "$DM" 2>&1 \
-  | grep -E "STEP_SUCCESS|Asset check|approval_" | tail -3 || true
-ok "gate ran; asset check flagged approval_pending"
+# report_approval is partitioned on the same DynamicPartitionsDefinition
+# as the pipeline. Its token file is `<sanitized_partition_key>.json`
+# where '/' → '_'. So the composite key `dagster-io/dagster#${DAGSTER_ISSUE_NUM}`
+# looks for `approvals/dagster-io_dagster#${DAGSTER_ISSUE_NUM}.json` —
+# one approval per triage.
+PARTITION_KEY="dagster-io/dagster#${DAGSTER_ISSUE_NUM}"
+SAFE_PARTITION_KEY="${PARTITION_KEY//\//_}"
+APPROVAL_TOKEN="$APPROVAL_DIR/${SAFE_PARTITION_KEY}.json"
 
-info "dropping approval token…"
-cat > "$APPROVAL_DIR/default.json" <<'JSON'
-{"approved": true, "approver": "demo-runner", "reason": "Looks accurate; ship it."}
+info "materializing report_approval WITHOUT a token — asset materializes but check 'approved' fails (approval_pending)…"
+uv run dagster asset materialize --select report_approval -m "$DM" --partition "$PARTITION_KEY" 2>&1 \
+  | grep -E "STEP_SUCCESS|Asset check|approval_" | tail -3 || true
+ok "gate ran on partition '$PARTITION_KEY'; asset check flagged approval_pending"
+
+info "dropping approval token at $APPROVAL_TOKEN…"
+cat > "$APPROVAL_TOKEN" <<JSON
+{"approved": true, "approver": "demo-runner", "reason": "Looks accurate; ship it — partition ${PARTITION_KEY}."}
 JSON
 
-info "re-materializing report_approval — check 'approved' should now pass…"
-uv run dagster asset materialize --select report_approval -m "$DM" 2>&1 \
+info "re-materializing report_approval for partition '$PARTITION_KEY' — check 'approved' should now pass…"
+uv run dagster asset materialize --select report_approval -m "$DM" --partition "$PARTITION_KEY" 2>&1 \
   | grep -E "STEP_SUCCESS|Asset check.*passed|Approved by" | tail -3 \
   || fail "gate did not pass with valid token"
 ok "gate passed; report ready to ship"
@@ -556,6 +572,8 @@ Or from the CLI:
   uv run dagster job execute -m $DM -j launch_mir_triage --config /tmp/mir_launch.yaml
 
 The approval_watcher sensor auto-progresses the gate the moment a new
-JSON drops into $APPROVAL_DIR. Drop a second token to see that in action:
-  echo '{"approved":true,"approver":"you"}' > $APPROVAL_DIR/second.json
+JSON drops into $APPROVAL_DIR. Each triage has its own token file —
+partition key with '/' sanitized to '_'. Drop the approval for another
+issue like this:
+  echo '{"approved":true,"approver":"you"}' > $APPROVAL_DIR/prefecthq_prefect#12345.json
 EOF
