@@ -550,9 +550,37 @@ def remove(ctx: click.Context, component_id: str, target_dir: str | None, yes: b
 @main.command()
 @click.argument("component_id")
 @click.option("--target-dir", help="Path to the component directory (skips auto-locate).")
+@click.option(
+    "--no-install",
+    is_flag=True,
+    help="Skip re-installing the component's pip requirements after update.",
+)
+@click.option(
+    "--auto-install",
+    is_flag=True,
+    help="Re-install pip requirements without prompting.",
+)
+@click.option(
+    "--manager",
+    type=click.Choice(["auto", "uv", "pip"]),
+    default="auto",
+    show_default=True,
+    help="Package manager to use for requirements install.",
+)
 @click.pass_context
-def update(ctx: click.Context, component_id: str, target_dir: str | None) -> None:
+def update(
+    ctx: click.Context,
+    component_id: str,
+    target_dir: str | None,
+    no_install: bool,
+    auto_install: bool,
+    manager: str,
+) -> None:
     """Re-fetch a component's files from the registry, overwriting in place.
+
+    Also re-installs the component's pip requirements (matching `add`) since a
+    component update may add / bump / drop deps and the venv should stay in sync.
+    Use `--no-install` to skip.
 
     Accepts `id@ref` to bump or change the pinned ref:
 
@@ -597,6 +625,29 @@ def update(ctx: click.Context, component_id: str, target_dir: str | None) -> Non
     console.print(
         f"[green]✓[/green] Updated {cid}{('@' + ref) if ref else ''} at {path}"
     )
+
+    # Re-install pip requirements. The freshly-fetched requirements.txt
+    # may have added / bumped / dropped deps since the last `add`.
+    pip_packages: list[str] = []
+    if "requirements.txt" in files:
+        for line in files["requirements.txt"].decode("utf-8").splitlines():
+            line = line.strip()
+            if line and not line.startswith("#"):
+                pip_packages.append(line)
+
+    if pip_packages and not no_install:
+        console.print(f"\nDependencies from updated requirements.txt ({len(pip_packages)}):")
+        for p in pip_packages:
+            console.print(f"  • {p}")
+        if auto_install or click.confirm(
+            "\nRe-install these into the current environment?", default=True
+        ):
+            rc = install_requirements(pip_packages, manager=manager)
+            if rc != 0:
+                err.print(f"[yellow]⚠[/yellow] pip install exited with code {rc}. Resolve manually:")
+                err.print(f"   pip install {' '.join(pip_packages)}")
+            else:
+                console.print("[green]✓[/green] Dependencies installed")
 
 
 # ── init ───────────────────────────────────────────────────────────────────────
