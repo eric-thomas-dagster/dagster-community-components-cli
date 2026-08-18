@@ -106,6 +106,42 @@ Dagster wires the partitioned dependency automatically because both sides share 
 
 This demo already shows it — the pipeline's `source: {kind: upstream_asset, upstream_asset_key: research_prompts}` wires it into the asset graph as a downstream of `research_prompts`. Materialize just the upstream to iterate on prompts; materialize just the pipeline to iterate on prompts / models / steps. Job-based flows have no such graph.
 
+## Authored from this NL prompt (coding-agent path)
+
+The 5-op YAML the setup script writes can be composed by Claude Code
+(or Cursor / Copilot) from a plain-English prompt. In a bare directory:
+
+```bash
+uvx create-dagster@latest project research-bot-demo --no-uv-sync
+cd research-bot-demo
+uvx --from dagster-community-components-cli dagster-component init
+```
+
+That writes `CLAUDE.md` / `.cursorrules` / `.github/copilot-instructions.md`.
+Then tell the assistant:
+
+> *Build a 5-step research pipeline in one AgenticPipelineComponent.
+> The topic comes from a partition (attention / rag /
+> transformer_vs_rnn). Emit five step assets: `baseline` (llm_call),
+> `routed` (route between a technical and general specialist),
+> `refined` (critique_loop, 1 iteration), `debated` (debate — two
+> proposers, arbitrator), and `final` (synthesize the four prior
+> outputs). Use gpt-4o-mini for the router / specialists and gpt-4o
+> for the debate + synthesize. Land the final result in
+> `out/{partition_key}/final.md`. Use `dagster-component search` +
+> `dagster-component schema agentic_pipeline` to nail the field names.*
+
+The assistant runs `dagster-component add agentic_pipeline` (which
+installs pip deps as a side effect), composes the defs.yaml, and
+`dagster definitions validate` passes.
+
+**Two artifacts, one substrate:** the hand-authored YAML (what the
+setup script ships) and the coding-agent-authored YAML are functionally
+identical — same assets, same materializations. The NL prompt above is
+the version-controllable intent; the YAML is what git tracks. If you
+want the NL prompt in git (edit-and-re-plan UX), see the PCA-authored
+sibling: [`pca_research_bot.md`](./pca_research_bot.md).
+
 ## Where the sinks land (per-partition)
 
 Each partition writes three files under `<project>/out/{partition_key}/`:

@@ -110,6 +110,45 @@ $PROJECT/out/META/investment_memo.json
 Each has all 3 proposals + arbitrator reasoning + winner — full audit
 trail for the committee record.
 
+## Authored from this NL prompt (coding-agent path)
+
+The debate YAML the setup script writes can be composed by Claude Code
+(or Cursor / Copilot) from a plain-English prompt. In a bare directory:
+
+```bash
+uvx create-dagster@latest project investment-memo-demo --no-uv-sync
+cd investment-memo-demo
+uvx --from dagster-community-components-cli dagster-component init
+```
+
+Then tell the assistant:
+
+> *Build an investment committee memo pipeline in one
+> `AgenticPipelineComponent` using the `debate` op. Partition over
+> tickers `[NVDA, TSLA, META]`. The source is a literal
+> `"Investment committee memo request. Ticker: {partition_key}. Buy,
+> hold, or sell?"`. Emit one asset — `investment_memo_recommendation`
+> — with three proposers (bull argues BUY, bear argues SELL, neutral
+> argues HOLD with a target price range) and a committee-chair
+> arbitrator that picks the recommendation best for a moderate-risk,
+> long-horizon institutional portfolio. All LLMs use `gpt-4o-mini`
+> and `OPENAI_API_KEY`. JSON-sink to `out/{partition_key}/investment_memo.json`.
+> Use `dagster-component schema agentic_pipeline` to verify the debate
+> op's field names.*
+
+The assistant runs `dagster-component add agentic_pipeline`, composes
+the defs.yaml (with `post_processing:` for the static partitions), and
+`dagster definitions validate` passes.
+
+**When to reach for the NL prompt vs. the setup script:** the setup
+script is a one-shot `curl | bash` that ships this exact demo end-to-end.
+The NL prompt is what a customer would type into Claude Code to author
+the same thing from scratch — useful for demoing the authoring flow,
+and easy to tweak (change the tickers, swap analyst personas, change
+the arbitrator's mandate). If you want the NL prompt in git rather than
+the YAML, see the PCA-authored sibling:
+[`pca_investment_memo.md`](./pca_investment_memo.md).
+
 ## Extending
 
 - **More analysts.** Add a fourth persona to `proposers:` (e.g. a

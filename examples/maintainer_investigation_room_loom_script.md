@@ -1,173 +1,220 @@
-# Loom recording script — "AI maintainer investigation room, authored by Claude Code, on Dagster"
+# Loom recording script — "AI-agentic-orchestration on Dagster, 3 shapes, all authored by Claude Code"
 
-Target length: **4–5 minutes.** Target audience: prospects asking "how does
-Dagster fit for AI agent workflows / agentic orchestration?"
+Target length: **6–7 minutes.** Target audience: prospects asking "how
+does Dagster fit for AI agent workflows / agentic orchestration?"
+
+Three progressively richer demos, each authored by Claude Code from a
+natural-language prompt in one go. Same substrate for all three —
+`AgenticPipelineComponent` — different ops per demo.
 
 ## Setup before recording
 
-- Fresh terminal in an empty dir (`~/tmp/loom-demo` or similar). Do
-  `rm -rf` first so viewers see the bare state.
-- Two env vars exported:
+- Fresh terminal in an empty dir (`~/tmp/loom` or similar). Do `rm -rf`
+  first so viewers see the bare state.
+- Env vars exported:
   ```bash
   export OPENAI_API_KEY=sk-...
-  export GITHUB_PERSONAL_ACCESS_TOKEN=ghp_...
+  export GITHUB_PERSONAL_ACCESS_TOKEN=$(gh auth token)   # for demo 3
   ```
-- Claude Code (or Cursor / Copilot) open in a second window, pointed at
-  the same dir.
-- Browser tab open on <https://dagster-component-ui.vercel.app/examples/maintainer_investigation_room>.
+- Claude Code (or Cursor / Copilot) open in a second window, pointed
+  at the same dir.
+- Optional browser tab: <https://dagster-component-ui.vercel.app/>
 
-## Scene 1 — the setup (30s)
+## Scene 1 — the framing (30s)
 
-**Show:** the empty terminal, empty directory.
+**Show:** empty terminal, empty directory.
 
 **Say:**
 
-> "AI-agentic-orchestration is the pattern where a coding agent authors
-> a multi-node LLM workflow — specialist agents fan out, a triage joiner
-> synthesizes, a skeptic critiques, a human signs off. Dagster ships all
-> the pieces today. In the next four minutes I'll go from an empty
-> directory to a real, materialized maintainer investigation on a live
-> GitHub issue — authored by Claude Code, all first-class Dagster assets."
+> "AI-agentic orchestration — specialist agents fan out, a joiner
+> synthesizes, sometimes a skeptic critiques, sometimes a human signs
+> off — is a shape most teams end up needing. Dagster ships the
+> primitive today. In the next six minutes I'll build three of them
+> live: a research assistant, an investment memo, and a maintainer
+> investigation room fetching a real GitHub issue. Every one is
+> authored by Claude Code from a natural-language prompt. Every step
+> becomes a first-class Dagster asset."
 
-## Scene 2 — zero to something, live (2 min)
+## Scene 2 — one-time setup (30s)
 
 **Do:**
 
 ```bash
-uvx create-dagster@latest project maintainer-triage --no-uv-sync
-cd maintainer-triage
 uvx --from dagster-community-components-cli dagster-component init
 ```
 
-**Say (over the `init`):**
+**Say:**
 
-> "That last command wrote `CLAUDE.md`, `.cursorrules`, and Copilot
-> instructions. Every coding agent I open in this repo now knows about
-> 963 Dagster community components and how to search + compose them."
+> "That one command wrote `CLAUDE.md`, `.cursorrules`, and Copilot
+> instructions. Every coding agent I open here now knows about 963
+> Dagster community components and how to search + compose them.
+> Everything after this is prompts."
 
-**Do:** switch to Claude Code (or Cursor), paste the reference prompt:
+## Scene 3 — Demo 1: research bot (1 min)
 
-```
-Build an AI maintainer triage room for GitHub issues on public repos.
-Fetch a real issue + comments via the GitHub MCP server (`npx -y
-@modelcontextprotocol/server-github`), fan out 4 LLM specialists
-(repo/code, docs, reproduction, prior history), synthesize a triage
-decision, have a skeptic critique it, draft a final report, gate the
-report on a human sign-off via a JSON token file, and add a filesystem
-sensor that auto-progresses the gate when a token drops. 100%
-components + YAML, no Python. Use `dagster-component search` and
-`dagster-component schema <id>` — no invented fields. Target issue:
-#30000 in dagster-io/dagster. Don't run it — just compose the defs.yaml
-files.
-```
-
-**Say (while Claude works, ~important nuance to call out):**
-
-> "Notice what Claude Code is doing under the hood — for each component
-> it picks, it's running `dagster-component add <id>`. That's the CLI
-> the `init` step wired up. `add` doesn't just write the defs.yaml
-> file; it also reads the component's `requirements.txt` and runs
-> `uv add` for each pip dep automatically. No manual dep management,
-> no `ModuleNotFoundError` surprises on first `dg check`."
-
-**When Claude finishes:** run
+**Do:** scaffold the project
 
 ```bash
-uv run dagster definitions validate -m maintainer_triage.definitions
+uvx create-dagster@latest project research-bot --no-uv-sync
+cd research-bot
 ```
 
-**Say:** "Passed. Zero to something in one prompt — pip deps installed as
-a side effect of the component picks."
+**Do:** paste this prompt into Claude Code:
 
-**If Claude Code composed defs.yaml without invoking `dagster-component add`
-(some agents do this) — fall back to explicit installs:**
+> *Build a 5-step research pipeline in one AgenticPipelineComponent
+> (asset_name_prefix: `research_bot`). Emit: `baseline` (llm_call),
+> `routed` (route: technical / general specialists), `refined`
+> (critique_loop, 1 iteration), `debated` (debate: 2 proposers +
+> arbitrator), `final` (synthesize the four prior). gpt-4o-mini
+> throughout. Source is a literal "Explain how transformer attention
+> works". Use `dagster-component add agentic_pipeline` and
+> `dagster-component schema` to nail field names.*
+
+**Say (while Claude works):**
+
+> "Watch Claude run `dagster-component add agentic_pipeline` — that
+> installs the component AND its pip deps. Then it fetches the schema
+> and composes the YAML. No `pip install` surprises."
+
+**Do:** when done, `dg check defs` (or just materialize):
 
 ```bash
-uv add "dagster-community-components" openai litellm mcp
+uv run dagster asset materialize --select '*' -m research_bot.definitions
 ```
 
-**Say:** "One catch: if the assistant writes defs.yaml directly instead
-of using `dagster-component add`, pip deps aren't auto-installed.
-Point your assistant at the `dagster-component add` workflow — the CLI
-is the source of truth for what a component needs."
+**Say:** "Five specialists ran, `final` synthesized them into one
+answer. All five are queryable Dagster assets — click any one to see
+the router's reasoning, cost, latency, model. `cd ..` and next demo."
 
-## Scene 3 — run it (1 min)
+## Scene 4 — Demo 2: investment memo (1 min)
 
 **Do:**
 
 ```bash
-uv run dagster asset materialize --select 'issue_facts' -m maintainer_triage.definitions
-uv run dagster asset materialize \
-  --select 'triage,skeptic,report' \
-  -m maintainer_triage.definitions
+cd ..
+uvx create-dagster@latest project investment-memo --no-uv-sync
+cd investment-memo
 ```
 
-**Say (over the fan-out run):**
+**Do:** paste this prompt into Claude Code:
 
-> "Watch the specialists run. Repo context, docs context, reproduction
-> analysis, prior history — four different context windows, four
-> different reasoning passes. Then triage synthesizes. Skeptic
-> critiques. Report drafts."
+> *Build an investment committee memo in one AgenticPipelineComponent
+> (`debate` op). Partition over `[NVDA, TSLA, META]`. Three proposers
+> — bull (BUY), bear (SELL), neutral (HOLD with a target price) — plus
+> a committee-chair arbitrator that picks the pick best for a
+> moderate-risk, long-horizon portfolio. Source is a literal `"Ticker:
+> {partition_key}. Buy, hold, or sell?"`. gpt-4o-mini throughout.
+> JSON-sink to `out/{partition_key}/investment_memo.json`.*
 
-**Do:** open the draft report file and scroll it.
+**Do:** when done, materialize one partition:
 
-**Say:** "Real triage of a real GitHub issue. This one landed on
-'needs-more-info' with three concrete asks for the reporter — those are
-what a maintainer would actually send back."
-
-## Scene 4 — the plan lives in your data graph (1 min)
-
-**Do:** open `dg dev` and go to the asset graph view.
+```bash
+uv run dagster asset materialize --select '*' --partition NVDA -m investment_memo.definitions
+```
 
 **Say:**
 
-> "Every node you just saw is an asset key. `repo_context`,
-> `docs_context`, `triage`, `report` — all first-class asset keys.
-> That means I can point a dbt model at `report`. I can wire it into
-> Insights alerting. I can materialize a downstream Snowflake task off
-> it. The AI-agentic plan isn't in a sidecar workflow tab — it's IN
-> the org's data graph, so the rest of the data platform composes with
-> it the same way it composes with any other asset."
+> "Same component. Different op — debate. Three analysts argued, the
+> arbitrator picked HOLD for NVDA. Click the recommendation asset →
+> materialization metadata shows all three proposals verbatim,
+> `arbitrator_reasoning`, `winner_index`, cost. Full audit trail for
+> the committee record. `cd ..` and the finale."
 
-**Do (optional):** point at the human_approval_gate asset and drop a
-token via CLI:
+## Scene 5 — Demo 3: maintainer investigation room (2.5 min)
+
+**Do:**
+
+```bash
+cd ..
+uvx create-dagster@latest project maintainer-triage --no-uv-sync
+cd maintainer-triage
+```
+
+**Do:** paste this prompt into Claude Code:
+
+> *Build an AI maintainer triage room for GitHub issues on public
+> repos in one AgenticPipelineComponent (`asset_name_prefix: mir`).
+> Step 1 is an `mcp_call` to the GitHub MCP server (`npx -y
+> @modelcontextprotocol/server-github`, tool `get_issue`, args
+> `{owner: dagster-io, repo: dagster, issue_number: 30000}`, parse_as
+> auto). Then 4 llm_call specialists (repo/code, docs, reproduction,
+> prior history) each with typed `inputs: {issue_facts: {from: intake}}`.
+> Then a `synthesize` with 5 typed named inputs joining all evidence.
+> Then a `report` llm_call rendering maintainer-facing markdown. Add
+> a `HumanApprovalGateComponent` gating the report on a JSON token
+> file, plus a `FilesystemMonitorSensorComponent` + `AssetJobComponent`
+> for auto-progression. Use `dagster-component add` for each pick.*
+
+**Say (while Claude works — ~important nuance to call out):**
+
+> "This is the meta-component pattern — the whole 9-node execution
+> plan is inside ONE component's config. `mcp_call` gives us a
+> deterministic tool step. Typed named `inputs:` let each downstream
+> step read specific prior outputs by port name — the standard
+> execution-plan graph shape."
+
+**Do:** when Claude finishes, run:
+
+```bash
+uv run dagster asset materialize --select 'mir_intake' -m maintainer_triage.definitions
+uv run dagster asset materialize \
+  --select 'mir_repo_evidence,mir_docs_evidence,mir_reproduction,mir_history_evidence,mir_preliminary,mir_skeptic,mir_decision,mir_report' \
+  -m maintainer_triage.definitions
+```
+
+**Do:** open the draft report file and scroll.
+
+**Say:** "Real triage of a real open GitHub issue. Classification,
+confidence, owner, next action, uncertainty section. Same shape you'd
+send back to the reporter."
+
+**Do:** open `dg dev` and go to the asset graph.
+
+**Say:**
+
+> "Every node is an asset key. `mir_repo_evidence`, `mir_preliminary`,
+> `mir_report` — all queryable. Point a dbt model at `mir_report`.
+> Wire it into Insights alerting. Materialize a downstream Snowflake
+> task off it. The AI-agentic plan isn't in a sidecar workflow tab —
+> it's IN the org's data graph."
+
+**Do:** drop an approval token:
 
 ```bash
 echo '{"approved":true,"approver":"me"}' > approvals/default.json
 ```
 
-**Say:** "The gate's watching that directory. The sensor picks it up in
-5 seconds and launches the ship job automatically. Human sign-off as a
+**Say:** "The gate's watching that directory. Sensor picks it up in
+5 seconds, launches the ship job automatically. Human sign-off as a
 first-class primitive — the check surfaces in the UI, in Insights, and
-in any alerting pipeline. No bespoke wiring per approval."
+in any alerting pipeline."
 
-## Scene 5 — close (30s)
+## Scene 6 — close (30s)
 
 **Say:**
 
-> "So — coding-agent-authors-the-plan, one NL prompt, four minutes to a
-> real materialized graph. Every specialist output is a queryable
-> asset. Every LLM call is an observable materialization. The human
-> sign-off is a check the platform already knows how to alert on. When
-> a customer asks 'does Dagster do AI-agentic orchestration?', the
-> honest answer is 'yes, and the plan lives in your data graph, not in
-> a workflow tab.'
+> "Three demos, all authored by Claude Code from natural-language
+> prompts, all landing on first-class Dagster assets. Whether you want
+> the YAML in git or the NL prompt in git, both are one flag away —
+> see the `pca_*` variants for the state-backed authoring path.
 >
-> The walkthrough with the setup script and the reference prompt is on
-> the community registry site. Link in the description."
+> Everything you saw is on the community registry site. Six
+> walkthroughs — three shapes × two authoring paths. Link in the
+> description."
 
 ## What to have on standby
 
-- A backup screenshot of the completed asset graph in case `dg dev`
-  boots slowly on recording day
-- The `investigation_draft.md` from an earlier run so you have a
-  visible artifact if the live run stalls
+- Backup screenshot of each completed asset graph in case any `dg dev`
+  boot is slow on recording day
+- The `investigation_draft.md` from a prior run so the maintainer
+  report is visible even if the live MCP call has any hiccup
+- The reference prompts above in a text file, ready to paste
 
 ## What NOT to say
 
-- Don't compare pricing. The story is capability + shape + observability.
-- Don't dwell on any specific friction point that got fixed in shipping.
-- Don't demo the two-component (MCPToolPicker + AgenticPipeline)
-  variant AND the single-YAML (`mcp_call` op) variant. Pick one for the
-  Loom. Recommend the single-YAML variant since it visually lands the
-  "one execution plan" beat.
+- Don't compare pricing.
+- Don't name a specific competitor as the target of any differentiator —
+  frame everything as pure Dagster capability.
+- Don't demo BOTH the `mcp_call`-op version AND the `MCPToolPickerComponent`
+  version of the maintainer. Pick one for the Loom. The `mcp_call` version
+  is more visually cohesive for the "one execution plan" beat.
