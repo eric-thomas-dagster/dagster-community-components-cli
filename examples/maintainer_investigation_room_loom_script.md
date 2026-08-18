@@ -76,15 +76,26 @@ cd research-bot
 > installs the component AND its pip deps. Then it fetches the schema
 > and composes the YAML. No `pip install` surprises."
 
-**Do:** when done, `dg check defs` (or just materialize):
+**Do:** when done, sync any missing pip deps + materialize:
 
 ```bash
+uvx --from dagster-community-components-cli dagster-component sync-deps --auto-install
 uv run dagster asset materialize --select '*' -m research_bot.definitions
 ```
 
-**Say:** "Five specialists ran, `final` synthesized them into one
-answer. All five are queryable Dagster assets — click any one to see
-the router's reasoning, cost, latency, model. `cd ..` and next demo."
+**Say (over the sync-deps line):**
+
+> "One command guarantees the venv has every dep the picked components
+> need — whether Claude wrote the yaml via `dagster-component add` or
+> directly. Walks every defs.yaml, resolves each component, installs
+> anything missing. Same command applies to every demo in this Loom
+> and to any customer scaffolding at home."
+
+**Say (over the materialize):**
+
+> "Five specialists ran, `final` synthesized them into one answer.
+> All five are queryable Dagster assets — click any one to see the
+> router's reasoning, cost, latency, model. `cd ..` and next demo."
 
 ## Scene 4 — Demo 2: investment memo (1 min)
 
@@ -106,9 +117,10 @@ cd investment-memo
 > {partition_key}. Buy, hold, or sell?"`. gpt-4o-mini throughout.
 > JSON-sink to `out/{partition_key}/investment_memo.json`.*
 
-**Do:** when done, materialize one partition:
+**Do:** when done, sync deps + materialize one partition:
 
 ```bash
+uvx --from dagster-community-components-cli dagster-component sync-deps --auto-install
 uv run dagster asset materialize --select '*' --partition NVDA -m investment_memo.definitions
 ```
 
@@ -153,9 +165,10 @@ cd maintainer-triage
 > step read specific prior outputs by port name — the standard
 > execution-plan graph shape."
 
-**Do:** when Claude finishes, run:
+**Do:** when Claude finishes, sync deps + materialize:
 
 ```bash
+uvx --from dagster-community-components-cli dagster-component sync-deps --auto-install
 uv run dagster asset materialize --select 'mir_intake' -m maintainer_triage.definitions
 uv run dagster asset materialize \
   --select 'mir_repo_evidence,mir_docs_evidence,mir_reproduction,mir_history_evidence,mir_preliminary,mir_skeptic,mir_decision,mir_report' \
