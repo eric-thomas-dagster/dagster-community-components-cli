@@ -70,14 +70,35 @@ files.
 > format tied to a Prefect Flow, but Dagster's `defs.yaml` shape that
 > the rest of my data graph already uses."
 
+**Say (while Claude works, ~important nuance to call out):**
+
+> "Notice what Claude Code is doing under the hood — for each component
+> it picks, it's running `dagster-component add <id>`. That's the CLI
+> the `init` step wired up. `add` doesn't just write the defs.yaml
+> file; it also reads the component's `requirements.txt` and runs
+> `uv add` for each pip dep automatically. No manual dep management,
+> no `ModuleNotFoundError` surprises on first `dg check`."
+
 **When Claude finishes:** run
 
 ```bash
-uv add "dagster-community-components" openai litellm mcp
 uv run dagster definitions validate -m maintainer_triage.definitions
 ```
 
-**Say:** "Passed. Zero to something in one prompt."
+**Say:** "Passed. Zero to something in one prompt — pip deps installed as
+a side effect of the component picks."
+
+**If Claude Code composed defs.yaml without invoking `dagster-component add`
+(some agents do this) — fall back to explicit installs:**
+
+```bash
+uv add "dagster-community-components" openai litellm mcp
+```
+
+**Say:** "One catch: if the assistant writes defs.yaml directly instead
+of using `dagster-component add`, pip deps aren't auto-installed.
+Point your assistant at the `dagster-component add` workflow — the CLI
+is the source of truth for what a component needs."
 
 ## Scene 3 — run it (1 min)
 
