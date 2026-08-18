@@ -1032,6 +1032,17 @@ def _canonicalize_install(
     dest.write_text("\n".join(new_lines) + ("\n" if text.endswith("\n") else ""))
     src.unlink()
 
+    # Ensure `src/<pkg>/components/__init__.py` exists. Without this,
+    # Python's importer doesn't recognize `<pkg>.components` as a
+    # package, so dg's `registry_modules = ["<pkg>.components.*"]`
+    # wildcard resolves but subsequent imports fail silently, and the
+    # component doesn't show up in `dg list components` / the Dagster
+    # UI's Components tab. Idempotent — no-op if the file already exists.
+    components_parent = install_dir.parent  # src/<pkg>/components/
+    components_init = components_parent / "__init__.py"
+    if not components_init.exists():
+        components_init.touch()
+
 
 def _guess_component_type(component: dict) -> str | None:
     """Best-effort inference of the dotted component type for defs.yaml."""
