@@ -35,29 +35,40 @@ natural-language prompt in one go. Same substrate for all three —
 > authored by Claude Code from a natural-language prompt. Every step
 > becomes a first-class Dagster asset."
 
-## Scene 2 — one-time setup (30s)
-
-**Do:**
-
-```bash
-uvx --from dagster-community-components-cli dagster-component init
-```
+## Scene 2 — the one command customers need per project (30s)
 
 **Say:**
 
-> "That one command wrote `CLAUDE.md`, `.cursorrules`, and Copilot
-> instructions. Every coding agent I open here now knows about 963
-> Dagster community components and how to search + compose them.
-> Everything after this is prompts."
+> "Every demo I'm about to run has the same one-command setup after
+> `uvx create-dagster project`: `dagster-component init`. That one
+> command does three things:
+>
+> 1. Writes `CLAUDE.md` / `.cursorrules` / Copilot instructions so the
+>    coding agent knows about 963 community components.
+> 2. Injects the Python entry point into `pyproject.toml` so the
+>    Dagster UI's Components tab lists this project's components.
+> 3. Runs `uv pip install -e .` so the entry point actually registers.
+>
+> Skip any of the three demos' `init` step and the UI won't see your
+> project. Include it and everything Just Works."
 
 ## Scene 3 — Demo 1: research bot (1 min)
 
-**Do:** scaffold the project
+**Do:** scaffold + init + persistent DAGSTER_HOME
 
 ```bash
 uvx create-dagster@latest project research-bot --no-uv-sync
 cd research-bot
+uv sync
+uvx --from dagster-community-components-cli dagster-component init --auto-install
+export DAGSTER_HOME=$(pwd)/.dagster_home && mkdir -p "$DAGSTER_HOME"
 ```
+
+**Say (over init running):**
+
+> "Init just wrote three AI-tool files, added the entry point to
+> pyproject.toml, and editable-installed the project. Any component
+> Claude Code adds from here on will show in the Dagster UI."
 
 **Do:** paste this prompt into Claude Code:
 
@@ -105,6 +116,9 @@ uv run dagster asset materialize --select '*' -m research_bot.definitions
 cd ..
 uvx create-dagster@latest project investment-memo --no-uv-sync
 cd investment-memo
+uv sync
+uvx --from dagster-community-components-cli dagster-component init --auto-install
+export DAGSTER_HOME=$(pwd)/.dagster_home && mkdir -p "$DAGSTER_HOME"
 ```
 
 **Do:** paste this prompt into Claude Code:
@@ -140,6 +154,9 @@ uv run dagster asset materialize --select '*' --partition NVDA -m investment_mem
 cd ..
 uvx create-dagster@latest project maintainer-triage --no-uv-sync
 cd maintainer-triage
+uv sync
+uvx --from dagster-community-components-cli dagster-component init --auto-install
+export DAGSTER_HOME=$(pwd)/.dagster_home && mkdir -p "$DAGSTER_HOME"
 ```
 
 **Do:** paste this prompt into Claude Code:

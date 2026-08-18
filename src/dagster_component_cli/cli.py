@@ -1010,7 +1010,7 @@ def _ensure_registry_entry_point(
         # Not a create-dagster project — nothing to wire up.
         return
 
-    console.print(f"\n[bold]Wiring up the Dagster UI's Components tab[/bold]")
+    console.print("\n[bold]Wiring up the Dagster UI's Components tab[/bold]")
 
     # Step 1: inject the entry point section if it's not already there.
     existing_ep = (
@@ -1059,7 +1059,7 @@ def _ensure_registry_entry_point(
     rc = _editable_install_project(project_root, manager=manager)
     if rc == 0:
         console.print(
-            f"  [green]✓[/green] Editable install complete. "
+            "  [green]✓[/green] Editable install complete. "
             "Restart `dg dev` — the Components tab will show your project's components."
         )
     else:
@@ -1105,8 +1105,8 @@ def _editable_install_project(project_root: Path, *, manager: str) -> int:
     Reuses `install_requirements`'s manager-detection but points at the
     project root as the sole 'package' to install editable.
     """
-    import subprocess
     import shutil
+    import subprocess
 
     if manager == "auto":
         manager = "uv" if shutil.which("uv") else "pip"
