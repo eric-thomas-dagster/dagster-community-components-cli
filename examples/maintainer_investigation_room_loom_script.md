@@ -163,34 +163,60 @@ export DAGSTER_HOME=$(pwd)/.dagster_home && mkdir -p "$DAGSTER_HOME"
 
 > *Build an AI maintainer triage room for GitHub issues on public
 > repos in one AgenticPipelineComponent (`asset_name_prefix: mir`).
-> Step 1 is an `mcp_call` to the GitHub MCP server (`npx -y
-> @modelcontextprotocol/server-github`, tool `get_issue`, args
-> `{owner: dagster-io, repo: dagster, issue_number: 30000}`, parse_as
-> auto). Then 4 llm_call specialists (repo/code, docs, reproduction,
-> prior history) each with typed `inputs: {issue_facts: {from: intake}}`.
-> Then a `synthesize` with 5 typed named inputs joining all evidence.
-> Then a `report` llm_call rendering maintainer-facing markdown. Add
-> a `HumanApprovalGateComponent` gating the report on a JSON token
-> file, plus a `FilesystemMonitorSensorComponent` + `AssetJobComponent`
-> for auto-progression. Use `dagster-component add` for each pick.*
+> Make it dynamic-partitioned on a DynamicPartitionsDefinition called
+> `mir_investigations` with `partition_key_parser:
+> "{owner}/{repo}#{issue_number:int}"`, so every triage is one
+> persistent partition. Step 1 is an `mcp_call` to the GitHub MCP
+> server (`npx -y @modelcontextprotocol/server-github`, tool
+> `get_issue`, args `{owner: "{partition.owner}", repo:
+> "{partition.repo}", issue_number: "{partition.issue_number}"}`,
+> parse_as auto). Then 4 llm_call specialists (repo/code, docs,
+> reproduction, prior history) each with typed `inputs: {issue_facts:
+> {from: intake}}`. Then a `synthesize` with 5 typed named inputs
+> joining all evidence, a skeptic critique, a final decision, and a
+> `report` llm_call rendering maintainer-facing markdown (heading
+> `# Issue triage — {partition.owner}/{partition.repo}#{partition.issue_number}`).
+> Add a `PartitionedAssetLauncherJobComponent` (`job_name:
+> launch_mir_triage`) as the config-driven entry point — targets all
+> 9 mir_* asset keys, dynamic_partitions_name `mir_investigations`,
+> partition_key_template `"{owner}/{repo}#{issue_number}"`, config_schema
+> `{owner: {type: str, default: dagster-io}, repo: {type: str, default:
+> dagster}, issue_number: {type: int}}`. Add a HumanApprovalGateComponent
+> gating the report on a JSON token file, plus a
+> FilesystemMonitorSensorComponent + AssetJobComponent for
+> auto-progression. Use `dagster-component add` for each pick.*
 
-**Say (while Claude works — ~important nuance to call out):**
+**Say (while Claude works — key nuance to call out):**
 
-> "This is the meta-component pattern — the whole 9-node execution
-> plan is inside ONE component's config. `mcp_call` gives us a
-> deterministic tool step. Typed named `inputs:` let each downstream
-> step read specific prior outputs by port name — the standard
-> execution-plan graph shape."
+> "Two moves here. First: the whole 9-node execution plan lives in one
+> AgenticPipelineComponent, dynamic-partitioned. Every triage becomes
+> one persistent partition. Second: a companion launcher job is the
+> config-shaped entry point — takes owner/repo/issue_number as run
+> config, derives the partition key, materializes the pipeline. Same
+> entry point for a human clicking Materialize in the UI and for an
+> external system POSTing run_config via GraphQL."
 
-**Do:** when Claude finishes, sync deps + materialize:
+**Do:** when Claude finishes, sync deps + launch via the config-driven
+launcher (partition_key derived at run time):
 
 ```bash
 uvx --from dagster-community-components-cli dagster-component sync-deps --auto-install
-uv run dagster asset materialize --select 'mir_intake' -m maintainer_triage.definitions
-uv run dagster asset materialize \
-  --select 'mir_repo_evidence,mir_docs_evidence,mir_reproduction,mir_history_evidence,mir_preliminary,mir_skeptic,mir_decision,mir_report' \
-  -m maintainer_triage.definitions
+
+cat > /tmp/mir_launch.yaml <<CFG
+ops:
+  launch_mir_triage_op:
+    config:
+      owner: dagster-io
+      repo: dagster
+      issue_number: 30000
+CFG
+uv run dagster job execute -m maintainer_triage.definitions -j launch_mir_triage --config /tmp/mir_launch.yaml
 ```
+
+**Say:** "One command. The launcher registered a new dynamic partition
+`dagster-io/dagster#30000` and materialized every step of the pipeline
+for that partition. Every subsequent triage — same launcher, different
+config, new partition — nothing to edit in YAML."
 
 **Do:** open the draft report file and scroll.
 

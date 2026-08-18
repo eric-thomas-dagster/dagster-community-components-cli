@@ -125,11 +125,42 @@ Requirements: `uv`, `npx` (Node — for the stdio GitHub MCP server),
 `OPENAI_API_KEY`, `GITHUB_PERSONAL_ACCESS_TOKEN`. ~90s first run. Uses ~15
 gpt-4o-mini calls + 3 gpt-4o calls per issue (roughly $0.02).
 
-Point at any dagster-io/dagster issue with:
+### Config-driven entry point — the launcher job
+
+The pipeline is dynamic-partitioned on a composite key
+(`{owner}/{repo}#{issue_number}`). A companion
+`PartitionedAssetLauncherJobComponent` — `launch_mir_triage` — accepts
+`owner`, `repo`, and `issue_number` as run config, formats the partition
+key, registers it, and materializes the whole 9-step pipeline for that
+partition. Same entry point for humans (Materialize the job in the UI,
+fill in the form) and for external systems (POST run_config via the
+Dagster GraphQL API).
+
+Launch a triage against a different repo / issue with no YAML edit —
+straight from the CLI:
+
+```bash
+cat > mir_launch.yaml <<'CFG'
+ops:
+  launch_mir_triage_op:
+    config:
+      owner: prefecthq
+      repo: prefect
+      issue_number: 12345
+CFG
+uv run dagster job execute -m mir_test.definitions -j launch_mir_triage --config mir_launch.yaml
+```
+
+Or set `DAGSTER_ISSUE_NUM` when re-running the setup to seed the demo
+with a different issue:
 
 ```bash
 DAGSTER_ISSUE_NUM=25000 bash setup_maintainer_investigation_room_demo.sh
 ```
+
+Every launch registers a new partition. The whole triage history for a
+repo is browsable + individually re-runnable from the asset graph — one
+persistent partition per `{owner, repo, issue_number}` triple.
 
 ## Two scenarios the script walks
 
