@@ -5,10 +5,10 @@ step can pull from any prior step by named port, and each named port
 becomes a `{port_name}` placeholder in the step's `prompt_template` +
 `system_prompt` (and, for `mcp_call`, in string `tool_args`).
 
-That's the **typed-I/O execution-plan shape** — same primitive that
-Prefect's Aug-13 pre-MVP agentic-workflows demo showed as node cards
-with labeled input ports and edge-wired ports between them. Dagster now
-does that in one YAML.
+That's the **typed-I/O execution-plan shape** — the standard "node cards
+with labeled input ports, edges wired by port name" primitive that
+agentic-workflow tools converge on. Dagster does it in one YAML, where
+each port output is a first-class asset key.
 
 ## The primitive
 
@@ -122,9 +122,9 @@ attributes:
   port, not just the final one.
 - **`{literal}` inputs = plan-level parameters.** The `audience`
   literal above is a compile-time value baked into the plan. Same
-  primitive covers Prefect's "PLAN INPUTS" node — declare the
-  parameters once as literals, reference them by name from every step
-  that needs them.
+  primitive covers a "PLAN INPUTS" pattern — declare the parameters
+  once as literals, reference them by name from every step that needs
+  them.
 - **Explicit edges = readable graphs.** Every input line names its
   source. No "reads whatever was last." No debugging by log-grepping to
   figure out which specialist fed the final synthesizer. The YAML is

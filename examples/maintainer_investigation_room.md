@@ -12,17 +12,16 @@ one about how it'd repro, one about prior similar reports. A triage lead
 synthesizes. A skeptic critiques the triage. A human signs off. Then the
 report ships.
 
-This is the pattern **Prefect's Aug-13 pre-MVP Loom** calls "agentic
-orchestration." Dagster's take: **every specialist is an asset, every
-decision is a materialization, the report is a warehouse-ready
-artifact, and the whole graph lives next to your dbt models.** No
-sidecar workflow tab.
+The AI-agentic-orchestration pattern, Dagster-honest: **every specialist
+is an asset, every decision is a materialization, the report is a
+warehouse-ready artifact, and the whole graph lives next to your dbt
+models.** No sidecar workflow tab.
 
 ## Architecture — 9-node "execution plan" as ONE YAML
 
 The whole pipeline is a single `AgenticPipelineComponent` using the new
 `mcp_call` op + typed named `inputs:` field. Every node has explicit
-input port names (Prefect's execution-plan shape); every node is a
+input port names (execution-plan graph shape); every node is a
 first-class Dagster asset. Edges wire specific outputs to specific
 inputs by name.
 
@@ -64,8 +63,8 @@ inputs by name.
                                │
                                ▼
       ┌───────────────────────────────────────────────────────┐
-      │  decision  (synthesize — 4 typed inputs, Prefect's    │
-      │            "Final routing decision" node)             │
+      │  decision  (synthesize — 4 typed inputs, final        │
+      │            routing decision node)                     │
       │  inputs: { skeptic, issue_facts, preliminary,         │
       │            triage_policy }                            │
       └────────────────────────┬──────────────────────────────┘
@@ -94,17 +93,17 @@ inputs by name.
 
 Every input arrow is a **named port**. Every port maps to a
 `{port_name}` placeholder in the target step's `prompt_template` +
-`system_prompt`. That's the same shape Prefect's execution-plan graph
-shows in their Aug-13 pre-MVP Loom — same primitive, on Dagster's
-substrate, where every port output is a queryable asset key.
+`system_prompt`. Same execution-plan graph shape any typed-IO workflow
+tool would draw — except on Dagster's substrate, every port output is
+a queryable asset key.
 
 ## What each component does
 
 - **`maintainer_investigation`** — [`AgenticPipelineComponent`](https://github.com/eric-thomas-dagster/dagster-community-components/tree/main/assets/ai/agentic_pipeline). One YAML declares the whole 9-node execution plan. Uses **two v2 features**:
-  - **`mcp_call` op** — the `intake` step calls the GitHub MCP directly (no planner LLM, just a deterministic MCP tool invocation). Prefect's "MCP server config with deferred secrets" story maps 1:1 to `server: {type: stdio, command: [npx, -y, "@modelcontextprotocol/server-github"]}` (token from parent process env, no YAML inlining). For http-transport MCP with deferred secrets, use `headers_env: {Authorization: GITHUB_MCP_TOKEN}`.
-  - **`inputs:` field** — every node with more than one upstream declares `inputs: {port_name: {from: step_id} | {literal: value}}` for typed named multi-input joins. `preliminary` reads 6 named inputs, `skeptic` reads 2, `decision` reads 4, `report` reads 1. Each port becomes a `{port_name}` placeholder in the step's `prompt_template` + `system_prompt` — same shape as Prefect's node cards showing named ports.
+  - **`mcp_call` op** — the `intake` step calls the GitHub MCP directly (no planner LLM, just a deterministic MCP tool invocation). Config shape: `server: {type: stdio, command: [npx, -y, "@modelcontextprotocol/server-github"]}` (token from parent process env, no YAML inlining). For http-transport MCP with deferred secrets, use `headers_env: {Authorization: GITHUB_MCP_TOKEN}` — the env-var NAME lives in YAML, the value never does.
+  - **`inputs:` field** — every node with more than one upstream declares `inputs: {port_name: {from: step_id} | {literal: value}}` for typed named multi-input joins. `preliminary` reads 6 named inputs, `skeptic` reads 2, `decision` reads 4, `report` reads 1. Each port becomes a `{port_name}` placeholder in the step's `prompt_template` + `system_prompt`.
 
-  Every one of the 9 step outputs is a first-class Dagster asset key. `mir_intake` / `mir_repo_evidence` / `mir_preliminary` / `mir_decision` / `mir_report` (etc.) can all be depended on by downstream dbt models, warehouse writes, notification sinks, whatever. That's the seam Prefect can't cross — their execution plan is bound to one Flow, so no port has an addressable key that other things depend on.
+  Every one of the 9 step outputs is a first-class Dagster asset key. `mir_intake` / `mir_repo_evidence` / `mir_preliminary` / `mir_decision` / `mir_report` (etc.) can all be depended on by downstream dbt models, warehouse writes, notification sinks, whatever. The plan is IN the org's data graph — not in a sidecar workflow tab.
 
 - **`report_approval`** — [`HumanApprovalGateComponent`](https://github.com/eric-thomas-dagster/dagster-community-components/tree/main/assets/ai/human_approval_gate). Always materializes so the asset stays green in the UI; state comes from the `approved` asset check. Missing token → `passed=False (WARN)` with `status: approval_pending` + hint metadata (re-materialize once the token appears, or let the sensor do it). `{approved: false}` → `passed=False (ERROR)` with rejection reason. `{approved: true}` → `passed=True` + report passes through with approver / reason / approved_at in metadata. Dagster+ Insights + alerts key off the check result — a rejected report pages someone without you writing any alerting code. `upstream_asset_key: mir_report` uses bare-string form (multi-part keys use slash notation; both map to `AssetKey.from_user_string()`).
 
@@ -149,56 +148,60 @@ echo '{"approved":true,"approver":"you"}' > $PROJECT/approvals/second.json
 ```
 
 The sensor picks it up within 5s and auto-launches `ship_report_job`
-for you — no manual re-materialize. That's the "human input mid-run"
-shape (via file drop / Slack modal / Retool form) — different mechanism
-than Prefect's promised UI-native mid-run input, same end result.
+for you — no manual re-materialize. Human sign-off happens via file
+drop / Slack modal / Retool form / GitHub Action — anything that can
+write a JSON token to the approval directory.
 
-## Where this beats Prefect's Aug-13 demo
+## What Dagster gives you that a plain workflow tool doesn't
 
-- **Cross-boundary lineage.** `maintainer_investigation_report` is an asset
-  key. Point a dbt model at it. Add a `duckdb_table_writer` downstream.
-  Wire it into your Insights dashboard. Prefect's plan is a Flow-scoped
-  artifact — it doesn't have an asset key that other things depend on.
-- **Deterministic + agent nodes in the same graph.** Nothing stops you
-  from adding a `snowflake_workspace` task or a `dbt_project` component
-  next to these — the graph doesn't care that some nodes are LLM calls
-  and others are `EXECUTE TASK`. Prefect explicitly said this ("agent
-  vs deterministic node") is planned, not shipped.
+- **Cross-boundary lineage.** `maintainer_investigation_report` is an
+  asset key. Point a dbt model at it. Add a `duckdb_table_writer`
+  downstream. Wire it into an Insights dashboard. The plan connects
+  into the rest of the org's data graph — no seam between "agent
+  workflow" and "data pipeline."
+- **Deterministic + agent nodes in the same graph.** Nothing stops
+  you from adding a `snowflake_workspace` task or a `dbt_project`
+  component next to these — the graph doesn't care that some nodes
+  are LLM calls and others are `EXECUTE TASK`. All materializations,
+  all queryable the same way.
 - **In-agent observability for free.** Each specialist emits an
-  `AssetObservation` per LLM call with token counts + model + duration.
-  Launchpad shows the tool call sequence. Insights turns it into a
-  metric. Prefect's Loom explicitly called out that inside-agent
-  observability is not there yet.
-- **Human sign-off — shipped, not "actively working on."** The gate +
-  sensor + auto-progression pattern already runs to `RUN_SUCCESS`
-  today. Prefect: "human input node — actively working on."
-- **Report retrieval.** The `report` asset materializes with structured
-  metadata + a markdown side file. Both are queryable in the UI right
-  now. Prefect explicitly said "fetch the report from the UI — not
-  shipped."
+  `AssetObservation` per LLM call with token counts, model, duration.
+  Launchpad shows the tool-call sequence. Insights turns any numeric
+  field into a queryable metric with alerts. No custom instrumentation.
+- **Human sign-off as a first-class primitive.** `HumanApprovalGate` +
+  filesystem sensor + auto-progression ships today. The gate's
+  `approved` asset check surfaces in the UI, in Insights, and in any
+  alerting pipeline — no bespoke wiring per approval.
+- **Report retrieval + audit trail.** The `report` asset materializes
+  with structured metadata + a markdown side file. Every past
+  materialization is browsable in the UI — click any partition, see the
+  exact triage decision from that run, the arbitrator reasoning, the
+  cost. Full audit trail with zero custom code.
 
-## Where Prefect has an edge — and how to close it here
+## Authoring the plan — coding-agent authored, in one prompt
 
-- **"Coding agent authors the plan via MCP" opener.** That's the demo
-  beat that lands. In Dagster's story, you'd start by running:
-  ```bash
-  uvx --from dagster-community-components-cli dagster-component init
-  ```
-  in a bare directory. That writes `CLAUDE.md` / `.cursorrules` /
-  `.github/copilot-instructions.md`. Then you tell your coding assistant
-  (component-agnostic version — let it discover them):
+The whole plan can be authored by Claude Code (or Cursor / Copilot) via
+the community components CLI:
 
-  > *Build a Dagster project that takes a public GitHub issue number and
-  > does an AI-driven maintainer triage on it: fetch the issue + comments
-  > via the GitHub MCP server (`npx -y @modelcontextprotocol/server-github`),
-  > fan out 4 LLM specialists (repo/code, docs, reproduction, prior
-  > history), synthesize a triage decision, have a skeptic critique it,
-  > draft a final maintainer report, gate it on a human sign-off via a
-  > JSON token file, and add a filesystem sensor that auto-launches the
-  > gate when a token drops. Use `dagster-component search` +
-  > `dagster-component schema <id>` to pick real components. 100%
-  > components + YAML, no Python. Target issue: #30000 in
-  > dagster-io/dagster.*
+```bash
+uvx --from dagster-community-components-cli dagster-component init
+```
+
+in a bare directory. That writes `CLAUDE.md` / `.cursorrules` /
+`.github/copilot-instructions.md`. Then you tell your coding assistant
+(component-agnostic — let it discover the right pieces):
+
+> *Build a Dagster project that takes a public GitHub issue number and
+> does an AI-driven maintainer triage on it: fetch the issue + comments
+> via the GitHub MCP server (`npx -y @modelcontextprotocol/server-github`),
+> fan out 4 LLM specialists (repo/code, docs, reproduction, prior
+> history), synthesize a triage decision, have a skeptic critique it,
+> draft a final maintainer report, gate it on a human sign-off via a
+> JSON token file, and add a filesystem sensor that auto-launches the
+> gate when a token drops. Use `dagster-component search` +
+> `dagster-component schema <id>` to pick real components. 100%
+> components + YAML, no Python. Target issue: #30000 in
+> dagster-io/dagster.*
 
 ## Zero-to-something — we ran this test
 
@@ -244,11 +247,6 @@ None of these are blockers — the assistant landed a validating project
 in one pass — but they're the cheapest UX wins for making
 zero-to-something even sharper next round.
 
-- **Live graph view mid-run.** Dagster's asset graph + run timeline show
-  the same information Prefect's execution plan tab shows — nodes
-  lighting up in order, per-node duration. Same picture, different
-  chrome.
-
 ## When to pick `mcp_call` vs. `MCPToolPickerComponent`
 
 The primary demo above uses the `mcp_call` op inline (one YAML, one
@@ -272,8 +270,8 @@ Both wire into the same downstream `HumanApprovalGate` +
 - **Snowflake / dbt downstream.** Point a
   [`snowflake_workspace`](https://dagster-component-ui.vercel.app/examples/snowflake_workspace)
   task or a `dbt_project` model at `maintainer_investigation_report`.
-  The lineage graph extends automatically. That's the story Prefect
-  structurally cannot tell.
+  The lineage graph extends automatically — the agent output is just
+  another asset in the org's data graph.
 - **Private repos.** Swap `MCPToolPickerComponent`'s server config from
   `stdio` (public MCP) to `http` with `headers_env: {Authorization:
   GITHUB_MCP_TOKEN}` for the GitHub Copilot MCP or an internal

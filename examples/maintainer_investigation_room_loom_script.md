@@ -1,8 +1,7 @@
-# Loom recording script — "Prefect can build one execution plan. Dagster builds the same plan and lets you continue past the seam."
+# Loom recording script — "AI maintainer investigation room, authored by Claude Code, on Dagster"
 
-Target length: **4–5 minutes.** Target audience: prospects who've seen (or
-will see) Prefect's Aug-13 agentic-workflows Loom and are asking "does
-Dagster have this?"
+Target length: **4–5 minutes.** Target audience: prospects asking "how does
+Dagster fit for AI agent workflows / agentic orchestration?"
 
 ## Setup before recording
 
@@ -19,16 +18,16 @@ Dagster have this?"
 
 ## Scene 1 — the setup (30s)
 
-**Show:** the Prefect Loom's first minute (or its Twitter clip). Then
-cut to your empty terminal.
+**Show:** the empty terminal, empty directory.
 
 **Say:**
 
-> "This week Prefect showed a pre-MVP feature they call 'agentic
-> orchestration' — a coding agent authors an execution plan and it
-> runs. It's the right pattern. Dagster has all the pieces. Let me
-> show you the same thing on our substrate, in the same amount of time
-> — plus one thing Prefect structurally can't do."
+> "AI-agentic-orchestration is the pattern where a coding agent authors
+> a multi-node LLM workflow — specialist agents fan out, a triage joiner
+> synthesizes, a skeptic critiques, a human signs off. Dagster ships all
+> the pieces today. In the next four minutes I'll go from an empty
+> directory to a real, materialized maintainer investigation on a live
+> GitHub issue — authored by Claude Code, all first-class Dagster assets."
 
 ## Scene 2 — zero to something, live (2 min)
 
@@ -61,14 +60,6 @@ components + YAML, no Python. Use `dagster-component search` and
 #30000 in dagster-io/dagster. Don't run it — just compose the defs.yaml
 files.
 ```
-
-**Say (while Claude works):**
-
-> "This is the same beat as Prefect's demo — I typed a natural-language
-> ask, an assistant composes the pipeline. The difference is what the
-> assistant is composing against: not a proprietary execution-plan
-> format tied to a Prefect Flow, but Dagster's `defs.yaml` shape that
-> the rest of my data graph already uses."
 
 **Say (while Claude works, ~important nuance to call out):**
 
@@ -124,20 +115,19 @@ uv run dagster asset materialize \
 'needs-more-info' with three concrete asks for the reporter — those are
 what a maintainer would actually send back."
 
-## Scene 4 — the seam Prefect can't cross (1 min)
+## Scene 4 — the plan lives in your data graph (1 min)
 
 **Do:** open `dg dev` and go to the asset graph view.
 
 **Say:**
 
-> "Here's the thing that makes the same demo land differently on our
-> platform. Every node you just saw is an asset key. `repo_context`,
-> `docs_context`, `triage`, `report` — asset keys. That means I can
-> point a dbt model at `report`. I can wire it into an alert. I can
-> materialize a downstream Snowflake task off it. Prefect's execution
-> plan is bound to one Flow — it doesn't have keys that other things
-> depend on. Their agent output ends when the plan ends. Ours starts
-> the rest of the data graph."
+> "Every node you just saw is an asset key. `repo_context`,
+> `docs_context`, `triage`, `report` — all first-class asset keys.
+> That means I can point a dbt model at `report`. I can wire it into
+> Insights alerting. I can materialize a downstream Snowflake task off
+> it. The AI-agentic plan isn't in a sidecar workflow tab — it's IN
+> the org's data graph, so the rest of the data platform composes with
+> it the same way it composes with any other asset."
 
 **Do (optional):** point at the human_approval_gate asset and drop a
 token via CLI:
@@ -147,18 +137,21 @@ echo '{"approved":true,"approver":"me"}' > approvals/default.json
 ```
 
 **Say:** "The gate's watching that directory. The sensor picks it up in
-5 seconds and launches the ship job automatically."
+5 seconds and launches the ship job automatically. Human sign-off as a
+first-class primitive — the check surfaces in the UI, in Insights, and
+in any alerting pipeline. No bespoke wiring per approval."
 
 ## Scene 5 — close (30s)
 
 **Say:**
 
-> "So — same shape as Prefect's demo, same coding-agent-authors-the-plan
-> UX, plus every specialist output is a first-class asset in the org's
-> data graph. When Prefect ships this feature, we'll have the same
-> arrow pointing at Dagster; when a customer asks 'does Dagster have
-> agentic orchestration?', the honest answer is 'yes, and it lives in
-> your data graph, not in a workflow tab.'
+> "So — coding-agent-authors-the-plan, one NL prompt, four minutes to a
+> real materialized graph. Every specialist output is a queryable
+> asset. Every LLM call is an observable materialization. The human
+> sign-off is a check the platform already knows how to alert on. When
+> a customer asks 'does Dagster do AI-agentic orchestration?', the
+> honest answer is 'yes, and the plan lives in your data graph, not in
+> a workflow tab.'
 >
 > The walkthrough with the setup script and the reference prompt is on
 > the community registry site. Link in the description."
@@ -169,16 +162,11 @@ echo '{"approved":true,"approver":"me"}' > approvals/default.json
   boots slowly on recording day
 - The `investigation_draft.md` from an earlier run so you have a
   visible artifact if the live run stalls
-- The Prefect Loom URL (<https://www.loom.com/share/695b69d5a2f046e1987a9c11a2ab4867>)
-  to open with a click if the audience hasn't seen it
 
 ## What NOT to say
 
 - Don't compare pricing. The story is capability + shape + observability.
-- Don't call Prefect's demo bad. It's actually good. Ours is different.
-- Don't dwell on the 3 friction points the zero-to-something test
-  surfaced (JSON schema opacity, MCP env literal, upstream_asset_key
-  string) — those got fixed. Keep it forward-looking.
+- Don't dwell on any specific friction point that got fixed in shipping.
 - Don't demo the two-component (MCPToolPicker + AgenticPipeline)
   variant AND the single-YAML (`mcp_call` op) variant. Pick one for the
   Loom. Recommend the single-YAML variant since it visually lands the
