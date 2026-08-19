@@ -296,7 +296,139 @@ show the `tool_call_trace` JSON blob.
 > asset object. Framework is one node in the Dagster graph; Dagster is
 > the harness at the pipeline level. Both stories work."
 
-## Scene 6 — close (30s)
+## Scene 6 — ALTERNATIVE to Scenes 5 + 5b: MIR-v3 in one Claude Code prompt (3 min)
+
+**Purpose:** pick this OR the 5 + 5b pair — not both. Same substrate,
+different demo choice: either walk viewers through the v1 → v3 upgrade
+path (Scenes 5 + 5b) OR compose the full MIR-v3 in one Claude Code
+prompt live (Scene 6). Scene 6 is the punchier "AI writes the whole
+comprehensive pipeline from one paragraph" beat; Scenes 5 + 5b are the
+"here's the progression from simple to comprehensive" beat.
+
+**Do:** scaffold + init + persistent DAGSTER_HOME
+
+```bash
+cd ..
+uvx create-dagster@latest project maintainer-triage-comprehensive --no-uv-sync
+cd maintainer-triage-comprehensive
+uv sync
+uvx --from dagster-community-components-cli@latest dagster-component init --auto-install
+export DAGSTER_HOME=$(pwd)/.dagster_home && mkdir -p "$DAGSTER_HOME"
+```
+
+**Do:** paste this prompt into Claude Code (verbatim — Claude Code
+composes the whole thing from CLAUDE.md's op catalog + community
+manifest):
+
+> *Build a comprehensive AI maintainer triage room for GitHub issues,
+> using every AgenticPipelineComponent primitive shipped in 2026-08.
+> Config-driven entry via PartitionedAssetLauncherJobComponent
+> (`launch_mir_triage`, config_schema owner/repo/issue_number,
+> partition_key_template `{owner}/{repo}#{issue_number}`).*
+>
+> *One AgenticPipelineComponent (`asset_name_prefix: mir`, `per_step_ops:
+> true`, dynamic-partitioned on mir_investigations with
+> partition_key_parser `{owner}/{repo}#{issue_number:int}`). Steps:*
+>
+> *1. `mir_intake` (`mcp_call`, GitHub MCP via stdio) fetches the issue.*
+> *2. `mir_repo_evidence` (`tool_use_loop`) — LLM has GitHub MCP tools
+>    (search_code / get_file_contents / list_repository_contents),
+>    max_iterations 8, iteratively explores until it calls `finalize`
+>    with a 3-line evidence summary.*
+> *3. `mir_reproduction` (`handoff` to LangGraph) — imports
+>    `maintainer_triage_comprehensive.framework_targets.reproducer`,
+>    calls `run_reproduction_analysis(issue_facts=...)`,
+>    output_text_key `final_answer`. Also write me the LangGraph
+>    module: 5-node state machine (plan → hypothesize → verify →
+>    refine → finalize) using gpt-4o-mini.*
+> *4. `mir_docs_evidence` + `mir_history_evidence` — simple llm_call
+>    specialists reading `issue_facts: {from: intake}`.*
+> *5. `mir_preliminary` (`synthesize`, 5 typed inputs joining all 4
+>    evidence steps + intake).*
+> *6. `mir_skeptic_debate` (`debate`, 3 gpt-4o skeptic proposers +
+>    arbitrator).*
+> *7. `mir_decision` (`synthesize`, 4 typed inputs).*
+> *8. `mir_report` (`critique_loop`, drafter + critic × 2 iterations,
+>    heading `# Issue triage — {partition.owner}/{partition.repo}#{partition.issue_number}`).*
+>
+> *Also add a SlackApprovalGateComponent (channel `#dagster-triage`,
+> allowlist $SLACK_APPROVER_USER_IDS, quorum 1) posting `mir_report`,
+> a HumanApprovalGateComponent reading the token, a
+> FilesystemMonitorSensorComponent, and an AssetJobComponent
+> `ship_mir_report_job`. Same approval_dir + dynamic partition
+> everywhere.*
+
+**Say (while Claude works — takes ~90s to compose all files):**
+
+> "The prompt is describing every primitive we shipped in one go —
+> PartitionedAssetLauncher, per_step_ops, tool_use_loop, handoff to
+> LangGraph, debate, critique_loop, Slack quorum HITL. Claude Code has
+> the 2026-08 additions section of CLAUDE.md — every op documented,
+> every YAML shape, every flag. It composes the whole 9-step YAML +
+> the LangGraph target module in one pass. Not a demo of Claude Code
+> being smart — a demo of the community registry documenting itself
+> well enough that Claude Code doesn't need to guess."
+
+**Do:** when Claude finishes, sync deps + launch via the config-driven
+launcher:
+
+```bash
+uvx --from dagster-community-components-cli dagster-component sync-deps --auto-install
+
+cat > /tmp/mir_launch.yaml <<CFG
+ops:
+  launch_mir_triage_op:
+    config:
+      owner: dagster-io
+      repo: dagster
+      issue_number: 30000
+CFG
+uv run dagster job execute -m maintainer_triage_comprehensive.definitions -j launch_mir_triage --config /tmp/mir_launch.yaml
+```
+
+**Do:** open `dg dev`, navigate to the pipeline's Runs page. Point at
+the 11 step_keys.
+
+**Say:**
+
+> "Every step is its own op — `per_step_ops: true` gave us that. Full
+> per-step retry via Dagster's native re-execution. Click into
+> `mir_repo_evidence` — full tool-call trajectory in metadata: LLM
+> called `search_code`, saw 3 hits, called `get_file_contents` on the
+> most likely one, called `search_code` again with a narrower query,
+> then called `finalize` with a written summary. 5 real MCP tool calls,
+> one Dagster asset. `mir_reproduction` — LangGraph handoff shows the
+> 5-node internal trajectory in `framework_result` metadata. Framework
+> is one node in the Dagster graph; Dagster is the harness at the
+> pipeline level. Both stories work."
+
+**Do:** open the drafted `reports/investigation_dagster-io_dagster_30000.md`
+file, scroll through it.
+
+**Say:**
+
+> "Real triage of a real open GitHub issue. LangGraph reproduction
+> analysis, 3-way skeptic debate, drafter+critic-iterated final report.
+> ~30 total LLM calls, ~$0.05. One YAML from one prompt."
+
+## Choosing between 5+5b vs 6
+
+**Use Scenes 5 + 5b when:** the audience is skeptical about incremental
+extensibility ("does Dagster grow with me?") — the v1 → v3 progression
+answers that directly. Also better if the audience has SEEN the v1
+demo before and is asking "what's new."
+
+**Use Scene 6 when:** the audience is skeptical about AI composability
+of complex pipelines ("can Claude Code REALLY write this?") — one
+prompt → 11-asset pipeline + LangGraph module answers that directly.
+Also better for a first-time audience where the v1 upgrade context is
+noise.
+
+Don't do both — either 5 + 5b (5 min) or 6 (3 min), not 5 + 5b + 6.
+Adjust `Target length` at the top accordingly (7-8 min for 5 + 5b,
+6-7 min for 6).
+
+## Scene 7 — close (30s)
 
 **Say:**
 
