@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
-"""Generate blog/feed.xml (RSS 2.0) from the markdown files in blog/.
+"""Generate blog/feed.xml (RSS 2.0) + blog/README.md Posts table from
+the markdown files in blog/.
 
 Reads YAML frontmatter (title / date / author / description) at the top
-of each *.md file, produces an RSS 2.0 feed sorted newest-first, writes
-to blog/feed.xml.
+of each *.md file, produces an RSS 2.0 feed AND the Posts table in
+blog/README.md, sorted newest-first.
 
 Usage:
-    python tools/generate_rss.py            # regen feed.xml
-    python tools/generate_rss.py --check    # exit 1 if feed.xml is stale
+    python tools/generate_rss.py            # regen feed.xml + README Posts table
+    python tools/generate_rss.py --check    # exit 1 if either is stale
 """
 from __future__ import annotations
 
@@ -22,6 +23,7 @@ from xml.sax.saxutils import escape
 ROOT = Path(__file__).resolve().parent.parent
 BLOG_DIR = ROOT / "blog"
 FEED_PATH = BLOG_DIR / "feed.xml"
+README_PATH = BLOG_DIR / "README.md"
 
 # Where the CLI repo (and this feed) lives publicly.
 SITE_URL = "https://github.com/eric-thomas-dagster/dagster-community-components-cli"
@@ -81,7 +83,35 @@ def read_post(path: Path) -> dict | None:
         "date": pub_date,
         "link": f"{SITE_URL}/blob/main/blog/{path.name}",
         "guid": f"{RAW_URL}/blog/{path.name}",
+        "filename": path.name,
     }
+
+
+def build_readme_posts_section(posts: list[dict]) -> str:
+    """Emit the ## Posts table body (rows only) for blog/README.md."""
+    lines = ["| Date | Title |", "|---|---|"]
+    for p in posts:
+        slug = p["filename"]
+        date = p["date"].date().isoformat()
+        title = p["title"]
+        desc = p["description"]
+        lines.append(f"| {date} | [{title}]({slug}) — {desc} |")
+    return "\n".join(lines)
+
+
+def splice_readme_posts(current: str, new_table: str) -> str:
+    """Replace the `## Posts` … `## Writing a new post` block's TABLE only,
+    preserving the section headers. Returns the updated README text."""
+    pattern = re.compile(
+        r"(## Posts\n\n)(.*?)(\n\n## Writing a new post)",
+        re.DOTALL,
+    )
+    if not pattern.search(current):
+        raise RuntimeError(
+            "blog/README.md missing `## Posts\\n\\n<table>\\n\\n## Writing a new post` "
+            "block — table cannot be spliced. Fix by hand once, then re-run."
+        )
+    return pattern.sub(rf"\g<1>{new_table}\g<3>", current)
 
 
 def build_feed(posts: list[dict]) -> str:
@@ -131,18 +161,32 @@ def main() -> int:
         return 1
 
     xml = build_feed(posts)
+    new_table = build_readme_posts_section(posts)
+    current_readme = README_PATH.read_text(encoding="utf-8") if README_PATH.exists() else ""
+    new_readme = splice_readme_posts(current_readme, new_table) if current_readme else current_readme
 
     if args.check:
-        current = FEED_PATH.read_text(encoding="utf-8") if FEED_PATH.exists() else ""
+        current_feed = FEED_PATH.read_text(encoding="utf-8") if FEED_PATH.exists() else ""
         # Ignore lastBuildDate churn — replace both sides' lastBuildDate for the diff.
         strip = re.compile(r"<lastBuildDate>[^<]+</lastBuildDate>")
-        if strip.sub("", current) == strip.sub("", xml):
+        feed_stale = strip.sub("", current_feed) != strip.sub("", xml)
+        readme_stale = current_readme != new_readme
+        if not feed_stale and not readme_stale:
             return 0
-        print(f"feed.xml is stale — run: python {Path(__file__).relative_to(ROOT)}", file=sys.stderr)
+        rel = Path(__file__).relative_to(ROOT)
+        if feed_stale:
+            print(f"feed.xml is stale — run: python {rel}", file=sys.stderr)
+        if readme_stale:
+            print(f"blog/README.md Posts table is stale — run: python {rel}", file=sys.stderr)
         return 1
 
     FEED_PATH.write_text(xml, encoding="utf-8")
-    print(f"wrote {FEED_PATH} — {len(posts)} post(s)")
+    if new_readme and new_readme != current_readme:
+        README_PATH.write_text(new_readme, encoding="utf-8")
+        readme_status = "updated"
+    else:
+        readme_status = "unchanged"
+    print(f"wrote {FEED_PATH} — {len(posts)} post(s); blog/README.md Posts table {readme_status}")
     for p in posts:
         print(f"  {p['date'].date()}  {p['title']}")
     return 0
