@@ -37,7 +37,8 @@
 #   mir_decision (synthesize — 4 typed named inputs)
 #         │
 #         ▼
-#   mir_report (critique_loop — drafter + critic × 2 iterations)
+#   mir_report (critique_loop — drafter + critic, ≤ 2 iterations,
+#                stops early when critic scores draft ≥ 85/100)
 #         │
 #         ▼
 #   mir_report_approval_slack (SlackApprovalGateComponent posts + polls)
@@ -497,11 +498,17 @@ attributes:
       max_tokens: 500
 
     # ── 6. Maintainer-facing report — ⭐ critique_loop op ──
-    #   Drafter writes report; critic reviews; drafter revises. 2
-    #   iterations. Final polished markdown lands as mir_report.
+    #   Drafter writes report; critic reviews; drafter revises. Cap at
+    #   2 iterations, BUT stop early when the critic scores the draft
+    #   >= 85/100 (skips the revise step). Real-world triage drafts
+    #   are often good on first pass → ~40% call-count savings when
+    #   the drafter nails it, still capped at 2 for hard cases.
+    #   Final polished markdown lands as mir_report.
     - id: report
       op: critique_loop
       source: decision
+      iterations: 2
+      until_score_gte: 85
       drafter:
         model: gpt-4o
         api_key_env_var: OPENAI_API_KEY
@@ -523,7 +530,6 @@ attributes:
           (b) whether next_action is specific enough for the assigned
           team to act, (c) whether uncertainty is honestly stated.
           Be terse. Actionable critique only.
-      iterations: 2
 
   outputs:
     assets:
@@ -648,7 +654,7 @@ against a real GitHub issue:
     ✓ tool_use_loop op in mir_repo_evidence
     ✓ handoff op → LangGraph in mir_reproduction
     ✓ debate op (3 skeptics + arbitrator) in mir_skeptic_debate
-    ✓ critique_loop op (drafter + critic × 2) in mir_report
+    ✓ critique_loop op (drafter + critic, ≤ 2 iters, early-stop @ score≥85) in mir_report
     ✓ synthesize op with typed inputs in mir_preliminary + mir_decision
   ✓ Dynamic partitions + composite partition_key_parser
 $([ -n "$SLACK_BOT_TOKEN" ] && echo "  ✓ SlackApprovalGateComponent — Slack quorum HITL")

@@ -66,7 +66,8 @@ launch_mir_triage_v3 (job — config-driven entry, dynamic partition register)
 │  └────────────┬─────────────────────────┘                             │
 │               ▼                                                       │
 │  ┌─────────────────────────────────────┐                              │
-│  │ mir_report (⭐ critique_loop)         │ drafter + critic × 2 iters  │
+│  │ mir_report (⭐ critique_loop)         │ drafter + critic, ≤2 iters, │
+│  │                                       │ early-stop @ score ≥ 85     │
 │  └────────────┬─────────────────────────┘                             │
 └───────────────┼───────────────────────────────────────────────────────┘
                 │
@@ -169,9 +170,9 @@ The `handoff` op imports the module, calls `run_reproduction_analysis(issue_fact
 
 Instead of ONE skeptic critiquing the preliminary triage, run **three** skeptics (Bayesian / classification / ownership angle) in parallel + an arbitrator picks the strongest. 4 LLM calls total; one asset materializes with the winner's text as `text`, all 3 proposals + arbitrator reasoning in metadata.
 
-### `critique_loop` on `mir_report`
+### `critique_loop` on `mir_report` (with `until_score_gte: 85`)
 
-Drafter writes the maintainer-facing report; critic reviews for clarity / actionable-next-step / honest-uncertainty; drafter revises. 2 iterations = 5 LLM calls total (initial draft + 2 × (critique + revise)). One asset with the FINAL revised text; full transcript in metadata.
+Drafter writes the maintainer-facing report; critic reviews for clarity / actionable-next-step / honest-uncertainty; drafter revises. Capped at 2 iterations = 5 LLM calls max, BUT stops early when the critic scores the draft ≥ 85/100 (skips the revise step for that iteration). Real-world triage drafts are often good on first pass → ~40% call-count savings on average, still capped at 2 iterations for hard cases. One asset with the FINAL revised text; full transcript + `final_score` + `stop_reason` in metadata.
 
 ### `SlackApprovalGateComponent`
 

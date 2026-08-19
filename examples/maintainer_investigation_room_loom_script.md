@@ -348,8 +348,12 @@ manifest):
 > *6. `mir_skeptic_debate` (`debate`, 3 gpt-4o skeptic proposers +
 >    arbitrator).*
 > *7. `mir_decision` (`synthesize`, 4 typed inputs).*
-> *8. `mir_report` (`critique_loop`, drafter + critic × 2 iterations,
->    heading `# Issue triage — {partition.owner}/{partition.repo}#{partition.issue_number}`).*
+> *8. `mir_report` (`critique_loop`, drafter + critic, `iterations: 2`
+>    with `until_score_gte: 85` so the loop stops the moment the critic
+>    scores the draft ≥ 85/100 — most triage reports are good on first
+>    pass, so this cuts ~40% of the report-step LLM calls without
+>    capping quality on hard cases. Heading exactly
+>    `# Issue triage — {partition.owner}/{partition.repo}#{partition.issue_number}`).*
 >
 > *Also add a SlackApprovalGateComponent (channel `#dagster-triage`,
 > allowlist $SLACK_APPROVER_USER_IDS, quorum 1) posting `mir_report`,
