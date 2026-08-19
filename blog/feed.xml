@@ -5,8 +5,16 @@
     <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/blog</link>
     <description>Long-form posts from Eric Thomas on the Dagster community components registry — design essays, component tours, honest retrospectives.</description>
     <language>en-us</language>
-    <lastBuildDate>Mon, 17 Aug 2026 20:25:46 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 19 Aug 2026 23:44:59 +0000</lastBuildDate>
     <atom:link href="https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/feed.xml" rel="self" type="application/rss+xml" />
+    <item>
+      <title>Orchestration for the HVR long tail</title>
+      <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/blog/hvr-hub-standalone-orchestration.md</link>
+      <guid isPermaLink="false">https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/hvr-hub-standalone-orchestration.md</guid>
+      <pubDate>Wed, 19 Aug 2026 00:00:00 +0000</pubDate>
+      <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Eric Thomas</dc:creator>
+      <description>Standalone HVR Hub is still in production at large enterprises that adopted it pre-Fivetran-acquisition. The new hvr_hub_workspace community component brings that install base into the Dagster catalog with one YAML — full Fivetran-shape, no migration required.</description>
+    </item>
     <item>
       <title>One YAML, every Snowflake object: how the community `snowflake_workspace` component turns Snowflake into a Dagster catalog</title>
       <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/blog/snowflake-workspace-external-orchestration.md</link>

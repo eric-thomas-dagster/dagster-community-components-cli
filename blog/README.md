@@ -17,6 +17,7 @@ python tools/generate_rss.py --check    # exit 1 if stale (for CI)
 
 | Date | Title |
 |---|---|
+| 2026-08-19 | [Orchestration for the HVR long tail](hvr-hub-standalone-orchestration.md) — bringing standalone HVR Hub into the Dagster catalog with the new `hvr_hub_workspace` community component |
 | 2026-08-17 | [One YAML, every Snowflake object](snowflake-workspace-external-orchestration.md) — a tour of the community `snowflake_workspace` component |
 | 2026-08-16 | [Not every SaaS integration should be a workspace](not-every-saas-is-a-workspace.md) — the taxonomy behind the reshape of Notion, GitHub, Jira, and PagerDuty |
 

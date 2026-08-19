@@ -1,3 +1,10 @@
+---
+title: "Orchestration for the HVR long tail"
+date: 2026-08-19
+author: Eric Thomas
+description: "Standalone HVR Hub is still in production at large enterprises that adopted it pre-Fivetran-acquisition. The new hvr_hub_workspace community component brings that install base into the Dagster catalog with one YAML — full Fivetran-shape, no migration required."
+---
+
 # Orchestration for the HVR long tail — bringing standalone HVR Hub into the Dagster catalog
 
 *By the Dagster community components team*
