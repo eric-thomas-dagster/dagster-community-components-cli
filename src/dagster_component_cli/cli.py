@@ -215,6 +215,13 @@ def add(
         # `src/<pkg>/defs/<id>/defs.yaml` so dg autoloads it.
         if canonical_pkg and canonical_defs_dir is not None:
             _canonicalize_install(install_dir, canonical_defs_dir, canonical_pkg, cid)
+        # Keep `components/__init__.py` re-exports in sync so the new class
+        # shows up in the Dagster UI's Components tab (entry-point-driven
+        # discovery only sees top-level attributes of the entry-point target).
+        if canonical_pkg and project_root is not None:
+            components_dir = project_root / "src" / canonical_pkg / "components"
+            if components_dir.is_dir():
+                _sync_components_init(components_dir)
     except InstallError as e:
         err.print(f"[red]✗[/red] {e}")
         sys.exit(1)
@@ -616,6 +623,10 @@ def update(
         # still inject the schema comment.
         if path.name == cid and path.parent.name == "components":
             (path / "example.yaml").unlink(missing_ok=True)
+            # Re-sync `components/__init__.py` — an update to component.py
+            # can rename the exported class, and this is a good time to
+            # heal any drift (missing subpackages, stale re-exports).
+            _sync_components_init(path.parent)
         elif "example.yaml" in files and "schema.json" in files:
             _inject_schema_comment(path / "example.yaml", component, ref=ref)
     except InstallError as e:
@@ -984,14 +995,17 @@ def _ensure_registry_entry_point(
     auto_install: bool,
     manager: str,
 ) -> None:
-    """Add the `dagster_dg_cli.registry_modules` entry point to pyproject.toml
-    and (optionally) editable-install the project so it registers.
+    """Ensure the project is editable-installed so its components register
+    with the Dagster UI's Components tab.
 
-    Without this: `dg list components` sees the project's custom components
-    (via `[tool.dg.project].registry_modules` in pyproject.toml), BUT the
-    Dagster webserver's Components tab does NOT (it reads Python entry
-    points, not tool.dg config). Result: customers wonder why their
-    scaffolded components never appear in the UI — for months.
+    Modern Dagster (1.13+) reads `[tool.dg.project].registry_modules` in
+    pyproject.toml — that IS the discovery mechanism. Older Dagster
+    needed a Python entry point (`[project.entry-points."dagster_dg_cli.registry_modules"]`)
+    on top. Both aren't compatible — when the entry-point block is
+    present AND points at a top-level module with an empty `__init__.py`,
+    discovery walks the entry point (not the tool.dg glob) and finds
+    nothing. So we PREFER the modern config and warn about (or offer to
+    remove) any stale entry-point block that would shadow it.
     """
     # tomllib is stdlib in 3.11+; on 3.10 fall back to tomli, then tomlkit.
     try:
@@ -1028,34 +1042,73 @@ def _ensure_registry_entry_point(
 
     console.print("\n[bold]Wiring up the Dagster UI's Components tab[/bold]")
 
-    # Step 1: inject the entry point section if it's not already there.
+    # The Dagster UI's Components tab reads Python entry points registered
+    # under the `dagster_dg_cli.registry_modules` group. Discovery walks
+    # ONLY the top-level attributes of the module the entry point names —
+    # it does NOT recurse into sub-packages. So an entry point pointing
+    # at the project's top-level module (typically an empty `__init__.py`)
+    # finds nothing.
+    #
+    # The correct target is `<root_module>.components` — the sub-package
+    # that holds the components — paired with a `components/__init__.py`
+    # that re-exports each component class. That way discovery finds
+    # every class as an attribute at the entry-point target level.
+    components_module = f"{root_module}.components"
+    entry_point_key = components_module.replace(".", "_")
     existing_ep = (
         cfg.get("project", {})
         .get("entry-points", {})
         .get("dagster_dg_cli.registry_modules", {})
     )
-    entry_point_key = root_module.replace(".", "_")
-    already_registered = existing_ep.get(entry_point_key) == root_module
 
-    if already_registered:
+    # Migrate a stale entry point that points at the top-level module —
+    # a legacy pattern this CLI used to inject before we understood the
+    # discovery rules. It's the "empty __init__.py, so the Components tab
+    # shows nothing" footgun.
+    stale_key = root_module.replace(".", "_")
+    if (
+        stale_key != entry_point_key
+        and existing_ep.get(stale_key) == root_module
+    ):
+        _remove_registry_entry_point(pyproject_path, stale_key)
+        console.print(
+            f"  [yellow]·[/yellow] Removed stale entry point "
+            f"[dim]{stale_key} = \"{root_module}\"[/dim] (pointed at empty "
+            f"top-level module — discovery couldn't find anything there)."
+        )
+        # Refresh view of existing_ep after removal.
+        existing_ep = {k: v for k, v in existing_ep.items() if k != stale_key}
+
+    if existing_ep.get(entry_point_key) == components_module:
         console.print(
             f"  [dim]·[/dim] Entry point already present: "
-            f"[dim]{entry_point_key} = {root_module}[/dim]"
+            f"[dim]{entry_point_key} = \"{components_module}\"[/dim]"
         )
-        wrote_entry_point = False
     else:
-        _write_registry_entry_point(pyproject_path, entry_point_key, root_module)
+        _write_registry_entry_point(pyproject_path, entry_point_key, components_module)
         console.print(
-            f"  [green]✓[/green] Added entry point to pyproject.toml: "
+            f"  [green]✓[/green] Added entry point: "
             f"[dim][project.entry-points.\"dagster_dg_cli.registry_modules\"] "
-            f"{entry_point_key} = \"{root_module}\"[/dim]"
+            f"{entry_point_key} = \"{components_module}\"[/dim]"
         )
-        wrote_entry_point = True
 
-    # Step 2: editable install (needs to run whether we just wrote the
-    # entry point OR it was already there — the venv may not have the
-    # package installed at all, in which case entry points aren't
-    # visible even if declared).
+    # Ensure `components/__init__.py` re-exports every scaffolded class —
+    # entry-point discovery only sees what's at the top-level of the
+    # target module. If the components dir doesn't exist yet, skip; the
+    # sync will happen the first time a component is added.
+    components_dir = project_root / "src" / root_module / "components"
+    if components_dir.is_dir():
+        n_synced = _sync_components_init(components_dir)
+        if n_synced:
+            console.print(
+                f"  [green]✓[/green] Synced [dim]components/__init__.py[/dim] "
+                f"with {n_synced} class re-export{'s' if n_synced != 1 else ''}."
+            )
+
+    # Step 2: editable install.
+    # Discovery only works when the project is installed into the venv —
+    # entry points live in site-packages/*.dist-info/entry_points.txt,
+    # written at install time.
     if skip_install:
         console.print(
             "  [yellow]·[/yellow] Skipping editable install (--no-install). "
@@ -1064,9 +1117,9 @@ def _ensure_registry_entry_point(
         )
         return
 
-    do_install = auto_install or wrote_entry_point or click.confirm(
+    do_install = auto_install or click.confirm(
         "  Editable-install this project into the venv? "
-        "(needed for Dagster UI to see the entry point)",
+        "(needed for the Components tab to see the project)",
         default=True,
     )
     if not do_install:
@@ -1113,6 +1166,123 @@ def _write_registry_entry_point(pyproject_path: Path, ep_key: str, ep_value: str
         )
         with pyproject_path.open("a") as fh:
             fh.write(block)
+
+
+def _sync_components_init(components_dir: Path) -> int:
+    """Populate `components/__init__.py` with `from .<sub> import <Class>`
+    lines for every scaffolded component class under this directory.
+
+    The Dagster UI's Components tab discovers only what's at the top-level
+    of the entry-point target — pointing that at `<pkg>.components`
+    requires `components/__init__.py` to expose each class. Called from
+    `init` (to backfill any existing scaffolds) and could be called from
+    `add` (to append the new class each time one is installed — see
+    _append_component_to_init).
+
+    Returns the number of classes exposed. Skips subdirs that don't have
+    a Component subclass or that already re-export via their own
+    `__init__.py`; leaves user-authored code in the file alone by
+    inserting a managed BEGIN/END sentinel block.
+    """
+    import re
+
+    entries: list[tuple[str, str]] = []  # (subpackage, ClassName)
+    for sub in sorted(components_dir.iterdir()):
+        if not sub.is_dir() or sub.name.startswith((".", "_")):
+            continue
+        # A subdir counts if it has an __init__.py that re-exports a
+        # `*Component` class, OR a component.py that defines one.
+        init_file = sub / "__init__.py"
+        component_file = sub / "component.py"
+        class_name: Optional[str] = None
+        if init_file.exists():
+            m = re.search(
+                r"from\s+\.component\s+import\s+([A-Z][A-Za-z0-9_]*)",
+                init_file.read_text(),
+            )
+            if m:
+                class_name = m.group(1)
+        if class_name is None and component_file.exists():
+            m = re.search(
+                r"^class\s+([A-Z][A-Za-z0-9_]*)\s*\([^)]*\bdg\.Component\b",
+                component_file.read_text(),
+                re.MULTILINE,
+            )
+            if m:
+                class_name = m.group(1)
+        if class_name:
+            entries.append((sub.name, class_name))
+
+    if not entries:
+        return 0
+
+    marker_begin = "# BEGIN dagster-component managed re-exports"
+    marker_end = "# END dagster-component managed re-exports"
+    block_lines = [marker_begin]
+    for sub, cls in entries:
+        block_lines.append(f"from .{sub} import {cls}")
+    block_lines.append(
+        "__all__ = [" + ", ".join(f'"{cls}"' for _, cls in entries) + "]"
+    )
+    block_lines.append(marker_end)
+    block = "\n".join(block_lines)
+
+    init_path = components_dir / "__init__.py"
+    existing = init_path.read_text() if init_path.exists() else ""
+    if marker_begin in existing and marker_end in existing:
+        new = re.sub(
+            re.escape(marker_begin) + r".*?" + re.escape(marker_end),
+            block,
+            existing,
+            count=1,
+            flags=re.DOTALL,
+        )
+    else:
+        prefix = existing.rstrip() + "\n\n" if existing.strip() else ""
+        new = prefix + block + "\n"
+    init_path.write_text(new)
+    return len(entries)
+
+
+def _remove_registry_entry_point(pyproject_path: Path, ep_key: str) -> None:
+    """Delete a specific key from
+    `[project.entry-points."dagster_dg_cli.registry_modules"]`. Drops the
+    whole section if it ends up empty. tomlkit preserves formatting;
+    plain text fallback handles envs without tomlkit but is regex-based
+    and best-effort.
+    """
+    try:
+        import tomlkit
+
+        doc = tomlkit.parse(pyproject_path.read_text())
+        section = (
+            doc.get("project", {})
+            .get("entry-points", {})
+            .get("dagster_dg_cli.registry_modules")
+        )
+        if section is None or ep_key not in section:
+            return
+        del section[ep_key]
+        # If the sub-table is now empty, drop it too, and drop the
+        # parent entry-points table if that also becomes empty.
+        entry_points = doc.get("project", {}).get("entry-points")
+        if entry_points is not None and not section:
+            del entry_points["dagster_dg_cli.registry_modules"]
+            if not entry_points:
+                del doc["project"]["entry-points"]
+        pyproject_path.write_text(tomlkit.dumps(doc))
+    except ImportError:
+        # Regex fallback — matches the header + all lines until the next
+        # section or EOF. Best-effort; users on old Pythons without
+        # tomlkit are the tail case.
+        import re
+
+        text = pyproject_path.read_text()
+        pattern = (
+            r"\n?\[project\.entry-points\.\"dagster_dg_cli\.registry_modules\"\]\n"
+            r"(?:[^\[]*)"
+        )
+        pyproject_path.write_text(re.sub(pattern, "\n", text))
 
 
 def _editable_install_project(project_root: Path, *, manager: str) -> int:
