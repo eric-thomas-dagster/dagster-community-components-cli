@@ -8,7 +8,7 @@ CLAUDE_MD = """\
 # Dagster community components
 
 This project can pull from the Dagster community components registry —
-**~850 reusable components** covering integrations, sensors, IO managers,
+**~970 reusable components** covering integrations, sensors, IO managers,
 transforms, sinks, sources, AI / NLP / agents (with MCP tool support),
 analytics, lakehouse, observability, and more. About 60% are validated
 end-to-end against real systems.
@@ -26,7 +26,7 @@ and official `dagster-<vendor>` integrations (dbt / Fivetran / Sling /
 Snowflake / Databricks / etc.). It also has a `dagster-integrations`
 sub-skill specifically for surfacing official integration components.
 
-**This document covers the community registry** — the long tail of ~850
+**This document covers the community registry** — the long tail of ~970
 components beyond official integrations (and ~215 end-to-end walkthroughs
 in `examples/`). Use the two together:
 
@@ -121,7 +121,7 @@ Each manifest entry carries a `validation` field — use it to set user expectat
 | `code` | YAML loads cleanly + `dg check defs` passes, but no live materialization run |
 | `infra` | Component depends on paid / proprietary infra; level depends on the user's environment |
 
-About 510 of ~850 components are `live`. The `validation.evidence` field
+About 620 of ~970 components are `live`. The `validation.evidence` field
 points at the walkthrough that validated it.
 
 ## Where `add` installs
@@ -395,6 +395,120 @@ following older guidance may have missed them:
 See `examples/agent_family.md`, `examples/litellm_agent.md`,
 `examples/lineage_to_datahub.md`, `examples/lineage_catalogs.md`, and
 `examples/warehouse_migration.md` for end-to-end walkthroughs of each.
+
+## Recent additions worth knowing (2026-08)
+
+Big shipment on the agentic-orchestration + HITL side. If the user asks
+about any of these, use the specific op / component; don't fall back
+to generic patterns.
+
+### AgenticPipelineComponent — now 8 ops (previously 5–6)
+
+One YAML with `source: + steps: + outputs:`. Every step becomes a
+first-class Dagster asset with cost/latency/tokens in metadata. All 8 ops:
+
+| Op | Purpose | Calls | Best for |
+|---|---|---|---|
+| `llm_call` | one LLM call over source | 1 | simple analysis / summarization |
+| `route` | router LLM picks a specialist; specialist answers | 2 | branch by content |
+| `debate` | N proposers write in parallel; arbitrator picks winner | N+1 | multi-perspective decisions |
+| `critique_loop` | drafter + critic × N iterations | 2N+1 | iterative refinement / editorial |
+| `synthesize` | join N upstream steps via typed named `inputs:` (or positional `sources:`) | 1 | multi-input merge with per-port templating |
+| `mcp_call` | deterministic MCP tool call (no LLM). Transports: `stdio` / `http` / `sse` / **`fastmcp`** (v2 client, auto-transport + bearer/OAuth) | 0 LLM, 1 MCP | fetch grounding data (GitHub, filesystem, remote MCP server) |
+| **`tool_use_loop`** | LLM has MCP tools; iteratively picks tools until `finalize`. Bounded by `max_iterations` | 3–30 (LLM + tool) | open-ended agent tool-use, LangGraph-shape |
+| **`handoff`** | invoke user-provided callable (LangGraph / AutoGen / CrewAI / DSPy). Framework's per-node lineage lives in asset metadata; adjacent Dagster steps stay first-class | 1 wrapped call | bring existing framework code as ONE pipeline step |
+
+**Every step's output flows in a standard `{text, cost_usd, latency_ms,
+tokens_total, model_fingerprint, materialized_at, op, ...}` dict shape.**
+Downstream steps consume via `source: <step_id>` OR typed `inputs: {port:
+{from: <step_id>} | {literal: <value>}}`. Every text-emitting op
+supports `{text}` + `{port_name}` + `{partition_key}` + `{partition.<name>}`
+substitution in prompts / tool_args / sink paths.
+
+### AgenticPipelineComponent — new opt-in flags
+
+- **`per_step_ops: true`** — emits as `@dg.graph_multi_asset` with ONE OP
+  PER STEP instead of a single `@multi_asset`. Runs page shows N step_keys
+  (`{prefix}_ingest`, `{prefix}_{step_id}` per step, `{prefix}_extract`)
+  instead of one composite op. Native per-op retry via Dagster's
+  re-execution machinery — restart from any failed step. State dict
+  serializes through the IO manager between ops. Default stays False for
+  zero-overhead single-op behavior.
+- **`partition_key_parser: "{owner}/{repo}#{issue_number:int}"`** —
+  parses composite partition keys into named fields available as
+  `{partition.<name>}` in tool_args + prompts + source.text. Optional
+  `:int` / `:float` / `:bool` type suffixes preserve types when the
+  substitution target is a pure single-placeholder value (needed for
+  GitHub MCP `get_issue` which rejects string `issue_number`).
+
+### PartitionedAssetLauncherJobComponent — config-driven entry
+
+Takes run config (owner/repo/issue_number, tenant_id, etc.), formats a
+partition key from `partition_key_template`, registers on the target's
+DynamicPartitionsDefinition, materializes the target assets with that
+key. Same entry point for humans (form-fill in the UI) + external
+systems (POST run_config via GraphQL). Pairs with any dynamic-partitioned
+multi_asset — typically an AgenticPipelineComponent with a
+`partition_key_parser` set.
+
+### Local-AI A/B stack (3 components — should-we-go-local as a pipeline)
+
+- **`InferenceProviderABTestComponent`** — same prompt through N LiteLLM
+  providers side-by-side; each response an asset with cost / latency /
+  tokens. Failure isolation (one provider erroring doesn't tank the A/B).
+- **`ProviderABEvaluatorComponent`** — LLM-as-judge scores N candidates
+  against a rubric in ONE pass (avoids judge-drift across separate
+  calls). Optional `min_winner_score` asset check turns the pair into
+  a branch-deploy merge gate: swap the provider in a PR, quality holds
+  → merge; drops → merge blocked automatically.
+- **`InferenceCostReportComponent`** — aggregates per-provider cost +
+  latency + quality into one report asset (baseline deltas, projected
+  daily savings, winner-by-cost / winner-by-quality / winner-by-value
+  composite). Materialize daily → time-series in Insights.
+
+### SlackApprovalGateComponent — Slack quorum HITL
+
+Reactions-polling (not interactive buttons) so it works in Dagster+
+Serverless without a public webhook. Multi-approver quorum + allowlist
++ timeout policies (`escalate` / `reject` / `approve`) + escalation
+pings. Writes the same JSON token file `HumanApprovalGateComponent`
+reads — everything downstream unchanged. Sanitizes composite partition
+keys (`/` → `_`) so per-partition token filenames land as single
+segments.
+
+### Key walkthroughs for these
+
+- `examples/local_ai_ab.md` — the A/B stack in one project
+- `examples/slack_approval_gate.md` — Slack quorum HITL
+- `examples/maintainer_investigation_room.md` — MIR-v1 (5-op mcp_call + fan-out + file-drop HITL)
+- `examples/maintainer_investigation_room_v3.md` — MIR-v3 (every 2026-08
+  primitive composed into one pipeline: per_step_ops + tool_use_loop +
+  handoff + debate + critique_loop + Slack quorum HITL)
+
+### Rules of thumb when composing agentic pipelines
+
+- **Fan-out with typed inputs:** N specialists all read
+  `inputs: {issue_facts: {from: intake}}`. Cleaner than passing the
+  whole state dict.
+- **Multi-input synthesize:** typed `inputs:` map port names to prior
+  step ids or literals. Each port becomes a `{port_name}` placeholder
+  in `prompt_template` + `system_prompt`. Prefer typed inputs over
+  positional `sources:` for multi-input joins.
+- **`per_step_ops: true` when the run view matters:** for demos + when
+  customers want dbt-style retry, flip it on. Default off keeps the
+  in-memory state performance for high-throughput pipelines.
+- **`tool_use_loop` for exploratory reasoning:** when the LLM needs
+  to make N calls that depend on prior tool results (search → read →
+  search → …). One asset materializes with the full trace in metadata.
+- **`handoff` for framework composition:** if the customer already has
+  LangGraph / AutoGen / CrewAI code, wrap it in a callable + use
+  `handoff` — don't force a rewrite to the Dagster ops. Adjacent
+  Dagster steps stay first-class.
+- **Composite partition keys + parser:** for per-entity pipelines
+  (per-issue triage, per-tenant analysis), key on
+  `{owner}/{repo}#{issue_number:int}` (or similar) and parse back with
+  `partition_key_parser` so each field is available as
+  `{partition.<name>}` in tool_args / prompts.
 """
 
 
