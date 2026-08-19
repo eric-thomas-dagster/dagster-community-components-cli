@@ -1194,7 +1194,7 @@ def _sync_components_init(components_dir: Path) -> int:
         # `*Component` class, OR a component.py that defines one.
         init_file = sub / "__init__.py"
         component_file = sub / "component.py"
-        class_name: Optional[str] = None
+        class_name: str | None = None
         if init_file.exists():
             m = re.search(
                 r"from\s+\.component\s+import\s+([A-Z][A-Za-z0-9_]*)",
