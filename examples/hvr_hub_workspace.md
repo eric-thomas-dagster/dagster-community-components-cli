@@ -1,121 +1,186 @@
 # HVR Hub Workspace — standalone HVR 6.x → Dagster external assets
 
+> One YAML wires the whole HVR Hub. Every replicated table shows up as a
+> Dagster asset with lineage + freshness telemetry. Fivetran-shape.
+> Ships with a fully-runnable demo (mock HVR Hub → Dagster catalog in
+> one command, no license required).
+
 **Component:** `dagster_community_components.HvrHubWorkspaceComponent`
-**Validation:** `code` (mock-tested; live-validate against your Hub with `{{ env }}` changes)
+**Setup script:** `setup_hvr_hub_workspace_demo.sh`
+**Validation:** `live` (mock Hub end-to-end; drop-in for a real Hub via env-var swap)
 
-## What this is
+## Try it in one command
 
-Full Fivetran-shape workspace component for **standalone HVR Hub 6.x**.
-One YAML wires the whole Hub — every replicated table shows up as a
-Dagster asset with lineage + freshness telemetry.
+```bash
+bash setup_hvr_hub_workspace_demo.sh
+```
+
+That does everything: spins up a mock HVR Hub REST server on
+`localhost:4340`, scaffolds a Dagster project, installs
+`hvr_hub_workspace`, points it at the mock Hub, refreshes discovery, and
+prints the resulting asset catalog. Takes ~30 seconds.
+
+What you get:
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                      HVR Hub Server (6.1 – 6.3)                     │
-│    ┌──────────────┐   ┌──────────────┐   ┌──────────────┐           │
-│    │ channel:     │   │ channel:     │   │ channel:     │           │
-│    │  sales_cdc   │   │ orders_stream│   │  ...         │           │
-│    │  ├─ orders   │   │  └─ events   │   │              │           │
-│    │  └─ customers│   │              │   │              │           │
-│    └──────────────┘   └──────────────┘   └──────────────┘           │
-└──────────────────────────────┬──────────────────────────────────────┘
-                               │ REST (bearer JWT)
-                               ▼
-     ┌──────────────────────────────────────────────────────────┐
-     │           HvrHubWorkspaceComponent (one YAML)             │
-     │  - Discovers channels + tables at load                    │
-     │  - Emits one Dagster asset per (channel × loc × table)    │
-     │  - Optional polling sensor: integrate-lag observations    │
-     │  - Optional asset check: SLA on integrate lag             │
-     └──────────────────────────────────────────────────────────┘
-                               │
-                               ▼
-       Dagster catalog: hvr/prod_hub/sales_cdc/snowflake_dw/orders
-                        hvr/prod_hub/sales_cdc/snowflake_dw/customers
-                        hvr/prod_hub/orders_stream/snowflake_dw/events
-                        prod_hub_hvr_observer (sensor)
+Assets  ── hvr/demo_hub/sales_cdc/target_snowflake_dw/orders
+        ── hvr/demo_hub/sales_cdc/target_snowflake_dw/customers
+        ── hvr/demo_hub/orders_stream/target_snowflake_dw/events
+        ── hvr/demo_hub/orders_stream/target_snowflake_dw/clicks
+        ── hvr/demo_hub/inventory_cdc/target_snowflake_dw/stock_levels
+                                    ↑
+        (test_ephemeral is filtered out by channel_selector)
+
+Sensor  ── demo_hub_hvr_observer         (polls integrate-lag every 60s)
+Checks  ── integrate_lag_within_sla × 5  (one per asset)
 ```
+
+Open the Dagster UI:
+
+```bash
+cd hvr-hub-demo && source .env.demo
+uv run dg dev
+```
+
+## What this component is
+
+Auto-discovers every channel + replicated table on a **standalone HVR
+Hub 6.x** server and emits one Dagster asset per (channel × target
+location × table). Optional polling sensor emits AssetObservations with
+integrate-lag metadata. Optional per-asset check fails when lag exceeds
+your SLA.
+
+Fivetran-shape — same YAML shape as `dagster-fivetran`, same fields
+(`workspace`, `channel_selector`, `translation`, `polling_sensor`),
+same `StateBackedComponent` lifecycle (discovery cached on disk;
+refresh explicitly).
 
 ## Which HVR do you have?
 
-Ask this first:
+Ask before installing anything:
 
-> *"Is your HVR through the Fivetran dashboard, or a standalone HVR Hub
-> install with a `.hvr` config directory?"*
+> *"Is your HVR through the Fivetran dashboard, or a standalone HVR
+> Hub install with a `.hvr` config directory?"*
 
-- **Fivetran dashboard** → use official [`dagster-fivetran`](https://docs.dagster.io/integrations/fivetran) — this component doesn't reach that surface.
-- **Standalone HVR Hub** → keep reading.
+| Answer | Use |
+|---|---|
+| **Fivetran dashboard** (HVR Enterprise tier managed by the Fivetran platform) | Official [`dagster-fivetran`](https://docs.dagster.io/integrations/fivetran) |
+| **Standalone HVR Hub** (`hvrhubserver` on your own hardware) | This component |
 
-## Setup
+The two products share a name and a corporate parent but different REST
+APIs, auth flows, and Dagster surfaces.
 
-```bash
-uvx create-dagster project hvr-catalog --no-uv-sync
-cd hvr-catalog
-uv sync
-uvx --from dagster-community-components-cli dagster-component init --auto-install
-uvx --from dagster-community-components-cli dagster-component add hvr_hub_workspace
-```
+## Point at your real Hub
 
-Fill in `src/<pkg>/defs/hvr_hub_workspace/defs.yaml`:
-
-```yaml
-type: dagster_community_components.HvrHubWorkspaceComponent
-attributes:
-  workspace:
-    hub_url:  "{{ env.HVR_HUB_URL }}"       # http://hvr-hub.internal:4340
-    hub_name: "{{ env.HVR_HUB_NAME }}"      # prod_hub
-    username: "{{ env.HVR_USERNAME }}"
-    password: "{{ env.HVR_PASSWORD }}"
-    api_version: "latest"                    # or "v6.3.5" to pin
-    verify_ssl: true
-
-  channel_selector:
-    by_pattern: [sales_*, orders_*]          # discover matching channels
-    exclude_by_pattern: [*_test]
-
-  group_name: hvr
-  action: noop                                # or 'refresh' to trigger POST /channels/{c}/refresh on materialize
-  polling_sensor: true
-  observation_interval_seconds: 300
-  freshness_lag_threshold_seconds: 900       # 15-minute SLA
-```
-
-Environment:
+Only 4 env vars change:
 
 ```bash
-export HVR_HUB_URL=http://hvr-hub.internal:4340
+export HVR_HUB_URL=https://your-hub:4340
 export HVR_HUB_NAME=prod_hub
 export HVR_USERNAME=hvradmin
 export HVR_PASSWORD='<your-hub-password>'
 ```
 
-Then:
+`defs.yaml` stays exactly as the setup script wrote it — it already
+uses `{{ env.HVR_HUB_URL }}` etc.
 
 ```bash
-uv run dg dev
+uv run dg utils refresh-defs-state    # pulls channels + tables from your Hub
+uv run dg dev                          # UI at http://localhost:3000
 ```
 
-Open http://localhost:3000 — every replicated table is in the catalog.
-The polling sensor is running (`prod_hub_hvr_observer`); observations
-land in each asset's history every 5 min with `integrate_lag_seconds` in
-metadata. The SLA check surfaces green/red per asset.
+## Full defs.yaml
 
-## What each YAML knob does
+```yaml
+type: dagster_community_components.HvrHubWorkspaceComponent
+attributes:
+  workspace:
+    hub_url:  "{{ env.HVR_HUB_URL }}"
+    hub_name: "{{ env.HVR_HUB_NAME }}"
+    username: "{{ env.HVR_USERNAME }}"
+    password: "{{ env.HVR_PASSWORD }}"
+    api_version: "latest"                    # or pin to "v6.3.5"
+    verify_ssl: true
+
+  # Filter which channels get discovered. Mirrors FivetranWorkspace.connector_selector.
+  channel_selector:
+    by_pattern: [sales_*, orders_*]
+    exclude_by_pattern: [*_test]
+
+  group_name: hvr
+  # asset_key_prefix: ["hvr", "prod_hub"]    # default ['hvr', <hub_name>]
+  # kinds: [hvr, cdc]                         # default
+  # tags: {tier: production}
+  # owners: [data-platform@acme.com]
+
+  # What happens when a user clicks materialize.
+  action: noop                                # or 'refresh' → POST /channels/{c}/refresh + poll
+  # wait_for_completion: true                 # only when action=refresh
+  # poll_interval_seconds: 30
+  # timeout_seconds: 3600
+
+  # Optional polling sensor — emits AssetObservations with integrate-lag metadata.
+  polling_sensor: true
+  observation_interval_seconds: 300
+
+  # Optional per-asset check — fails when last observed lag > threshold.
+  freshness_lag_threshold_seconds: 900
+
+  # Optional custom translation callable — override key / tags / group / kinds
+  # per asset (see "Custom translation" below).
+  # translation: "{{ load_python_module_attr('my_project.hvr_translation.tag_by_channel') }}"
+```
+
+## How each knob behaves
 
 | Knob | Effect |
 |---|---|
-| `workspace: {…}` | Auth block — canonical `{{ env }}`-templated. Mirrors `dagster-fivetran` shape. |
-| `channel_selector` | Filter which channels get discovered. Include (`by_name`, `by_pattern`) + exclude (`exclude_by_name`, `exclude_by_pattern`). |
-| `translation` | Python callable — override per-asset `AssetSpec` (rename key, add tags, override group). |
-| `action: noop` | Default. External assets, HVR CDC is continuous, materialization is a no-op. |
-| `action: refresh` | Assets become **materializable** — click one → posts `/channels/{c}/refresh` + polls to completion. Fivetran-style. |
-| `polling_sensor: true` | Emit `{hub_name}_hvr_observer` polling `/jobs?fetch=latency`. Every 5 min → one `AssetObservation` per (channel × target × table) with lag metadata. |
-| `freshness_lag_threshold_seconds: N` | Emit `integrate_lag_within_sla` per-asset check that fails when last observed lag > N. |
-| `defs_state` | State backend for cached discovery. Local FS by default; override to Dagster Cloud state store per-deploy. |
+| `workspace.*` | Connection block (mirrors `dagster-fivetran` shape). `{{ env }}`-templated. |
+| `channel_selector` | Include/exclude filter. `by_name`, `by_pattern`, `exclude_by_name`, `exclude_by_pattern` (globs). Exclusion wins. |
+| `action: noop` (default) | Assets are external. HVR CDC is continuous — there's genuinely nothing to trigger. |
+| `action: refresh` | Assets become materializable. Clicking one posts `/channels/{c}/refresh` and polls until integrate catches up. Fivetran-style. |
+| `polling_sensor: true` | Emits `{hub_name}_hvr_observer` sensor. Every `observation_interval_seconds`, calls `GET /jobs?fetch=latency` and writes one AssetObservation per (channel × target × table) with `integrate_lag_seconds`, `state`, `job_name`, `observed_at`. |
+| `freshness_lag_threshold_seconds` | Emits `integrate_lag_within_sla` per-asset check. Pass = last observation ≤ threshold; fail = above. Wire into an asset-checks-first schedule or alert. |
+| `translation` | Python callable path — customize per-asset AssetSpec (rename key, add tags, override group). Same convention as `dagster-fivetran` and `dagster-databricks`. |
+
+## Architecture
+
+```
+┌──────────────────────────────────────────────────────────────────────┐
+│                    Standalone HVR Hub 6.x (customer-hosted)          │
+│                                                                      │
+│  ┌────────────┐    ┌────────────┐    ┌────────────┐                  │
+│  │ channel:   │    │ channel:   │    │ channel:   │                  │
+│  │ sales_cdc  │    │orders_strm │    │inventory   │                  │
+│  │ ├─ orders  │    │ ├─ events  │    │ └─ stock   │                  │
+│  │ └─ custom… │    │ └─ clicks  │    │            │                  │
+│  └────────────┘    └────────────┘    └────────────┘                  │
+└─────────────────────────────────┬────────────────────────────────────┘
+                                  │ REST (bearer JWT)
+                                  ▼
+       ┌─────────────────────────────────────────────────────────┐
+       │            HvrHubWorkspaceComponent (one YAML)          │
+       │                                                         │
+       │  StateBackedComponent:                                  │
+       │    write_state_to_path → REST discovery → JSON on disk  │
+       │    build_defs_from_state → reads cache, no HTTP         │
+       │                                                         │
+       │  polling_sensor → GET /jobs?fetch=latency every 5 min   │
+       │  action=refresh → POST /channels/{c}/refresh on click   │
+       └────────────────────────────────┬────────────────────────┘
+                                        │
+                                        ▼
+       Dagster catalog + graph:
+         hvr/prod_hub/sales_cdc/target_snowflake_dw/orders
+         hvr/prod_hub/sales_cdc/target_snowflake_dw/customers
+         hvr/prod_hub/orders_stream/target_snowflake_dw/events    …
+         prod_hub_hvr_observer (sensor)
+         integrate_lag_within_sla × N (asset checks)
+```
 
 ## Custom translation
 
-For per-channel routing, tag application, or key restructuring:
+For per-channel routing, tag application, or asset-key restructuring:
 
 ```python
 # my_project/hvr_translation.py
@@ -124,10 +189,11 @@ from dagster import AssetSpec, AssetKey
 
 
 def tag_by_channel(props: HvrObjectProps) -> AssetSpec:
+    tier = "gold" if (props.channel or "").startswith("sales_") else "silver"
     return AssetSpec(
         key=AssetKey(["warehouse", props.target_loc, props.object_name]),
-        tags={"hvr_channel": props.channel, "sla_tier": "gold" if props.channel.startswith("sales_") else "silver"},
-        kinds={"hvr", "cdc", props.channel},
+        tags={"hvr_channel": props.channel or "?", "sla_tier": tier},
+        kinds={"hvr", "cdc", props.channel or "unknown"},
     )
 ```
 
@@ -139,11 +205,10 @@ attributes:
 
 ## StateBackedComponent
 
-Discovery hits the REST API at `write_state_to_path` (initial load or
-`dg utils refresh-defs-state`) and caches the channel/table snapshot to
-disk. `build_defs_from_state` reads the cache on every subsequent
-code-location reload — no HVR HTTP call, instant load. Same pattern as
-`FivetranWorkspace` and `QlikReplicateWorkspaceComponent`.
+Discovery hits the REST API only on `write_state_to_path` (initial load or
+`dg utils refresh-defs-state`). Every subsequent code-location reload
+reads the cached snapshot — no HVR HTTP calls, instant load. Same pattern
+as `FivetranWorkspace` and `QlikReplicateWorkspaceComponent`.
 
 Refresh the catalog explicitly:
 
@@ -154,33 +219,48 @@ uv run dg utils refresh-defs-state
 Or wire an automation to refresh on a schedule (per-deploy config on the
 `defs_state` field).
 
-## Trying it locally with the HVR eval Docker image
+## What it hits (REST endpoints)
 
-Fivetran ships a pre-configured `fivetraninc/hvrpov` eval image (HVR Hub
-+ Postgres repo). Explicitly evaluation-only:
-
-```bash
-docker pull fivetraninc/hvrpov
-docker run -d --name hvr-eval --platform linux/amd64 -p 4340:4340 fivetraninc/hvrpov
-sleep 5
-docker exec -u hvr -d hvr-eval hvrhubserver
-# HVR Hub REST API is now live at http://localhost:4340
 ```
-
-Bootstrapping the eval Hub (creating an admin, initializing the repo,
-defining a channel with real source/target DBs) is a full HVR domain
-workflow — see [Fivetran's Quick Start Guide](https://fivetran.com/docs/hvr6/getting-started/quick-start-guide).
-Not required for validating the component itself against auth + discovery.
+POST  /auth/v1/password                                        — bearer JWT
+GET   /api/{ver}/hubs/{hub}/definition/channels                — list channels
+GET   /api/{ver}/hubs/{hub}/definition/channels/{c}/tables     — tables per channel
+GET   /api/{ver}/hubs/{hub}/definition/channels/{c}/loc_groups — locations per channel
+GET   /api/{ver}/hubs/{hub}/jobs?fetch=latency                 — integrate lag per job
+POST  /api/{ver}/hubs/{hub}/channels/{c}/refresh               — when action=refresh
+```
 
 ## Version compatibility
 
-Tested against 6.1.5.2 API surface. Also compatible with:
+Tested API surface: HVR **6.1.5.2**. Also known to work with:
 
-- **6.2.5** — docker eval image
-- **6.3.5/2** — customer prod deployments as of 2026-08
+- **6.2.5** — Fivetran's docker eval image
+- **6.3.5/2** — current customer prod deployments as of 2026-08
 
 Leave `api_version: latest` (default) unless you specifically need to pin
 across Hub upgrades.
+
+## Why not use the Docker eval image for the demo?
+
+Fivetran ships a `fivetraninc/hvrpov` eval Docker image (HVR Hub +
+pre-configured Postgres repo) — you can absolutely spin it up and point
+this component at it:
+
+```bash
+docker run -d --name hvr-eval --platform linux/amd64 -p 4340:4340 fivetraninc/hvrpov
+sleep 5
+docker exec -u hvr -d hvr-eval bash -lc 'hvrhubserver'
+```
+
+But **creating a hub against it requires a temporary eval license key
+from Fivetran Support** (see the license notice in the image's
+`/opt/hvr/hvr_home/www/License.txt`). Not a blocker for kicking the tires,
+but too much friction for a one-command demo. The mock server in
+`setup_hvr_hub_workspace_demo.sh` runs the same 5 endpoints the component
+uses — enough for full end-to-end validation of the Dagster surface.
+
+Once you have an eval license, the same defs.yaml points at the real
+Hub with the 4 env-var swap.
 
 ## What this component does NOT do (yet)
 
@@ -190,6 +270,6 @@ across Hub upgrades.
 
 ## Roadmap companion components
 
-- **`hvr_channel_refresh`** — dedicated single-channel bulk-refresh trigger (already accessible via `action: refresh` on the workspace — this would break it out for per-channel scheduling).
-- **`hvr_definition_snapshot`** — materialize channel definition JSON as a versioned asset (config drift detection).
-- **`hvr_alert_sensor`** — poll HVR Alert Interface + emit Dagster asset failures.
+- `hvr_channel_refresh` — dedicated single-channel bulk-refresh trigger
+- `hvr_definition_snapshot` — versioned channel-definition asset for drift detection
+- `hvr_alert_sensor` — poll HVR Alert Interface → emit asset failures
