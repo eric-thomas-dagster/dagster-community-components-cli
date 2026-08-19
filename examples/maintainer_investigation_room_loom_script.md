@@ -1,11 +1,15 @@
 # Loom recording script — "AI-agentic-orchestration on Dagster, 3 shapes, all authored by Claude Code"
 
-Target length: **6–7 minutes.** Target audience: prospects asking "how
+Target length: **7–8 minutes.** Target audience: prospects asking "how
 does Dagster fit for AI agent workflows / agentic orchestration?"
 
 Three progressively richer demos, each authored by Claude Code from a
 natural-language prompt in one go. Same substrate for all three —
-`AgenticPipelineComponent` — different ops per demo.
+`AgenticPipelineComponent` — different ops per demo. **Optional Scene
+5b** shows the upgrade path — every new primitive from v0.10.69–v0.10.73
+composed on top of the same MIR pattern (per_step_ops, tool_use_loop,
+handoff to LangGraph, debate, critique_loop, SlackApprovalGate).
+Recommended for the 8-minute version; skip for the 6-minute cut.
 
 ## Setup before recording
 
@@ -244,6 +248,53 @@ echo '{"approved":true,"approver":"me"}' > approvals/default.json
 5 seconds, launches the ship job automatically. Human sign-off as a
 first-class primitive — the check surfaces in the UI, in Insights, and
 in any alerting pipeline."
+
+## Scene 5b — the "comprehensive" MIR-v3 upgrade path (1 min)
+
+**Purpose:** show off what we shipped on top of the base MIR pattern —
+per-step ops, agent tool-use loops, framework composition, Slack quorum
+HITL. Not a fresh scaffold; just walk through the v3 walkthrough page
++ Runs page of a pre-materialized run.
+
+**Do:** open [`maintainer_investigation_room_v3.md`](maintainer_investigation_room_v3.md)
+in a browser tab.
+
+**Say:**
+
+> "That same triage pipeline can be extended with everything else we
+> shipped. `per_step_ops: true` on the AgenticPipelineComponent flips
+> it from one op in the Runs page to 11 ops — every step is
+> independently retryable, dbt-style resume. The specialists get more
+> ambitious: `tool_use_loop` gives one of them GitHub MCP tools to
+> iteratively explore the codebase; `handoff` lets us drop an existing
+> LangGraph state machine in for the reproduction analysis without
+> rewriting it. Then `debate` runs 3 skeptics against the preliminary
+> triage; `critique_loop` iterates the final report with a critic;
+> `SlackApprovalGateComponent` posts to a channel and writes the
+> approval token on N-of-M reaction quorum. Same substrate, same YAML
+> shape — just more primitives composed together."
+
+**Do:** open `dg dev` for the v3 project (or a screenshot), navigate to
+the pipeline's Runs page. Point at the 11 step_keys.
+
+**Say:**
+
+> "Compare to the earlier demo — one op, whole-pipeline retry. Here,
+> 11 ops. If step 6 fails, retry restarts from step 6, upstream state
+> already on the IO manager. And the tool_use_loop op — I can click
+> into that step's materialization, see the full 5-8 tool call trace
+> in metadata: which MCP tool the LLM called, what args, what came
+> back, what it did next."
+
+**Do:** click into a `mir_repo_evidence` materialization's metadata,
+show the `tool_call_trace` JSON blob.
+
+**Say:**
+
+> "Handoff step's materialization shows the same for LangGraph —
+> per-node trajectory in metadata, framework result as a first-class
+> asset object. Framework is one node in the Dagster graph; Dagster is
+> the harness at the pipeline level. Both stories work."
 
 ## Scene 6 — close (30s)
 
