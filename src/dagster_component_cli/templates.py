@@ -487,6 +487,15 @@ segments.
 
 ### Rules of thumb when composing agentic pipelines
 
+- **Vague prompt → `tool_use_loop`. Known shape → typed steps.**
+  If the user's ask is exploratory ("grab an issue, figure out what I
+  need, give me a report"), the whole thing is ONE `tool_use_loop` op:
+  give it the source, list the MCP tools, set `max_iterations`, let the
+  LLM decide what to fetch each turn. If the user already knows the
+  shape ("intake → 4 specialists → synthesize → debate → report"), use
+  the prescriptive multi-step DAG — every step a first-class asset.
+  Hybrid works too: deterministic intake (`mcp_call`) → exploratory
+  middle (`tool_use_loop`) → deterministic report (`critique_loop`).
 - **Fan-out with typed inputs:** N specialists all read
   `inputs: {issue_facts: {from: intake}}`. Cleaner than passing the
   whole state dict.
