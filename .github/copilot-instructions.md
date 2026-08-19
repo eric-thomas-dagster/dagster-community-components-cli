@@ -395,21 +395,22 @@ Big shipment on the agentic-orchestration + HITL side. If the user asks
 about any of these, use the specific op / component; don't fall back
 to generic patterns.
 
-### AgenticPipelineComponent — now 8 ops (previously 5–6)
+### AgenticPipelineComponent — now 9 ops (previously 5–6)
 
 One YAML with `source: + steps: + outputs:`. Every step becomes a
-first-class Dagster asset with cost/latency/tokens in metadata. All 8 ops:
+first-class Dagster asset with cost/latency/tokens in metadata. All 9 ops:
 
 | Op | Purpose | Calls | Best for |
 |---|---|---|---|
 | `llm_call` | one LLM call over source | 1 | simple analysis / summarization |
-| `route` | router LLM picks a specialist; specialist answers | 2 | branch by content |
+| `route` | router LLM picks a specialist; specialist answers | 2 | soft branch by content ("does this read as a question?") |
+| **`conditional_route`** | deterministic branching (`regex` / `contains` / `equals` / `jsonpath`) picks specialist; NO router LLM | 1 | hard branch by label / regex / structured field — cheap, testable, reviewable |
 | `debate` | N proposers write in parallel; arbitrator picks winner | N+1 | multi-perspective decisions |
-| `critique_loop` | drafter + critic × N iterations | 2N+1 | iterative refinement / editorial |
+| `critique_loop` | drafter + critic × N iterations. Optional **`until_score_gte: N`** — critic scores each draft `SCORE: X/100`; stops early when X ≥ N (saves ~half the calls when the first draft is already good) | 2N+1 (or fewer) | iterative refinement with cost control |
 | `synthesize` | join N upstream steps via typed named `inputs:` (or positional `sources:`) | 1 | multi-input merge with per-port templating |
 | `mcp_call` | deterministic MCP tool call (no LLM). Transports: `stdio` / `http` / `sse` / **`fastmcp`** (v2 client, auto-transport + bearer/OAuth) | 0 LLM, 1 MCP | fetch grounding data (GitHub, filesystem, remote MCP server) |
-| **`tool_use_loop`** | LLM has MCP tools; iteratively picks tools until `finalize`. Bounded by `max_iterations` | 3–30 (LLM + tool) | open-ended agent tool-use, LangGraph-shape |
-| **`handoff`** | invoke user-provided callable (LangGraph / AutoGen / CrewAI / DSPy). Framework's per-node lineage lives in asset metadata; adjacent Dagster steps stay first-class | 1 wrapped call | bring existing framework code as ONE pipeline step |
+| `tool_use_loop` | LLM has MCP tools; iteratively picks tools until `finalize`. Bounded by `max_iterations` | 3–30 (LLM + tool) | open-ended agent tool-use, LangGraph-shape |
+| `handoff` | invoke user-provided callable (LangGraph / AutoGen / CrewAI / DSPy). Framework's per-node lineage lives in asset metadata; adjacent Dagster steps stay first-class | 1 wrapped call | bring existing framework code as ONE pipeline step |
 
 **Every step's output flows in a standard `{text, cost_usd, latency_ms,
 tokens_total, model_fingerprint, materialized_at, op, ...}` dict shape.**
@@ -480,6 +481,17 @@ segments.
 
 ### Rules of thumb when composing agentic pipelines
 
+- **`route` vs `conditional_route`.** If the branch signal is deterministic
+  (a label field, a regex on a subject line, a JSON path into a payload),
+  reach for `conditional_route` — it's a code path, cheap ($0), and
+  reviewable in a diff. If the signal is soft ("does this issue read as
+  a question or a bug report?"), keep `route` (LLM picks). Rule: if you
+  can write the picker as a unit test, use `conditional_route`.
+- **`critique_loop` with `until_score_gte:`.** Set an iteration cap AND
+  a quality floor — critic scores each draft `SCORE: N/100` and the loop
+  stops the moment quality clears the bar (skipping the revise step
+  since the current draft is already good enough). Cuts cost roughly in
+  half on easy cases without capping quality on hard ones.
 - **Vague prompt → `tool_use_loop`. Known shape → typed steps.**
   If the user's ask is exploratory ("grab an issue, figure out what I
   need, give me a report"), the whole thing is ONE `tool_use_loop` op:
