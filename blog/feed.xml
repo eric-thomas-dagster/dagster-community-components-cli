@@ -5,7 +5,7 @@
     <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/blog</link>
     <description>Long-form posts from Eric Thomas on the Dagster community components registry — design essays, component tours, honest retrospectives.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 19 Aug 2026 23:56:55 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 20 Aug 2026 00:21:24 +0000</lastBuildDate>
     <atom:link href="https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/feed.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>Orchestration for the HVR long tail</title>
