@@ -160,7 +160,8 @@ export HVR_PASSWORD='<your-password>'
 Rerun `uv run dg utils refresh-defs-state`. Your replicated tables are
 now in Dagster.
 
-Full walkthrough: [**`examples/hvr_hub_workspace.md`**](https://dagster-component-ui.vercel.app/examples/hvr_hub_workspace) — includes the setup script, per-knob behavior, architecture diagram, custom-translation example, and version-compatibility notes.
+- **Walkthrough:** [`examples/hvr_hub_workspace.md`](https://dagster-component-ui.vercel.app/examples/hvr_hub_workspace) — setup script, per-knob behavior, architecture diagram, custom-translation example, version-compatibility notes.
+- **Component reference:** [`hvr_hub_workspace`](https://dagster-component-ui.vercel.app/c/hvr_hub_workspace) — full field-by-field schema, tags, dependencies, validation status.
 
 ## The broader shape
 

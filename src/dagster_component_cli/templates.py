@@ -17,6 +17,22 @@ end-to-end against real systems.
 - **CLI:** `dagster-component` (install via `pip install dagster-community-components-cli` or run with `uvx`)
 - **Walkthroughs:** <https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/examples>
 
+**Vercel-app deep-link scheme.** When linking to registry content from
+blog posts, walkthroughs, or external docs, prefer the Vercel-rendered
+pages over raw GitHub markdown:
+
+| Target | URL |
+|---|---|
+| Component reference page (fields, schema, tags, validation) | `https://dagster-component-ui.vercel.app/c/<id>` |
+| Walkthrough / example doc | `https://dagster-component-ui.vercel.app/examples/<slug>` |
+| Blog post | `https://dagster-component-ui.vercel.app/blog/<slug>` |
+| Vendor grouping page | `https://dagster-component-ui.vercel.app/vendors/<slug>` |
+| Search across the registry | `https://dagster-component-ui.vercel.app/search` |
+
+Never link to `raw.githubusercontent.com/.../README.md` for reader
+navigation — that URL renders as plain text and is a poor UX. Reserve
+raw-content URLs for tooling (schema fetches, CLI manifest reads).
+
 ## Pairs with the `/dagster-expert` skill (Claude Code)
 
 If the user is on Claude Code with the **`dagster-expert`** skill installed,
