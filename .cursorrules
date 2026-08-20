@@ -411,22 +411,28 @@ Big shipment on the agentic-orchestration + HITL side. If the user asks
 about any of these, use the specific op / component; don't fall back
 to generic patterns.
 
-### AgenticPipelineComponent — now 9 ops (previously 5–6)
+### AgenticPipelineComponent — 15 ops
 
 One YAML with `source: + steps: + outputs:`. Every step becomes a
-first-class Dagster asset with cost/latency/tokens in metadata. All 9 ops:
+first-class Dagster asset with cost/latency/tokens in metadata. All 15 ops:
 
 | Op | Purpose | Calls | Best for |
 |---|---|---|---|
 | `llm_call` | one LLM call over source | 1 | simple analysis / summarization |
 | `route` | router LLM picks a specialist; specialist answers | 2 | soft branch by content ("does this read as a question?") |
-| **`conditional_route`** | deterministic branching (`regex` / `contains` / `equals` / `jsonpath`) picks specialist; NO router LLM | 1 | hard branch by label / regex / structured field — cheap, testable, reviewable |
+| `conditional_route` | deterministic branching (`regex` / `contains` / `equals` / `jsonpath`) picks specialist; NO router LLM | 1 | hard branch by label / regex / structured field — cheap, testable, reviewable |
 | `debate` | N proposers write in parallel; arbitrator picks winner | N+1 | multi-perspective decisions |
-| `critique_loop` | drafter + critic × N iterations. Optional **`until_score_gte: N`** — critic scores each draft `SCORE: X/100`; stops early when X ≥ N (saves ~half the calls when the first draft is already good) | 2N+1 (or fewer) | iterative refinement with cost control |
+| `critique_loop` | drafter + critic × N iterations. Optional `until_score_gte: N` — critic scores each draft `SCORE: X/100`; stops early when X ≥ N | 2N+1 (or fewer) | iterative refinement with cost control |
 | `synthesize` | join N upstream steps via typed named `inputs:` (or positional `sources:`) | 1 | multi-input merge with per-port templating |
-| `mcp_call` | deterministic MCP tool call (no LLM). Transports: `stdio` / `http` / `sse` / **`fastmcp`** (v2 client, auto-transport + bearer/OAuth) | 0 LLM, 1 MCP | fetch grounding data (GitHub, filesystem, remote MCP server) |
+| `mcp_call` | deterministic MCP tool call (no LLM). Transports: `stdio` / `http` / `sse` / `fastmcp` (v2 client, auto-transport + bearer/OAuth) | 0 LLM, 1 MCP | fetch grounding data (GitHub, filesystem, remote MCP server) |
 | `tool_use_loop` | LLM has MCP tools; iteratively picks tools until `finalize`. Bounded by `max_iterations` | 3–30 (LLM + tool) | open-ended agent tool-use, LangGraph-shape |
 | `handoff` | invoke user-provided callable (LangGraph / AutoGen / CrewAI / DSPy). Framework's per-node lineage lives in asset metadata; adjacent Dagster steps stay first-class | 1 wrapped call | bring existing framework code as ONE pipeline step |
+| **`map`** | apply an LLM call to each item in a list source (JSON array); aggregate. `max_concurrent` opt-in threading. Per-item outputs land in metadata | N | fan-out — one LLM per issue / row / doc |
+| **`extract`** | text → structured JSON matching an `output_schema` (JSON Schema). Uses `tool_choice="required"` — reliable JSON, not prompt-engineered | 1 | typed metadata extraction (issue → {priority, labels}, doc → {entities, dates}) |
+| **`classify`** | text → label from a fixed `labels: [...]`. Cheap, tool_choice-forced enum. Optional `include_rationale` | 1 | ticket triage, PII flagging, priority scoring — the cheapest common op |
+| **`reduce`** | LLM-fold over chunks of a list — prior summary + next chunk → updated summary. `chunk_size` items per fold call | ⌈N/chunk_size⌉ | list-too-big-for-one-context (rollups, N-way summaries, big-log analysis) |
+| **`self_reflect`** | ONE call producing `DRAFT / CRITIQUE / REVISED` sections; the REVISED becomes `text`. Cheap alternative to `critique_loop` | 1 | cost-sensitive quality bump when 2-iteration critique_loop is overkill |
+| **`sub_pipeline`** | invoke an inline `steps:` list as one step; `output_step_id` picks which sub-step's text flows back. Sub-state isolated from outer | sum of sub-steps | compose / reuse common step blocks (a "cleanup + summarize" pattern applied in many places) |
 
 **Every step's output flows in a standard `{text, cost_usd, latency_ms,
 tokens_total, model_fingerprint, materialized_at, op, ...}` dict shape.**
