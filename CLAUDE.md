@@ -456,6 +456,18 @@ substitution in prompts / tool_args / sink paths.
   `:int` / `:float` / `:bool` type suffixes preserve types when the
   substitution target is a pure single-placeholder value (needed for
   GitHub MCP `get_issue` which rejects string `issue_number`).
+- **`personas:`** — declare reusable LLM sub-configs by name
+  (`{model, api_key_env_var, system_prompt, temperature, max_tokens}`).
+  Reference from any step OR sub-config via `persona: <name>`; the
+  persona's fields are merged in (explicit inline fields win). Cleans
+  up multi-agent fan-out patterns — the 3 skeptic proposers in a
+  `debate` step become `- persona: security_skeptic` / `- persona:
+  perf_skeptic` / `- persona: api_skeptic` instead of duplicating the
+  system_prompt three times. Applies to step-level (llm_call, classify,
+  extract, reduce, self_reflect, map, tool_use_loop) AND sub-configs
+  (route.router, route.specialists[*], debate.proposers[*],
+  debate.arbitrator, critique_loop.drafter, critique_loop.critic).
+  Inherited into sub_pipeline steps automatically.
 
 ### PartitionedAssetLauncherJobComponent — config-driven entry
 
