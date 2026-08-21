@@ -594,6 +594,57 @@ segments.
   `{owner}/{repo}#{issue_number:int}` (or similar) and parse back with
   `partition_key_parser` so each field is available as
   `{partition.<name>}` in tool_args / prompts.
+
+## Recent additions worth knowing (2026-08-21)
+
+### Reasoning-model + prompt-caching support on every agent + AgenticPipeline
+
+Every LLM sub-config (in `AgenticPipelineComponent` steps + personas,
+and in the singleton `litellm_agent` / `openai_agent` /
+`anthropic_agent` / `gemini_agent` / `vercel_ai_gateway_agent`) now
+accepts three new opt-in fields:
+
+- **`reasoning_effort: low | medium | high`** — forwarded to OpenAI o1/o3
+  reasoning models and Gemini 2.5+. Silently skipped for other providers.
+- **`thinking_budget: <int>`** — max reasoning-trace tokens for Gemini
+  2.5+ (native `thinking_budget`) or Anthropic thinking mode (auto-mapped
+  to `thinking: {type: enabled, budget_tokens: N}`). On Gemini, set 0
+  for short structured outputs to avoid silent truncation (thinking
+  tokens draw from `max_tokens`). Skipped for OpenAI / others.
+- **`prompt_caching: true | false`** (default false) — Anthropic-only.
+  When true AND the model is Anthropic-family, wraps the system prompt
+  with `cache_control: {type: ephemeral}` so subsequent calls within
+  ~5 min hit Anthropic's cache (~90% cheaper on the cached prefix).
+  In `AgenticPipelineComponent`, `_do_tool_use_loop` also caches
+  the system prompt across every iteration — big win for MCP agents
+  with long tool schemas.
+
+Every field is **provider-family filtered client-side** — a persona can
+carry `thinking_budget` and be reused across mixed OpenAI/Gemini/Anthropic
+steps without breaking (LiteLLM's `drop_params` doesn't strip provider-
+specific params, so we filter ahead of the call).
+
+`AgenticPipelineComponent` also surfaces `cache_read_tokens` and
+`cache_creation_tokens` on each step's usage metadata — promote them to
+Dagster+ Insights to track cache-hit rate on repeated pipelines.
+
+### VoyageEmbeddingBatchComponent — SOTA RAG embeddings (native SDK, no LiteLLM)
+
+Native Voyage AI embeddings — `voyage-3-large` currently tops the MTEB
+retrieval benchmark. Reach for this over `litellm_embedding_batch` when
+retrieval quality is the main lever + you don't need cross-provider
+fallback.
+
+- **Asymmetric embeddings** — first-class `input_type: query | document`
+  field. Voyage produces DIFFERENT embeddings for the same text depending
+  on whether it's indexed or used as a search query. 4-6 pt NDCG@10 lift
+  when set correctly.
+- **Configurable dimensionality** — 256 / 512 / 1024 (default) / 2048 on
+  voyage-3-large. Smaller = cheaper vector store + faster ANN queries.
+- **Domain-tuned models** — `voyage-code-3` for code retrieval,
+  `voyage-finance-2` for financial docs, `voyage-law-2` for legal,
+  `voyage-multilingual-2` for 100+ languages.
+- **Native SDK (`voyageai`)** — no LiteLLM dep; ~2 MB tree vs ~40 MB.
 """
 
 
