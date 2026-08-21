@@ -411,10 +411,10 @@ Big shipment on the agentic-orchestration + HITL side. If the user asks
 about any of these, use the specific op / component; don't fall back
 to generic patterns.
 
-### AgenticPipelineComponent — 15 ops
+### AgenticPipelineComponent — 16 ops
 
 One YAML with `source: + steps: + outputs:`. Every step becomes a
-first-class Dagster asset with cost/latency/tokens in metadata. All 15 ops:
+first-class Dagster asset with cost/latency/tokens in metadata. All 16 ops:
 
 | Op | Purpose | Calls | Best for |
 |---|---|---|---|
@@ -433,6 +433,7 @@ first-class Dagster asset with cost/latency/tokens in metadata. All 15 ops:
 | **`reduce`** | LLM-fold over chunks of a list — prior summary + next chunk → updated summary. `chunk_size` items per fold call | ⌈N/chunk_size⌉ | list-too-big-for-one-context (rollups, N-way summaries, big-log analysis) |
 | **`self_reflect`** | ONE call producing `DRAFT / CRITIQUE / REVISED` sections; the REVISED becomes `text`. Cheap alternative to `critique_loop` | 1 | cost-sensitive quality bump when 2-iteration critique_loop is overkill |
 | **`sub_pipeline`** | invoke an inline `steps:` list as one step; `output_step_id` picks which sub-step's text flows back. Sub-state isolated from outer | sum of sub-steps | compose / reuse common step blocks (a "cleanup + summarize" pattern applied in many places) |
+| **`agent_call`** | dispatch by name to a pre-built agent declared in the top-level `agents:` block. Kinds: `openai_assistant` (thread+run on OpenAI Assistants API), `remote_agent` (authenticated HTTP with sync or async-polling), `handoff` (Python callable — LangGraph/AutoGen/CrewAI/DSPy) | 1 external call | "call the agent I already deployed" — Assistants API workflows, in-house agent services, framework wrappers as ONE step |
 
 **Every step's output flows in a standard `{text, cost_usd, latency_ms,
 tokens_total, model_fingerprint, materialized_at, op, ...}` dict shape.**
@@ -457,7 +458,8 @@ substitution in prompts / tool_args / sink paths.
   substitution target is a pure single-placeholder value (needed for
   GitHub MCP `get_issue` which rejects string `issue_number`).
 - **`personas:`** — declare reusable LLM sub-configs by name
-  (`{model, api_key_env_var, system_prompt, temperature, max_tokens}`).
+  (`{model, api_key_env_var, system_prompt, temperature, max_tokens,
+  reasoning_effort, thinking_budget}`).
   Reference from any step OR sub-config via `persona: <name>`; the
   persona's fields are merged in (explicit inline fields win). Cleans
   up multi-agent fan-out patterns — the 3 skeptic proposers in a
@@ -468,6 +470,34 @@ substitution in prompts / tool_args / sink paths.
   (route.router, route.specialists[*], debate.proposers[*],
   debate.arbitrator, critique_loop.drafter, critique_loop.critic).
   Inherited into sub_pipeline steps automatically.
+- **`agents:`** — declare pre-built agents by name, dispatched by the
+  `agent_call` op. Three kinds:
+  - `openai_assistant` — thread+run against OpenAI's Assistants API
+    (assistant's tools/files/system_prompt are configured on OpenAI's
+    side; supply `assistant_id_env_var` + `api_key_env_var`).
+  - `remote_agent` — authenticated HTTP call to your own deployed agent
+    (Vercel / Cloud Run / Modal / anywhere). Supports `payload_template`,
+    `response_text_path` (JSON path into the reply),
+    `auth_bearer_env_var` / `headers_env`, sync OR async-poll pattern
+    (`poll_url_path` / `poll_terminal_status_path` /
+    `poll_terminal_success` / `poll_interval_seconds` /
+    `poll_timeout_seconds`).
+  - `handoff` — Python callable (`entry_module` + `entry_callable`) for
+    wrapping LangGraph / AutoGen / CrewAI / DSPy agents. Callable
+    signature: `(prompt, **kwargs) -> {"final_answer", "n_llm_calls",
+    "cost_usd"}`.
+  Agents are inherited into sub_pipeline steps automatically.
+- **Reasoning-model support (`reasoning_effort` / `thinking_budget`)** —
+  every LLM sub-config (step OR persona) accepts these two fields.
+  `reasoning_effort: low | medium | high` forwards to OpenAI o1/o3.
+  `thinking_budget: <int>` caps reasoning-trace tokens on Gemini 2.5+
+  (native param) and Anthropic thinking models (auto-mapped to
+  `thinking: {type: enabled, budget_tokens: N}`). Set `0` on Gemini
+  for short structured outputs to avoid silent truncation (thinking
+  tokens are drawn from `max_tokens`). Component filters both fields
+  by model family before dispatch, so a persona can carry them across
+  mixed OpenAI/Gemini/Anthropic steps without any step blowing up on
+  a param the provider doesn't recognize.
 
 ### PartitionedAssetLauncherJobComponent — config-driven entry
 
