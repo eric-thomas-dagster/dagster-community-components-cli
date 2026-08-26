@@ -2,10 +2,11 @@
 
 > **What this is.** A three-scenario Dagster demo shaped around the enterprise data-orchestration patterns most retail data teams need to prove out before adopting a replacement orchestrator. Everything scaffolds end-to-end from one script; the walkthrough below maps every requirement to specific components + config so it's clear which piece of the demo satisfies which requirement.
 
-**Two ways to build this demo:**
+**Three ways to build this:**
 
-- **Fast (~3 min)** — run the scaffold script and inspect the output.
-- **Hands-on (~30 min, teach-yourself)** — follow the [from-scratch tutorial](retail_data_orchestration_from_scratch.md). Same end state, but you type every command and understand each moving piece.
+- **Fast local scaffold (~3 min)** — run the [setup script](setup_retail_data_orchestration_demo.sh) to get the laptop-runnable demo. No credentials required. Best for inspecting the output shape.
+- **Local from scratch (~30 min, teach-yourself)** — follow the [local hands-on tutorial](retail_data_orchestration_from_scratch.md). Uses stand-ins (MinIO / DuckDB / dbt Core); type every command yourself. No credentials required.
+- **Real POC from scratch (~1 hr, hands-on with real credentials)** — follow the [real POC hands-on tutorial](retail_data_orchestration_real_from_scratch.md). Builds directly against real Snowflake / dbt Cloud / HVR / Power BI. Uses `snowflake_workspace` and `hvr_hub_workspace` as the primary Snowflake + HVR surfaces (one YAML block per system, not one per object).
 
 **Fast setup:**
 
@@ -104,16 +105,18 @@ attributes:
   # Downstream sensors + FreshnessPolicy hang off these directly.
 ```
 
-**Real-mode swaps** (each is one YAML file replacement; see [`POC_REAL_MODE.md`](retail_data_orchestration_real_mode.md)):
+**Real-mode swaps** (each is one YAML file replacement; see [real-mode swap guide](retail_data_orchestration_real_mode.md) or start from scratch against real credentials with the [real POC hands-on tutorial](retail_data_orchestration_real_from_scratch.md)):
 
-| Local demo | Real POC | Effect |
+| Local demo | Real POC (recommended) | Effect |
 |---|---|---|
-| `filesystem_monitor` | `snowflake_snowpipe_load_sensor` | Watches `COPY_HISTORY` per PIPE. Fires on real load-completion. |
-| `dbt_project` (Core, DuckDB) | `dbt_run_job` + `dbt_cloud_job_sensor` | Kicks off dbt Cloud at selector granularity; sensor surfaces per-model test pass/fail. |
-| `shell_command_asset` extract | `shell_command_asset` unchanged | The Python script writes to real S3 instead of MinIO — env var swap only. |
-| `duckdb_resource` | `snowflake_resource` | Env vars: `SNOWFLAKE_ACCOUNT` / `SNOWFLAKE_USER` / `SNOWFLAKE_PRIVATE_KEY_FILE`. |
-| — (add) | `external_snowflake_table` per mart | Last-updated + row count visible as data property (OBS-02). |
-| — (add) | `dagster-powerbi` `PowerBIWorkspace` | S1.8 stretch — pass credentials, gets refresh triggers + report/dataset assets. |
+| `filesystem_monitor` + `shell_command_asset` (dbt) | **`snowflake_workspace`** with `import_snowpipes: true` + `import_tables: true` + `polling_sensor: true` | ONE YAML block replaces both — discovers every Snowpipe + landing/mart table under the schema, and the polling sensor emits load-completion events for TRG-01/OBS-03. |
+| `shell_command_asset` extract | `shell_command_asset` unchanged | The Python script writes to real S3 instead of MinIO — env var swap only, no component change (G7). |
+| `shell_command_asset` (dbt) | `dbt_run_job` + `dbt_cloud_job_sensor` | Kicks off dbt Cloud at selector granularity; sensor surfaces per-model test pass/fail (OBS-05). |
+| Mock replication CLI | **`hvr_hub_workspace`** with `action: refresh` + `polling_sensor: true` | ONE YAML block replaces the shim — POST /refresh + polls completion + emits per-table observation events with integrate-lag metadata. |
+| — (add) | `dagster-powerbi` `PowerBIWorkspace` | S1.8 stretch — official Dagster integration, not a community component. Emits report/dataset/semantic-model assets hanging off Snowflake mart. |
+| — (add) | `dbt_state_reuse_patch` | Scenario 3 Mechanism A — treats dbt Cloud `no-op` responses as materialization events instead of failures. |
+
+**Piecemeal alternative** — when the workspace defaults don't fit, use `snowflake_snowpipe_load_sensor` / `snowflake_snowpipe` / `external_snowflake_table` individually. See the [real-mode swap guide](retail_data_orchestration_real_mode.md#1a-alt-piecemeal--snowflake_snowpipe_load_sensor-for-finer-control) for the piecemeal path.
 
 ---
 

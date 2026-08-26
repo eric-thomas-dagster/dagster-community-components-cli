@@ -1,11 +1,14 @@
-# Retail Data Orchestration — from-scratch tutorial
+# Retail Data Orchestration — LOCAL from-scratch tutorial
 
-Hands-on companion to [retail_data_orchestration.md](retail_data_orchestration.md). Start from an empty terminal, type every command, paste every file, understand what each piece does. Ends in the exact same working demo the [scaffold script](setup_retail_data_orchestration_demo.sh) produces — you just built it yourself.
+> **Building the REAL POC?** Skip this doc and use [retail_data_orchestration_real_from_scratch.md](retail_data_orchestration_real_from_scratch.md) — it walks the same from-scratch shape but against real Snowflake / dbt Cloud / HVR / Power BI credentials, using the recommended `snowflake_workspace` + `hvr_hub_workspace` primary surfaces.
+
+Hands-on companion to [retail_data_orchestration.md](retail_data_orchestration.md), for readers who want to prototype the LOCAL demo (with MinIO / DuckDB / dbt Core stand-ins) without the scaffold script. Ends in the same working local demo the [scaffold script](setup_retail_data_orchestration_demo.sh) produces — you just built it yourself.
 
 > **When to use which doc.**
-> - **[Scaffold script](setup_retail_data_orchestration_demo.sh)** — you want it working in ~3 minutes to inspect the output.
-> - **This doc (from-scratch)** — you want to understand each moving piece, so you can build a similar demo for a different scenario later. Estimated time: ~30 minutes.
-> - **[Real-mode swap guide](retail_data_orchestration_real_mode.md)** — you already have it working locally and want to convert to real Snowflake / dbt Cloud / HVR.
+> - **[Scaffold script](setup_retail_data_orchestration_demo.sh)** — you want the LOCAL demo working in ~3 minutes to inspect the output. No credentials required.
+> - **This doc (LOCAL from-scratch)** — you want to understand each moving piece of the LOCAL demo, so you can build a similar demo for a different scenario later. Estimated time: ~30 minutes. No credentials required.
+> - **[Real POC from-scratch](retail_data_orchestration_real_from_scratch.md)** — you have Snowflake / dbt Cloud / HVR credentials and want to build the REAL POC by hand. Estimated time: ~1 hour.
+> - **[Real-mode swap guide](retail_data_orchestration_real_mode.md)** — you already have the LOCAL demo working and want the fastest-path convert to real.
 
 ---
 

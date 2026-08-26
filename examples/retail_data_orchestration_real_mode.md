@@ -12,12 +12,55 @@ Each swap is intentionally isolated — one YAML file per swap. You can convert 
 
 ## Scenario 1 — API extract → SnowPipe load → dbt Cloud → mart
 
-### 1a. Load-completion sensor: `filesystem_monitor` → `snowflake_snowpipe_load_sensor`
+### 1a. Snowflake surface: `filesystem_monitor` → `snowflake_workspace` (RECOMMENDED)
 
-Add the component's files to the project first:
+**Prefer the workspace-shape component** over piecemeal individuals. One `snowflake_workspace` block discovers every Snowpipe + landing table + mart table under a given database/schema and emits them all as first-class Dagster assets. A `polling_sensor: true` on the same component watches for pipe-load completions and emits `AssetObservation` events — the same signal the piecemeal `snowflake_snowpipe_load_sensor` gives you, but bundled with the rest of the Snowflake surface.
 
 ```bash
-dagster-component add snowflake_snowpipe_load_sensor
+dagster-component add snowflake_workspace
+```
+
+Replace `src/<pkg>/defs/scenario1_api_load_dbt/load_completion_sensor.yaml` with a new `snowflake_workspace.yaml` (and delete the old `filesystem_monitor` YAML):
+
+```yaml
+type: <pkg>.components.snowflake_workspace.SnowflakeWorkspaceComponent
+attributes:
+  workspace:
+    account:              {env: SNOWFLAKE_ACCOUNT}
+    user:                 {env: SNOWFLAKE_USER}
+    authenticator:        SNOWFLAKE_JWT
+    private_key_path:     {env: SNOWFLAKE_PRIVATE_KEY_FILE}
+    warehouse:            COMPUTE_WH
+    database:             FUEL_AND_TRADING
+    schema:               LANDING
+    role:                 SYSADMIN
+  import_snowpipes:          true    # ← the load-completion primitive
+  import_tables:             true    # ← landing + mart tables in one shot
+  import_dynamic_tables:     false
+  import_stored_procedures:  false
+  polling_sensor:            true    # emits AssetObservation on pipe-load completion
+  poll_interval_seconds:     60
+  group_name: scenario1_snowpipe_dbt
+  kinds: [snowflake, snowpipe]
+```
+
+**Why the workspace is the right primitive for the POC:**
+- One YAML block covers the whole Snowflake surface: Snowpipes, landing tables, mart tables, dynamic tables (if enabled), stored procedures (if enabled). Scales without adding more YAML per object.
+- Auto-discovers new objects: land a new `EXTRACT_<endpoint>_PIPE` in Snowflake, restart Dagster, and it's a first-class asset with no config change.
+- The polling sensor handles TRG-01 + TRG-02 + OBS-03 in one — `COPY_HISTORY` per-file metadata bubbles into the asset observation events, and the "how many files am I waiting for?" question goes away because the sensor triggers on *load events*, not file count.
+
+### 1a-alt. Piecemeal — `snowflake_snowpipe_load_sensor` (for finer control)
+
+Reach for the piecemeal components only when the workspace's defaults don't fit:
+
+- Per-pipe rate limiting or custom `minimum_interval_seconds`
+- Per-object custom `AssetSpec` attributes (owners, tags, freshness policies)
+- Explicit target-job specification (workspace emits assets; if you need a *job* triggered instead of asset materialization events, the piecemeal sensor is the right tool)
+
+If any of those apply:
+
+```bash
+dagster-component add snowflake_snowpipe_load_sensor snowflake_snowpipe external_snowflake_table
 ```
 
 Replace `src/<pkg>/defs/scenario1_api_load_dbt/load_completion_sensor.yaml`:
@@ -47,10 +90,10 @@ attributes:
   default_status: running
 ```
 
-**What this gets you** vs. the local `filesystem_monitor`:
-- Reads Snowflake's `COPY_HISTORY` view directly — files-pending / files-loaded / files-errored / bytes / last-load-time surface as sensor metadata (satisfies OBS-03 without opening a Snowflake worksheet).
-- Handles the non-deterministic file count (TRG-02) — it triggers on *load events*, not on file arrival, so it doesn't need to know how many files the extract emits.
-- Per-file failure metadata: `COPY_HISTORY.ERROR_MESSAGE` bubbles into the sensor tick log (F1.2 — malformed file → visible SnowPipe error).
+**When the piecemeal path is better** vs the workspace:
+- Reads Snowflake's `COPY_HISTORY` view directly with more granular filtering — files-pending / files-loaded / files-errored / bytes / last-load-time surface as sensor metadata (OBS-03).
+- Triggers a specific Dagster JOB by name, rather than emitting an AssetObservation event.
+- Per-file failure metadata is finer-grained than the workspace's per-batch aggregation.
 
 ### 1b. Python extract path
 
@@ -97,13 +140,15 @@ attributes:
 
 **What this gets you**: per-model asset-check pass/fail (OBS-05), selector-granularity trigger (INT-01 / TRG-06), dbt source freshness surfaced (OBS-06).
 
-### 1d. External Snowflake tables (OBS-02)
+### 1d. External Snowflake tables (OBS-02) — already covered by the workspace
+
+If you took the recommended workspace path in 1a, `import_tables: true` already emits every mart table as a first-class Dagster asset. Skip this section.
+
+If you took the piecemeal path in 1a-alt, add `external_snowflake_table` one per mart table:
 
 ```bash
 dagster-component add external_snowflake_table
 ```
-
-Add one per mart table (repeat for each `rpt_<endpoint>` in scope):
 
 ```yaml
 type: <pkg>.components.external_snowflake_table.ExternalSnowflakeTableComponent
@@ -113,7 +158,7 @@ attributes:
   table:    daily_summary
 ```
 
-This makes the mart tables first-class Dagster assets. Last-updated + row count show up as *properties of the data* (OBS-02), not just as run history.
+Either way, OBS-02 is satisfied — last-updated + row count show up as *properties of the data*, not just as run history.
 
 ### 1e. Power BI refresh (S1.8 stretch)
 
@@ -274,5 +319,6 @@ Dry-run planner shows the exact steps a real materialization would execute, incl
 ## Companion docs
 
 - [retail_data_orchestration.md](retail_data_orchestration.md) — main walkthrough with the full criteria mapping table
-- [retail_data_orchestration_from_scratch.md](retail_data_orchestration_from_scratch.md) — hands-on tutorial (build the local demo step-by-step without the scaffold script)
-- [setup_retail_data_orchestration_demo.sh](setup_retail_data_orchestration_demo.sh) — the scaffold script; run this first, then follow this real-mode guide
+- [retail_data_orchestration_real_from_scratch.md](retail_data_orchestration_real_from_scratch.md) — hands-on REAL POC tutorial (build against real Snowflake / dbt Cloud / HVR / Power BI from an empty terminal, using `snowflake_workspace` as the primary Snowflake surface)
+- [retail_data_orchestration_from_scratch.md](retail_data_orchestration_from_scratch.md) — hands-on LOCAL tutorial (build the local stand-in demo step-by-step)
+- [setup_retail_data_orchestration_demo.sh](setup_retail_data_orchestration_demo.sh) — the local scaffold script; run this first, then follow this real-mode guide
