@@ -140,6 +140,21 @@ CANONICAL_QUERIES: list[tuple[str, list[str]]] = [
     # ─── Warehouse / lakehouse ─────────────────────────────────────
     ("warehouse migration", ["database_tables_migration", "database_schema_inventory"]),
     ("data catalog lineage", ["lineage_to_datahub", "lineage_graph_extractor"]),
+    # ─── Schedules over partitioned assets ─────────────────────────
+    # Regression guard: a customer automation in 2026-08 wrote a custom
+    # PartitionedIngestionScheduleComponent because it searched for the
+    # exact API name `build_schedule_from_partitioned_job` and got zero
+    # hits. The registry's `cron_schedule` DOES wrap this API — the
+    # discoverability gap was pure vocabulary, not missing capability.
+    ("cron schedule", ["cron_schedule"]),
+    ("cron schedule partitioned job", ["cron_schedule"]),
+    ("schedule partitioned assets", ["cron_schedule"]),
+    ("partitioned asset schedule", ["cron_schedule"]),
+    ("build_schedule_from_partitioned_job", ["cron_schedule"]),
+    ("cron over partitioned job", ["cron_schedule"]),
+    ("interval schedule", ["interval_schedule"]),
+    ("asset job", ["asset_job"]),
+
     # ─── Sensors / monitors ────────────────────────────────────────
     ("file arrival", [
         "s3_monitor", "gcs_monitor", "filesystem_monitor", "adls_monitor",
