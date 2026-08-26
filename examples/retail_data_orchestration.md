@@ -287,7 +287,7 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 | REC-03 | Backfill a specific prior partition | Dagster+ Backfills UI + `partitioned_asset_launcher_job` for config-driven kickoff. |
 | REC-04 | Kill in-flight + restart cleanly | Dagster+ UI Terminate + re-launch — platform guarantee. |
 | REC-05 | Force a step to succeed / skip | `dagster mark_run_step_successful` CLI + `human_approval_gate` component for gated force-succeed. |
-| REC-06 | Retry that fires for infra, not data, failure | Dagster `RetryPolicy` accepts an `error_filter` — infrastructure errors retry, `DagsterTypeCheckError` / `Failure` do not. Wired into all three scenarios' defs. |
+| REC-06 | Retry that fires for infra, not data, failure | `RetryPolicy(max_retries=...)` sets the retry budget uniformly; the *selection* between infra and data errors happens in compute: raise `dagster.RetryRequested(...)` for infra failures (retry consumed), let `dagster.Failure` (or any exception the caller doesn't wrap) propagate for data failures (retry NOT consumed). Wrap each component's shell-out / API-call in a try/except that maps `ConnectionError` / `TimeoutError` / HTTP 5xx to `RetryRequested`. |
 | REC-07 | **Consistency of intervention across pipelines** | This is the platform-guarantee vs per-job-design question. Because every scenario uses the same components + Dagster's built-in `RetryPolicy` / `MaterializationEvent` primitives, re-run / cancel / backfill / force-skip semantics are identical across all three. This is the highest-value grade to press vendors on. |
 
 ### Integration (INT-series)
@@ -308,7 +308,7 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 | # | Requirement | Satisfied by |
 |---|---|---|
 | ERR-01 | Legible errors from third-party tools | `snowflake_snowpipe_load_sensor` bubbles `COPY_HISTORY.ERROR_MESSAGE` per-file into asset metadata. `hvr_hub_workspace` bubbles HVR error codes as run failures. |
-| ERR-03 | Classify infrastructure vs data failure | Dagster distinguishes `RetryRequested` (infra) from `Failure` (data). Wired into `RetryPolicy(error_filter=...)`. |
+| ERR-03 | Classify infrastructure vs data failure | Dagster distinguishes `RetryRequested` (infra, consumes a retry from the `RetryPolicy` budget) from `Failure` (data, non-retryable). Classification lives in the compute function itself: a `try/except` around the API call maps transient errors (`ConnectionError`, `TimeoutError`, HTTP 5xx) to `raise dagster.RetryRequested(...)` and lets data errors (schema violation, `Failure`) surface as terminal. `RetryPolicy` itself only sets `max_retries` / `delay` / `backoff` / `jitter` — no built-in error-type filter. |
 | ERR-05 | Snowflake dynamic-table fallback-to-full-refresh visibility | `snowflake_table_observation_sensor` component (community) reads `INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY` — surfaces incremental-vs-full as sensor metadata. Direct answer to the A3 pain point. |
 
 ### Alerting (ALT-series)

@@ -442,7 +442,35 @@ uv run dg check defs
 
 ## Step 8: Retry policies for the "infra vs data" distinction (REC-06)
 
-Dagster's `RetryPolicy` accepts an `error_filter` — infrastructure errors retry, data errors fail permanently. This is a Dagster core capability, not a community component, so it goes into the YAML directly. Add to any component that needs it:
+`RetryPolicy` sets the retry BUDGET — `max_retries`, `delay`, `backoff`, `jitter`. It does **not** have a built-in filter for "retry only certain exceptions." The infra-vs-data distinction lives in the compute function itself, using two Dagster primitives:
+
+- `dagster.RetryRequested(...)` — raise this for a **transient / infrastructure** failure. Consumes one retry from the `RetryPolicy` budget and re-queues the step.
+- `dagster.Failure(...)` (or any uncaught exception the caller doesn't wrap) — treated as a **data / permanent** failure. Does NOT consume a retry; the step is marked failed immediately and downstream is skipped.
+
+Pattern for any component whose compute makes a network call — wrap it, map transient errors to `RetryRequested`, let everything else propagate:
+
+```python
+# Inside a component's compute function (illustration — real components
+# already wrap their own API calls this way):
+import dagster as dg
+import requests
+
+try:
+    resp = requests.post(url, json=payload, timeout=30)
+    resp.raise_for_status()
+except (requests.ConnectionError, requests.Timeout) as e:
+    raise dg.RetryRequested(
+        max_retries=3,
+        seconds_to_wait=30,
+    ) from e
+except requests.HTTPError as e:
+    if 500 <= e.response.status_code < 600:
+        raise dg.RetryRequested(max_retries=3, seconds_to_wait=30) from e
+    # 4xx = data/auth error — permanent, no retry
+    raise dg.Failure(f"API returned {e.response.status_code}") from e
+```
+
+Add a `retry_policy:` block to any Dagster-native asset that needs a retry BUDGET (the specific behavior above is what actually filters what retries):
 
 ```yaml
 # example: scenario 1 dbt_cloud_job.yaml augmented
@@ -451,12 +479,14 @@ attributes:
   job_name: dbt_build_scenario1_job
   retry_policy:
     max_retries: 3
-    delay: 60
-    backoff: exponential
-    # error_filter: python callable path — only retry on infra errors
-    # (network timeouts, auth failures, transient 5xx). Data errors
-    # (dbt test failures, schema violations) fail permanently.
+    delay: 60             # seconds
+    backoff: exponential  # doubles between attempts
+    # No `error_filter:` field exists on RetryPolicy. If the community
+    # component's compute wraps its outbound API call as shown above,
+    # `RetryRequested` uses this budget; a `Failure` bypasses it entirely.
 ```
+
+**Why this matters for the POC.** REC-06 asks for retries that fire on infra failures but NOT on data failures. Vendors who show a slider labeled "retry on any exception" fail this criterion. Vendors who let the compute function classify the failure type — and then respect that classification against a policy budget — pass it. Dagster falls in the second camp.
 
 ---
 
