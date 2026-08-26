@@ -206,44 +206,106 @@ name_filter:
   include: ["*FUEL*", "*API_EVENTS*"]
 ```
 
-### 4b. `dbt_cloud_job.yaml` — trigger dbt Cloud at selector granularity
+### 4b. Register the dbt Cloud resource
+
+**dbt Cloud calls go through a resource.** Register it once per code location:
 
 ```bash
-cat > src/retail_data_orchestration/defs/scenario1_snowpipe_dbt/dbt_cloud_job.yaml <<'YAML'
-type: retail_data_orchestration.components.dbt_run_job.DbtRunJobComponent
+dcc add dbt_cloud_resource --auto-install
+```
+
+```bash
+cat > src/retail_data_orchestration/defs/scenario1_snowpipe_dbt/dbt_cloud_resource.yaml <<'YAML'
+type: retail_data_orchestration.components.dbt_cloud_resource.DbtCloudResourceComponent
 attributes:
-  job_name: dbt_build_scenario1_job
-  # dbt_run_job kicks off dbt Cloud's job via the Cloud API. Selector
-  # granularity comes from the dbt Cloud job definition itself; if you
-  # need to override per-run, pass `select:` as run config.
+  resource_key:       dbt_cloud_resource       # every dbt Cloud component references this key
+  auth_token_env_var: DBT_CLOUD_API_TOKEN
+  account_id:         12345                     # your dbt Cloud account ID (numeric)
 YAML
 ```
 
-### 4c. `dbt_cloud_sensor.yaml` — trigger the dbt job on Snowpipe-load events
+### 4c. Trigger the dbt Cloud job — `dbt_cloud_trigger_job` (op-job)
 
-The `snowflake_workspace` polling sensor emits `AssetObservation` events when Snowpipes complete loads. `dbt_cloud_job_sensor` watches for those events and triggers the dbt Cloud job.
+**This is the missing "Dagster kicks off dbt Cloud" primitive.** The component wraps `DbtCloudResource.run_job_and_poll` behind YAML, exposing a Dagster **op-job** that any sensor / schedule / upstream event can target by name. When Dagster runs the op-job, it POSTs the trigger to dbt Cloud, polls until the run terminates, and (optionally) emits `AssetMaterialization` events for the models the run built so downstream Dagster assets see the update.
 
 ```bash
-cat > src/retail_data_orchestration/defs/scenario1_snowpipe_dbt/dbt_cloud_sensor.yaml <<'YAML'
+dcc add dbt_cloud_trigger_job --auto-install
+```
+
+```bash
+cat > src/retail_data_orchestration/defs/scenario1_snowpipe_dbt/dbt_cloud_trigger.yaml <<'YAML'
+type: retail_data_orchestration.components.dbt_cloud_trigger_job.DbtCloudTriggerJobComponent
+attributes:
+  job_name: dbt_build_scenario1_job              # sensors below target this
+  dbt_cloud_job_id: 67890                        # your dbt Cloud job ID (numeric)
+  dbt_cloud_resource_key: dbt_cloud_resource     # matches 4b
+  wait_for_completion: true                      # block Dagster op until dbt Cloud run terminates
+  poll_interval_seconds: 30
+  cause: "Triggered by Dagster on Snowpipe load event"
+
+  # After successful run, emit AssetMaterialization for each mart the
+  # dbt Cloud job builds. This is what wires the dbt Cloud run into
+  # Dagster's asset graph — downstream automation conditions trip on
+  # these materializations. Use the exact asset keys from `dg list defs`.
+  emit_materializations_for:
+    - snowflake_workspace/tables/MART/DAILY_SUMMARY
+    - snowflake_workspace/tables/MART/HOURLY_PRICING
+YAML
+```
+
+### 4d. Wire the load-completion sensor to trigger the dbt Cloud job
+
+Now the sensor that watches for Snowpipe load events and calls the op-job above. The `snowflake_workspace` `polling_sensor: true` from 4a emits `AssetObservation` events on load completion. Use `snowflake_snowpipe_load_sensor` (piecemeal component — separate from the workspace's polling sensor) to also emit a `RunRequest` targeting `dbt_build_scenario1_job`:
+
+```bash
+dcc add snowflake_snowpipe_load_sensor --auto-install
+```
+
+```bash
+cat > src/retail_data_orchestration/defs/scenario1_snowpipe_dbt/snowpipe_load_sensor.yaml <<'YAML'
+type: retail_data_orchestration.components.snowflake_snowpipe_load_sensor.SnowflakeSnowpipeLoadSensorComponent
+attributes:
+  sensor_name: snowpipe_to_dbt_cloud
+  job_name:    dbt_build_scenario1_job          # ← matches DbtCloudTriggerJobComponent.job_name
+
+  pipe_name:         FUEL_AND_TRADING_LANDING_PIPE   # your real Snowpipe name
+  destination_table: LANDING.RAW_API_EVENTS
+
+  account:          {env: SNOWFLAKE_ACCOUNT}
+  user:             {env: SNOWFLAKE_USER}
+  warehouse:        {env: SNOWFLAKE_WAREHOUSE}
+  database:         {env: SNOWFLAKE_DATABASE_S1}
+  schema:           {env: SNOWFLAKE_SCHEMA_S1_LANDING}
+  role:             {env: SNOWFLAKE_ROLE}
+  authenticator:    SNOWFLAKE_JWT
+  private_key_file: {env: SNOWFLAKE_PRIVATE_KEY_FILE}
+
+  minimum_interval_seconds: 60
+  lookback_minutes:         60
+  pass_file_metadata:       true
+  default_status:           running
+YAML
+```
+
+**The full chain:** `FUEL_AND_TRADING_LANDING_PIPE` completes a load → `snowpipe_to_dbt_cloud` sensor reads `COPY_HISTORY`, sees new load rows since watermark, emits `RunRequest(job_name="dbt_build_scenario1_job")` → Dagster launches the op-job → the op calls `DbtCloudResource.run_job_and_poll(job_id=67890)` → dbt Cloud runs, polls until done → op emits `AssetMaterialization` for `MART/DAILY_SUMMARY` and `MART/HOURLY_PRICING`.
+
+### 4e. (Optional) Also observe dbt Cloud runs with `dbt_cloud_job_sensor`
+
+This sensor is the **reverse direction** — polls dbt Cloud, triggers a Dagster job when a dbt Cloud run completes. Useful if you want a separate downstream Dagster job (e.g., a report-refresh job) to fire on dbt Cloud completion:
+
+```yaml
 type: retail_data_orchestration.components.dbt_cloud_job_sensor.DbtCloudJobSensorComponent
 attributes:
-  sensor_name: dbt_cloud_scenario1_sensor
-  dbt_cloud_job_id:    {env: DBT_CLOUD_JOB_ID_SCENARIO1}
-  dbt_cloud_api_token: {env: DBT_CLOUD_API_TOKEN}
-  dbt_cloud_account_id: {env: DBT_CLOUD_ACCOUNT_ID}
-
-  # Only surface test failures as first-class asset check pass/fail
-  # (OBS-05); model successes emit MaterializationEvents which the mart
-  # assets from snowflake_workspace pick up as freshness signals (OBS-02).
+  sensor_name:     dbt_cloud_scenario1_downstream_sensor
+  account_id:      12345                          # dbt Cloud account ID (int, not env)
+  job_id:          67890                          # dbt Cloud job ID (int)
+  api_token_env_var: DBT_CLOUD_API_TOKEN         # name of env var (string), NOT the value
+  job_name:        downstream_report_refresh_job # existing Dagster job to trigger
   minimum_interval_seconds: 60
-  default_status: running
-
-  # Optional: filter which upstream materializations trigger this sensor.
-  # Omit to trigger on ANY monitored asset materializing.
-  triggering_assets:
-    - snowflake_workspace/snowpipes/FUEL_AND_TRADING_LANDING_PIPE
-YAML
+  default_status:  running
 ```
+
+**Note the field names** — the sensor uses `account_id: <int>`, `job_id: <int>`, `api_token_env_var: <string-of-env-var-name>` (NOT the env-var value). Skip this section if the trigger direction in 4c/4d is all you need.
 
 Validate:
 
@@ -304,29 +366,40 @@ YAML
 
 ### 5b. dbt Cloud trigger — same shape as scenario 1
 
+Reuse the `dbt_cloud_resource` you registered in 4b (no need to register again — one resource per code location covers both scenarios). Add a second `dbt_cloud_trigger_job` for scenario 2:
+
 ```bash
-cat > src/retail_data_orchestration/defs/scenario2_replication_refresh/dbt_cloud_job.yaml <<'YAML'
-type: retail_data_orchestration.components.dbt_run_job.DbtRunJobComponent
+cat > src/retail_data_orchestration/defs/scenario2_replication_refresh/dbt_cloud_trigger.yaml <<'YAML'
+type: retail_data_orchestration.components.dbt_cloud_trigger_job.DbtCloudTriggerJobComponent
 attributes:
   job_name: dbt_build_scenario2_job
-YAML
-
-cat > src/retail_data_orchestration/defs/scenario2_replication_refresh/dbt_cloud_sensor.yaml <<'YAML'
-type: retail_data_orchestration.components.dbt_cloud_job_sensor.DbtCloudJobSensorComponent
-attributes:
-  sensor_name: dbt_cloud_scenario2_sensor
-  dbt_cloud_job_id:     {env: DBT_CLOUD_JOB_ID_SCENARIO2}
-  dbt_cloud_api_token:  {env: DBT_CLOUD_API_TOKEN}
-  dbt_cloud_account_id: {env: DBT_CLOUD_ACCOUNT_ID}
-  minimum_interval_seconds: 60
-  default_status: running
-  # Trigger on the HVR channel completing its refresh — the specific
-  # asset key depends on your channel_selector. Check `dg list defs`
-  # after first load-time for the exact key.
-  triggering_assets:
-    - hvr/prod_hub/fuel_price02
+  dbt_cloud_job_id: 67891                        # your scenario-2 dbt Cloud job ID
+  dbt_cloud_resource_key: dbt_cloud_resource
+  wait_for_completion: true
+  cause: "Triggered by Dagster on HVR channel refresh completion"
+  emit_materializations_for:
+    - snowflake_workspace/tables/MART/FUEL_PRICES_MART
 YAML
 ```
+
+To trigger `dbt_build_scenario2_job` on HVR refresh completion, use an `AutomationCondition` on the trigger job's downstream mart asset. `hvr_hub_workspace` emits materializations on channel refresh; the automation condition trips when the upstream materializes:
+
+```bash
+dcc add event_automation --auto-install
+```
+
+```bash
+cat > src/retail_data_orchestration/defs/scenario2_replication_refresh/automation.yaml <<'YAML'
+type: retail_data_orchestration.components.event_automation.EventAutomationComponent
+attributes:
+  asset_key: snowflake_workspace/tables/MART/FUEL_PRICES_MART
+  # Materialize the mart when the HVR channel newly refreshed — but not
+  # more than once every 30 min (rate-limit + de-dup for chatty channels).
+  automation_condition: "{{ dg.AutomationCondition.eager() & ~dg.AutomationCondition.newly_materialized_within(minutes=30) }}"
+YAML
+```
+
+**Semantic note.** In scenario 2 the trigger is an AutomationCondition, not a sensor (as in 4d). This is because HVR's refresh completion IS an asset materialization on `hvr_hub_workspace`'s channel asset — so a declarative condition on the downstream mart is simpler than a bespoke sensor. In scenario 1 the Snowpipe completion is an `AssetObservation` (from `polling_sensor`), which does NOT trip `AutomationCondition.on_upstream_materialized()` — hence the explicit `snowflake_snowpipe_load_sensor` in 4d.
 
 Validate:
 

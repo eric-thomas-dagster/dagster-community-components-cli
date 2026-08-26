@@ -41,7 +41,7 @@ chmod +x setup.sh
     [ filesystem_monitor sensor ]        ◄── stand-in for snowflake_snowpipe_load_sensor
                     │  fires on load completion
                     ▼
-      [ dbt build (dbt_project) ]         ◄── stand-in for dbt_run_job + dbt_cloud_job_sensor
+      [ dbt build (shell_command_asset) ]  ◄── stand-in for dbt_cloud_trigger_job + dbt_cloud_resource
                     │
                     ▼
          [ DuckDB mart tables ]           ◄── stand-in for Snowflake mart
@@ -95,7 +95,7 @@ attributes:
 
 ```yaml
 # dbt.yaml — dbt build against DuckDB. Emits per-model assets w/ test results
-# as first-class pass/fail signals (OBS-05). Swap to dbt_run_job for real
+# as first-class pass/fail signals (OBS-05). Swap to dbt_cloud_trigger_job for real
 # dbt Cloud (see retail_data_orchestration_real_mode.md).
 type: retail_data_orchestration.components.dbt_project.DbtProjectComponent
 attributes:
@@ -111,7 +111,7 @@ attributes:
 |---|---|---|
 | `filesystem_monitor` + `shell_command_asset` (dbt) | **`snowflake_workspace`** with `import_snowpipes: true` + `import_tables: true` + `polling_sensor: true` | ONE YAML block replaces both — discovers every Snowpipe + landing/mart table under the schema, and the polling sensor emits load-completion events for TRG-01/OBS-03. |
 | `shell_command_asset` extract | `shell_command_asset` unchanged | The Python script writes to real S3 instead of MinIO — env var swap only, no component change (G7). |
-| `shell_command_asset` (dbt) | `dbt_run_job` + `dbt_cloud_job_sensor` | Kicks off dbt Cloud at selector granularity; sensor surfaces per-model test pass/fail (OBS-05). |
+| `shell_command_asset` (dbt) | `dbt_cloud_resource` + `dbt_cloud_trigger_job` (+ optional `dbt_cloud_job_sensor`) | Registers the dbt Cloud connection, then wraps `DbtCloudResource.run_job_and_poll` in a Dagster op-job any sensor / schedule / upstream event can target by name. Emits per-model `AssetMaterialization` events for keys in `emit_materializations_for`, wiring the run into the asset graph. `dbt_cloud_job_sensor` is the reverse direction (observes dbt Cloud, triggers Dagster downstream) — optional. **`dbt_run_job` runs dbt Core via subprocess, NOT dbt Cloud — don't confuse them.** |
 | Mock replication CLI | **`hvr_hub_workspace`** with `action: refresh` + `polling_sensor: true` | ONE YAML block replaces the shim — POST /refresh + polls completion + emits per-table observation events with integrate-lag metadata. |
 | — (add) | `dagster-powerbi` `PowerBIWorkspace` | S1.8 stretch — official Dagster integration, not a community component. Emits report/dataset/semantic-model assets hanging off Snowflake mart. |
 | — (add) | `dbt_state_reuse_patch` | Scenario 3 Mechanism A — treats dbt Cloud `no-op` responses as materialization events instead of failures. |
@@ -275,7 +275,7 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 | TRG-03 | Whole chain as one pipeline / one status | Asset graph. `partitioned_asset_launcher_job` for humans + external callers wanting a single status endpoint. |
 | TRG-04 | Cron scheduling | `cron_schedule` component wraps `dg.build_schedule_from_partitioned_job` — supports 7 partition types including multi-partitioned (date × static-dim). |
 | TRG-05 | Skip-or-run decision on freshness | Scenario 3 above. |
-| TRG-06 | dbt Cloud selector-granularity trigger | `dbt_run_job` `select:` field. |
+| TRG-06 | dbt Cloud selector-granularity trigger | Selector granularity is configured on the dbt Cloud job itself; `dbt_cloud_trigger_job` supports per-run `steps_override:` (list of dbt commands like `["dbt build --select tag:hourly"]`) to replace the job's default steps for that specific run. |
 | TRG-07 | Concurrency control (no overlapping refresh) | Dagster run concurrency + `RunsFilter`. Also `partitioned_asset_launcher_job` enforces partition-level exclusivity. |
 
 ### Recovery (REC-series)
@@ -283,7 +283,7 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 | # | Task | Satisfied by |
 |---|---|---|
 | REC-01 | Re-run only the failed step | Dagster+ UI "re-execute from failed" — platform guarantee, works uniformly across all three scenarios. |
-| REC-02 | Re-run with different selector for that run only | `dbt_run_job` accepts `select` as a run-config override; Dagster+ Launchpad UI form. |
+| REC-02 | Re-run with different selector for that run only | `dbt_cloud_trigger_job`'s `steps_override:` field on the component supports one-off selector overrides via Dagster+ Launchpad UI run-config form. For dbt Core (via `dbt_run_job`), `select` is a run-config override. |
 | REC-03 | Backfill a specific prior partition | Dagster+ Backfills UI + `partitioned_asset_launcher_job` for config-driven kickoff. |
 | REC-04 | Kill in-flight + restart cleanly | Dagster+ UI Terminate + re-launch — platform guarantee. |
 | REC-05 | Force a step to succeed / skip | `dagster mark_run_step_successful` CLI + `human_approval_gate` component for gated force-succeed. |
@@ -294,7 +294,7 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 
 | # | Integration | Satisfied by |
 |---|---|---|
-| INT-01 | dbt Cloud at selector granularity | `dbt_run_job` + `dbt_cloud_job_sensor`. |
+| INT-01 | dbt Cloud at selector granularity | `dbt_cloud_resource` + `dbt_cloud_trigger_job` for the "Dagster triggers dbt Cloud" direction. `dbt_cloud_job_sensor` for the reverse (Dagster observes dbt Cloud → triggers downstream). Selector granularity via the job's dbt Cloud config, per-run overrides via `steps_override:`. |
 | INT-02 | dbt Core support | `dbt_project` component (in the local demo). |
 | INT-03 | SnowPipe status → orchestrator | `snowflake_snowpipe_load_sensor`. |
 | INT-05 | External replication API (HVR / Fivetran / …) | `hvr_hub_workspace` (real mode). `fivetran_workspace` also available for the Fivetran side of the migration. |

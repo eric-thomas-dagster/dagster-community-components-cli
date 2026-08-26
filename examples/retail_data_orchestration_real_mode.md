@@ -110,35 +110,67 @@ attributes:
   partition_start: "2026-01-01"
 ```
 
-### 1c. dbt: local `dbt_project` shell-out → `dbt_run_job` + `dbt_cloud_job_sensor`
+### 1c. dbt: local shell-out → `dbt_cloud_resource` + `dbt_cloud_trigger_job`
+
+Three components involved — one registers the connection, one triggers dbt Cloud (op-job you install), one optionally observes dbt Cloud (reverse direction):
+
+- **`dbt_cloud_resource`** — registers `dagster_dbt.DbtCloudResource` for the connection.
+- **`dbt_cloud_trigger_job`** — Dagster **op-job** that calls `DbtCloudResource.run_job_and_poll(job_id=...)`. Sensors / schedules target this by name.
+- **`dbt_cloud_job_sensor`** — REVERSE direction: watches dbt Cloud, triggers a Dagster job when a dbt Cloud run completes. Useful for chaining downstream Dagster work off dbt Cloud completions (e.g., report refresh). Skip unless you need the observation direction.
+
+**Do NOT use `dbt_run_job` for dbt Cloud** — that component runs dbt Core via subprocess, not dbt Cloud.
 
 ```bash
-dagster-component add dbt_run_job dbt_cloud_job_sensor
+dagster-component add dbt_cloud_resource dbt_cloud_trigger_job
+```
+
+Register the resource (once per code location):
+
+```yaml
+# resources/dbt_cloud_resource.yaml
+type: <pkg>.components.dbt_cloud_resource.DbtCloudResourceComponent
+attributes:
+  resource_key:       dbt_cloud_resource
+  auth_token_env_var: DBT_CLOUD_API_TOKEN
+  account_id:         12345          # your dbt Cloud account ID (int, not env)
 ```
 
 Replace `src/<pkg>/defs/scenario1_api_load_dbt/dbt.yaml`:
 
 ```yaml
-type: <pkg>.components.dbt_run_job.DbtRunJobComponent
+type: <pkg>.components.dbt_cloud_trigger_job.DbtCloudTriggerJobComponent
 attributes:
-  job_name: dbt_build_scenario1_job
-  # This is a Dagster job; the SnowPipe sensor above triggers it. You
-  # CAN also add a scheduled sibling for calendar-driven runs.
+  job_name: dbt_build_scenario1_job              # sensors target this string
+  dbt_cloud_job_id: 67890                        # your dbt Cloud job ID (int)
+  dbt_cloud_resource_key: dbt_cloud_resource     # matches the resource above
+  wait_for_completion: true
+  poll_interval_seconds: 30
+  cause: "Triggered by Dagster on Snowpipe load event"
+
+  # After successful run, emit AssetMaterialization for each mart. This
+  # is what wires the dbt Cloud run into Dagster's asset graph.
+  emit_materializations_for:
+    - snowflake_workspace/tables/MART/DAILY_SUMMARY
+    - snowflake_workspace/tables/MART/HOURLY_PRICING
 ```
 
-Add a sibling `dbt_cloud_job_sensor.yaml`:
+Wire the SnowPipe load sensor to this job (from 1a — the sensor's `job_name:` field targets `dbt_build_scenario1_job`).
+
+**Optional — observe dbt Cloud runs too.** If you also want a Dagster job to fire when the dbt Cloud run *completes* (e.g., for downstream Power BI refresh), add `dbt_cloud_job_sensor`. Note the correct field names:
 
 ```yaml
 type: <pkg>.components.dbt_cloud_job_sensor.DbtCloudJobSensorComponent
 attributes:
-  sensor_name: dbt_cloud_status_sensor
-  dbt_cloud_job_id: "{{ env('DBT_CLOUD_JOB_ID_SCENARIO1') }}"
-  dbt_cloud_api_token: "{{ env('DBT_CLOUD_API_TOKEN') }}"
-  dbt_cloud_account_id: "{{ env('DBT_CLOUD_ACCOUNT_ID') }}"
+  sensor_name:       dbt_cloud_status_sensor
+  account_id:        12345                       # int, not env
+  job_id:            67890                       # int, not env
+  api_token_env_var: DBT_CLOUD_API_TOKEN         # env-var NAME (string), not value
+  job_name:          powerbi_refresh_job         # existing Dagster job to trigger
   minimum_interval_seconds: 60
+  default_status:    running
 ```
 
-**What this gets you**: per-model asset-check pass/fail (OBS-05), selector-granularity trigger (INT-01 / TRG-06), dbt source freshness surfaced (OBS-06).
+**What this gets you**: per-model asset-check pass/fail from dbt Cloud (OBS-05) surface as Dagster asset checks on the mart tables. Selector-granularity is configured on the dbt Cloud side; override per-run via `steps_override:` on the trigger component. Source freshness (OBS-06) is a dbt-side capability that appears in dbt Cloud UI and can be surfaced in Dagster by materializing the source asset with per-source freshness policies.
 
 ### 1d. External Snowflake tables (OBS-02) — already covered by the workspace
 
@@ -229,7 +261,28 @@ attributes:
 
 ### 2b. dbt: same swap as 1c.
 
-`dbt_run_job` + `dbt_cloud_job_sensor` — replace the `shell_command_asset` shim with `dbt_run_job`. The `deps: [replicated_landing_tables]` line stays; `replicated_landing_tables` now becomes an asset produced by `hvr_hub_workspace` instead of the shell shim.
+Add a second `dbt_cloud_trigger_job` for scenario 2 (reuses the `dbt_cloud_resource` from 1c):
+
+```yaml
+type: <pkg>.components.dbt_cloud_trigger_job.DbtCloudTriggerJobComponent
+attributes:
+  job_name: dbt_build_scenario2_job
+  dbt_cloud_job_id: 67891
+  dbt_cloud_resource_key: dbt_cloud_resource
+  wait_for_completion: true
+  cause: "Triggered by Dagster on HVR channel refresh completion"
+  emit_materializations_for:
+    - snowflake_workspace/tables/MART/FUEL_PRICES_MART
+```
+
+Trigger it via an `AutomationCondition` on the downstream mart (HVR emits materializations on channel refresh — no separate sensor needed, unlike scenario 1 where Snowpipe emits observations, not materializations):
+
+```yaml
+type: <pkg>.components.event_automation.EventAutomationComponent
+attributes:
+  asset_key: snowflake_workspace/tables/MART/FUEL_PRICES_MART
+  automation_condition: "{{ dg.AutomationCondition.eager() & ~dg.AutomationCondition.newly_materialized_within(minutes=30) }}"
+```
 
 ---
 
