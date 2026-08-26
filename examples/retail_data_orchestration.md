@@ -2,7 +2,12 @@
 
 > **What this is.** A three-scenario Dagster demo shaped around the enterprise data-orchestration patterns most retail data teams need to prove out before adopting a replacement orchestrator. Everything scaffolds end-to-end from one script; the walkthrough below maps every requirement to specific components + config so it's clear which piece of the demo satisfies which requirement.
 
-**Setup** (one command, ~3 min):
+**Two ways to build this demo:**
+
+- **Fast (~3 min)** — run the scaffold script and inspect the output.
+- **Hands-on (~30 min, teach-yourself)** — follow the [from-scratch tutorial](retail_data_orchestration_from_scratch.md). Same end state, but you type every command and understand each moving piece.
+
+**Fast setup:**
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_retail_data_orchestration_demo.sh -o setup.sh

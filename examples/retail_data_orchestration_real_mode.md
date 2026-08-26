@@ -274,4 +274,5 @@ Dry-run planner shows the exact steps a real materialization would execute, incl
 ## Companion docs
 
 - [retail_data_orchestration.md](retail_data_orchestration.md) — main walkthrough with the full criteria mapping table
+- [retail_data_orchestration_from_scratch.md](retail_data_orchestration_from_scratch.md) — hands-on tutorial (build the local demo step-by-step without the scaffold script)
 - [setup_retail_data_orchestration_demo.sh](setup_retail_data_orchestration_demo.sh) — the scaffold script; run this first, then follow this real-mode guide
