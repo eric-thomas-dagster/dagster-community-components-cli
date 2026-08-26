@@ -254,6 +254,16 @@ def add(
     ),
 )
 @click.option("--limit", type=int, default=20, show_default=True)
+@click.option(
+    "--json",
+    "as_json",
+    is_flag=True,
+    help=(
+        "Emit machine-readable JSON: list of "
+        "{id, score, matched_fields, matched_terms, category, produces, description}. "
+        "For automations that need to pick the top hit deterministically."
+    ),
+)
 @click.pass_context
 def search(
     ctx: click.Context,
@@ -261,15 +271,45 @@ def search(
     category: str | None,
     produces: str | None,
     limit: int,
+    as_json: bool,
 ) -> None:
-    """Search the community registry by id, name, description, or tags.
+    """Search the community registry.
+
+    Multi-term AND across id, name, description, tags, keywords, agent_hints
+    (when_to_use / example_prompts / anti_uses / typical_upstream / …),
+    consumes, provides, and pip deps. Ranked by field-weighted score
+    (id > keywords > name > tags > agent_hints.primary > description).
 
     Example: dagster-component search snowflake
+    Example: dagster-component search "kafka upsert"
     Example: dagster-component search "" --produces schedule
+    Example: dagster-component search rest --json    # machine-readable
     """
     registry: Registry = ctx.obj["registry"]
-    results = registry.search(query, category=category, produces=produces)
-    if not results:
+    scored = registry.search(
+        query, category=category, produces=produces, with_scores=True
+    )
+
+    if as_json:
+        # Emit compact JSON — deterministic ordering, no console-formatting escape
+        # codes. Cap at `--limit` even in JSON to match table behavior.
+        payload = [
+            {
+                "id": c.get("id"),
+                "score": s,
+                "matched_fields": sorted(matched.keys()),
+                "matched_terms": sorted({t for lst in matched.values() for t in lst}),
+                "category": c.get("category"),
+                "produces": c.get("produces") or [],
+                "description": c.get("description") or "",
+                "validation_level": (c.get("validation") or {}).get("level"),
+            }
+            for c, s, matched in scored[:limit]
+        ]
+        click.echo(json.dumps(payload, indent=2))
+        return
+
+    if not scored:
         filters = []
         if category:
             filters.append(f"category={category}")
@@ -279,22 +319,29 @@ def search(
         console.print(f"No components match [bold]{query or '*'}[/bold]{filter_str}.")
         sys.exit(0)
 
-    table = Table(title=f"{len(results)} match(es) for '{query or '*'}'", show_lines=False)
+    table = Table(
+        title=f"{len(scored)} match(es) for '{query or '*'}'", show_lines=False
+    )
+    table.add_column("Score", style="yellow", justify="right", no_wrap=True)
     table.add_column("ID", style="cyan", no_wrap=True)
     table.add_column("Category", style="magenta")
     table.add_column("Produces", style="green")
     table.add_column("Description")
 
-    for c in results[:limit]:
+    for c, score, _matched in scored[:limit]:
         table.add_row(
+            str(score) if score > 0 else "—",
             c.get("id", "?"),
             c.get("category", "?"),
             ",".join(c.get("produces") or []),
             (c.get("description") or "")[:80],
         )
     console.print(table)
-    if len(results) > limit:
-        console.print(f"[dim]+ {len(results) - limit} more (use --limit to expand)[/dim]")
+    if len(scored) > limit:
+        console.print(
+            f"[dim]+ {len(scored) - limit} more (use --limit to expand, "
+            f"--json for machine-readable output)[/dim]"
+        )
 
 
 # ── analyze-schedules ─────────────────────────────────────────────────────────

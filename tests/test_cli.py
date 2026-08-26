@@ -86,6 +86,131 @@ def test_registry_categories():
     assert cats == {"io_manager": 1, "resource": 1}
 
 
+# ── search: ranking + multi-term + agent_hints + keywords ────────────────────
+
+SEARCH_MANIFEST = {
+    "version": "1.0.0",
+    "components": [
+        {
+            "id": "mssql_resource",
+            "name": "MSSQL Resource",
+            "category": "resource",
+            "description": "Connect to Microsoft SQL Server / Azure SQL databases.",
+            "tags": ["resource", "mssql", "database"],
+            "keywords": ["sql server", "microsoft sql", "azure sql", "tsql", "sqlserver"],
+        },
+        {
+            "id": "kafka_to_database_asset",
+            "name": "Kafka to Database Asset",
+            "category": "ingestion",
+            "description": "Stream Kafka messages into a database table.",
+            "tags": ["kafka", "ingestion", "streaming"],
+            "keywords": ["upsert", "stream ingest"],
+            "agent_hints": {
+                "when_to_use": "Land Kafka topic events into a warehouse table.",
+                "example_prompts": ["Ingest Kafka events into Postgres with upsert semantics"],
+            },
+        },
+        {
+            "id": "rest_api_fetcher",
+            "name": "REST API Fetcher",
+            "category": "ingestion",
+            "description": "Fetch data from any REST API and materialize as an asset.",
+            "tags": ["ingestion", "rest", "api"],
+            "agent_hints": {
+                "when_to_use": "Any REST endpoint returning JSON — per-partition dispatch supported.",
+                "example_prompts": [
+                    "Pull freight carrier rate feeds from FedEx and UPS APIs into a warehouse table"
+                ],
+            },
+        },
+        {
+            "id": "unrelated_component",
+            "name": "Unrelated Component",
+            "category": "sensor",
+            "description": "Some other thing entirely.",
+            "tags": ["sensor", "other"],
+        },
+    ],
+}
+
+
+def test_search_multi_term_and_semantics():
+    """All terms must match — a single-term hit is not enough."""
+    r = _registry_with(SEARCH_MANIFEST)
+    # "kafka" matches kafka_to_database_asset AND unrelated? No — check that
+    # "kafka upsert" only returns the one component that has BOTH terms.
+    matches = r.search("kafka upsert")
+    assert {m["id"] for m in matches} == {"kafka_to_database_asset"}
+
+
+def test_search_keywords_field():
+    """`keywords: [...]` should be searchable and weighted higher than description."""
+    r = _registry_with(SEARCH_MANIFEST)
+    matches = r.search("sql server")
+    assert matches[0]["id"] == "mssql_resource"
+
+
+def test_search_agent_hints_when_to_use():
+    """agent_hints.when_to_use should be searchable — this is the whole point of
+    surfacing the intent field to search."""
+    r = _registry_with(SEARCH_MANIFEST)
+    matches = r.search("freight carrier")
+    assert {m["id"] for m in matches} == {"rest_api_fetcher"}
+
+
+def test_search_ranking_id_beats_description():
+    """A hit in `id` outranks a hit only in `description`. Sample: `kafka` hits
+    kafka_to_database_asset's id AND unrelated tag/description in the fixture
+    if it existed — this test just verifies id-hits float to the top."""
+    r = _registry_with(SEARCH_MANIFEST)
+    scored = r.search("kafka", with_scores=True)
+    # kafka_to_database_asset should score highest because id and name both hit.
+    top_id = scored[0][0]["id"]
+    assert top_id == "kafka_to_database_asset"
+
+
+def test_search_with_scores_returns_tuples():
+    r = _registry_with(SEARCH_MANIFEST)
+    scored = r.search("mssql", with_scores=True)
+    assert len(scored) == 1
+    entry, score, matched = scored[0]
+    assert entry["id"] == "mssql_resource"
+    assert score > 0
+    # matched should be a dict {field_name: [terms]}.
+    assert isinstance(matched, dict)
+    assert "id" in matched  # `mssql` hits the id
+
+
+def test_search_empty_query_returns_all_filtered():
+    """Empty query + category filter should still browse."""
+    r = _registry_with(SEARCH_MANIFEST)
+    matches = r.search("", category="ingestion")
+    assert {m["id"] for m in matches} == {"kafka_to_database_asset", "rest_api_fetcher"}
+
+
+def test_search_no_match_returns_empty():
+    r = _registry_with(SEARCH_MANIFEST)
+    assert r.search("nonexistent_term_zzz") == []
+
+
+def test_search_case_insensitive():
+    r = _registry_with(SEARCH_MANIFEST)
+    matches = r.search("MSSQL")
+    assert {m["id"] for m in matches} == {"mssql_resource"}
+
+
+def test_search_produces_filter_still_works():
+    r = _registry_with({
+        "components": [
+            {**c, "produces": ["asset"]} if c["category"] == "ingestion" else c
+            for c in SEARCH_MANIFEST["components"]
+        ]
+    })
+    matches = r.search("", produces="asset")
+    assert {m["id"] for m in matches} == {"kafka_to_database_asset", "rest_api_fetcher"}
+
+
 # ── installer helpers ─────────────────────────────────────────────────────────
 
 

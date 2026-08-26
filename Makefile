@@ -1,12 +1,13 @@
-.PHONY: help test ruff pyright check fix
+.PHONY: help test ruff pyright check fix search-qa
 
 help:
 	@echo "Available targets:"
-	@echo "  make test      — run pytest"
-	@echo "  make ruff      — run ruff lint"
-	@echo "  make pyright   — run pyright type check"
-	@echo "  make check     — run ruff + pyright + test (matches upstream community-integrations 'make check')"
-	@echo "  make fix       — auto-fix ruff issues"
+	@echo "  make test        — run pytest"
+	@echo "  make ruff        — run ruff lint"
+	@echo "  make pyright     — run pyright type check"
+	@echo "  make search-qa   — assert canonical queries return expected components in top-5"
+	@echo "  make check       — run ruff + pyright + test + search-qa"
+	@echo "  make fix         — auto-fix ruff issues"
 
 test:
 	uv run pytest tests/
@@ -17,7 +18,10 @@ ruff:
 pyright:
 	uvx pyright src
 
-check: ruff pyright test
+search-qa:
+	PYTHONPATH=src python3 tools/search_qa.py --top 5
+
+check: ruff pyright test search-qa
 
 fix:
 	uvx ruff check --fix src tests
