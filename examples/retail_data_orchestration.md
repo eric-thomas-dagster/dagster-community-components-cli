@@ -47,7 +47,7 @@ chmod +x setup.sh
        [ Power BI semantic model refresh ]        (stretch — commented in defs.yaml)
 ```
 
-**For the real POC**, four YAML swaps convert every stand-in to the real component. Each is called out in the walkthrough section below and copy-pasteable from `POC_REAL_MODE.md` that the setup script emits.
+**For the real POC**, four YAML swaps convert every stand-in to the real component. Each is called out in the walkthrough section below and copy-pasteable from [`POC_REAL_MODE.md`](retail_data_orchestration_real_mode.md) that the setup script emits.
 
 ---
 
@@ -90,7 +90,7 @@ attributes:
 ```yaml
 # dbt.yaml — dbt build against DuckDB. Emits per-model assets w/ test results
 # as first-class pass/fail signals (OBS-05). Swap to dbt_run_job for real
-# dbt Cloud (see POC_REAL_MODE.md).
+# dbt Cloud (see retail_data_orchestration_real_mode.md).
 type: retail_data_orchestration.components.dbt_project.DbtProjectComponent
 attributes:
   project_dir: /workspace/dbt_project
@@ -99,7 +99,7 @@ attributes:
   # Downstream sensors + FreshnessPolicy hang off these directly.
 ```
 
-**Real-mode swaps** (each is one YAML file replacement; see `POC_REAL_MODE.md`):
+**Real-mode swaps** (each is one YAML file replacement; see [`POC_REAL_MODE.md`](retail_data_orchestration_real_mode.md)):
 
 | Local demo | Real POC | Effect |
 |---|---|---|
@@ -239,7 +239,7 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 | G1 | Batch, not real-time | Every scenario's `partition_type` is `daily`; no sub-minute triggers used. |
 | G2 | Reuse existing production pipelines | `shell_command_asset` runs the Python extract *unchanged*; the demo does not rewrite it into ops. |
 | G3 | Non-interfering | Local mode uses MinIO + DuckDB — nothing writes to production Snowflake. Real-mode YAMLs use dedicated POC schemas. |
-| G4 | dbt Cloud, not dbt Core | Local demo uses dbt Core against DuckDB as a stand-in; real-mode swap is one YAML line (see `POC_REAL_MODE.md`). |
+| G4 | dbt Cloud, not dbt Core | Local demo uses dbt Core against DuckDB as a stand-in; real-mode swap is one YAML line (see [`POC_REAL_MODE.md`](retail_data_orchestration_real_mode.md)). |
 | G5 | Timeboxed | Total scaffold takes ~3 min; each scenario is ~15 lines of YAML. |
 | G6 | Demonstrated beats asserted | Every criterion below points at a real file the evaluator can `cat` and inspect. |
 | G7 | Love's engineers do the building | Setup script scaffolds the shell; every `defs.yaml` is a template the customer edits — the customer's engineers own the config. |
@@ -263,7 +263,7 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 | # | Requirement | Satisfied by |
 |---|---|---|
 | TRG-01 | Trigger on external event (SnowPipe load complete, refresh complete) | `snowflake_snowpipe_load_sensor` (S1) / `hvr_hub_workspace polling_sensor` (S2). |
-| TRG-02 | Handle non-deterministic file count | `snowflake_snowpipe_load_sensor` reads `COPY_HISTORY` — cares about *bytes ingested since watermark*, not file count. For truly ambiguous multi-file extracts, the alternative is emit a `_SUCCESS` sentinel; both approaches documented in `POC_REAL_MODE.md`. |
+| TRG-02 | Handle non-deterministic file count | `snowflake_snowpipe_load_sensor` reads `COPY_HISTORY` — cares about *bytes ingested since watermark*, not file count. For truly ambiguous multi-file extracts, the alternative is emit a `_SUCCESS` sentinel; both approaches documented in [`POC_REAL_MODE.md`](retail_data_orchestration_real_mode.md). |
 | TRG-03 | Whole chain as one pipeline / one status | Asset graph. `partitioned_asset_launcher_job` for humans + external callers wanting a single status endpoint. |
 | TRG-04 | Cron scheduling | `cron_schedule` component wraps `dg.build_schedule_from_partitioned_job` — supports 7 partition types including multi-partitioned (date × static-dim). |
 | TRG-05 | Skip-or-run decision on freshness | Scenario 3 above. |
@@ -333,8 +333,8 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 
 ## What's out of scope for this demo
 
-- Rewriting the Python extract to emit a `_SUCCESS` sentinel. Documented as an option in `POC_REAL_MODE.md` under TRG-02, but the demo's default path is `snowflake_snowpipe_load_sensor` which reads `COPY_HISTORY` — the sentinel approach is only needed if the source APIs go through a non-SnowPipe load path.
-- Real credentials / real Snowflake / real dbt Cloud / real HVR. The demo is deliberately laptop-runnable; the swap to real is one commit's worth of YAML edits documented in `POC_REAL_MODE.md`.
+- Rewriting the Python extract to emit a `_SUCCESS` sentinel. Documented as an option in [`POC_REAL_MODE.md`](retail_data_orchestration_real_mode.md) under TRG-02, but the demo's default path is `snowflake_snowpipe_load_sensor` which reads `COPY_HISTORY` — the sentinel approach is only needed if the source APIs go through a non-SnowPipe load path.
+- Real credentials / real Snowflake / real dbt Cloud / real HVR. The demo is deliberately laptop-runnable; the swap to real is one commit's worth of YAML edits documented in [`POC_REAL_MODE.md`](retail_data_orchestration_real_mode.md).
 - Stream-processing observability (source doc marks it out of scope).
 - Kafka health (source doc marks it observed-not-orchestrated).
 
@@ -378,6 +378,8 @@ retail-data-orchestration/
 │           ├── native_freshness.yaml
 │           └── automation_conditional_mart.yaml
 ├── POC_REAL_MODE.md                       — the swap-guide from local → real Snowflake/dbt Cloud/HVR
+│                                            (identical content also lives at
+│                                             examples/retail_data_orchestration_real_mode.md)
 └── README.md                              — quickstart + `dg dev` next steps
 ```
 
