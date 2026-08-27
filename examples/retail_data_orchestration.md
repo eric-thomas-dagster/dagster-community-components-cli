@@ -339,6 +339,18 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 
 ---
 
+## Also available for legacy ETL sources (not exercised in this demo)
+
+The scenario document mentions **SSIS on SQL Server** as the source of Scenario 2's `FuelPrices` view — HVR replicates the SSIS output, but if you want to orchestrate the SSIS package itself the registry now has:
+
+| Component | Wraps |
+|---|---|
+| `ssis_workspace` | SSISDB catalog — every SSIS package as a Dagster asset with polling sensor + freshness check. `action: execute` triggers `catalog.create_execution` + `start_execution` + polls to completion. |
+| `talend_cloud_workspace` | Talend Cloud (TMC) — jobs / plans / routes via REST API. |
+| `informatica_workspace` | Informatica IDMC (IICS) — mapping tasks + mass ingestion + data replication tasks. |
+
+Same workspace-shape as `hvr_hub_workspace` — one YAML block covers auth + discovery + selector + polling sensor + freshness lag threshold. Use these when Dagster needs to orchestrate a legacy scheduler during migration parallel-run periods.
+
 ## What's out of scope for this demo
 
 - Rewriting the Python extract to emit a `_SUCCESS` sentinel. Documented as an option in [`POC_REAL_MODE.md`](retail_data_orchestration_real_mode.md) under TRG-02, but the demo's default path is `snowflake_snowpipe_load_sensor` which reads `COPY_HISTORY` — the sentinel approach is only needed if the source APIs go through a non-SnowPipe load path.
