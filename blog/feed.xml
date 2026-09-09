@@ -5,7 +5,7 @@
     <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/blog</link>
     <description>Long-form posts from Eric Thomas on the Dagster community components registry — design essays, component tours, honest retrospectives.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 09 Sep 2026 20:33:32 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 09 Sep 2026 21:13:03 +0000</lastBuildDate>
     <atom:link href="https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/feed.xml" rel="self" type="application/rss+xml" />
     <item>
       <title>One YAML, every Snowflake object: how the community `snowflake_workspace` component turns Snowflake into a Dagster catalog</title>
