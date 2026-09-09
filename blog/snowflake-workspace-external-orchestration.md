@@ -91,8 +91,6 @@ Eleven-plus object types, all under the same `import_*` flag pattern:
 | OpenFlow flow | `import_openflow_flows` | **External asset** — sensor queries `SNOWFLAKE.TELEMETRY.EVENTS`, emits materialization when new metrics land |
 | Table / view | `import_tables` / `import_views` | *Not recommended for most cases — see below.* Configurable per object as `observable` / `asset` / `virtual`. |
 
-> **v2.1.0 note (September 2026):** Streams, stages, alerts, and OpenFlow flows now register as `AssetSpec` (external assets) with the observation sensor emitting their materialization events. They **go green** in the UI on each detected change — same UX as tasks / DTs / snowpipes. This replaces the earlier `@observable_source_asset` shape (which was semantically fine but left the tiles gray). Same probes, same metadata, same signature-based dedup — just visible now.
-
 Multiply that across a real Snowflake account and you're looking at
 50-500 Dagster assets from a component definition that fits on a phone
 screen.
@@ -417,7 +415,7 @@ attributes:
     - {from: enriched, kind: table, table: ANALYTICS.GOLD_BY_REGION, mode: overwrite}
 ```
 
-**The `ml` op — in-warehouse machine learning (v1.1.0+).**
+**The `ml` op — in-warehouse machine learning.**
 Turn any step into a KMeans / RandomForest / XGBoost fit via
 `snowflake-ml-python`. Feature prep, fit, and post-processing all
 run inside the warehouse as part of the same compiled plan.
@@ -432,10 +430,9 @@ run inside the warehouse as part of the same compiled plan.
   hyperparameters: {n_estimators: 200, max_depth: 6}
 ```
 
-**Snowflake Model Registry — train once, predict often (v1.2.0,
-just shipped September 2026).** Add `model_name:` to any fit-mode op
-and the fitted estimator persists to the Snowflake Model Registry as a
-timestamped version. A separate pipeline (different schedule) uses
+**Snowflake Model Registry — train once, predict often.**
+Add `model_name:` to any fit-mode op and the fitted estimator persists
+to the Snowflake Model Registry as a timestamped version. A separate pipeline (different schedule) uses
 `mode: predict` + `model_name:` to load the versioned model and score
 new data — no retraining, no rebuild.
 
@@ -568,9 +565,9 @@ trigger, and Snowflake owns exactly what Snowflake should own.**
 ---
 
 **Reference:**
-- Workspace component: [`snowflake_workspace`](https://dagster-component-ui.vercel.app/c/snowflake_workspace) — v2.1.0
+- Workspace component: [`snowflake_workspace`](https://dagster-component-ui.vercel.app/c/snowflake_workspace)
 - Walkthrough demo: [`examples/snowflake_workspace`](https://dagster-component-ui.vercel.app/examples/snowflake_workspace)
-- Transform: [`snowpark_pipeline`](https://dagster-component-ui.vercel.app/c/snowpark_pipeline) — v1.2.0 (with `ml` op + Snowflake Model Registry)
-- ML across pipelines: [`ml_pipeline`](https://dagster-component-ui.vercel.app/c/ml_pipeline) — v1.2.0 (sklearn / xgboost / lightgbm with MLflow or Snowflake Model Registry backend)
+- Transform: [`snowpark_pipeline`](https://dagster-component-ui.vercel.app/c/snowpark_pipeline) — multi-step Snowpark chain with the `ml` op + Snowflake Model Registry
+- ML across pipelines: [`ml_pipeline`](https://dagster-component-ui.vercel.app/c/ml_pipeline) — sklearn / xgboost / lightgbm with MLflow or Snowflake Model Registry backend
 - Cortex: [`snowflake_cortex_asset`](https://dagster-component-ui.vercel.app/c/snowflake_cortex_asset) · [`snowflake_cortex_search`](https://dagster-component-ui.vercel.app/c/snowflake_cortex_search) · [`snowflake_cortex_agent`](https://dagster-component-ui.vercel.app/c/snowflake_cortex_agent)
 - Vendor page (all ~30 Snowflake components): [Snowflake](https://dagster-component-ui.vercel.app/vendors/snowflake)
