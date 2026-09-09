@@ -19,8 +19,8 @@ python tools/generate_rss.py --check    # exit 1 if either is stale (for CI)
 
 | Date | Title |
 |---|---|
+| 2026-09-09 | [One YAML, every Snowflake object: how the community `snowflake_workspace` component turns Snowflake into a Dagster catalog](snowflake-workspace-external-orchestration.md) — A tour of the `snowflake_workspace` component — 11+ Snowflake object types as Dagster assets, every Snowflake-native event as a trigger, plus the sibling components (`snowpark_pipeline` with in-warehouse ML + Model Registry, `snowflake_cortex_agent` / `_asset` / `_search`) that turn "Snowflake is external" into a full Snowflake-native pipeline toolkit. |
 | 2026-08-19 | [Orchestration for the HVR long tail](hvr-hub-standalone-orchestration.md) — Standalone HVR Hub is still in production at large enterprises that adopted it pre-Fivetran-acquisition. The new hvr_hub_workspace community component brings that install base into the Dagster catalog with one YAML — full Fivetran-shape, no migration required. |
-| 2026-08-17 | [One YAML, every Snowflake object: how the community `snowflake_workspace` component turns Snowflake into a Dagster catalog](snowflake-workspace-external-orchestration.md) — A tour of the `snowflake_workspace` component — 11+ Snowflake object types as Dagster assets, every Snowflake-native event as a trigger, and Snowflake stays exactly where it is. |
 | 2026-08-16 | [Not every SaaS integration should be a workspace](not-every-saas-is-a-workspace.md) — A design essay on when to build a `_workspace` component, when to build a `_resource + _sink` pair, and how to tell the difference. Includes the taxonomy behind the community-components reshape of Notion, GitHub, Jira, and PagerDuty. |
 
 ## Writing a new post
