@@ -1,15 +1,15 @@
 ---
 title: "One YAML, every Snowflake object: how the community `snowflake_workspace` component turns Snowflake into a Dagster catalog"
-date: 2026-08-17
+date: 2026-09-09
 author: Eric Thomas
-description: A tour of the `snowflake_workspace` component — 11+ Snowflake object types as Dagster assets, every Snowflake-native event as a trigger, and Snowflake stays exactly where it is.
+description: A tour of the `snowflake_workspace` component — 11+ Snowflake object types as Dagster assets, every Snowflake-native event as a trigger, plus the sibling components (`snowpark_pipeline` with in-warehouse ML + Model Registry, `snowflake_cortex_agent` / `_asset` / `_search`) that turn "Snowflake is external" into a full Snowflake-native pipeline toolkit.
 ---
 
 # One YAML, every Snowflake object
 
-*A tour of the `snowflake_workspace` component — 11+ Snowflake object types as Dagster assets, every Snowflake-native event as a trigger, and Snowflake stays exactly where it is.*
+*A tour of the `snowflake_workspace` component — 11+ Snowflake object types as Dagster assets, every Snowflake-native event as a trigger, plus the sibling components (Snowpark pipelines, in-warehouse ML with the Snowflake Model Registry, and Cortex agents/search) that let you build a full Snowflake-native pipeline without leaving the warehouse.*
 
-**Eric Thomas · August 2026**
+**Eric Thomas · September 2026**
 
 ---
 
@@ -82,14 +82,16 @@ Eleven-plus object types, all under the same `import_*` flag pattern:
 | Task | `import_tasks` | `EXECUTE TASK`, polls `TASK_HISTORY` to terminal state, attaches query perf metadata |
 | Stored procedure | `import_stored_procedures` | `CALL <proc>(args…)`, captures return value + perf |
 | Dynamic table | `import_dynamic_tables` | Two modes — `external` (declare-only, refreshes reflected via sensor) or `asset` (manual `ALTER … REFRESH` from Dagster) |
-| Stream | `import_streams` | Observable — polls `SYSTEM$STREAM_HAS_DATA` + `STREAM_HAS_DATA_SINCE` |
+| Stream | `import_streams` | **External asset** — the observation sensor probes `SYSTEM$STREAM_HAS_DATA` + `QUERY_HISTORY.rows_advanced_7d` and emits `AssetMaterialization` when CDC state advances. Tile turns green on each new consumption. |
 | Snowpipe | `import_snowpipes` | `ALTER PIPE <name> REFRESH`, exposes `SYSTEM$PIPE_STATUS` as metadata |
-| Stage | `import_stages` | Observable — polls stage file listings |
+| Stage | `import_stages` | **External asset** — sensor runs `LIST @stage`, emits materialization when file_count or total_bytes changes |
 | Materialized view | `import_materialized_views` | `ALTER MATERIALIZED VIEW <name> REFRESH` |
 | External table | `import_external_tables` | `ALTER EXTERNAL TABLE <name> REFRESH` |
-| Alert | `import_alerts` | Observable — polls `SHOW ALERTS` state + `ALERT_HISTORY` |
-| Openflow flow | `import_openflow_flows` | Observable — reads flow telemetry from `SNOWFLAKE.TELEMETRY.EVENTS` |
+| Alert | `import_alerts` | **External asset** — sensor runs `SHOW ALERTS` + `ALERT_HISTORY`, emits materialization on each new evaluation |
+| OpenFlow flow | `import_openflow_flows` | **External asset** — sensor queries `SNOWFLAKE.TELEMETRY.EVENTS`, emits materialization when new metrics land |
 | Table / view | `import_tables` / `import_views` | *Not recommended for most cases — see below.* Configurable per object as `observable` / `asset` / `virtual`. |
+
+> **v2.1.0 note (September 2026):** Streams, stages, alerts, and OpenFlow flows now register as `AssetSpec` (external assets) with the observation sensor emitting their materialization events. They **go green** in the UI on each detected change — same UX as tasks / DTs / snowpipes. This replaces the earlier `@observable_source_asset` shape (which was semantically fine but left the tiles gray). Same probes, same metadata, same signature-based dedup — just visible now.
 
 Multiply that across a real Snowflake account and you're looking at
 50-500 Dagster assets from a component definition that fits on a phone
@@ -164,11 +166,19 @@ outside a Dagster-initiated `EXECUTE TASK`.
 
 ### 4. "When a Stream has data, can that fire a job without custom polling?"
 
-Yes — `import_streams: true` produces one observable source asset per
-stream. Its observation function polls
-`SYSTEM$STREAM_HAS_DATA(<stream>)`; when the boolean flips true, the
-`DataVersion` changes, and Dagster's declarative automation treats it
-like any other data-version change on an upstream asset.
+Yes — `import_streams: true` produces one **external asset** (`AssetSpec`)
+per stream. The observation sensor probes
+`SYSTEM$STREAM_HAS_DATA(<stream>)` for the point-in-time boolean, plus
+`INFORMATION_SCHEMA.QUERY_HISTORY.rows_advanced_7d` for the cumulative
+signal that new rows actually flowed through the stream. When either
+signature moves, the sensor emits `AssetMaterialization` (with a
+stable `data_version` tag for dedup) and downstream assets keyed with
+`AutomationCondition.eager()` fire.
+
+Practically: the stream tile in the Dagster UI turns **green** each
+time the CDC state advances — same visual behavior as tasks and
+dynamic tables. Signature-based dedup means unchanged observations
+don't re-emit and don't cascade downstream.
 
 ### 5. "Dynamic Table refresh completion or refresh lag as a trigger / freshness signal?"
 
@@ -368,6 +378,175 @@ What you get is the *observation and orchestration layer* on top:
   Snowflake objects with zero glue code.
 - One YAML declaration → the whole graph.
 
+## Beyond the workspace — the Snowflake-native toolkit
+
+The workspace is the catalog. It gives you every Snowflake object as a
+Dagster asset. But the DCC registry ships **~30 Snowflake-related
+components** total, and the interesting ones are the *transform* and
+*inference* layers that let you build a pipeline where **the compute
+stays in Snowflake even when the pipeline stages don't map to a
+pre-existing Snowflake object**.
+
+Three families worth calling out:
+
+### `snowpark_pipeline` — multi-step Snowpark DataFrame chain, one asset
+
+Every op builds a lazy Snowpark plan; the whole pipeline compiles to
+**one** SQL statement that runs entirely in the Snowflake warehouse.
+No data through Python. Reach for it when the pipeline is more complex
+than a single-query `warehouse_summarize` but everything still lives in
+Snowflake.
+
+```yaml
+type: dagster_community_components.SnowparkPipelineComponent
+attributes:
+  asset_name: gold_customers_by_region
+  connection: {account_env_var: SNOWFLAKE_ACCOUNT, ...}
+  steps:
+    - id: paid_orders
+      source: {kind: table, table: RAW.ORDERS}
+      operations:
+        - {op: filter, predicate: "STATUS = 'paid'"}
+    - id: enriched
+      source: {kind: ref, ref: paid_orders}
+      operations:
+        - {op: join, right: {table: RAW.CUSTOMERS}, on_columns: [CUSTOMER_ID]}
+        - {op: group_by, group_by: [REGION],
+           aggregations: {REVENUE: {col: AMOUNT, agg: sum}}}
+  sinks:
+    - {from: enriched, kind: table, table: ANALYTICS.GOLD_BY_REGION, mode: overwrite}
+```
+
+**The `ml` op — in-warehouse machine learning (v1.1.0+).**
+Turn any step into a KMeans / RandomForest / XGBoost fit via
+`snowflake-ml-python`. Feature prep, fit, and post-processing all
+run inside the warehouse as part of the same compiled plan.
+
+```yaml
+- op: ml
+  algorithm: xgb_classifier
+  input_columns: [TENURE_DAYS, MONTHLY_SPEND, SUPPORT_TICKETS]
+  label_columns: [CHURNED]
+  output_column: PREDICTION
+  mode: fit_predict
+  hyperparameters: {n_estimators: 200, max_depth: 6}
+```
+
+**Snowflake Model Registry — train once, predict often (v1.2.0,
+just shipped September 2026).** Add `model_name:` to any fit-mode op
+and the fitted estimator persists to the Snowflake Model Registry as a
+timestamped version. A separate pipeline (different schedule) uses
+`mode: predict` + `model_name:` to load the versioned model and score
+new data — no retraining, no rebuild.
+
+```yaml
+# Training pipeline (weekly cron)
+- op: ml
+  mode: fit
+  algorithm: xgb_classifier
+  input_columns: [...]
+  label_columns: [CHURNED]
+  model_name: customer_churn        # ← persists to Registry
+
+# Inference pipeline (hourly cron, separate YAML)
+- op: ml
+  mode: predict
+  input_columns: [...]
+  model_name: customer_churn        # ← loads latest version from Registry
+  # model_version: latest           # default; also 'staging' | 'production' | pinned literal
+```
+
+Model versions live inside Snowflake — same RBAC, audit log, and
+replication as your training data. No MLflow server to run, no S3
+bucket to secure, no serializer choices to make. The `ml_pipeline`
+component (sklearn / XGBoost / LightGBM outside the warehouse) ships
+the same `register_model` / `load_model` shape with a `backend:
+mlflow | snowflake` selector, so you can move a model between systems
+without rewriting the pipeline.
+
+### Cortex — LLM inference and vector search, native in Snowflake
+
+Three components wrap Snowflake Cortex so agentic + RAG workloads stay
+inside the warehouse:
+
+| Component | What it does |
+|---|---|
+| **`snowflake_cortex_asset`** | Batch `SNOWFLAKE.CORTEX.COMPLETE(...)` over a table column. Materialize daily, land LLM completions as a new column, use Cortex-native models (`claude-3-5-sonnet`, `llama3.1-70b`, `mistral-large2`, `snowflake-arctic`, etc.) without leaving Snowflake. |
+| **`snowflake_cortex_search`** | Vector search over a Cortex Search Service (Snowflake's managed vector index). Query with a top-K search string, land the ranked hits as a Dagster asset. |
+| **`snowflake_cortex_agent`** | Single-shot LLM agent that speaks the same MCP-tool + typed-output shape as `openai_agent` / `anthropic_agent` / `gemini_agent` — but the model runs inside Snowflake via Cortex. Partition-aware, freshness-policy aware, `RetryPolicy`-aware. |
+
+Same catalog-plus-transform-plus-inference story as the rest of the
+Snowflake toolkit: **the workspace enumerates what's there, Snowpark
+pipelines do the multi-step transforms, Cortex components run the
+LLM / retrieval calls — all as first-class Dagster assets with
+Snowflake as the sole runtime.**
+
+### Snowpipe — continuous ingestion, driven from Dagster or observed
+
+The workspace covers Snowpipes via `import_snowpipes: true`
+(`ALTER PIPE <name> REFRESH` + `SYSTEM$PIPE_STATUS` metadata). For
+finer control, two sibling components:
+
+- **`snowflake_snowpipe`** — declare a single pipe with its full
+  `COPY INTO` shape (target table + stage + file_format + on_error).
+  Materialize triggers a refresh; per-run metadata surfaces the load
+  latency + file count.
+- **`snowflake_snowpipe_load_sensor`** — a standalone sensor that
+  watches `INFORMATION_SCHEMA.COPY_HISTORY` for a specific pipe (or
+  set of pipes) and emits materialization events for downstream
+  eager cascade. Use this when a Snowpipe is driven by S3 event
+  notifications (not by Dagster) and you still want the load event
+  in the Dagster graph.
+
+### Single-object components — for finer control than bulk enumeration
+
+The workspace is the right tool when you want a whole account's worth
+of tasks / DTs / streams / pipes surfaced automatically. When you want
+**one specific table** as a lineage node, or **one specific task** with
+custom automation, reach for the single-object component instead:
+
+| Component | Use when |
+|---|---|
+| `snowflake_task` | You want one specific task as an asset with its own YAML file |
+| `snowflake_dynamic_table` | Single-DT declaration, per-DT YAML for reviewability |
+| `snowflake_iceberg_table` | Snowflake-managed Iceberg tables with time-travel + optimize |
+| `snowflake_stream` | Single-stream declaration (targeted CDC observer) |
+| `snowflake_alert` | Single-alert declaration + condition + action YAML |
+| `external_snowflake_table` | Declare-only external asset (pure lineage node, no compute) — Snowflake stays external, Dagster gets it in the graph |
+| `snowflake_time_travel_asset` | Point-in-time snapshot of a table (AT / BEFORE timestamp) |
+| `snowflake_materialized_view` | Single MV with refresh + cluster_by + behind_by metadata |
+| `snowflake_stored_procedure` | Single procedure declaration (name + args + return_type) |
+| `dataframe_to_snowflake` / `dataframe_to_snowflake_bulk` | Sink assets — land a DataFrame in Snowflake (row-by-row vs `PUT + COPY INTO`) |
+
+Rule of thumb: **workspace when you want the whole graph; single-object
+components when you want per-object review, custom automation, or
+non-default per-asset config.**
+
+### The whole toolkit in one graph
+
+Nothing forces a project to use just one of these. A common shape:
+
+- `snowflake_workspace` — enumerates the 200 pre-existing tasks / DTs
+  / streams / pipes → all show up as assets, all wired to the
+  observation sensor.
+- 5-10 `snowpark_pipeline` assets — the transforms that are complex
+  enough to deserve their own YAML file (the multi-step joins +
+  aggregates that would be too much for the workspace's auto-mapped
+  tasks).
+- 2-3 `snowflake_cortex_asset` assets — the LLM-batch steps.
+- 1 `snowflake_cortex_agent` asset — the agentic step (with MCP tools
+  for grounding).
+- 1 `snowpark_pipeline` with `op: ml` (`mode: fit` + `model_name:
+  customer_churn`) on a weekly cron — the trainer.
+- 1 `snowpark_pipeline` with `op: ml` (`mode: predict` +
+  `model_name: customer_churn`) on an hourly cron — the scorer.
+
+Every asset above runs its compute inside the Snowflake warehouse.
+Dagster owns the DAG, the lineage across all of them, the retries,
+the alerts, and the "did this asset materialize in the last N
+minutes" freshness story. **The data plane stayed in Snowflake; the
+control plane is one YAML directory.**
+
 ## What's next
 
 The community `snowflake_workspace` component ships in the
@@ -389,11 +568,9 @@ trigger, and Snowflake owns exactly what Snowflake should own.**
 ---
 
 **Reference:**
-- Component source: [`integrations/snowflake_workspace/component.py`][src]
-- Walkthrough demo: [`examples/snowflake_workspace.md`][demo]
-- Companion object components (single-DT, single-task, single-pipe, etc.):
-  [`integrations/snowflake_*/`][companions]
-
-[src]: https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/integrations/snowflake_workspace/component.py
-[demo]: https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples/snowflake_workspace.md
-[companions]: https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/integrations
+- Workspace component: [`snowflake_workspace`](https://dagster-component-ui.vercel.app/c/snowflake_workspace) — v2.1.0
+- Walkthrough demo: [`examples/snowflake_workspace`](https://dagster-component-ui.vercel.app/examples/snowflake_workspace)
+- Transform: [`snowpark_pipeline`](https://dagster-component-ui.vercel.app/c/snowpark_pipeline) — v1.2.0 (with `ml` op + Snowflake Model Registry)
+- ML across pipelines: [`ml_pipeline`](https://dagster-component-ui.vercel.app/c/ml_pipeline) — v1.2.0 (sklearn / xgboost / lightgbm with MLflow or Snowflake Model Registry backend)
+- Cortex: [`snowflake_cortex_asset`](https://dagster-component-ui.vercel.app/c/snowflake_cortex_asset) · [`snowflake_cortex_search`](https://dagster-component-ui.vercel.app/c/snowflake_cortex_search) · [`snowflake_cortex_agent`](https://dagster-component-ui.vercel.app/c/snowflake_cortex_agent)
+- Vendor page (all ~30 Snowflake components): [Snowflake](https://dagster-component-ui.vercel.app/vendors/snowflake)
