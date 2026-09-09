@@ -544,16 +544,24 @@ the alerts, and the "did this asset materialize in the last N
 minutes" freshness story. **The data plane stayed in Snowflake; the
 control plane is one YAML directory.**
 
-## What's next
+## Build it, extend it, fork it
 
-The community `snowflake_workspace` component ships in the
-[dagster-community-components][repo] registry today, and I'm proposing
-to promote it directly into the official `dagster-snowflake` package.
-The syntax matches `DatabricksWorkspaceComponent` /
-`FivetranAccountComponent` / `PowerBIWorkspaceComponent` line-for-line —
-same `workspace:` top-level field, same `@public` API, same
-`StateBackedComponent` internal shape, same `translation:` hook. Nothing
-new for reviewers to learn.
+The Snowflake components live in the
+[dagster-community-components][repo] registry — install with the
+`dagster-component` CLI, or read the source and adapt. The registry is
+where I ship the long tail of what teams actually run against Snowflake
+day-to-day: streams and stages and OpenFlow flows and the Cortex trio
+and multi-step Snowpark ML pipelines with Model Registry. Dagster keeps
+shipping the core platform + the flagship integrations; the community
+registry is where the long tail lives.
+
+If a component here almost does what you need but not quite, **the
+right move is often to fork it into your project**. The whole thing
+is a few Python files and a schema — a `snowflake_workspace` variant
+that filters tasks by `assets_by_name` prefix, or a `snowpark_pipeline`
+variant with a domain-specific op, is an afternoon of work, not a
+subclass tower. And if what you build is generally useful, PRs to the
+registry are welcome.
 
 If your team runs Snowflake and you're figuring out where Dagster fits,
 this is what "fits" looks like: **one YAML declaration, every Snowflake
