@@ -255,6 +255,8 @@ The component family — `database_schema_inventory`, `database_migration_assess
 | [NBA Scoreboard](nba_scoreboard.md) | `rest_api_fetcher`, `json_path_extractor`, `dataframe_to_csv`, `http_poll_sensor` | `http_poll_sensor` with targeted hashing |
 | [RSS Sensor](rss_sensor.md) | `rest_api_fetcher`, `xml_parser`, `dataframe_to_csv`, `rss_feed_sensor` | Sensor-driven HN frontpage ingestion |
 | [SQL Observation Sensor (DuckDB)](sql_observation_sensor.md) | `external_sql_asset`, `sql_observation_sensor` | Hermetic end-to-end: SQLAlchemy `SELECT COUNT(*)` + `MAX(watermark)` against a seeded DuckDB file, emits AssetMaterialization with a data_version tag. Retargets at Postgres / MySQL / Snowflake / BigQuery / Redshift / any SQLAlchemy dialect by swapping `DUCKDB_URL`. |
+| [SQL Monitor (DuckDB)](sql_monitor.md) | `sql_monitor`, `python_callable_job` | Sibling of sql_observation_sensor — sensor emits **one RunRequest per new row past a watermark column** (each row's payload threaded into op config), triggers a target job. First tick initializes the cursor (no double-firing historical rows); second tick after INSERT emits exactly 1 RunRequest with the new row. |
+| [SQL → DB (DuckDB → DuckDB)](sql_to_database_asset.md) | `sql_to_database_asset` | Full row-copy from a SQLAlchemy source to a SQLAlchemy destination via pandas.read_sql / to_sql. Both sides are local DuckDB files in the demo; swap either `*_DB_URL` for any dialect (Postgres, MySQL, Snowflake, BigQuery, MSSQL) with no YAML change. Supports incremental mode via `watermark_column` + `watermark_env_var`. |
 
 ### OCSF / Security
 
