@@ -254,6 +254,7 @@ The component family — `database_schema_inventory`, `database_migration_assess
 | [Movies → SQL](movies_sql.md) | `file_ingestion`, `type_coercer`, `formula`, `dataframe_to_table` | Real MovieLens Top 250 → SQLite |
 | [NBA Scoreboard](nba_scoreboard.md) | `rest_api_fetcher`, `json_path_extractor`, `dataframe_to_csv`, `http_poll_sensor` | `http_poll_sensor` with targeted hashing |
 | [RSS Sensor](rss_sensor.md) | `rest_api_fetcher`, `xml_parser`, `dataframe_to_csv`, `rss_feed_sensor` | Sensor-driven HN frontpage ingestion |
+| [SQL Observation Sensor (DuckDB)](sql_observation_sensor.md) | `external_sql_asset`, `sql_observation_sensor` | Hermetic end-to-end: SQLAlchemy `SELECT COUNT(*)` + `MAX(watermark)` against a seeded DuckDB file, emits AssetMaterialization with a data_version tag. Retargets at Postgres / MySQL / Snowflake / BigQuery / Redshift / any SQLAlchemy dialect by swapping `DUCKDB_URL`. |
 
 ### OCSF / Security
 
