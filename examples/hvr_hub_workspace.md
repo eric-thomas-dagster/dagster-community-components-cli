@@ -46,7 +46,7 @@ uv run dg dev
 
 Auto-discovers every channel + replicated table on a **standalone HVR
 Hub 6.x** server and emits one Dagster asset per (channel × target
-location × table). Optional polling sensor emits AssetObservations with
+location × table). Optional polling sensor emits AssetMaterialization events with
 integrate-lag metadata. Optional per-asset check fails when lag exceeds
 your SLA.
 
@@ -119,7 +119,7 @@ attributes:
   # poll_interval_seconds: 30
   # timeout_seconds: 3600
 
-  # Optional polling sensor — emits AssetObservations with integrate-lag metadata.
+  # Optional polling sensor — emits AssetMaterialization events with integrate-lag metadata.
   polling_sensor: true
   observation_interval_seconds: 300
 
@@ -139,7 +139,7 @@ attributes:
 | `channel_selector` | Include/exclude filter. `by_name`, `by_pattern`, `exclude_by_name`, `exclude_by_pattern` (globs). Exclusion wins. |
 | `action: noop` (default) | Assets are external. HVR CDC is continuous — there's genuinely nothing to trigger. |
 | `action: refresh` | Assets become materializable. Clicking one posts `/channels/{c}/refresh` and polls until integrate catches up. Fivetran-style. |
-| `polling_sensor: true` | Emits `{hub_name}_hvr_observer` sensor. Every `observation_interval_seconds`, calls `GET /jobs?fetch=latency` and writes one AssetObservation per (channel × target × table) with `integrate_lag_seconds`, `state`, `job_name`, `observed_at`. |
+| `polling_sensor: true` | Emits `{hub_name}_hvr_observer` sensor. Every `observation_interval_seconds`, calls `GET /jobs?fetch=latency` and emits `AssetMaterialization` per (channel × target × table) with `integrate_lag_seconds`, `state`, `job_name`, `observed_at` + `dagster/data_version` tag. **Per-job cursor dedup** — only emits when lag or state actually change since the previous tick, so downstream `AutomationCondition.eager()` fires only on real progress. Set `emit_materialization: false` for "observed, not materialized" semantics (dashed / gray tile). |
 | `freshness_lag_threshold_seconds` | Emits `integrate_lag_within_sla` per-asset check. Pass = last observation ≤ threshold; fail = above. Wire into an asset-checks-first schedule or alert. |
 | `translation` | Python callable path — customize per-asset AssetSpec (rename key, add tags, override group). Same convention as `dagster-fivetran` and `dagster-databricks`. |
 
