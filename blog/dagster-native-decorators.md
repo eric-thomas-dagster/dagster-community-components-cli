@@ -42,38 +42,38 @@ your team).
 
 | Component | What it does |
 |---|---|
-| **`@cached`** | Content-addressable cache — skip compute when `code_version` + inputs haven't changed. |
-| **`@budget`** | Cost caps for LLM/API spend — sum `cost_usd` observations over a rolling window; short-circuit when over budget. |
-| **`@sla`** | Wall-clock SLAs on compute — emit `sla_breach=true` observations, escalate on repeated breach. |
-| **`@timeout`** | Hard-kill runaway compute at N seconds. |
-| **`@smart_retry`** | Retry with classification — on `429` but not `4xx`, on `openai.RateLimitError` but not `ValueError`, per-exception-class backoff. |
-| **`@throttle`** | Cross-run rate limits — read the last materialization timestamp, skip or fail if the gap is too small. |
+| [**`@cached`**](https://dagster-component-ui.vercel.app/c/cached_asset) | Content-addressable cache — skip compute when `code_version` + inputs haven't changed. |
+| [**`@budget`**](https://dagster-component-ui.vercel.app/c/budget_asset) | Cost caps for LLM/API spend — sum `cost_usd` observations over a rolling window; short-circuit when over budget. |
+| [**`@sla`**](https://dagster-component-ui.vercel.app/c/sla_asset) | Wall-clock SLAs on compute — emit `sla_breach=true` observations, escalate on repeated breach. |
+| [**`@timeout`**](https://dagster-component-ui.vercel.app/c/timeout_asset) | Hard-kill runaway compute at N seconds. |
+| [**`@smart_retry`**](https://dagster-component-ui.vercel.app/c/smart_retry) | Retry with classification — on `429` but not `4xx`, on `openai.RateLimitError` but not `ValueError`, per-exception-class backoff. |
+| [**`@throttle`**](https://dagster-component-ui.vercel.app/c/throttle_asset) | Cross-run rate limits — read the last materialization timestamp, skip or fail if the gap is too small. |
 
 ### Safety & lifecycle
 
 | Component | What it does |
 |---|---|
-| **`@shadow`** | Dual-run new vs old — run alt impl in parallel, diff outputs, flip when clean. Vendor migrations without risking prod. |
-| **`@dry_run`** | Safe-mode any asset — run compute, discard writes. Enable via YAML field, run tag, or env var. |
-| **`@snapshot`** | Point-in-time snapshots — write a `code_version`-keyed parquet after every materialization. Rollback becomes an event-log query. |
-| **`@sensitive`** | PII scrubbing in the event log — regex + field list applied before it lands. Strategies: redact / hash / mask. |
-| **`@on_hooks`** | Lifecycle callbacks — on_start / on_success / on_failure / on_end. |
-| **`@lifecycle`** (WAP) | Write-audit-publish — stage → audit → promote or quarantine. |
+| [**`@shadow`**](https://dagster-component-ui.vercel.app/c/shadow_asset) | Dual-run new vs old — run alt impl in parallel, diff outputs, flip when clean. Vendor migrations without risking prod. |
+| [**`@dry_run`**](https://dagster-component-ui.vercel.app/c/dry_run_asset) | Safe-mode any asset — run compute, discard writes. Enable via YAML field, run tag, or env var. |
+| [**`@snapshot`**](https://dagster-component-ui.vercel.app/c/snapshot_asset) | Point-in-time snapshots — write a `code_version`-keyed parquet after every materialization. Rollback becomes an event-log query. |
+| [**`@sensitive`**](https://dagster-component-ui.vercel.app/c/sensitive_asset) | PII scrubbing in the event log — regex + field list applied before it lands. Strategies: redact / hash / mask. |
+| [**`@on_hooks`**](https://dagster-component-ui.vercel.app/c/hooks_asset) | Lifecycle callbacks — on_start / on_success / on_failure / on_end. |
+| [**`@lifecycle`**](https://dagster-component-ui.vercel.app/c/lifecycle_wap) (WAP) | Write-audit-publish — stage → audit → promote or quarantine. |
 
 ### Observability
 
 | Component | What it does |
 |---|---|
-| **`@profile`** | Auto-profile every materialization — per-column `null_ratio` / `distinct_count` / min / max / mean / std as observations. |
-| **`@log_prints`** | Route Python `print()` into Dagster logs — port legacy scripts without a rewrite. |
-| **`@data_contract`** | Producer/consumer schema contracts — producer emits a snapshot each run; consumer refuses on incompatible upstream. |
-| **`@partition_lock`** | Per-partition mutex — prevents concurrent runs from clobbering the same partition. State in the event log. |
+| [**`@profile`**](https://dagster-component-ui.vercel.app/c/profile_asset) | Auto-profile every materialization — per-column `null_ratio` / `distinct_count` / min / max / mean / std as observations. |
+| [**`@log_prints`**](https://dagster-component-ui.vercel.app/c/log_prints_asset) | Route Python `print()` into Dagster logs — port legacy scripts without a rewrite. |
+| [**`@data_contract`**](https://dagster-component-ui.vercel.app/c/data_contract) | Producer/consumer schema contracts — producer emits a snapshot each run; consumer refuses on incompatible upstream. |
+| [**`@partition_lock`**](https://dagster-component-ui.vercel.app/c/partition_lock_asset) | Per-partition mutex — prevents concurrent runs from clobbering the same partition. State in the event log. |
 
 ### Dynamic sub-steps
 
 | Component | What it does |
 |---|---|
-| **`@task`** / **`@task_asset`** / **`TaskAssetComponent`** | Prefect-style dynamic sub-steps — runtime-declared sub-steps under an asset with per-call durations and optional caching. |
+| [**`@task` / `@task_asset` / `TaskAssetComponent`**](https://dagster-component-ui.vercel.app/c/task_asset) | Prefect-style dynamic sub-steps — runtime-declared sub-steps under an asset with per-call durations and optional caching. |
 
 Every one ships a runnable walkthrough that reproduces both shapes in
 about sixty seconds:
@@ -137,7 +137,10 @@ any other component with a single YAML field.
 
 ## Try it
 
-Browse the 17 for shapes you recognize:
+Browse all 17 in the registry UI:
+👉 [dagster-component-ui.vercel.app/?category=decorator](https://dagster-component-ui.vercel.app/?category=decorator)
+
+Or via the CLI:
 
 ```bash
 dagster-component search "" --category decorator
