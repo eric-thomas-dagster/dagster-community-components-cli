@@ -1,48 +1,86 @@
-# cached_asset — `@cached` decorator: skip expensive Python compute when nothing changed
+# cached_asset — `@cached` decorator + `CachedAssetComponent.wraps:` composability
 > ✅ **100% offline** — no API keys, no cloud, no external services.
 
-**Live-validated** — the setup script runs end-to-end and shows one full
-cache miss → hit → invalidation cycle in ~90 seconds.
-
-```
-   expensive_report  ← @dg.asset + @cached decorator
-        │
-        └── cache_dir: <project>/.cache/expensive_report/
-            ├── c67b5184...parquet   (code_version 1.0 result)
-            └── a8d2e3d8...parquet   (code_version 1.1 result — same fn, new key)
-```
+**Live-validated** — the setup script runs end-to-end demonstrating BOTH
+shapes of the DCC decorator API in ~90 seconds.
 
 ## What this demo shows
 
-Three back-to-back runs of the same asset, each ending in a different
-cache outcome:
+Two assets, one per shape. Both use content-addressable caching under
+the hood; both emit `cached_asset_status=hit|miss` observations:
 
-| Run | code_version | Outcome | Compute time |
-|---|---|---|---|
-| 1 | `1.0` | MISS — no parquet at that key yet, run + write | ~3s (sleep 3) + Dagster overhead |
-| 2 | `1.0` | HIT — same key, load parquet, skip compute | ~0s (Dagster overhead only) |
-| 3 | `1.1` | MISS — code_version bumped → new key → run + write | ~3s again |
+| Run | Asset | Behavior |
+|---|---|---|
+| 1 | `py_expensive_report` (Python decorator) | MISS — 3s compute, writes parquet cache |
+| 2 | `py_expensive_report` (Python decorator) | HIT — loads parquet, skips compute (near-zero) |
+| 3 | `yaml_expensive_report` (YAML composability) | MISS — inner `SyntheticDataGeneratorComponent` runs (1000 rows), writes parquet cache |
+| 4 | `yaml_expensive_report` (YAML composability) | HIT — inner data-gen **NOT invoked**, parquet loaded |
 
-## Components used
+## The two shapes — same primitive, different authoring surface
 
-| Component | What it does |
+**Shape 1: Python decorator** — best when you already have Python code you want to cache:
+
+```python
+# src/<pkg>/defs/py_expensive_report.py
+import time
+import pandas as pd
+import dagster as dg
+from dagster_community_components import cached
+
+CACHE_DIR = "/tmp/.cache/py_shape"
+
+@dg.asset(code_version="1.0", group_name="python_decorator")
+@cached(cache_dir=CACHE_DIR, code_version="1.0", ttl_seconds=3600)
+def py_expensive_report(context) -> pd.DataFrame:
+    time.sleep(3)
+    return pd.DataFrame({"metric": [...], "value": [...]})
+```
+
+**Shape 2: YAML composability — the money shot.** `CachedAssetComponent` wraps **another DCC component**. Zero Python for this asset. The cache intercepts the inner's compute — on hit, the inner is entirely skipped; on miss, the inner runs and its returned DataFrame is cached:
+
+```yaml
+# src/<pkg>/defs/yaml_expensive_report/defs.yaml
+type: dagster_community_components.CachedAssetComponent
+attributes:
+  cache_dir: /tmp/.cache/yaml_shape
+  code_version: v1
+  wraps:
+    type: dagster_community_components.SyntheticDataGeneratorComponent
+    attributes:
+      asset_name: yaml_expensive_report
+      schema_type: customers
+      row_count: 1000
+      random_state: 42
+```
+
+**One asset is registered** (`yaml_expensive_report`) — no duplication. Stack arbitrarily deep — `BudgetAssetComponent { wraps: CachedAssetComponent { wraps: SnowflakeQueryComponent } }` = `@budget @cached @snowflake` in Python decorator terms.
+
+Any component whose compute returns a `pandas.DataFrame` can be wrapped. That covers most data-shape components (SnowflakeQuery, BigqueryQuery, DataframeFromCsv, SyntheticDataGenerator, LLMPromptExecutor, etc.).
+
+## Why the YAML composability is the money shot
+
+Before `wraps:`, YAML users had to write Python callables and reference them via `compute: {kind: python, python: 'mod:fn'}` to use decorators. That's fine but requires user Python.
+
+With `wraps:`, `CachedAssetComponent` stacks over **any DCC component** with zero user Python:
+
+- `CachedAssetComponent { wraps: SnowflakeQueryComponent }` — cache a warehouse query result
+- `CachedAssetComponent { wraps: LLMPromptExecutorComponent }` — cache LLM responses (huge cost win)
+- `CachedAssetComponent { wraps: RestApiFetcherComponent }` — cache external API responses
+- `CachedAssetComponent { wraps: DataframeFromSqlComponent }` — cache SQL query results
+- `CachedAssetComponent { wraps: SyntheticDataGeneratorComponent }` — the demo shape
+
+## Cache invalidation levers
+
+| Lever | How |
 |---|---|
-| `cached_asset` (`@cached` decorator) | Content-addressable cache for `@dg.asset` compute. Cache key = hash(asset_key + code_version + partition_key + optional user key_fn). On hit, skips the wrapped function entirely and loads the cached parquet. Cache lives at `{cache_dir}/{cache_key}.parquet` — local FS or any fsspec URI (`s3://`, `gs://`, `abfs://`). Companion `CachedAssetComponent` YAML wrapper if you prefer YAML. |
-
-## Why this belongs in Dagster
-
-- **Cache key composes with `code_version`** — Dagster's built-in change
-  detection: bump the version on the asset, cache invalidates cleanly.
-- **Cache hit/miss surfaced as materialization metadata** — every run
-  records `cache_status`, `cache_key`, `cache_path`, `cache_rows`. Query
-  the event log for a cache-hit-rate dashboard.
-- **Works with any executor** — the parquet file is the shared state; no
-  in-memory state to coordinate across processes.
+| `code_version` bump | Change the version on both `@dg.asset` and `@cached` (or on `CachedAssetComponent.code_version`) |
+| `ttl_seconds` expired | `cached(ttl_seconds=3600)` — cache treated as miss when parquet mtime > 1h old |
+| Custom `key_fn` | `cached(key_fn="my_module:key_from_config")` — string mixed into the cache key; use to invalidate when external config changes |
+| Manual bust | `rm <cache_dir>/<key>.parquet` |
 
 ## Cost
 
-**$0.** The demo is fully offline — a `time.sleep(3)` stands in for the
-expensive compute.
+**$0.** Fully offline.
 
 ## Required env vars
 
@@ -56,74 +94,35 @@ cd cached-asset-demo
 uv run dg dev
 ```
 
-The setup script does everything end-to-end — scaffolds a project,
-installs DCC, drops a decorated `@dg.asset`, and runs it 3 times with a
-`code_version` bump between runs 2 and 3.
-
-## The decorated asset
-
-```python
-# src/<pkg>/defs/expensive_report.py
-import time
-import pandas as pd
-import dagster as dg
-from dagster_community_components import cached
-
-CACHE_DIR = "<project>/.cache/expensive_report"
-
-@dg.asset(code_version="1.0", group_name="cache_demo")
-@cached(cache_dir=CACHE_DIR, code_version="1.0", ttl_seconds=3600)
-def expensive_report(context) -> pd.DataFrame:
-    context.log.info("[expensive_report] running compute (sleep 3s)")
-    time.sleep(3)
-    return pd.DataFrame({
-        "metric": ["revenue_usd", "order_count", "avg_order_value"],
-        "value":  [125_430.75, 4_218, 29.73],
-    })
-```
-
-**Decoration order matters** — `@cached` goes UNDER `@dg.asset` (the
-cache wrapper is the innermost decorator; Dagster wraps the cached
-wrapper). Both take a matching `code_version` so a bump on the asset
-also bumps the cache key.
-
-## Ways to invalidate the cache
-
-| Lever | How |
-|---|---|
-| `code_version` bump | Change the version on both `@dg.asset` and `@cached` |
-| `ttl_seconds` expired | `cached(ttl_seconds=3600)` — cache treated as miss when parquet mtime > 1h old |
-| Custom `key_fn` | `cached(key_fn="my_module:key_from_config")` — returns a string mixed into the key; use this to invalidate when external config or upstream feature-flags change |
-| Manual bust | `rm <cache_dir>/<key>.parquet` |
-
-## What this decorator is (and isn't) for
+## Ways to use this in production
 
 **Use `@cached` when:**
-- The compute is expensive Python (LLM calls, complex pandas, heavy IO to third-party APIs)
+- The compute is expensive Python (LLM calls, heavy pandas, external APIs)
 - The result fits comfortably in memory as a `pandas.DataFrame`
 - Multiple runs would produce the same output for the same inputs (deterministic + slow)
 
+**Use `CachedAssetComponent.wraps` when:**
+- You're already using another DCC component and want to add caching without editing it
+- You want the cache layer to be declarative (visible in YAML diff)
+- You want the cache decision separate from the component's authorship
+
 **Don't use `@cached` for:**
-- Results > ~1 GB — a real query cache (materialized views, Iceberg
-  incrementals) will scale better than parquet blobs
+- Results > ~1 GB — a real query cache (materialized views, Iceberg incrementals) scales better
 - Streaming assets — the cache assumes a stable compute
-- Cross-run memoization where you want ONE cache entry to live "forever" —
-  use a real Dagster asset with an IO manager instead
+- Cross-run memoization where you want ONE cache entry "forever" — use a real Dagster asset with an IO manager
 
 ## After the demo — inspect in the UI
 
 ```bash
 cd cached-asset-demo
 export DAGSTER_HOME=$(pwd)/.dagster_home
-uv run dg dev  # → http://localhost:3000
+uv run dg dev
 ```
 
-Click `expensive_report` → **Materializations tab**:
-- Each run shows `cache_status: hit|miss`, `cache_key`, `cache_path`, `cache_rows`
-- Bump `code_version` in the decorator → next run is a MISS
-- Roll back to previous `code_version` → hits again (parquet under the old key is untouched)
+Click either asset → **Observations panel** shows `cached_asset_status: hit|miss` + `cache_key` + `cache_path` metadata for every materialization.
 
 ## See also
 
 - [`cached_asset` component reference](https://dagster-component-ui.vercel.app/c/cached_asset)
+- [`throttle_asset` walkthrough](throttle_asset.md) — same "wraps" pattern, different primitive
 - Browse the [walkthrough index](README.md) for more decorator + infrastructure demos.
