@@ -5,15 +5,15 @@
     <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/blog</link>
     <description>Long-form posts from Eric Thomas on the Dagster community components registry — design essays, component tours, honest retrospectives.</description>
     <language>en-us</language>
-    <lastBuildDate>Fri, 11 Sep 2026 22:12:55 +0000</lastBuildDate>
+    <lastBuildDate>Fri, 11 Sep 2026 22:17:49 +0000</lastBuildDate>
     <atom:link href="https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/feed.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>Build your own Dagster decorators — as components</title>
+      <title>Augment any Dagster asset with layered components</title>
       <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/blog/dagster-native-decorators.md</link>
       <guid isPermaLink="false">https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/dagster-native-decorators.md</guid>
       <pubDate>Fri, 11 Sep 2026 00:00:00 +0000</pubDate>
       <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Eric Thomas</dc:creator>
-      <description>Dagster has an under-explored extension shape: a component that produces nothing of its own, only wraps another component's work with cross-cutting behavior. It ships with a schema, a catalog entry, a Python decorator counterpart, event-log-backed state, and — via one YAML field, `wraps:` — arbitrarily deep composability. This post is the pattern, the four properties that make it scale, a walkthrough of building one, and the seventeen examples I shipped as starting points.</description>
+      <description>17 new community components layer cross-cutting behavior — retry classification, SLAs, cost caps, PII scrubbing, snapshots, WAP, and more — around any existing Dagster asset. All composable in YAML via `wraps:`, so you can stack them arbitrarily deep with zero Python.</description>
     </item>
     <item>
       <title>One YAML, every Snowflake object: how the community `snowflake_workspace` component turns Snowflake into a Dagster catalog</title>
