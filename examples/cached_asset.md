@@ -1,4 +1,4 @@
-# cached_asset — `@cached` decorator + `CachedAssetComponent.wraps:` composability
+# Cache expensive Python compute — skip re-runs when nothing changed
 > ✅ **100% offline** — no API keys, no cloud, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

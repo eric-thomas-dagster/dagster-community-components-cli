@@ -1,4 +1,4 @@
-# timeout_asset — `@timeout` decorator + `TimeoutAssetComponent.wraps:` composability
+# Hard-kill runaway compute at N seconds
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

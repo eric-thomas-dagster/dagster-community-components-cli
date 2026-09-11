@@ -1,4 +1,4 @@
-# shadow_asset — `@shadow` decorator + `ShadowAssetComponent.wraps:` composability
+# Dual-run new vs old — vendor swap without risking production
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

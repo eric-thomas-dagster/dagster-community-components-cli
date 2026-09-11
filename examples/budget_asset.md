@@ -1,4 +1,4 @@
-# budget_asset — `@budget` decorator + `BudgetAssetComponent.wraps:` composability
+# Track $ per asset — rolling-window cap + pre-flight breach guard
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

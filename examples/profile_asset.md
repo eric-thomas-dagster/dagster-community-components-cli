@@ -1,4 +1,4 @@
-# profile_asset — `@profile` decorator + `ProfileAssetComponent.wraps:` composability
+# Auto-profile every materialization — histograms, quantiles, correlations
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

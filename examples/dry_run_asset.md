@@ -1,4 +1,4 @@
-# dry_run_asset — `@dry_run` decorator + `DryRunAssetComponent.wraps:` composability
+# Safe-mode any asset — cost estimates + diff-vs-current, no writes
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

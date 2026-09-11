@@ -1,4 +1,4 @@
-# snapshot_asset — `@snapshot` decorator + `SnapshotAssetComponent.wraps:` composability
+# Point-in-time snapshots — with rollback + compression
 > ✅ **100% offline** — no API keys, no cloud, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

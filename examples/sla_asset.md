@@ -1,4 +1,4 @@
-# sla_asset — `@sla` decorator + `SlaAssetComponent.wraps:` composability
+# Wall-clock SLAs on asset compute — with escalation-after-N-breaches
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

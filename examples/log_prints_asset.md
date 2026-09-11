@@ -1,4 +1,4 @@
-# log_prints_asset — `@log_prints` decorator + `LogPrintsAssetComponent.wraps:` composability
+# Route Python `print()` into Dagster logs — legacy code gets observability
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

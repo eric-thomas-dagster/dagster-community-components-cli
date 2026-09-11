@@ -1,4 +1,4 @@
-# throttle_asset — `@throttle` decorator + `ThrottleAssetComponent.wraps:` composability
+# Rate-limit an asset — cross-run mutex backed by the event log
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

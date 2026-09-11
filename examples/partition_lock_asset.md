@@ -1,4 +1,4 @@
-# partition_lock_asset — `@partition_lock` decorator + `PartitionLockAssetComponent.wraps:` composability
+# Per-partition mutex — event log or Postgres advisory lock
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

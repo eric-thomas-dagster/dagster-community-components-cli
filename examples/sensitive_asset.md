@@ -1,4 +1,4 @@
-# sensitive_asset — `@sensitive` decorator + `SensitiveAssetComponent.wraps:` composability
+# Scrub PII & secrets before they hit the event log
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

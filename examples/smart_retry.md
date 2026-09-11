@@ -1,4 +1,4 @@
-# smart_retry — `@smart_retry` decorator + `SmartRetryComponent.wraps:` composability
+# Classification-aware retry — transient vs permanent, no thrashing
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH

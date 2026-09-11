@@ -1,4 +1,4 @@
-# hooks_asset — `@on_hooks` decorator + `HooksAssetComponent.wraps:` composability
+# Prefect-style lifecycle callbacks — on_start / on_success / on_failure / on_end
 > ✅ **100% offline** — no API keys, no external services.
 
 **Live-validated** — the setup script runs end-to-end demonstrating BOTH
