@@ -2,41 +2,40 @@
 title: "Augment any Dagster asset with layered components"
 date: 2026-09-11
 author: Eric Thomas
-description: "17 new community components layer cross-cutting behavior — retry classification, SLAs, cost caps, PII scrubbing, snapshots, WAP, and more — around any existing Dagster asset. All composable in YAML via `wraps:`, so you can stack them arbitrarily deep with zero Python."
+description: "Dagster ships more than most teams use. The context.log stream, the event log, dg.RetryRequested, dynamic outputs, AssetCheckResult, and cheap event-log queries add up to a serious platform for cross-cutting behavior. Here are 17 decorators that wire those primitives together into retry classification, wall-clock SLAs, LLM cost caps, PII scrubbing, point-in-time snapshots, write-audit-publish, and more."
 ---
 
 # Augment any Dagster asset with layered components
 
-*17 new community components layer cross-cutting behavior — retry
-classification, SLAs, cost caps, PII scrubbing, snapshots, WAP, and
-more — around any existing Dagster asset. All composable in YAML via
-`wraps:` — stack them arbitrarily deep with zero Python.*
+*Dagster ships more than most teams use. The `context.log` stream, the
+event log, `dg.RetryRequested`, dynamic outputs, `AssetCheckResult`, and
+cheap event-log queries add up to a serious platform for cross-cutting
+behavior. Here are 17 decorators that wire those primitives together —
+retry classification, wall-clock SLAs, LLM cost caps, PII scrubbing,
+point-in-time snapshots, write-audit-publish, and more.*
 
 **Eric Thomas · September 2026**
 
 ---
 
 Most Dagster components create new assets. They ingest from vendors,
-sync workspaces, land data in warehouses. That's the majority of what's
-in every registry.
+sync workspaces, land data in warehouses.
 
 There's a second, quieter shape that produces nothing of its own — it
 wraps another component's work and layers cross-cutting behavior around
 it. Retry classification. Wall-clock SLAs. LLM cost caps. PII scrubbing.
 Point-in-time snapshots. Write-audit-publish.
 
-Seventeen of them landed in the community registry this month, and they
-all stack together via one YAML field (`wraps:`). This post covers what
-they do, the four properties that make the pattern durable, and how to
-install them.
+None of it is new capability. It's all wired out of Dagster primitives
+most teams never touch — the `context.log` stream, the event log,
+`dg.RetryRequested`, dynamic outputs, `AssetCheckResult`. This post
+walks the 17 that shipped and, more usefully, which Dagster primitive
+each one exploits.
 
 ## What the 17 do
 
-All 17 live in the [`decorator`
-category](https://dagster-component-ui.vercel.app/?category=decorator).
-Each one ships as both a Python decorator and a `wraps:`-composable YAML
-component (same behavior, one helper module — pick the shape that fits
-your team).
+Each one ships as a Python decorator + a YAML component, backed by one
+helper module. Pick the shape that fits your team.
 
 ### Runtime control
 
@@ -82,58 +81,58 @@ about sixty seconds:
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_<name>_demo.sh | bash
 ```
 
-## Stack them in YAML
+## How they work — Dagster's underused primitives
 
-The interesting part is what happens when you layer them. Every one
-accepts a `wraps:` field pointing at another component — outer wraps
-inner wraps inner, arbitrarily deep, zero customer Python:
+None of these decorators are magic. Every one is a small wrapper around
+something Dagster already ships and most teams never touch:
 
-```yaml
-type: dagster_community_components.SnapshotAssetComponent
-attributes:
-  uri: s3://backups/orders                             # ← historical audit trail
-  wraps:
-    type: dagster_community_components.BudgetAssetComponent
-    attributes:
-      max_cost_per_day_usd: 5.00                       # ← daily API cost cap
-      wraps:
-        type: dagster_community_components.SensitiveAssetComponent
-        attributes:
-          scrub_fields: [email, phone, ssn]            # ← PII scrubbing
-          wraps:
-            type: dagster_community_components.RestApiFetcherComponent
-            attributes:
-              url: "https://api.example.com/orders"   # ← the actual work
-              output_asset_key: orders
-```
+- **The `context.log` stream.** Everything a compute prints or logs
+  flows through here on its way to the event log. Nothing stops you
+  from filtering that stream before it lands. [`@sensitive`](https://dagster-component-ui.vercel.app/c/sensitive_asset)
+  redacts regex-matched PII inline. [`@log_prints`](https://dagster-component-ui.vercel.app/c/log_prints_asset)
+  reroutes stray Python `print()` calls through it so legacy scripts
+  get real observability without a rewrite.
 
-One asset registered (`orders`). Snapshotted, cost-capped, PII-scrubbed,
-and ingested — every layer plugs into the next via a YAML block. Any
-community component + any internal `my_company.*` component with the
-same `compute:` + `wraps:` shape plugs into the same slot; the stack
-doesn't care where the layers came from.
+- **`AssetObservation` events in the event log** are cross-run state
+  you don't have to provision anything for. [`@budget`](https://dagster-component-ui.vercel.app/c/budget_asset)
+  sums `cost_usd` observations over a rolling window.
+  [`@throttle`](https://dagster-component-ui.vercel.app/c/throttle_asset)
+  reads the last materialization timestamp.
+  [`@partition_lock`](https://dagster-component-ui.vercel.app/c/partition_lock_asset)
+  writes and consults a lock observation.
+  [`@data_contract`](https://dagster-component-ui.vercel.app/c/data_contract)
+  emits a schema snapshot each run so consumers can validate against a
+  specific producer version. No Redis, no side database — just events
+  queryable by any sensor.
 
-The Python analog is `@snapshot @budget @sensitive def fetch(...)`.
+- **`dg.RetryRequested`.** Raise it from a compute and Dagster's step
+  runner re-runs the step properly — the UI goes yellow, waits,
+  reruns, `context.retry_number` increments, Insights counts attempts.
+  Not a hidden in-place `for` loop. [`@smart_retry`](https://dagster-component-ui.vercel.app/c/smart_retry)
+  uses this to add HTTP-status and exception-class classification on
+  top of Dagster's four-knob `RetryPolicy`.
 
-## Why the pattern lasts
+- **Dynamic outputs.** Declare a fan-out at runtime, get real graph
+  nodes with parallel execution and per-call durations.
+  [`@task_asset`](https://dagster-component-ui.vercel.app/c/task_asset)
+  builds on this to bring Prefect-style `@task` sub-steps to Dagster —
+  each imperative call renders as its own graph node.
 
-Four properties keep this shape working long-term:
+- **`AssetCheckResult`.** Attach data-quality gates to any asset that
+  fail loudly and quarantine downstream automatically.
+  [`@lifecycle`](https://dagster-component-ui.vercel.app/c/lifecycle_wap)
+  (WAP) uses them as the audit step between staging and publish;
+  failing checks block the promote and preserve the staged data for
+  triage.
 
-**1. Discoverability.** They live in the catalog. `dg list components`
-finds them, the docs indexes them, `dagster-component add <id>` installs
-them. No git-cloning some team-local `utils/decorators.py`.
+- **`context.instance.get_event_records()`.** Reads past events
+  cheaply from any compute. Every decorator that needs history uses
+  it — no in-process caches, no synced side store, no consistency
+  bugs.
 
-**2. YAML + Python parity.** Every one ships both a Python decorator
-and a YAML component, backed by one helper module. No lock-in to either
-style.
-
-**3. Event log as state store.** Cross-run state (cost history,
-throttle timestamps, contract snapshots, breach counts) lands as
-`AssetObservation` events — restart-safe, worker-safe, sensor-queryable,
-zero new infra. No Redis, no side database.
-
-**4. `wraps:` composability.** As shown above — any of these stack over
-any other component with a single YAML field.
+Dagster ships all of this. Most teams touch two or three. These
+decorators are what happens when you wire the rest together on
+purpose.
 
 ## Try it
 
