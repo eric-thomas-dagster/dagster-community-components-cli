@@ -78,10 +78,12 @@ if ! uv run dg check defs 2>&1 | tail -6; then
   echo "    ✗ dg check failed"; exit 1
 fi
 
-# _step_duration <log-file>: extract STEP_SUCCESS duration for the expensive_report step
+# _step_duration <log-file>: extract STEP_SUCCESS duration for the expensive_report step.
+# Robust under `set -eo pipefail` — grep never returns non-zero because we `|| true`
+# and the outer command substitution won't fail even if nothing matches.
 _step_duration() {
-  grep -oE 'expensive_report - STEP_SUCCESS - Finished execution of step "expensive_report" in [0-9.]+s' "$1" \
-    | grep -oE '[0-9.]+s' | tail -1
+  { grep -oE 'expensive_report - STEP_SUCCESS - Finished execution of step "expensive_report" in [0-9.]+s' "$1" || true; } \
+    | { grep -oE '[0-9.]+s' || true; } | tail -1
 }
 
 # --- 6. RUN 1 — cache MISS (fresh, no parquet yet). Expect ~3s compute. ---
@@ -89,7 +91,7 @@ echo ""
 echo ">>> RUN 1  — expected: MISS + cached_asset_status=miss observation + ~3s COMPUTE"
 LOG1="$PROJECT_ABS/.run1.log"
 uv run dg launch --assets expensive_report >"$LOG1" 2>&1
-grep -E '\[cached\]|\[expensive_report\]|STEP_SUCCESS' "$LOG1" | sed 's/^/    /'
+{ grep -E '\[cached\]|\[expensive_report\]|STEP_SUCCESS' "$LOG1" || true; } | sed 's/^/    /'
 echo "    ⏱  compute (step_success): $(_step_duration "$LOG1")"
 echo ""
 echo "    cache dir contents:"
@@ -100,7 +102,7 @@ echo ""
 echo ">>> RUN 2  — expected: HIT + cached_asset_status=hit observation + <1s COMPUTE (parquet load)"
 LOG2="$PROJECT_ABS/.run2.log"
 uv run dg launch --assets expensive_report >"$LOG2" 2>&1
-grep -E '\[cached\]|\[expensive_report\]|STEP_SUCCESS' "$LOG2" | sed 's/^/    /'
+{ grep -E '\[cached\]|\[expensive_report\]|STEP_SUCCESS' "$LOG2" || true; } | sed 's/^/    /'
 echo "    ⏱  compute (step_success): $(_step_duration "$LOG2")"
 
 # --- 8. Bump code_version → invalidate cache → RUN 3 should MISS again ----
@@ -130,35 +132,37 @@ echo ""
 echo ">>> RUN 3  — expected: MISS again (new code_version → new key) + ~3s COMPUTE"
 LOG3="$PROJECT_ABS/.run3.log"
 uv run dg launch --assets expensive_report >"$LOG3" 2>&1
-grep -E '\[cached\]|\[expensive_report\]|STEP_SUCCESS' "$LOG3" | sed 's/^/    /'
+{ grep -E '\[cached\]|\[expensive_report\]|STEP_SUCCESS' "$LOG3" || true; } | sed 's/^/    /'
 echo "    ⏱  compute (step_success): $(_step_duration "$LOG3")"
 echo ""
 echo "    cache dir now has BOTH keys (one per code_version):"
 ls -la "$CACHE_DIR" 2>/dev/null | grep -v '^total\|^d' | sed 's/^/      /'
 
-# --- 9. Query the event log for cache metadata ---------------------------
-# Every @cached materialization carries cache_status / cache_key / cache_path
-# metadata on the ASSET_MATERIALIZATION event — perfect for cache-hit-rate dashboards.
+# --- 9. Query the event log for cache observation events ----------------
+# Every @cached materialization emits an AssetObservation with cache_status tag
+# + cache_key/cache_path metadata — perfect shape for cache-hit-rate dashboards.
 echo ""
-echo ">>> Cache metadata from the event log (proof each run recorded its status):"
+echo ">>> Cache observation events from the event log (proof each run recorded its status):"
 DAGSTER_HOME="$DAGSTER_HOME" uv run python - <<'PY'
 import dagster as dg
 from dagster import DagsterInstance
 
 with DagsterInstance.get() as inst:
-    recs = list(reversed(inst.fetch_materializations(
+    recs = list(reversed(inst.fetch_observations(
         records_filter=dg.AssetKey("expensive_report"), limit=20,
     ).records))
-    print(f"    {'run':<7}  {'status':<5}  {'cache_key':<26}  {'rows':<5}  path")
-    print(f"    {'---':<7}  {'-----':<5}  {'---------':<26}  {'----':<5}  ----")
+    print(f"    {'run':<7}  {'status':<5}  {'cache_key':<26}  path")
+    print(f"    {'---':<7}  {'-----':<5}  {'---------':<26}  ----")
     for i, r in enumerate(recs, start=1):
-        m = r.asset_materialization
-        md = {k: v.value for k, v in (m.metadata or {}).items()} if m else {}
-        status = md.get("cache_status", "-")
-        ck = (md.get("cache_key") or "-")[:24]
-        rows = md.get("cache_rows", "-")
-        cp = md.get("cache_path", "-")
-        print(f"    RUN {i:<3}  {status:<5}  {ck:<26}  {str(rows):<5}  {cp}")
+        obs = r.asset_observation
+        if not obs:
+            continue
+        tags = dict(obs.tags or {})
+        meta = {k: v.value for k, v in (obs.metadata or {}).items()}
+        status = tags.get("cached_asset_status", "-")
+        ck = (meta.get("cache_key") or "-")[:24]
+        cp = meta.get("cache_path", "-")
+        print(f"    RUN {i:<3}  {status:<5}  {ck:<26}  {cp}")
 PY
 
 # --- 10. Explainer --------------------------------------------------------
