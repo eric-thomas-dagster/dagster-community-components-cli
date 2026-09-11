@@ -137,18 +137,8 @@ any other component with a single YAML field.
 
 ## Try it
 
-Browse all 17 in the registry UI:
-👉 [dagster-component-ui.vercel.app/?category=decorator](https://dagster-component-ui.vercel.app/?category=decorator)
+Browse the full category at
+👉 [dagster-component-ui.vercel.app/?category=decorator](https://dagster-component-ui.vercel.app/?category=decorator).
 
-Or via the CLI:
-
-```bash
-dagster-component search "" --category decorator
-```
-
-Install one and run its walkthrough:
-
-```bash
-dagster-component add snapshot_asset --auto-install
-curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_snapshot_asset_demo.sh | bash
-```
+Every component page has the schema, the install command, and a link
+to a runnable walkthrough.
