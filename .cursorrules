@@ -79,6 +79,47 @@ dagster-component remove <id>                  # uninstall (only removes CLI-ins
 dagster-component update <id>[@<ref>]          # re-fetch / repin
 ```
 
+## CLI gotchas + silent failures
+
+Real gaps and silent-failure traps discovered by an automated build system
+running these commands nightly. Bake these into your muscle memory —
+several will hang or mislead if you don't:
+
+- **`dagster-component search` takes ONE positional argument.** Multiple
+  positional terms are rejected. Put several terms *inside* one quoted
+  string — they're AND-ed across id, name, description, tags, keywords,
+  and agent_hints: `dagster-component search "kafka avro sink"`. Use
+  `--json` for machine-readable output shape
+  (`{id, score, matched_fields, matched_terms, category, produces,
+  description, validation_level}`).
+- **Pass `--auto-install` to `init` and `add`, or they prompt and hang
+  forever unattended.** Every AI-driven invocation should include the
+  flag: `dagster-component init --auto-install`,
+  `dagster-component add <id> --auto-install`.
+- **`dagster-component init` does NOT scaffold a Dagster project.** It
+  writes AI-tool config (CLAUDE.md / .cursorrules /
+  .github/copilot-instructions.md) and wires the `registry_modules`
+  entry point into an EXISTING project. Run `uvx create-dagster project
+  <name>` first if there's no project yet.
+- **Never assert a registry gap without `search "..." --json`.** The
+  registry has thin wrappers over core Dagster calls and a lot of
+  vendor-specific components hidden behind non-obvious ids. "This is
+  core Dagster" or "I don't remember seeing one" is NOT evidence of
+  absence — search every time, with `--json`, before saying "no
+  component for X."
+- **`dg list components` sometimes misses custom components** installed
+  in the project. Re-run `dagster-component init --force` to refresh
+  the entry point wiring; the missed components then show up.
+- **`components/__init__.py` must re-export every custom component
+  class**, or the Dagster UI Components tab won't list them even when
+  `dg list components` (CLI) does. Silent trap — the UI just shows
+  fewer components than the CLI.
+- **`dg launch --assets '*'` CANNOT validate a partitioned project.**
+  It exits with `"Asset has partitions, but no '--partition' option
+  was provided"`. For CI / smoke tests on a partitioned project, pick
+  a specific partition (`dg launch --assets '*' --partition
+  2025-01-01`) or narrow to a non-partitioned asset selection.
+
 ## Examples / walkthroughs — point users here
 
 The CLI repo ships a large `examples/` folder of end-to-end walkthroughs.
@@ -164,6 +205,49 @@ natural Dagster experience — `dg launch` is for CI or quick verification,
 not the day-to-day flow.
 
 In a plain project, the user wires components into their own `definitions.py`.
+
+## Deploying to Dagster+ — preflight
+
+`dg dev` is the local flow. Deploying to Dagster+ (Serverless or Hybrid)
+adds several checks that are easy to miss until the deploy hangs
+mid-agent-sync with a confusing error. Verify these before running
+`dagster-cloud serverless deploy` / equivalent:
+
+- **`pex` must be installed as a project dep** (Serverless PEX build
+  mode) — `--build-method local` fails immediately otherwise.
+- **`dagster-cloud` must be a PROJECT dependency**, not just on your
+  shell `PATH`. Deploy dies with `dagster-cloud: command not found`
+  from inside the build container even when the CLI works in your
+  terminal.
+- **`--package-name` must be the module holding `Definitions`, not the
+  project directory name.** Verify with
+  `python -c "import <pkg>; print(<pkg>.defs)"` before deploying.
+- **`dbt_project/` must live INSIDE the Python package dir** (e.g.
+  `src/<pkg>/dbt_project/`) or it won't ship in the wheel. The location
+  then fails to load remotely with a confusing path error.
+- **`.gitignore`d files don't ship** — `dbt target/manifest.json` and
+  `defs_state/` are usually gitignored. Force-include via
+  `[tool.hatch.build.targets.wheel.force-include]` in `pyproject.toml`
+  so they land in the wheel.
+- **Run `dg utils refresh-defs-state` before deploying** when using
+  state-backed components (Fivetran, dbt, Airbyte, any
+  `StateBackedComponent`) — the location fails to load remotely
+  without a fresh state cache.
+- **Verify wheel CONTENTS, don't trust config**:
+  `python -m build && unzip -l dist/*.whl | grep -E
+  "manifest|defs_state"`. If they're not in the wheel, they won't be
+  on the deployed location.
+- **Deploy exit code 0 does NOT mean the location loaded.** `LOADED`
+  means the definitions parsed remotely, not that assets can
+  materialize. Confirm with `dg api dagster-cloud …` after deploy.
+
+**Dagster+ Serverless — runtime storage is EPHEMERAL.** Each run is a
+fresh container. Local DuckDB files, sqlite state, `/tmp/*` writes —
+anything spanning multiple runs works locally and silently breaks in
+Serverless. Give interactive demos via `dg dev`; treat the Dagster+
+deployment as proof the project loads. For persistent state between
+runs, use a cloud store (S3 / GCS / Postgres / Snowflake) via an IO
+manager.
 
 ## Generating YAML for a component
 
