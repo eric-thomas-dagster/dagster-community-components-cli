@@ -318,6 +318,7 @@ The component family — `database_schema_inventory`, `database_migration_assess
 | [IBM Db2](db2.md) | `db2_resource`, `dataframe_to_table`, `synthetic_data_generator`, `local_parquet_io_manager` | Db2 Community Edition in **local Docker container** (free, non-production). Retargets at Db2 on Cloud / Db2 Warehouse by changing host + port + ssl. |
 | [IBM Db2 for i (AS/400 / iSeries)](db2_iseries.md) | `db2_resource` + downstream components | Meta-walkthrough for pointing existing Db2 components at a real AS/400 — no Docker image exists for IBM i (proprietary hardware). Covers what changes vs. Db2 LUW + which catalog queries work on i. |
 | [Applying Automation Conditions broadly](automation_condition_pipeline.md) | `automation_condition_applicator` | Set Dagster `AutomationCondition`s across many assets at once without editing every `defs.yaml` — fall-through priority, preserve-existing, auto-derive from upstream cadences. Validated against a 4-asset test project. |
+| [Cached asset — `@cached` decorator](cached_asset.md) | `cached_asset` (`@cached` decorator on a `@dg.asset`) | 100% offline poster demo for the DCC decorator family. Three back-to-back runs of one asset: RUN 1 MISS (writes parquet cache), RUN 2 HIT (loads parquet, skips compute), RUN 3 MISS after `code_version` bump (new key, new parquet). Ends with an event-log query reading cache metadata (`cache_status` / `cache_key` / `cache_path` / `cache_rows`) — the shape you'd use for a cache-hit-rate dashboard. |
 
 ---
 
