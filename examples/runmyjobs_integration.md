@@ -1,6 +1,8 @@
 # RunMyJobs Integration — Redwood RunMyJobs jobs as daily-partitioned Dagster assets
 
-**Validated end-to-end** (`demo_mode: true` simulates the full REST API lifecycle on stdout — zero external dependencies). Materialize any partition and you see the whole RMJ call trace (AUTH → SUBMIT → POLL × 5 → STDOUT → DONE → EVENT) in the run logs.
+**Validated end-to-end** — the setup script spins up a **mock RunMyJobs REST server** (FastAPI, HTTP Basic Auth, realistic state machine `Waiting Time → Ready → Running → Completed`) inside the project directory, then points the component at it with `demo_mode: false`. Materialization exercises the REAL `_execute_runmyjobs` code path over real HTTP — not the in-process stdout simulator — so the whole Dagster surface is validated against a working REST endpoint.
+
+Prefer the in-process simulator? Set `demo_mode: true` and skip the mock server entirely — same asset shape, same run-log trace, no external process.
 
 ## Components used
 
@@ -34,23 +36,50 @@ Sensors  ── runmyjobs_external_execution_monitor  (poll every 60s)
 Schedule ── runmyjobs_reconciliation_schedule     (cron: 0 * * * *)
 ```
 
-## Live output — one partition materialization in demo mode
+## Live output — one partition materialization against the mock
+
+Actual run logs (setup script materializes partition `2024-06-01` end-to-end):
 
 ```
-[AUTH]   Authorization: Basic c3ZjX2RhZ3N0... (HTTP Basic)
-[SUBMIT] POST .../scheduler/api/submitjob
-  Payload: {"jobDefinition": "EOD_BATCH_SETTLEMENT", "application": "DAILY_BATCH",
-            "queue": "prod_queue", "scheduledTime": "2024-06-01", "parameters": {}}
-  Response: 201 Created — processId: RMJ-2418EC98
-[POLL]   GET .../scheduler/api/processes/RMJ-2418EC98 -> status=Waiting Time
-[POLL]   GET .../scheduler/api/processes/RMJ-2418EC98 -> status=Ready
-[POLL]   GET .../scheduler/api/processes/RMJ-2418EC98 -> status=Running
-[POLL]   GET .../scheduler/api/processes/RMJ-2418EC98 -> status=Running
-[POLL]   GET .../scheduler/api/processes/RMJ-2418EC98 -> status=Completed
-[STDOUT] GET .../scheduler/api/processes/RMJ-2418EC98/stdout -> 623 lines
-[DONE]   EOD_BATCH_SETTLEMENT -> Completed (processId: RMJ-2418EC98, scheduledTime: 2024-06-01)
-[EVENT]  POST .../scheduler/api/processes/RMJ-2418EC98/events
+[SUBMIT] POST http://localhost:8890/scheduler/api/submitjob — EOD_BATCH_SETTLEMENT
+[POLL]   EOD_BATCH_SETTLEMENT -> Waiting Time
+[POLL]   EOD_BATCH_SETTLEMENT -> Ready
+[POLL]   EOD_BATCH_SETTLEMENT -> Running
+[POLL]   EOD_BATCH_SETTLEMENT -> Running
+[POLL]   EOD_BATCH_SETTLEMENT -> Completed
+[STDOUT] 7 lines
+[EVENT]  Sent completion event
+ASSET_MATERIALIZATION - Materialized value rmj_eod_settlement.
+RUN_SUCCESS
 ```
+
+Every poll is a real HTTP GET against the mock server. Every state transition is driven by the mock's state machine (deterministic 4-poll settle → `Completed`).
+
+## Mock RunMyJobs server (what the setup script ships)
+
+The setup script writes a ~150-line FastAPI app inside `<project>/rmj-mock/mock_rmj.py`, launches it in an isolated venv (`<project>/rmj-mock/venv/`) on `localhost:8890`, and points the component at it with HTTP Basic Auth (`svc_dagster` / `DagsterDemo1`).
+
+Endpoints served (matching the modern RunMyJobs JSON REST surface):
+
+```
+POST /scheduler/api/submitjob                    — create process (returns processId)
+GET  /scheduler/api/processes/{id}               — status; state machine advances each poll
+GET  /scheduler/api/processes/{id}/stdout        — fake stdout output
+POST /scheduler/api/processes/{id}/events        — accept completion event
+POST /scheduler/api/processes/{id}/rerun         — restart process (restart op)
+POST /scheduler/api/processes/{id}/kill          — kill process (kill op)
+POST /scheduler/api/applications/{app}/hold      — hold all processes in app (hold op)
+POST /scheduler/api/applications/{app}/release   — release held processes (release op)
+GET  /scheduler/api/processes?since=...&limit=…  — list for reconciliation
+```
+
+Every endpoint requires HTTP Basic Auth. Held applications reject subsequent `/submitjob` requests. Kill flips process status to `Killed`. Rerun resets the poll counter so the state machine walks again.
+
+All state lives in-memory in the mock — restart the mock to reset.
+
+## Why a mock instead of a Docker image
+
+Redwood's PoC Docker images are license-gated (require a temporary key from Redwood Support). The mock exposes exactly the 9 endpoints the component hits with realistic responses, ships in an isolated Python venv inside the project directory (no `/tmp` pollution, no Windows portability trap), and — critically — exercises the **real** `_execute_runmyjobs` code path so you get true validation of the Dagster surface. When you swap in a real RMJ instance (Redwood-provisioned or SAP Redwood Schedule), only the `endpoint` + `RUNMYJOBS_USER` / `RUNMYJOBS_PASSWORD` env vars change.
 
 Asset metadata captured on every materialization: `external_process_id`, `status`, `scheduled_time`, `duration_seconds`, `demo_mode`.
 
@@ -93,11 +122,15 @@ export RUNMYJOBS_PASSWORD='<your-password>'
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/setup_runmyjobs_integration_demo.sh | bash
-cd runmyjobs-demo
+cd runmyjobs-demo && source .env.demo
 uv run dg dev
 ```
 
-Then in the UI: click a partition (2024-06-01 or later) → **Materialize**. Watch the full REST API trace stream into the run logs.
+Then in the UI: click a partition (2024-06-01 or later) → **Materialize**. Watch the full REST API trace stream into the run logs — every POLL is a real HTTP call to `http://localhost:8890`.
+
+The setup script also materializes partition `2024-06-01` at the end so you see a green run before you even open the UI.
+
+Cleanup when done: `kill $(cat runmyjobs-demo/rmj-mock/mock.pid) && rm -rf runmyjobs-demo`
 
 ## REST API endpoints exercised
 
