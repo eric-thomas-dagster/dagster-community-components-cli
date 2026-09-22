@@ -1,5 +1,5 @@
 # Temporal + Dagster — Full-Trio End-to-End Demo
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script starts its own local Temporal dev server for zero-credential reproducibility, and Serverless/Hybrid can't run that for you. The components themselves have no such requirement: same code path against `target_host`/`namespace` pointed at Temporal Cloud, and the same YAML deploys to Dagster+ as-is — see "Temporal Cloud" below.
 
 **Components:**
 - `TemporalWorkflowTriggerComponent` (`assets/infrastructure/temporal_workflow_trigger`)

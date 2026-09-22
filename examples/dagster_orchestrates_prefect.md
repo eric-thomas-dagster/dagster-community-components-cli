@@ -1,5 +1,5 @@
 # Dagster Orchestrates + Prefect Executes — Each Doing What It's Best At
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script starts its own local Prefect server for zero-credential reproducibility, and Serverless/Hybrid can't run that for you. The components themselves have no such requirement: point `api_url` (+ `api_key_env_var`) at Prefect Cloud or any reachable Prefect server and the same YAML deploys to Dagster+ as-is — see "Switch to Prefect Cloud" below.
 
 Not competitive — **complementary**. Dagster owns the graph, the partition (per-file / per-tenant / per-day), the asset catalog, the state tracking. Prefect owns the per-run work — including **durable execution** and **runtime-decided task graphs** (the exact tasks depend on what's inside each input).
 

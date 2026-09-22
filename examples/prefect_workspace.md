@@ -1,6 +1,6 @@
 # Prefect Workspace — Auto-Discover Every Deployment, Zero Per-Flow YAML
 
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script starts its own local Prefect server for zero-credential reproducibility, and Serverless/Hybrid can't run that for you. The component itself has no such requirement: point `workspace.api_url` (+ `api_key_env_var`) at Prefect Cloud or any reachable Prefect server and the same YAML deploys to Dagster+ as-is — see "Switch to Prefect Cloud" below.
 
 `PrefectFlowRunAssetComponent` is one YAML block per Prefect deployment. That's
 fine for a handful of flows. It's a real tax once a Prefect estate has dozens —
