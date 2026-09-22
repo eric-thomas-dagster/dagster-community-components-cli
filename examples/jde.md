@@ -1,5 +1,5 @@
 # JD Edwards Orchestrator → Dagster orchestration
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
 **Goal:** wrap **JDE Orchestrator** with Dagster to schedule orchestrations, react to completion events, ingest orchestration output, and auto-emit assets for every orchestration.
 

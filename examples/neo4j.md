@@ -1,5 +1,5 @@
 # Neo4j end-to-end — local docker, no SaaS
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
 Read / write the Neo4j graph database via the community-component family. Same components target AuraDB / self-hosted clusters unchanged — only `uri` + auth env vars change.
 

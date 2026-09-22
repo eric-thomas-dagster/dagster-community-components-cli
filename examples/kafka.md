@@ -1,5 +1,5 @@
 # Kafka end-to-end — local broker, no SaaS, no auth
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
 Full validation of the Kafka community-component family against a single-container Kafka broker running locally in KRaft mode (no Zookeeper, no managed cluster, no auth). The same components work unchanged against MSK / Confluent Cloud / Strimzi / self-hosted clusters — just swap `bootstrap_servers` + `security_protocol`.
 

@@ -1,5 +1,5 @@
 # Docker container as a Dagster asset
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** unlike the other Docker-based walkthroughs in this registry, this is a real component-level constraint, not just a demo-only one — `docker_container_asset` needs a Docker daemon reachable from wherever the *run itself* executes, not a separately-deployed service Dagster+ can just be pointed at over the network. Serverless's ephemeral build containers don't expose one at all. Hybrid can work only if your own agent's execution environment has Docker installed and its socket reachable — uncommon, and worth the security review that implies before relying on it.
 
 Run any container image as a first-class Dagster asset via `dagster-docker`. No SaaS, no auth, no managed cluster — just the local Docker daemon. Right when the work needs an isolated runtime (a specific Python version, system libs, ML model weights, vendored CLI tools) but you don't want to build a Dockerfile into every Dagster project.
 

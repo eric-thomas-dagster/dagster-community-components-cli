@@ -1,5 +1,5 @@
 # InfluxDB 2.x — DataFrame → Flux query (live, Docker)
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
 Single-container Docker walkthrough. Spins up `influxdb:2-alpine` with a pre-initialized org + bucket + admin token, scaffolds a Dagster project that generates IoT sensor data, and bulk-writes 10,000 points into InfluxDB via the official `influxdb-client` Python SDK.
 

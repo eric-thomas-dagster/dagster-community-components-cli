@@ -1,5 +1,5 @@
 # MQTT end-to-end — local docker, no auth
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
 Exercise the MQTT family against a local Eclipse Mosquitto broker. Same components target HiveMQ Cloud / AWS IoT Core / managed brokers unchanged — only `broker_host` / TLS / auth env vars change.
 

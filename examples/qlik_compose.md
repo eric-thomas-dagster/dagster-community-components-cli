@@ -1,5 +1,5 @@
 # Qlik Compose → Dagster orchestration
-> ❌ **Dagster+ Serverless / Hybrid:** local-only demo — requires container/server dependency.
+> ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
 **Goal:** wrap Qlik Compose (data-warehouse automation) with Dagster to run workflows, react to workflow state, ingest per-workflow metrics, and auto-emit assets for every Project × Workflow × Data Mart.
 
