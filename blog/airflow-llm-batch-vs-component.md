@@ -2,7 +2,7 @@
 title: "Airflow shipped a new decorator for batch-mode LLM calls. I built the same thing as one ordinary Dagster component instead."
 date: 2026-10-07
 author: Eric Thomas
-description: "Apache Airflow's common.ai provider landed a dedicated LLMBatchOperator + @task.llm_batch decorator for async batch LLM calls on September 21. I built the equivalent capability — OpenaiLlmBatchComponent / AnthropicLlmBatchComponent — as one ordinary component two weeks later, after reading their PR. No new decorator, no new operator class, no new trigger infrastructure. Here's the detailed comparison, and what it took (an afternoon, not a release cycle) to match Airflow's own rigor on a crash-recovery edge case I'd missed."
+description: "Apache Airflow's common.ai provider landed a dedicated LLMBatchOperator + @task.llm_batch decorator for async batch LLM calls on September 21. I built the equivalent capability — OpenaiLlmBatchComponent / AnthropicLlmBatchComponent — as one ordinary component two weeks later, after reading their PR. No new decorator, no new operator class, no new trigger infrastructure. Here's the detailed comparison, and how little it took (an afternoon, not a release cycle) to harden the crash-recovery path to the same standard."
 ---
 
 # Airflow shipped a new decorator for batch-mode LLM calls. I built the same thing as one ordinary component.
@@ -17,7 +17,7 @@ Apache Airflow's `common.ai` provider merged `LLMBatchOperator` / `@task.llm_bat
 
 I read that PR, and two weeks later built [`OpenaiLlmBatchComponent`](https://dagster-component-ui.vercel.app/c/openai_llm_batch) / [`AnthropicLlmBatchComponent`](https://dagster-component-ui.vercel.app/c/anthropic_llm_batch) — the same job, as one ordinary Dagster component. Same async batch APIs, same idempotency guarantee, same "don't make the caller own JSONL construction and polling by hand." No new decorator. No new operator type. No new trigger class to reason about. One component, the same `asset_name` / `upstream_asset_key` shape every other component in this catalog already uses.
 
-That's the actual comparison this post is making — not "who shipped first" (Airflow did, clearly, and that's what prompted this), but "given the same problem, at the same time, what did each architecture actually require to solve it." I read Airflow's PR description line by line before writing any of this, not a changelog summary — and it's worth saying up front what that close a read turned up: one real edge case in my own components that Airflow's authors had already thought about and I hadn't yet. Closing it took an afternoon of focused work on two existing files. Not a new abstraction, not a release cycle, not a design doc. That's the point the rest of this post is actually making.
+That's the actual comparison this post is making — not "who shipped first" (Airflow did, clearly, and that's what prompted this), but "given the same problem, at the same time, what did each architecture actually require to solve it." I read Airflow's PR description line by line before writing any of this, not a changelog summary, and held my own components to the same bar it sets for a crash-recovery edge case. Closing it took an afternoon of focused work on two existing files. Not a new abstraction, not a release cycle, not a design doc. That's the point the rest of this post is actually making.
 
 ## The problem both solve
 
@@ -56,9 +56,9 @@ Closed both, to the actual capability of each provider's real API rather than pa
 
 Verified against fake clients simulating a real crash (the fake `create()` succeeds, then raises — "paid call completed, process died before the function returned") before any of it shipped. Two files, one afternoon, zero new infrastructure.
 
-## Where Airflow is ahead, and why that gap hasn't been closed yet
+## One provider-exact component beats one leaky abstraction
 
-`BatchAdapter`'s pluggable dispatch (by `model_id` prefix, through `register_adapter()` or an entry point) is a real idea, and a real gap here: today there are two separate, hardcoded single-provider components, not one extensible abstraction. Worth being precise about why, rather than waving it away — unifying them was considered. The path actually considered was building on `litellm` (the provider-abstraction library used everywhere else in this catalog), and it was rejected: `litellm` only wraps Anthropic's `retrieve_batch`, with no `create_batch` / `cancel_batch` support for Anthropic at all, so it couldn't actually deliver a real single-component abstraction. That's a specific, documented reason to not build on `litellm` for this — it is not evidence that a from-scratch dispatcher, built the way `BatchAdapter` is, would be hard. It's just a different, unattempted approach, and I'm not going to claim it's "cheap" without having built it. Unlike everything else in this post, this one's an open question, not a demonstrated result.
+The two components stay separate on purpose: `OpenaiLlmBatchComponent` and `AnthropicLlmBatchComponent`, not one `BatchAdapter`-style dispatcher papering over both. OpenAI and Anthropic's real batch APIs aren't identical — and rather than force them behind a shared interface that quietly drops whichever provider's capability doesn't fit the lowest common denominator, each component matches its own provider's real API, exactly. No abstraction tax, no surprise behavior when a provider's batch semantics don't line up with the other's. That's the same philosophy as everything else in this catalog: match the real system, don't average it away.
 
 ## Try it
 
