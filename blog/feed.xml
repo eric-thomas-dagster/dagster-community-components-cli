@@ -5,15 +5,15 @@
     <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/blog</link>
     <description>Long-form posts from Eric Thomas on the Dagster community components registry — design essays, component tours, honest retrospectives.</description>
     <language>en-us</language>
-    <lastBuildDate>Wed, 07 Oct 2026 22:28:32 +0000</lastBuildDate>
+    <lastBuildDate>Wed, 07 Oct 2026 22:36:19 +0000</lastBuildDate>
     <atom:link href="https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/feed.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>Airflow just shipped batch-mode LLM calls. Here's how the community component compares — and a real gap it found in ours.</title>
+      <title>Airflow just shipped batch-mode LLM calls behind a new decorator. We shipped it as one ordinary component — months ago.</title>
       <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/blog/airflow-llm-batch-vs-component.md</link>
       <guid isPermaLink="false">https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/airflow-llm-batch-vs-component.md</guid>
       <pubDate>Wed, 07 Oct 2026 00:00:00 +0000</pubDate>
       <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Eric Thomas</dc:creator>
-      <description>Apache Airflow's new LLMBatchOperator solves the same problem OpenaiLlmBatchComponent/AnthropicLlmBatchComponent do: cheap async batch LLM calls without owning JSONL/polling/retry logic by hand. A fair, detailed comparison — including a real crash-recovery gap the comparison found in our own components, and the fix.</description>
+      <description>Apache Airflow's common.ai provider just landed a dedicated LLMBatchOperator + @task.llm_batch decorator for async batch LLM calls. OpenaiLlmBatchComponent / AnthropicLlmBatchComponent already do the same job as one ordinary component — no new decorator, no new operator class, no new trigger infrastructure. Here's the detailed comparison, and what it took (an afternoon, not a release cycle) to match Airflow's own rigor on a crash-recovery edge case.</description>
     </item>
     <item>
       <title>Augment any Dagster asset with layered components</title>
