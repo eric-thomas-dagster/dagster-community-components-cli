@@ -54,9 +54,9 @@ Closed both, to the actual capability of each provider's real API rather than pa
 
 Verified against fake clients simulating a real crash (the fake `create()` succeeds, then raises — "paid call completed, process died before the function returned") before any of it shipped. Two files, one afternoon, zero new infrastructure. That's the whole argument of this post, demonstrated on itself.
 
-## Where we're extending next
+## Where Airflow is ahead, and why we haven't matched it yet
 
-`BatchAdapter`'s pluggable dispatch (by `model_id` prefix, through `register_adapter()` or an entry point) is a real idea worth matching — it's how Bedrock and Vertex batch support can ship as separate packages without touching `common.ai` core. Today we have two separate, hardcoded single-provider components instead of one extensible abstraction. Given everything above, adding that shape is exactly the kind of change this architecture makes cheap: a new dispatch method on an existing component, not a new framework concept.
+`BatchAdapter`'s pluggable dispatch (by `model_id` prefix, through `register_adapter()` or an entry point) is a real idea, and a real gap on our side: today we have two separate, hardcoded single-provider components, not one extensible abstraction. Worth being precise about why, rather than waving it away — we looked at unifying them before. The path we actually considered was building on `litellm` (the provider-abstraction library used everywhere else in this catalog), and rejected it: `litellm` only wraps Anthropic's `retrieve_batch`, with no `create_batch` / `cancel_batch` support for Anthropic at all, so it couldn't actually deliver a real single-component abstraction. That's a specific, documented reason to not build on `litellm` for this — it is not evidence that a from-scratch dispatcher, built the way `BatchAdapter` is, would be hard. It's just a different, unattempted approach, and we're not going to claim it's "cheap" without having built it. Unlike everything else in this post, this one's an open question, not a demonstrated result.
 
 ## Try it
 
