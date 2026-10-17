@@ -11,7 +11,7 @@
 #
 # Pipeline (4 components, all autoloaded by `dg`):
 #   http_poll_sensor (sensor) ─⟶ triggers ─⟶
-#       rest_api_fetcher → json_path_extractor → dataframe_to_csv
+#       rest_api_ingestion → json_path_extractor → dataframe_to_csv
 
 set -euo pipefail
 PROJECT_DIR="${1:-nba-scoreboard-demo}"
@@ -31,18 +31,18 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component --refresh"
 
 echo ">>> Installing 4 community components"
-$CLI add rest_api_fetcher       --auto-install
+$CLI add rest_api_ingestion       --auto-install
 $CLI add json_path_extractor    --auto-install
 $CLI add dataframe_to_csv       --auto-install
 $CLI add http_poll_sensor       --auto-install
 
 echo ">>> Writing demo defs.yaml"
 
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: nba_scoreboard_raw
-  api_url: "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2024-12-25&l=4387"
+  api_url: "https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=2024-12-25&l=4387"
   method: GET
   auth_type: none
   output_format: dataframe
@@ -83,7 +83,7 @@ type: $PKG.components.http_poll_sensor.component.HttpPollSensorComponent
 attributes:
   sensor_name: nba_scores_changed
   asset_keys: [nba_scoreboard_summary]
-  url: "https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2024-12-25&l=4387"
+  url: "https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=2024-12-25&l=4387"
   # Hash only the events list — fires when results actually change.
   json_path: "events"
   minimum_interval_seconds: 120
@@ -107,7 +107,7 @@ uv run dg dev                   # then enable nba_scores_changed in the UI
 ## ⚠️ Fragility warning
 
 This demo depends on a **public, undocumented NBA endpoint**:
-`https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2024-12-25&l=4387`
+`https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=2024-12-25&l=4387`
 
 If the NBA changes the JSON shape (renames fields, restructures the games
 array, etc.), the `json_path_extractor` config in
@@ -116,7 +116,7 @@ shape was last validated **2026-05-02** during the BOS-PHI Game 7 East
 First Round.
 
 If you hit a parse failure:
-1. `curl https://www.thesportsdb.com/api/v1/json/3/eventsday.php?d=2024-12-25&l=4387 | jq .scoreboard.games[0]`
+1. `curl https://www.thesportsdb.com/api/v1/json/123/eventsday.php?d=2024-12-25&l=4387 | jq .scoreboard.games[0]`
 2. Compare the keys to the `extractions:` block in the json_path_extractor defs.yaml
 3. Update field names accordingly
 

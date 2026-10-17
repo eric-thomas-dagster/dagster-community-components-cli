@@ -8,9 +8,9 @@
 #
 # Pipeline (5 components, all autoloaded by `dg`):
 #
-#     rest_api_fetcher (launches) ┐
+#     rest_api_ingestion (launches) ┐
 #                                  ├─→ dataframe_join → select_columns → CSV
-#     rest_api_fetcher (rockets) ─┘
+#     rest_api_ingestion (rockets) ─┘
 
 set -euo pipefail
 
@@ -31,18 +31,18 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher    --auto-install
+$CLI add rest_api_ingestion    --auto-install
 $CLI add dataframe_join      --auto-install
 $CLI add select_columns      --auto-install
 $CLI add dataframe_to_csv    --auto-install
 
 # Two REST fetches into separate dirs — same component used twice
-mkdir -p "src/$PKG/defs/rest_rockets"  # only needs defs.yaml; component code is in components/rest_api_fetcher/
+mkdir -p "src/$PKG/defs/rest_rockets"  # only needs defs.yaml; component code is in components/rest_api_ingestion/
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1a. Fetch launches
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: launches
   api_url: https://api.spacexdata.com/v4/launches
@@ -55,7 +55,7 @@ EOF
 
 # 1b. Fetch rockets (4 of them — Falcon 1, Falcon 9, Falcon Heavy, Starship)
 cat > "src/$PKG/defs/rest_rockets/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: rockets
   api_url: https://api.spacexdata.com/v4/rockets

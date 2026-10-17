@@ -126,14 +126,14 @@ type: dagster_community_components.DataframeToTableComponent
 attributes:
   asset_name: hana_dim_customer_loaded
   upstream_asset_key: dim_customer
-  destination_url_env_var: HANA_URL    # 'hana://user:pwd@host:443?encrypt=true'
-  destination_table: DIM_CUSTOMER
-  destination_schema: DAGSTER_OWNED
+  database_url_env_var: HANA_URL    # 'hana://user:pwd@host:443?encrypt=true'
+  table: DIM_CUSTOMER
+  schema: DAGSTER_OWNED
   if_exists: append          # or 'replace'
   group_name: sap_hana
 ```
 
-`destination_url_env_var` should hold a full SQLAlchemy URL (use the resource's `url()` helper to mint it).
+`database_url_env_var` should name an env var holding a full SQLAlchemy URL (use the resource's `url()` helper to mint it).
 
 ## Partitioning patterns
 

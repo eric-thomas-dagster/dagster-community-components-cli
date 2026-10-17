@@ -213,7 +213,7 @@ type: $PKG.components.dataframe_to_table.component.DataframeToTableComponent
 attributes:
   asset_name: movies_table
   upstream_asset_key: movies_final
-  table_name: top_movies
+  table: top_movies
   database_url_env_var: DATABASE_URL
   if_exists: replace
   drop_timezone: true

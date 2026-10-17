@@ -8,12 +8,12 @@ matrix, writes a CSV.
 ## Pipeline
 
 ```
-rest_api_fetcher → datetime_parser → running_total → transpose → dataframe_to_csv
+rest_api_ingestion → datetime_parser → running_total → transpose → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET Open-Meteo with `json_path: daily` to extract the columnar `{time, temp_max, temp_min, precip_sum}` block |
+| 1 | `rest_api_ingestion` | ingestion | GET Open-Meteo with `json_path: daily` to extract the columnar `{time, temp_max, temp_min, precip_sum}` block |
 | 2 | `datetime_parser` | transformation | Parse `time` strings (`YYYY-MM-DD`) into datetimes |
 | 3 | `running_total` | transformation | Cumulative sum of `precipitation_sum` → `cumulative_precip_mm` |
 | 4 | `transpose` | transformation | Pivot so dates are columns, metrics are rows |
@@ -23,7 +23,7 @@ rest_api_fetcher → datetime_parser → running_total → transpose → datafra
 
 - `dataframe_to_csv`
 - `datetime_parser`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 - `running_total`
 - `transpose`
 
@@ -47,7 +47,7 @@ cumulative_precip_mm  11.5        11.5        13.0        ...  37.1
 
 ## What this demo shows
 
-- `rest_api_fetcher` handles **columnar dict responses** — when an API
+- `rest_api_ingestion` handles **columnar dict responses** — when an API
   returns `{col: [v1, v2, ...]}` (parallel lists), the fetcher detects this
   and produces a normal row-oriented DataFrame instead of a 1-row df with
   list-valued cells.

@@ -218,7 +218,7 @@ type: dagster_community_components.SupabaseVectorSearchAssetComponent
 attributes:
   asset_name: retrieved_context
   upstream_asset_key: rag_query_embedding
-  resource_name: supabase
+  resource_key: supabase
   table_name: docs
   embedding_column: embedding
   query_embedding_column: embedding

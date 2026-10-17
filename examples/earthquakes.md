@@ -7,12 +7,12 @@ nested GeoJSON, selects + sorts fields, writes JSONL.
 ## Pipeline
 
 ```
-rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_json
+rest_api_ingestion → json_flatten → select_columns → sort → dataframe_to_json
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET the USGS daily feed (no auth) |
+| 1 | `rest_api_ingestion` | ingestion | GET the USGS daily feed (no auth) |
 | 2 | `json_flatten` | transformation | Flatten the `properties` dict from each feature |
 | 3 | `select_columns` | transformation | Keep `mag`, `place`, `time`, `url`, `tsunami` |
 | 4 | `sort` | transformation | Order by magnitude (descending) |
@@ -22,7 +22,7 @@ rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_j
 
 - `dataframe_to_json`
 - `json_flatten`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 - `select_columns`
 - `sort`
 

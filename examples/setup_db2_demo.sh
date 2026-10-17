@@ -107,7 +107,7 @@ attributes:
   asset_name: orders_in_db2
   upstream_asset_key: synthetic_orders
   database_url: db2+ibm_db://$DB2_USER:$DB2_PASS@localhost:$DB2_PORT/$DB2_DB
-  table_name: ORDERS
+  table: ORDERS
   if_exists: replace
   group_name: db2_demo"
 

@@ -175,7 +175,8 @@ mkdir -p "src/${PKG}/defs"/{mlflow_workspace,version_check,promotion,inference,i
 cat > "src/${PKG}/defs/mlflow_workspace/defs.yaml" <<YAML
 type: dagster_community_components.MLflowWorkspaceComponent
 attributes:
-  tracking_uri_env_var: MLFLOW_TRACKING_URI
+  workspace:
+    tracking_uri: "{{ env.MLFLOW_TRACKING_URI }}"
   model_selector:
     by_pattern: ["*"]
   experiment_selector:

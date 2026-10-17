@@ -279,10 +279,11 @@ YAML
 cat > "src/$PKG/defs/qlik_replicate_workspace/defs.yaml" <<YAML
 type: dagster_community_components.QlikReplicateWorkspaceComponent
 attributes:
-  base_url_env_var: QLIK_EM_URL
-  username_env_var: QLIK_EM_USER
-  password_env_var: QLIK_EM_PASSWORD
-  verify_ssl: false
+  workspace:
+    base_url: "{{ env.QLIK_EM_URL }}"
+    username: "{{ env.QLIK_EM_USER }}"
+    password: "{{ env.QLIK_EM_PASSWORD }}"
+    verify_ssl: false
   servers: [prod-replicate-01]
   task_selector:
     by_name: [orders_sqlserver_to_snowflake, customers_db2_to_snowflake]

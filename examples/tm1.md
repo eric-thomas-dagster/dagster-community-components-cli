@@ -96,9 +96,10 @@ Chain downstream `dataframe_to_snowflake` for BI dashboards.
 ```yaml
 type: dagster_community_components.TM1WorkspaceComponent
 attributes:
-  base_url_env_var: TM1_URL
-  username_env_var: TM1_USER
-  password_env_var: TM1_PASSWORD
+  workspace:
+    base_url: "{{ env.TM1_URL }}"
+    username: "{{ env.TM1_USER }}"
+    password: "{{ env.TM1_PASSWORD }}"
   process_selector:
     by_pattern: [Load_*, Refresh_*]
   group_name: tm1_operations

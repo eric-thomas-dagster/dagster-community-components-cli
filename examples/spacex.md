@@ -7,12 +7,12 @@ launch dates, ranks launches newest-first, writes an Excel report.
 ## Pipeline
 
 ```
-rest_api_fetcher → select_columns → datetime_parser → rank → dataframe_to_excel
+rest_api_ingestion → select_columns → datetime_parser → rank → dataframe_to_excel
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET `api.spacexdata.com/v4/launches` (no auth) |
+| 1 | `rest_api_ingestion` | ingestion | GET `api.spacexdata.com/v4/launches` (no auth) |
 | 2 | `select_columns` | transformation | Keep `name`, `date_utc`, `success`, `rocket`, `flight_number`, `details` |
 | 3 | `datetime_parser` | transformation | Parse `date_utc` → tz-aware datetime in `launch_date` |
 | 4 | `rank` | transformation | Rank by `launch_date` descending → `rank_by_date` |
@@ -23,7 +23,7 @@ rest_api_fetcher → select_columns → datetime_parser → rank → dataframe_t
 - `dataframe_to_excel`
 - `datetime_parser`
 - `rank`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 - `select_columns`
 
 ## Run

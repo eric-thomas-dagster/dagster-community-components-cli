@@ -247,10 +247,11 @@ YAML
 cat > "src/$PKG/defs/tm1_workspace/defs.yaml" <<YAML
 type: dagster_community_components.TM1WorkspaceComponent
 attributes:
-  base_url_env_var: TM1_URL
-  username_env_var: TM1_USER
-  password_env_var: TM1_PASSWORD
-  verify_ssl: false
+  workspace:
+    base_url: "{{ env.TM1_URL }}"
+    username: "{{ env.TM1_USER }}"
+    password: "{{ env.TM1_PASSWORD }}"
+    verify_ssl: false
   cube_selector:
     by_name: [Sales, Finance]
   process_selector:

@@ -65,7 +65,7 @@ With `wraps:`, decorator components stack over **any DCC component** with zero u
 
 - `TimeoutAssetComponent { wraps: LLMPromptExecutorComponent }` — hard-kill an LLM call that hangs
 - `TimeoutAssetComponent { wraps: BigqueryQueryComponent }` — hard-kill a runaway warehouse query
-- `TimeoutAssetComponent { wraps: RestApiFetcherComponent }` — hard-kill a stuck external API call
+- `TimeoutAssetComponent { wraps: RestApiIngestionComponent }` — hard-kill a stuck external API call
 - `TimeoutAssetComponent { wraps: DockerContainerAsset }` — hard-kill a container asset that ran past budget
 - `SmartRetryAssetComponent { wraps: TimeoutAssetComponent { wraps: SnowflakeQueryComponent } }` — retry on timeout with backoff
 

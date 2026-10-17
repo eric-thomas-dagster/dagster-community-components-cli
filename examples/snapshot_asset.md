@@ -71,7 +71,7 @@ With `wraps:`, decorator components stack over **any DCC component** with zero u
 - `SnapshotAssetComponent { wraps: SnowflakeQueryComponent }` — snapshot warehouse query results for rollback
 - `SnapshotAssetComponent { wraps: LLMPromptExecutorComponent }` — snapshot LLM outputs for audit
 - `SnapshotAssetComponent { wraps: SyntheticDataGeneratorComponent }` — the demo shape
-- `SnapshotAssetComponent { wraps: RestApiFetcherComponent }` — snapshot external API responses for replay
+- `SnapshotAssetComponent { wraps: RestApiIngestionComponent }` — snapshot external API responses for replay
 - `SnapshotAssetComponent { wraps: DataframeFromCsv }` — snapshot canonical inputs after ingestion
 
 ## Path shape

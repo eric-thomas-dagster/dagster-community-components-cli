@@ -24,7 +24,7 @@ Pull **SAP Analytics Cloud** stories, models, and comments into Dagster. SAC is 
 |---|---|---|
 | `oauth_token_resource` | community | OAuth2 client_credentials for SAC REST API |
 | `oauth_rest_ingestion` | community | GET SAC stories / models / comments metadata |
-| `rest_api_fetcher` | community | POST data INTO SAC models (the more valuable direction) |
+| `rest_api_ingestion` | community | POST data INTO SAC models (the more valuable direction) |
 | `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
 
 ## When to integrate SAC with Dagster
@@ -94,7 +94,7 @@ This is the most valuable Dagster→SAC pattern: refresh a SAC model after upstr
 
 ```yaml
 # defs/sac_revenue_model_loaded/defs.yaml
-type: dagster_community_components.RestApiFetcherComponent  # or build a custom asset
+type: dagster_community_components.RestApiIngestionComponent  # or build a custom asset
 attributes:
   asset_name: sac_revenue_model_loaded
   api_url: https://my-tenant.eu10.hcs.cloud.sap/api/v1/dataimport/<model_id>

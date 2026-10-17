@@ -8,15 +8,15 @@ foreign-key column, and writing an enriched report. First demo to use
 ## Pipeline
 
 ```
-rest_api_fetcher (launches) ┐
+rest_api_ingestion (launches) ┐
                              ├─→ dataframe_join → select_columns → CSV
-rest_api_fetcher (rockets)  ┘
+rest_api_ingestion (rockets)  ┘
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1a | `rest_api_fetcher` (launches) | ingestion | GET `/v4/launches` — every SpaceX launch with a `rocket` ID FK |
-| 1b | `rest_api_fetcher` (rockets) | ingestion | GET `/v4/rockets` — rocket catalog (Falcon 1 / 9 / Heavy / Starship) |
+| 1a | `rest_api_ingestion` (launches) | ingestion | GET `/v4/launches` — every SpaceX launch with a `rocket` ID FK |
+| 1b | `rest_api_ingestion` (rockets) | ingestion | GET `/v4/rockets` — rocket catalog (Falcon 1 / 9 / Heavy / Starship) |
 | 2 | `dataframe_join` | transformation | LEFT JOIN launches.rocket = rockets.id with `_launch` / `_rocket` suffixes |
 | 3 | `select_columns` | transformation | Keep + rename to human-readable column names |
 | 4 | `dataframe_to_csv` | sink | Write the enriched 205-row table |
@@ -25,7 +25,7 @@ rest_api_fetcher (rockets)  ┘
 
 - `dataframe_join`
 - `dataframe_to_csv`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 - `select_columns`
 
 ## Run
@@ -61,7 +61,7 @@ Counts per rocket:
   `right_asset_key` (instead of the usual single `upstream_asset_key`),
   which `dg`'s autoloader resolves into a two-input asset graph.
 - **The same component installed twice in one project.** Both fetches
-  use `rest_api_fetcher`; the second is installed with `--target-dir
+  use `rest_api_ingestion`; the second is installed with `--target-dir
   src/<pkg>/defs/rest_rockets/` so each gets its own `defs.yaml`. Same
   pattern the wine demo uses for `random_forest_model`.
 - **Type field uses the actual class name.** The class is

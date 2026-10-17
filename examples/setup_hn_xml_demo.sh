@@ -7,7 +7,7 @@
 # both columns in parallel → CSV. Xpath all the way down, no regex.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
-#     rest_api_fetcher (text)  → xml_parser (findall)
+#     rest_api_ingestion (text)  → xml_parser (findall)
 #                              → array_exploder (parallel)
 #                              → dataframe_to_csv
 
@@ -30,7 +30,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 4 components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher    --auto-install
+$CLI add rest_api_ingestion    --auto-install
 $CLI add xml_parser          --auto-install
 $CLI add array_exploder      --auto-install
 $CLI add dataframe_to_csv    --auto-install
@@ -38,8 +38,8 @@ $CLI add dataframe_to_csv    --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Fetch HN RSS as raw XML
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: feed_xml
   api_url: https://hnrss.org/frontpage

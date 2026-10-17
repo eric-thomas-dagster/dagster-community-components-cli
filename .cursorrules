@@ -428,7 +428,7 @@ Filter with `--category`: `dagster-component search "" --category io_manager`.
 | Connect to PostgreSQL / MySQL / MSSQL / Oracle / Db2 | `postgres_resource` / `mysql_resource` / `mssql_resource` / `oracle_resource` / `db2_resource` |
 | Land DataFrames as parquet on S3 / GCS / ADLS | `s3_parquet_io_manager` / `gcs_parquet_io_manager` / `azure_blob_parquet_io_manager` |
 | Watch S3 / GCS / ADLS for new objects | `s3_monitor` / `gcs_monitor` / `adls_monitor` (dynamic-partition mode) |
-| Read REST API → DataFrame | `rest_api_fetcher` |
+| Read REST API → DataFrame | `rest_api_ingestion` |
 | OData reads (SAP / MS Graph / Dynamics) | `odata_ingestion` |
 | Kafka / NATS / RabbitMQ / MQTT / Pulsar | `<broker>_to_database_asset` + `<broker>_monitor` + `<broker>_observation_sensor` |
 | MongoDB / Cassandra / Neo4j / Elasticsearch | `<db>_resource` + `<db>_reader` + `<db>_writer` |

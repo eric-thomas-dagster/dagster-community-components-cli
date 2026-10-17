@@ -89,7 +89,7 @@ cat > "$DEFS/yaml_user_export/defs.yaml" <<'YAML'
 # context.log calls through the redactor. This inner component doesn't
 # actually LOG any secrets, so redacted_count=0 — but the observation is
 # still emitted every run. In production the shape is:
-#   SensitiveAssetComponent { wraps: RestApiFetcherComponent { ... } }
+#   SensitiveAssetComponent { wraps: RestApiIngestionComponent { ... } }
 # where any secret the inner accidentally logs gets scrubbed before the
 # event log persists it — SOC2-audit-worthy per-asset attestation.
 type: dagster_community_components.SensitiveAssetComponent
@@ -189,7 +189,7 @@ What just happened:
                  → redacted_count = matched fields (log + metadata)
   RUN 2 (yaml) → inner data-gen has nothing sensitive to log → redacted_count=0
                  → observation IS emitted every run — audit proof the redactor was active
-                 → in production: SensitiveAssetComponent { wraps: RestApiFetcherComponent }
+                 → in production: SensitiveAssetComponent { wraps: RestApiIngestionComponent }
                    catches any secret the inner accidentally logs
 
 Redaction strategies:

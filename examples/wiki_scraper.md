@@ -7,14 +7,14 @@ fetch-HTML → parse-tables → land structured-data pattern entirely from
 registry components — a common Dagster use case.
 
 Pipeline (4 components, all autoloaded by `dg`):
-    rest_api_fetcher (text) → html_parser (extract_tables)
+    rest_api_ingestion (text) → html_parser (extract_tables)
                             → array_exploder → dataframe_to_json
 
 ## Components used
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | Hit a REST endpoint |
+| 1 | `rest_api_ingestion` | ingestion | Hit a REST endpoint |
 | 2 | `html_parser` | transformation | Parse HTML tables |
 | 3 | `array_exploder` | transformation |  |
 | 4 | `dataframe_to_json` | sink |  |

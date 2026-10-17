@@ -6,7 +6,7 @@
 # writes a partition-suffixed JSONL file.
 #
 # Pipeline (5 components, all autoloaded by `dg`, daily-partitioned):
-#     rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_json
+#     rest_api_ingestion → json_flatten → select_columns → sort → dataframe_to_json
 
 set -euo pipefail
 
@@ -28,7 +28,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 5 community components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher    --auto-install
+$CLI add rest_api_ingestion    --auto-install
 $CLI add json_flatten        --auto-install
 $CLI add select_columns      --auto-install
 $CLI add sort                --auto-install
@@ -36,8 +36,8 @@ $CLI add dataframe_to_json   --auto-install
 
 echo ">>> Writing demo defs.yaml for each component (daily-partitioned)"
 
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: earthquakes_raw
   api_url: https://earthquake.usgs.gov/fdsnws/event/1/query

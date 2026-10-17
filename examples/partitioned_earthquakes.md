@@ -8,13 +8,13 @@ individual days, view per-partition output in the Dagster UI.
 ## Pipeline
 
 ```
-rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_json
+rest_api_ingestion → json_flatten → select_columns → sort → dataframe_to_json
        (all 5 components partitioned daily — DailyPartitionsDefinition)
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | Daily-partitioned GET to the USGS historical query API; uses `{partition_date}` / `{partition_date_next}` URL templating |
+| 1 | `rest_api_ingestion` | ingestion | Daily-partitioned GET to the USGS historical query API; uses `{partition_date}` / `{partition_date_next}` URL templating |
 | 2 | `json_flatten` | transformation | Flatten partition-by-partition |
 | 3 | `select_columns` | transformation | Same as the unpartitioned demo |
 | 4 | `sort` | transformation | By magnitude per partition |
@@ -24,7 +24,7 @@ rest_api_fetcher → json_flatten → select_columns → sort → dataframe_to_j
 
 - `dataframe_to_json`
 - `json_flatten`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 - `select_columns`
 - `sort`
 

@@ -170,7 +170,7 @@ attributes:
   asset_name: orders_in_duckdb
   upstream_asset_key: writer_input_df
   database_path: out/local_io_demo_writer.duckdb
-  table_name: orders
+  table: orders
   write_mode: replace
   group_name: round_trip"
 

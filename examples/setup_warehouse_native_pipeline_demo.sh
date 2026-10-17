@@ -89,7 +89,7 @@ attributes:
   asset_name: raw_orders_in_warehouse
   upstream_asset_key: orders
   database_url: duckdb:///$DB
-  table_name: raw_orders
+  table: raw_orders
   if_exists: replace
   group_name: warehouse_native"
 
@@ -289,7 +289,7 @@ attributes:
   asset_name: raw_customers_in_warehouse
   upstream_asset_key: customers
   database_url: duckdb:///$DB
-  table_name: raw_customers
+  table: raw_customers
   if_exists: replace
   group_name: warehouse_native"
 

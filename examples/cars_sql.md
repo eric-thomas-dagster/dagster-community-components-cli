@@ -9,12 +9,12 @@ a file path in `DATABASE_URL`.
 ## Pipeline
 
 ```
-rest_api_fetcher → datetime_parser → formula → dataframe_to_table
+rest_api_ingestion → datetime_parser → formula → dataframe_to_table
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET vega's cars.json (406-record JSON array, no auth) |
+| 1 | `rest_api_ingestion` | ingestion | GET vega's cars.json (406-record JSON array, no auth) |
 | 2 | `datetime_parser` | transformation | Parse the `Year` string ("YYYY-01-01") into a real datetime |
 | 3 | `formula` | transformation | Compute `decade = (model_year.dt.year // 10) * 10` |
 | 4 | `dataframe_to_table` | sink | Write to whatever DB `DATABASE_URL` points at — SQLite for this demo |
@@ -24,7 +24,7 @@ rest_api_fetcher → datetime_parser → formula → dataframe_to_table
 - `dataframe_to_table`
 - `datetime_parser`
 - `formula`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 
 ## Run
 

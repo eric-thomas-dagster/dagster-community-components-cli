@@ -13,13 +13,13 @@ meaningful changes.
 
 Pipeline (4 components, all autoloaded by `dg`):
   http_poll_sensor (sensor) ─⟶ triggers ─⟶
-      rest_api_fetcher → json_path_extractor → dataframe_to_csv
+      rest_api_ingestion → json_path_extractor → dataframe_to_csv
 
 ## Components used
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | Hit a REST endpoint |
+| 1 | `rest_api_ingestion` | ingestion | Hit a REST endpoint |
 | 2 | `json_path_extractor` | transformation | JSONPath extract → columns |
 | 3 | `dataframe_to_csv` | sink | Write CSV |
 | 4 | `http_poll_sensor` | sensor | Trigger on URL change |

@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
 # REST Countries demo — canonical create-dagster + dg.
 #
-# Hits the public REST Countries API (no auth), computes population density
+# Hits a public countries dataset on GitHub (no auth; the restcountries.com v3.1 API was retired), computes population density
 # per country, rolls up by region, writes a JSON report.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
-#     rest_api_fetcher → formula → summarize → dataframe_to_json
+#     rest_api_ingestion → formula → summarize → dataframe_to_json
 
 set -euo pipefail
 
@@ -26,22 +26,22 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 4 community components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher    --auto-install
+$CLI add rest_api_ingestion    --auto-install
 $CLI add formula             --auto-install
 $CLI add summarize           --auto-install
 $CLI add dataframe_to_json   --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: countries_raw
-  api_url: https://restcountries.com/v3.1/all?fields=region,subregion,population,area,cca3
+  api_url: https://raw.githubusercontent.com/dr5hn/countries-states-cities-database/master/json/countries.json
   method: GET
   auth_type: none
   output_format: dataframe
-  description: All countries — region, population, area
+  description: All countries — region, population, area_sq_km
   group_name: ingest
 EOF
 
@@ -51,7 +51,7 @@ attributes:
   asset_name: countries_with_density
   upstream_asset_key: countries_raw
   expressions:
-    density_per_km2: "population / area"
+    density_per_km2: "population / area_sq_km"
   group_name: transform
 EOF
 
@@ -64,7 +64,7 @@ attributes:
   aggregations:
     population: sum
     density_per_km2: mean
-    cca3: count
+    iso3: count
   group_name: transform
 EOF
 

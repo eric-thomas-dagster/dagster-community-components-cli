@@ -76,7 +76,7 @@ With `wraps:`, decorator components stack over **any DCC component** with zero u
 
 - `ShadowAssetComponent { wraps: SnowflakeQueryComponent, shadow_wraps: BigqueryQueryComponent }` — validate a warehouse migration end-to-end
 - `ShadowAssetComponent { wraps: OpenAiAgent, shadow_wraps: AnthropicAgent }` — compare LLM providers with the same prompt
-- `ShadowAssetComponent { wraps: RestApiFetcherComponent (v2 API), shadow_wraps: RestApiFetcherComponent (v1 API) }` — validate an API version upgrade
+- `ShadowAssetComponent { wraps: RestApiIngestionComponent (v2 API), shadow_wraps: RestApiIngestionComponent (v1 API) }` — validate an API version upgrade
 - `ShadowAssetComponent { wraps: DataframeFromSqlComponent (new query), shadow_wraps: DataframeFromSqlComponent (legacy query) }` — validate a query rewrite
 - `ShadowAssetComponent { wraps: NewIngestionComponent, shadow_wraps: OldIngestionComponent, enforce_match: true }` — release gate that blocks on drift
 

@@ -153,6 +153,12 @@ def _score_component(component: dict, terms: list[str]) -> tuple[int, dict]:
     return (score, matched_fields)
 
 
+# Components renamed in the library. `add rest_api_fetcher` keeps working.
+RENAMED_COMPONENTS: dict[str, str] = {
+    "rest_api_fetcher": "rest_api_ingestion",
+}
+
+
 class Registry:
     """Lazy, cached client for the community components manifest."""
 
@@ -170,6 +176,14 @@ class Registry:
     @property
     def components(self) -> list[dict]:
         return self.manifest.get("components", [])
+
+    def resolve_alias(self, component_id: str) -> str:
+        """Return the current id for a renamed component (only when the old id
+        is absent from the manifest and the new one is present)."""
+        new = RENAMED_COMPONENTS.get(component_id)
+        if new and self.get(component_id) is None and self.get(new) is not None:
+            return new
+        return component_id
 
     def get(self, component_id: str) -> dict | None:
         """Return the manifest entry for `component_id`, or None if not found."""

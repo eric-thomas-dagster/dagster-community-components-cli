@@ -211,10 +211,11 @@ YAML
 cat > "src/$PKG/defs/qlik_compose_workspace/defs.yaml" <<YAML
 type: dagster_community_components.QlikComposeWorkspaceComponent
 attributes:
-  base_url_env_var: QLIK_COMPOSE_URL
-  username_env_var: QLIK_COMPOSE_USER
-  password_env_var: QLIK_COMPOSE_PASSWORD
-  verify_ssl: false
+  workspace:
+    base_url: "{{ env.QLIK_COMPOSE_URL }}"
+    username: "{{ env.QLIK_COMPOSE_USER }}"
+    password: "{{ env.QLIK_COMPOSE_PASSWORD }}"
+    verify_ssl: false
   projects: [FinanceDW, SalesDW]
   workflow_selector:
     by_pattern: ["FullBuild*", "Incremental*"]

@@ -8,13 +8,13 @@ and writes a JSON file. Backfill any range of pages with a single command.
 ## Pipeline
 
 ```
-rest_api_fetcher (text)  → html_parser (extract_links)  → dataframe_to_json
+rest_api_ingestion (text)  → html_parser (extract_links)  → dataframe_to_json
 {partition_key} → URL                                    {partition_key} → file_path
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET `/catalogue/page-{partition_key}.html` — `output_format: text` returns raw HTML |
+| 1 | `rest_api_ingestion` | ingestion | GET `/catalogue/page-{partition_key}.html` — `output_format: text` returns raw HTML |
 | 2 | `html_parser` | transformation | `mode: extract_links` parses every `<a href>` |
 | 3 | `dataframe_to_json` | sink | One file per partition: `/tmp/books_page_{partition_key}.json` |
 
@@ -24,7 +24,7 @@ All three are partitioned with `partition_type: static`, `partition_values: ["1"
 
 - `dataframe_to_json`
 - `html_parser`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 
 ## Run
 
@@ -63,7 +63,7 @@ Each file is a JSON array with one record `{"content": [<list of URLs>]}`.
   YAML. The Dagster UI shows each page as a discrete materializable unit;
   retries, backfills, and parallelism work the same as for any other
   partitioned asset.
-- **`output_format: text` on rest_api_fetcher** — wraps raw response body
+- **`output_format: text` on rest_api_ingestion** — wraps raw response body
   in a 1-row `content` column so transforms like `html_parser` and
   `regex_parser` can chain off it.
 - **`html_parser` modes** — `extract_links`, `extract_tables`,

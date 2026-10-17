@@ -264,12 +264,14 @@ Each returns a materialization + metadata dict, so downstream assets can consume
 ```yaml
 type: dagster_community_components.ShellCommandAssetComponent
 attributes:
-  asset_key: legacy_data_prep
-  command: "/usr/local/bin/nightly_prep.sh --date {run_date}"
-  working_dir: /data/nightly
+  asset_name: legacy_data_prep
+  command: "/usr/local/bin/nightly_prep.sh --date $(date +%F)"
+  cwd: /data/nightly
+  env_vars:
+    PREP_ENV: prod
 ```
 
-Runs on the Dagster agent host (bare-metal in your case). Environment vars, working dir, stdin, retry-on-nonzero all configurable. Stdout + stderr captured to the asset's compute logs — no more grepping `/var/log`.
+Runs on the Dagster agent host (bare-metal in your case). Environment variables (`env_vars`) and working directory (`cwd`) are configurable, and a non-zero exit fails the asset (so Dagster's own run retries / alerts apply). Stdout + stderr captured to the asset's compute logs — no more grepping `/var/log`.
 
 ### 10. Operations / Developer Experience (README-only)
 

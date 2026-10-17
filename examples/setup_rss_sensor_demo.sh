@@ -4,11 +4,11 @@
 # rss_feed_sensor polls Hacker News' frontpage RSS every 10 minutes. When new
 # entries appear, it triggers a RunRequest that materializes the
 # `latest_news_summary` asset, which fetches the same feed via
-# rest_api_fetcher, parses the headlines via xml_parser, and writes a CSV.
+# rest_api_ingestion, parses the headlines via xml_parser, and writes a CSV.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
 #   rss_feed_sensor (sensor) ─⟶ triggers ─⟶
-#       rest_api_fetcher → xml_parser → dataframe_to_csv
+#       rest_api_ingestion → xml_parser → dataframe_to_csv
 
 set -euo pipefail
 PROJECT_DIR="${1:-rss-sensor-demo}"
@@ -28,15 +28,15 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component --refresh"
 
 echo ">>> Installing 4 community components"
-$CLI add rest_api_fetcher  --auto-install
+$CLI add rest_api_ingestion  --auto-install
 $CLI add xml_parser        --auto-install
 $CLI add dataframe_to_csv  --auto-install
 $CLI add rss_feed_sensor   --auto-install
 
 echo ">>> Writing demo defs.yaml"
 
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: hn_feed_xml
   api_url: "https://hnrss.org/frontpage"

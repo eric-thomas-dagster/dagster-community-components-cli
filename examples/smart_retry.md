@@ -74,9 +74,9 @@ attributes:
 
 **One asset is registered** (`yaml_api_call`) — no duplication. The outer `SmartRetryComponent` intercepts the inner's compute; if the inner raises, the outer classifies via the `retry_rules` and either issues a `RetryRequested` (transient) or raises `dg.Failure` (permanent). Inner's config (partitions, deps, kinds, tags, group) all pass through unchanged.
 
-The demo's inner `SyntheticDataGeneratorComponent` won't fail on its own — this run demonstrates the wrap **loads + runs cleanly**. In production the inner is typically a component that CAN fail (`rest_api_fetcher`, `snowflake_query`, `mongodb_writer`, etc.) — that's when classification kicks in.
+The demo's inner `SyntheticDataGeneratorComponent` won't fail on its own — this run demonstrates the wrap **loads + runs cleanly**. In production the inner is typically a component that CAN fail (`rest_api_ingestion`, `snowflake_query`, `mongodb_writer`, etc.) — that's when classification kicks in.
 
-Add or remove the outer wrap without touching the inner's config. Stack arbitrarily deep — `SlaAssetComponent { wraps: SmartRetryComponent { wraps: RestApiFetcherComponent } }` = `@sla @smart_retry @fetch` in Python decorator terms.
+Add or remove the outer wrap without touching the inner's config. Stack arbitrarily deep — `SlaAssetComponent { wraps: SmartRetryComponent { wraps: RestApiIngestionComponent } }` = `@sla @smart_retry @fetch` in Python decorator terms.
 
 ## Why the YAML composability is the money shot
 
@@ -84,7 +84,7 @@ Before `wraps:`, YAML users had to write Python callables and reference them via
 
 With `wraps:`, `SmartRetryComponent` stacks over **any DCC component** with zero user Python:
 
-- `SmartRetryComponent { wraps: RestApiFetcherComponent }` — 429/500 → transient; 400/404 → permanent
+- `SmartRetryComponent { wraps: RestApiIngestionComponent }` — 429/500 → transient; 400/404 → permanent
 - `SmartRetryComponent { wraps: SnowflakeQueryComponent }` — auth errors → permanent; timeouts → transient
 - `SmartRetryComponent { wraps: MongodbWriterComponent }` — network blips → transient; schema violations → permanent
 - `SmartRetryComponent { wraps: LLMPromptExecutorComponent }` — 429 rate-limit → transient; 401 bad key → permanent

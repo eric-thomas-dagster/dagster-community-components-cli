@@ -9,14 +9,14 @@ clean CSV.
 ## Pipeline
 
 ```
-rest_api_fetcher (text)  → regex_parser (split)
+rest_api_ingestion (text)  → regex_parser (split)
                          → regex_parser (extract)  → filter
                          → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET `hnrss.org/frontpage`; `output_format: text` returns raw XML |
+| 1 | `rest_api_ingestion` | ingestion | GET `hnrss.org/frontpage`; `output_format: text` returns raw XML |
 | 2 | `regex_parser` (split) | transformation | Split on `</item>`; one row per feed item |
 | 3 | `regex_parser` (extract) | transformation | Extract title + link via two capture groups in one regex |
 | 4 | `filter` | transformation | Drop rows where `title` is null (the preamble before the first item) |
@@ -27,7 +27,7 @@ rest_api_fetcher (text)  → regex_parser (split)
 - `dataframe_to_csv`
 - `filter`
 - `regex_parser`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 
 ## Run
 
@@ -57,7 +57,7 @@ An open letter asking NHS England to keep its code open,https://keepthingsopen.c
   at `defs/regex_parser/` for the split step and `defs/regex_extract/` for
   the extraction step (via `dagster-component add ... --target-dir`).
   Each gets its own `defs.yaml`, both pointing at the same Python class.
-- **`output_format: text`** on rest_api_fetcher wraps the raw response
+- **`output_format: text`** on rest_api_ingestion wraps the raw response
   in a 1-row DataFrame so downstream parsers have a column to operate on
   — the same pattern the books-scraper demo uses.
 

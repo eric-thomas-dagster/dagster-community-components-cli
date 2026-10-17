@@ -70,8 +70,9 @@ attributes:
 ```yaml
 type: dagster_community_components.QlikComposeWorkspaceComponent
 attributes:
-  base_url_env_var: QLIK_COMPOSE_URL
-  api_token_env_var: QLIK_COMPOSE_TOKEN
+  workspace:
+    base_url: "{{ env.QLIK_COMPOSE_URL }}"
+    api_token: "{{ env.QLIK_COMPOSE_TOKEN }}"
   workflow_selector:
     by_pattern: ["FullBuild*", "Incremental*"]
   data_mart_selector:

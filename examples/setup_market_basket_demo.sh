@@ -27,8 +27,9 @@ uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — bre
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 echo ">>> Generating synthetic baskets (200 orders × ~4 items each, with bundles)"
-uv run python - <<'PY'
-import csv, random
+PROJECT_ABS="$PROJECT_ABS" uv run python - <<'PY'
+import csv, os, random
+PROJECT_ABS = os.environ["PROJECT_ABS"]
 random.seed(42)
 # Bundles that often co-occur
 bundles = [
@@ -52,10 +53,10 @@ for order_id in range(1, 201):
     items += random.sample(extras, k=random.randint(1, 3))
     for item in set(items):
         rows.append({"order_id": f"ORD{order_id:04d}", "product_name": item})
-with open("$PROJECT_ABS/out/baskets.csv", "w", newline="") as f:
+with open(f"{PROJECT_ABS}/out/baskets.csv", "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=rows[0].keys())
     w.writeheader(); w.writerows(rows)
-print(f"wrote $PROJECT_ABS/out/baskets.csv: {len(rows)} line items across 200 baskets")
+print(f"wrote {PROJECT_ABS}/out/baskets.csv: {len(rows)} line items across 200 baskets")
 PY
 
 CLI="uvx --from dagster-community-components-cli dagster-component"

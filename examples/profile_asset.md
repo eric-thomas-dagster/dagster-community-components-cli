@@ -64,7 +64,7 @@ With `wraps:`, `ProfileAssetComponent` stacks over **any DCC component whose com
 - `ProfileAssetComponent { wraps: SnowflakeQueryComponent }` — profile every query result
 - `ProfileAssetComponent { wraps: BigqueryQueryComponent }` — same for BigQuery
 - `ProfileAssetComponent { wraps: DataframeFromCsvComponent }` — profile ingested CSVs
-- `ProfileAssetComponent { wraps: RestApiFetcherComponent }` — profile API responses
+- `ProfileAssetComponent { wraps: RestApiIngestionComponent }` — profile API responses
 - `ProfileAssetComponent { wraps: SyntheticDataGeneratorComponent }` — the demo shape
 
 ## Components used

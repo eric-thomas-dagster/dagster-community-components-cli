@@ -76,7 +76,7 @@ attributes:
   asset_name: orders_in_db2
   upstream_asset_key: synthetic_orders
   database_url_env_var: DB2_URL   # db2+ibm_db://user:pass@host:port/database
-  table_name: ORDERS
+  table: ORDERS
   if_exists: replace
 ```
 

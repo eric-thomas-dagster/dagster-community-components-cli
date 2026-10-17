@@ -49,7 +49,7 @@ attributes:
   host: bw.acme.com
   port: 30015
   user: DAGSTER_BW
-  passwd_env_var: BW_PASSWORD
+  password_env_var: BW_PASSWORD
   encrypt: true
 ```
 

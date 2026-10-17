@@ -606,3 +606,44 @@ def test_cli_add_as_package_marker_records_mode(tmp_path: Path):
     data = _json.loads(marker.read_text())
     assert data["mode"] == "as_package"
     assert data["component_type"].startswith("dagster_community_components.")
+
+
+# ── renamed-component aliases ─────────────────────────────────────────────────
+
+_RENAMED_MANIFEST = {
+    "version": "1.0.0",
+    "components": [
+        {
+            "id": "rest_api_ingestion",
+            "name": "REST API Ingestion",
+            "category": "ingestion",
+            "description": "Fetch data from REST APIs.",
+            "tags": ["ingestion"],
+            "component_url": "https://raw.example.com/assets/ingestion/rest_api_ingestion/component.py",
+        },
+    ],
+}
+
+
+def test_registry_resolve_alias_renamed_id():
+    r = _registry_with(_RENAMED_MANIFEST)
+    assert r.get("rest_api_fetcher") is None
+    assert r.resolve_alias("rest_api_fetcher") == "rest_api_ingestion"
+    assert r.resolve_alias("rest_api_ingestion") == "rest_api_ingestion"
+    assert r.resolve_alias("unknown_thing") == "unknown_thing"
+
+
+def test_registry_resolve_alias_prefers_real_id():
+    # If the old id exists in the manifest again, it wins over the alias.
+    manifest = {"components": _RENAMED_MANIFEST["components"] + [{"id": "rest_api_fetcher"}]}
+    r = _registry_with(manifest)
+    assert r.resolve_alias("rest_api_fetcher") == "rest_api_fetcher"
+
+
+def test_info_command_resolves_renamed_id():
+    r = _registry_with(_RENAMED_MANIFEST)
+    with patch("dagster_component_cli.cli.Registry", return_value=r):
+        result = CliRunner().invoke(main, ["info", "rest_api_fetcher"])
+    assert result.exit_code == 0, result.output
+    assert "rest_api_ingestion" in result.output
+    assert "renamed" in result.output

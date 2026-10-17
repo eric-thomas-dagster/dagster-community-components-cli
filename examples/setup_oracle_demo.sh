@@ -101,7 +101,7 @@ attributes:
   asset_name: orders_in_oracle
   upstream_asset_key: synthetic_orders
   database_url: oracle+oracledb://system:$ORACLE_PWD@localhost:$ORACLE_PORT/?service_name=$SERVICE_NAME
-  table_name: orders
+  table: orders
   if_exists: replace
   group_name: oracle_demo"
 

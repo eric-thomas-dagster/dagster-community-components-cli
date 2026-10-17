@@ -164,7 +164,7 @@ cat > "src/${PROJECT_NAME}/defs/users_snapshot/defs.yaml" <<YAML
 type: dagster_community_components.FirestoreCollectionIngestionComponent
 attributes:
   asset_name: users_snapshot
-  resource_name: firebase
+  resource_key: firebase
   collection_path: users
   where_clauses:
     - field: plan

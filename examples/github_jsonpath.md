@@ -9,12 +9,12 @@ both `nested_field_extractor` (dot paths) and `json_path_extractor`
 ## Pipeline
 
 ```
-rest_api_fetcher → nested_field_extractor → json_path_extractor → dataframe_to_csv
+rest_api_ingestion → nested_field_extractor → json_path_extractor → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET `/search/repositories?q=orchestrator&per_page=10`; `json_path: items` extracts the array |
+| 1 | `rest_api_ingestion` | ingestion | GET `/search/repositories?q=orchestrator&per_page=10`; `json_path: items` extracts the array |
 | 2 | `nested_field_extractor` | transformation | Dot paths into `owner` dict — `login`, `html_url` |
 | 3 | `json_path_extractor` | transformation | JSONPath into `license` dict (which may be null) — `$.key`, `$.name` |
 | 4 | `dataframe_to_csv` | sink | Pick the human-meaningful columns |
@@ -24,7 +24,7 @@ rest_api_fetcher → nested_field_extractor → json_path_extractor → datafram
 - `dataframe_to_csv`
 - `json_path_extractor`
 - `nested_field_extractor`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 
 ## Run
 

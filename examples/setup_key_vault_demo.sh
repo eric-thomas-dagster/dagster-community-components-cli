@@ -128,7 +128,7 @@ type: $PKG.components.dataframe_to_table.component.DataframeToTableComponent
 attributes:
   asset_name: orders_in_postgres
   upstream_asset_key: orders_raw
-  table_name: orders
+  table: orders
   database_url_env_var: DATABASE_URL    # set by the postgres_url asset above
   if_exists: replace
   drop_timezone: true

@@ -7,7 +7,7 @@
 # registry components — a common Dagster use case.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
-#     rest_api_fetcher (text) → html_parser (extract_tables)
+#     rest_api_ingestion (text) → html_parser (extract_tables)
 #                             → array_exploder → dataframe_to_json
 
 set -euo pipefail
@@ -29,7 +29,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 4 community components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher    --auto-install
+$CLI add rest_api_ingestion    --auto-install
 $CLI add html_parser         --auto-install
 $CLI add array_exploder      --auto-install
 $CLI add dataframe_to_json   --auto-install
@@ -39,8 +39,8 @@ echo ">>> Writing demo defs.yaml for each component"
 # 1. Fetch the Wikipedia page as raw HTML — output_format=text wraps it in
 # a 1-row DataFrame with a `content` column. Wikipedia blocks the default
 # python-requests UA, so identify ourselves.
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: page_html
   api_url: https://en.wikipedia.org/wiki/List_of_countries_by_GDP_(nominal)

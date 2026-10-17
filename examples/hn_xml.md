@@ -10,14 +10,14 @@ parallel for one row per item.
 ## Pipeline
 
 ```
-rest_api_fetcher (text)  → xml_parser (mode: findall)
+rest_api_ingestion (text)  → xml_parser (mode: findall)
                          → array_exploder (parallel)
                          → dataframe_to_csv
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET HN RSS as raw XML (`output_format: text`) |
+| 1 | `rest_api_ingestion` | ingestion | GET HN RSS as raw XML (`output_format: text`) |
 | 2 | `xml_parser` | transformation | xpath `findall` for `.//item/title` and `.//item/link` — each cell becomes a list of matches |
 | 3 | `array_exploder` | transformation | Explode both list-columns in parallel (zip-style) — one row per item |
 | 4 | `dataframe_to_csv` | sink | Write `title, link` |
@@ -26,7 +26,7 @@ rest_api_fetcher (text)  → xml_parser (mode: findall)
 
 - `array_exploder`
 - `dataframe_to_csv`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 - `xml_parser`
 
 ## Run

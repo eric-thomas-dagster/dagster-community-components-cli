@@ -37,6 +37,14 @@ console = Console()
 err = Console(stderr=True, style="red")
 
 
+def _resolve_alias(registry: Registry, cid: str) -> str:
+    """Map a renamed component id to its current id, printing a one-line notice."""
+    new = registry.resolve_alias(cid)
+    if new != cid:
+        err.print(f"[yellow]![/yellow] '{cid}' was renamed to '{new}' - using '{new}'.", style="yellow")
+    return new
+
+
 # ── Top-level group ───────────────────────────────────────────────────────────
 
 
@@ -140,6 +148,7 @@ def add(
         return
     cid, ref = parse_component_ref(component_id)
     registry: Registry = ctx.obj["registry"]
+    cid = _resolve_alias(registry, cid)
     component = registry.get(cid)
     if not component:
         err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
@@ -391,6 +400,7 @@ def info(ctx: click.Context, component_id: str) -> None:
     """
     cid, ref = parse_component_ref(component_id)
     registry: Registry = ctx.obj["registry"]
+    cid = _resolve_alias(registry, cid)
     c = registry.get(cid)
     if not c:
         err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
@@ -441,6 +451,7 @@ def schema(ctx: click.Context, component_id: str, fmt: str) -> None:
 
     cid, ref = parse_component_ref(component_id)
     registry: Registry = ctx.obj["registry"]
+    cid = _resolve_alias(registry, cid)
     c = registry.get(cid)
     if not c:
         err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
@@ -643,6 +654,7 @@ def update(
     """
     cid, ref = parse_component_ref(component_id)
     registry: Registry = ctx.obj["registry"]
+    cid = _resolve_alias(registry, cid)
     component = registry.get(cid)
     if not component:
         err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")
@@ -1514,6 +1526,7 @@ def _add_as_package(
         )
 
     registry: Registry = ctx.obj["registry"]
+    cid = _resolve_alias(registry, cid)
     component = registry.get(cid)
     if not component:
         err.print(f"[red]✗[/red] Component not found: [bold]{cid}[/bold]")

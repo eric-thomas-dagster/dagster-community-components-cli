@@ -8,12 +8,12 @@ or drafts), sorts newest-first, writes Parquet.
 ## Pipeline
 
 ```
-rest_api_fetcher → select_columns → datetime_parser → filter → sort → dataframe_to_parquet
+rest_api_ingestion → select_columns → datetime_parser → filter → sort → dataframe_to_parquet
 ```
 
 | # | Component | Category | Role |
 |---|---|---|---|
-| 1 | `rest_api_fetcher` | ingestion | GET `api.github.com/repos/dagster-io/dagster/releases?per_page=50` (no auth, ~60 req/hr/IP) |
+| 1 | `rest_api_ingestion` | ingestion | GET `api.github.com/repos/dagster-io/dagster/releases?per_page=50` (no auth, ~60 req/hr/IP) |
 | 2 | `select_columns` | transformation | Keep `tag_name`, `name`, `published_at`, `prerelease`, `draft`, `html_url` |
 | 3 | `datetime_parser` | transformation | Parse `published_at` ISO 8601 → tz-aware datetime in `published_dt` |
 | 4 | `filter` | transformation | `prerelease == False and draft == False` |
@@ -25,7 +25,7 @@ rest_api_fetcher → select_columns → datetime_parser → filter → sort → 
 - `dataframe_to_parquet`
 - `datetime_parser`
 - `filter`
-- `rest_api_fetcher`
+- `rest_api_ingestion`
 - `select_columns`
 - `sort`
 
@@ -73,7 +73,7 @@ attributes:
     Filter out any release where prerelease == true.
     Sort by published_at descending.
     Write the result to /tmp/dagster_releases.csv.
-  include_ids: ['rest_api_fetcher']
+  include_ids: ['rest_api_ingestion']
   llm_model: gpt-4o-mini
   api_key_env_var: OPENAI_API_KEY
   prefilter_llm: true

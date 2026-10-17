@@ -278,24 +278,29 @@ attributes:
     ...case task text with {passenger}/{flight}/{baggage_id}...
   tools:
     - name: query_baggage_db
+      description: "Query the baggage tracking DB. Args: baggage_id."
       tool_type: sql
       resource: baggage_db
       sql_template: "SELECT ... WHERE baggage_id = '{args}'"
     - name: inquire_with_airport
+      description: "Send a lookup to an airport. Args: airport_code."
       system_message: "You are an airport lookup..."
     # ... 4 more tools
   outputs:
     - name: delivery_request
+      description: "Emit when the agent organized delivery for a located bag."
       output_schema:
         baggage_id: "..."
         address: "..."
         delivery_id: "..."
         eta_hours: "..."
     - name: voucher_issued
+      description: "Emit when a care voucher was sent."
       output_schema:
         voucher_id: "..."
         amount_usd: "..."
     - name: escalation
+      description: "Emit when the case needs human review."
       output_schema:
         case_summary: "..."
         urgency: "..."
@@ -358,13 +363,26 @@ Components:
 # 3 files, ~5 lines each — the component handles the shape
 type: dagster_community_components.LlmMultiPathRouterComponent
 attributes:
+  asset_name: baggage_triage_agent
+  upstream_asset_key: baggage_reports
+  partition_type: static
+  partition_values: "c1,c2,c3"
+  partition_static_column: case_id
+  task_template: "...case task text..."
+  tools:
+    - name: query_baggage_db
+      description: "Query the baggage tracking DB. Args: baggage_id."
+      system_message: "..."
   outputs:
     - name: delivery_request
-      output_schema: {baggage_id: "...", address: "...", ...}
+      description: "Emit when the agent organized delivery for a located bag."
+      output_schema: {baggage_id: "...", address: "..."}
     - name: voucher_issued
-      output_schema: {voucher_id: "...", amount_usd: "...", ...}
+      description: "Emit when a care voucher was sent."
+      output_schema: {voucher_id: "...", amount_usd: "..."}
     - name: escalation
-      output_schema: {case_summary: "...", urgency: "...", ...}
+      description: "Emit when the case needs human review."
+      output_schema: {case_summary: "...", urgency: "..."}
 ```
 
 Plain Python:
@@ -492,28 +510,34 @@ type: dagster_community_components.LlmMultiPathRouterComponent
 attributes:
   asset_name: fraud_triage_agent
   upstream_asset_key: fraud_reports
+  use_dynamic_partitions: false      # single multi-asset sharing one dynamic partition set
   partition_type: dynamic
   dynamic_partition_name: fraud_cases
   task_template: "You are a fraud triage agent. Case {case_id}: ..."
   tools:
     - name: query_transaction_history
+      description: "Fetch a user's recent transactions. Args: user_id."
       tool_type: sql
       resource: postgres_txn_db
       sql_template: "SELECT ... FROM transactions WHERE user_id = '{args}'"
     - name: check_device_fingerprint
+      description: "Look up the device fingerprint. Args: device_id."
       tool_type: http
       http_url: "https://internal-fraud/api/device/{args}"
     # 4 more tools...
   outputs:
     - name: block_account
+      description: "Emit when the account should be blocked."
       output_schema:
         user_id: "..."
         reason: "..."
     - name: require_step_up_auth
+      description: "Emit when step-up authentication is enough."
       output_schema:
         user_id: "..."
         auth_method: "..."
     - name: escalate_to_fraud_ops
+      description: "Emit when a fraud analyst must review."
       output_schema:
         case_summary: "..."
         urgency: "..."

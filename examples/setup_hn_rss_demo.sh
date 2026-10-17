@@ -6,7 +6,7 @@
 # capture-group pair, drops the empty preamble, writes a clean CSV.
 #
 # Pipeline (5 components, all autoloaded by `dg`):
-#     rest_api_fetcher (text)  → regex_parser (split)
+#     rest_api_ingestion (text)  → regex_parser (split)
 #                              → regex_parser (extract)  → filter
 #                              → dataframe_to_csv
 
@@ -29,7 +29,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 4 distinct components into src/$PKG/components/ + defs/ (regex_parser used twice)"
-$CLI add rest_api_fetcher    --auto-install
+$CLI add rest_api_ingestion    --auto-install
 $CLI add regex_parser        --auto-install
 $CLI add filter              --auto-install
 $CLI add dataframe_to_csv    --auto-install
@@ -38,8 +38,8 @@ mkdir -p "src/$PKG/defs/regex_extract"  # only needs defs.yaml; component code i
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Fetch the RSS feed as raw XML (output_format=text wraps in 1-row df)
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: feed_xml
   api_url: https://hnrss.org/frontpage

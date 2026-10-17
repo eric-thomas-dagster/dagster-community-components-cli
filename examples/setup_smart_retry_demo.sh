@@ -117,7 +117,7 @@ PY
 # The inner SyntheticDataGeneratorComponent won't fail on its own, so
 # this run demonstrates the wrap LOADS + RUNS CLEANLY (retry logic
 # layers over inner compute). If the inner were, e.g., a
-# `rest_api_fetcher` that hit a 503, the outer SmartRetryComponent
+# `rest_api_ingestion` that hit a 503, the outer SmartRetryComponent
 # would classify it TRANSIENT via the http_status rule and issue a
 # RetryRequested; a 404 would be classified PERMANENT and raise
 # dg.Failure immediately.
@@ -237,7 +237,7 @@ Browse in the UI:
   uv run dg dev  # → http://localhost:3000 → api_call → run history
 
 Try:
-  - Wrap a real REST fetcher: SmartRetryComponent { wraps: RestApiFetcherComponent }
+  - Wrap a real REST fetcher: SmartRetryComponent { wraps: RestApiIngestionComponent }
     → 429 → transient (retries); 404 → permanent (fails immediately).
   - Add llm_fallback={"model": "gpt-4o-mini", "api_key_env_var": "OPENAI_API_KEY"} for
     day-1 LLM-classifies unmatched exceptions (opt-in, off by default).

@@ -82,7 +82,7 @@ attributes:
       3. Also extract the number of words in each post's body into a column
          called word_count (use formula: body.str.split().str.len()).
     Write the enriched posts to /tmp/posts_enriched.csv.
-  include_ids: ['rest_api_fetcher', 'file_ingestion', 'json_flatten', 'regex_parser', 'formula', 'dataframe_to_csv']
+  include_ids: ['rest_api_ingestion', 'file_ingestion', 'json_flatten', 'regex_parser', 'formula', 'dataframe_to_csv']
   llm_model: gpt-4o-mini
   api_key_env_var: OPENAI_API_KEY
   prefilter_llm: true

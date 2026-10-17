@@ -17,8 +17,8 @@ you put them in the same pipeline. Real shape: **incoming document →
 agent classifies the format → agent routes to the right RPA bot →
 bot extracts raw payload → normalize across vendor payload shapes →
 agent extracts structured fields → LLM-as-judge scores the extraction
-against a rubric → if the score is below threshold, a human approval
-gate blocks the downstream data load until an approver signs off.**
+with built-in judges → a human approval
+gate blocks the downstream data load until an approver writes an approval token.**
 
 Every step is a Dagster asset. Lineage runs end-to-end from the
 incoming document through the RPA bot output, through the LLM
@@ -62,11 +62,11 @@ work" pattern.
                                   │              {vendor, invoice_no, date, line_items[]…}
                                   ▼
                     extraction_quality_score    (llm_evaluator)
-                                  │              rubric: accuracy + completeness + format
-                                  │              overall score in [0, 1]
+                                  │              built-in judges (answer_relevance, coherence…)
+                                  │              per-judge score in [0, 1]
                                   ▼
                     invoice_approval_gate       (human_approval_gate)
-                                  │              blocks if quality_score < 0.85
+                                  │              blocks until an approval token exists
                                   │              approval via Slack quorum OR file drop
                                   ▼
                     invoice_ledger              (downstream — dbt / Snowflake / warehouse write)
@@ -97,14 +97,14 @@ Two peer checks watch the RPA layer:
 | [`blue_prism_integration`](https://dagster-community-components.vercel.app/c/blue_prism_integration) | Blue Prism Control Room processes as assets. |
 | [`power_automate_integration`](https://dagster-component-ui.vercel.app/c/power_automate_integration) | Microsoft Power Automate cloud flows as assets. |
 | [`rpa_output_parser`](https://dagster-component-ui.vercel.app/c/rpa_output_parser) | Flattens per-vendor payload shapes (`OutputArguments` / `bot_output` / `session_output` / `trigger_output`) into one downstream-friendly asset. |
-| [`llm_evaluator`](https://dagster-component-ui.vercel.app/c/llm_evaluator) | LLM-as-judge scoring the extracted fields against a rubric. Emits a numeric `quality_score` + per-metric reasoning. |
-| [`human_approval_gate`](https://dagster-component-ui.vercel.app/c/human_approval_gate) | Asset-check gate. Passes on `{approved: true}` token; blocks downstream on missing / rejected. Compatible with Slack quorum via `slack_approval_gate`. |
-| [`rpa_health_check`](https://dagster-component-ui.vercel.app/c/rpa_health_check) | Per-RPA-asset check. Fails when a bot exceeds SLA or returns empty output. Surfaces in Insights + alerts. |
-| [`rpa_queue_concurrency_lock`](https://dagster-component-ui.vercel.app/c/rpa_queue_concurrency_lock) | Global Dagster concurrency pool capping parallel bot invocations to your license count. |
+| [`llm_evaluator`](https://dagster-component-ui.vercel.app/c/llm_evaluator) | LLM-as-judge scoring the extracted fields against a rubric. Emits a 0-1 score + reason per built-in evaluation (`score.<name>` metadata). |
+| [`human_approval_gate`](https://dagster-component-ui.vercel.app/c/human_approval_gate) | Approval-token gate asset. Passes on `{approved: true}` token; blocks downstream on missing / rejected. Compatible with Slack quorum via `slack_approval_gate`. |
+| [`rpa_health_check`](https://dagster-component-ui.vercel.app/c/rpa_health_check) | Per-RPA-asset check. Fails when a bot's latest run is stale, not in a success status, or returned empty output. Surfaces in Insights + alerts. |
+| [`rpa_queue_concurrency_lock`](https://dagster-component-ui.vercel.app/c/rpa_queue_concurrency_lock) | Event-log-backed concurrency pool capping parallel bot invocations to your license count. |
 
 ## Live output — one document, end-to-end
 
-Actual run trace for a scanned-image invoice that scores below the
+Illustrative run trace (shape, not captured output) for a scanned-image invoice that scores below the
 quality threshold and needs a human sign-off:
 
 ```
@@ -186,9 +186,11 @@ quality threshold and needs a human sign-off:
 [ASSET]   invoice_ledger  RUN_SUCCESS
 ```
 
-Every log line is either a real API call the RPA integration makes or
-a real LLM call the agentic pipeline dispatches. Every `[ASSET]`
-line corresponds to a queryable materialization in the Dagster UI.
+The trace is a sketch of the intended flow: log formats, scores, the
+threshold-driven `[GATE]` decision and the `corrections` token field are
+illustrative. As shipped, the gate is token-only (see the gate notes
+below) and `conditional_route` picks a specialist rather than dispatching
+to an asset key.
 
 ## The classify + conditional_route pattern
 
@@ -200,46 +202,82 @@ dispatches to the appropriate RPA asset key downstream.
 # defs/invoice_router/defs.yaml
 type: dagster_community_components.AgenticPipelineComponent
 attributes:
-  name: invoice_router
+  asset_name_prefix: invoice            # steps become invoice_format, invoice_route
+  group_name: invoice_routing
   source:
-    from: raw_invoices
+    kind: upstream_asset
+    upstream_asset_key: raw_invoices
   steps:
-    - id: invoice_format
+    - id: format
       op: classify
       labels: [pdf, scanned_image, edi, email]
       include_rationale: true
-      llm:
-        model: gpt-4o-mini
-        api_key_env_var: OPENAI_API_KEY
-        system_prompt: |
-          You classify incoming invoice documents by format.
-          Read the body_text + attachment_kind. Pick ONE label.
+      model: gpt-4o-mini
+      api_key_env_var: OPENAI_API_KEY
+      system_prompt: |
+        You classify incoming invoice documents by format.
+        Read the body_text + attachment_kind. Pick ONE label.
 
-    - id: invoice_route
+    - id: route
       op: conditional_route
-      rules:
-        - when: 'invoice_format.text == "pdf"'
-          then: uipath_extract_standard_pdf   # asset key downstream
-        - when: 'invoice_format.text == "scanned_image"'
+      source: format
+      conditions:
+        - when: {equals: pdf}
+          then: uipath_standard_pdf
+        - when: {equals: scanned_image}
           then: aa_ocr_scanned_image
-        - when: 'invoice_format.text == "edi"'
+        - when: {equals: edi}
           then: bp_edi_parser
-        - when: 'invoice_format.text == "email"'
+        - when: {equals: email}
           then: pa_email_extract
+      default: pa_email_extract
+      specialists:
+        - name: uipath_standard_pdf
+          description: "Prepare the UiPath standard-PDF extraction job arguments."
+          model: gpt-4o-mini
+          api_key_env_var: OPENAI_API_KEY
+          system_prompt: "Return the JSON input arguments for the UiPath standard PDF invoice process."
+        - name: aa_ocr_scanned_image
+          description: "Prepare the Automation Anywhere OCR bot input."
+          model: gpt-4o-mini
+          api_key_env_var: OPENAI_API_KEY
+          system_prompt: "Return the JSON botInput for the scanned-image OCR bot."
+        - name: bp_edi_parser
+          description: "Prepare the Blue Prism EDI parser session inputs."
+          model: gpt-4o-mini
+          api_key_env_var: OPENAI_API_KEY
+          system_prompt: "Return the JSON inputs for the EDI parser process."
+        - name: pa_email_extract
+          description: "Prepare the Power Automate email-extraction flow trigger."
+          model: gpt-4o-mini
+          api_key_env_var: OPENAI_API_KEY
+          system_prompt: "Return the JSON trigger payload for the email extraction flow."
+  outputs:
+    assets: [format, route]
 ```
 
-Every `then:` value is an **asset key** — the target asset materializes
-only when the rule fires, so downstream you only pay for the RPA bot
-you actually need to invoke. Unmatched branches skip cleanly and show
-up as skipped in the Dagster UI's Runs view. Because
-`conditional_route` is deterministic (no router LLM), it costs $0,
-tests as a unit, and reviews cleanly in a diff.
+`conditional_route` is a deterministic picker (`equals` / `contains` /
+`regex` / `jsonpath` on the upstream step text, first match wins, `default`
+required). It chooses which **specialist** (a small LLM call with its own
+system prompt) answers, with no router LLM, so the pick itself costs $0
+and tests as a unit. It does **not** by itself decide which downstream
+asset materializes: the bot assets are separate integration components, and
+the routing decision is available to them as the `invoice_route` asset's
+text/metadata. If you need a branch asset to be skipped for unpicked
+branches, use `LlmMultiPathRouterComponent`, which emits only the outputs
+the classifier picks (see [`agentic_router_plain.md`](agentic_router_plain.md)).
 
 ## The rpa_output_parser normalization step
 
 Each RPA vendor puts the useful payload in a differently-named field
-on a differently-shaped response. `rpa_output_parser` collapses the
-difference into one downstream-friendly asset.
+on a differently-shaped response. `rpa_output_parser` reads each upstream
+bot's `output_payload` metadata, picks the vendor's payload field using a
+built-in map keyed on the payload's `vendor` value (UiPath, Automation
+Anywhere, Blue Prism, Power Automate), and emits one row per upstream with
+the columns `vendor, run_id, status, asset_key, materialized_at,
+output_field, raw_payload`. The vendor map is built in and there is no
+per-field canonical-schema mapping: downstream steps (the `extract` step
+below) do the field-level normalization.
 
 ```yaml
 # defs/invoice_output_normalized/defs.yaml
@@ -251,24 +289,13 @@ attributes:
     - aa_ocr_scanned_image
     - bp_edi_parser
     - pa_email_extract
-  vendor_field: vendor                # read from each upstream's output_payload
-  # per-vendor field-path map — where the payload lives in each vendor's response
-  vendor_output_paths:
-    uipath:              output_arguments        # UiPath OutputArguments dict
-    automation_anywhere: bot_output              # AA bot output dict
-    blue_prism:          session_output          # BP session dict
-    power_automate:      trigger_output          # PA cloud flow output
-  # optional canonicalization — map raw vendor keys to a common shape
-  canonical_schema:
-    invoice_id:      "$.invoice_id | $.invoiceId | $.InvoiceID"
-    extracted_text:  "$.text | $.raw_text | $.OcrText"
-    tables:          "$.tables | $.lineItems"
-    confidence:      "$.confidence | $.OcrConfidence"
+  group_name: rpa_normalized
+  fail_on_missing_upstream: false     # true -> raise if an upstream bot never ran
 ```
 
 Downstream steps read from **one asset**, not four. Swapping a bot
 vendor (`aa_ocr_scanned_image` → a new `hp_ocr_scanned_image`) is a
-one-line edit here — everything below stays untouched.
+one-line edit to `upstream_asset_keys` — everything below stays untouched.
 
 ## The LLM extract + judge + HITL loop
 
@@ -280,15 +307,16 @@ score is below threshold.
 # defs/invoice_extraction/defs.yaml
 type: dagster_community_components.AgenticPipelineComponent
 attributes:
-  name: invoice_extraction
+  asset_name_prefix: invoice            # step `extracted_fields` -> invoice_extracted_fields
+  group_name: invoice_extraction
   source:
-    from: invoice_output_normalized
+    kind: upstream_asset
+    upstream_asset_key: invoice_output_normalized
   steps:
-    - id: invoice_extracted_fields
+    - id: extracted_fields
       op: extract
-      llm:
-        model: gpt-4o                  # bump to gpt-4o for structured accuracy
-        api_key_env_var: OPENAI_API_KEY
+      model: gpt-4o                    # bump to gpt-4o for structured accuracy
+      api_key_env_var: OPENAI_API_KEY
       output_schema:
         type: object
         required: [vendor, invoice_number, invoice_date, currency, line_items, total]
@@ -307,6 +335,8 @@ attributes:
                 qty:         {type: [number, "null"]}
                 unit_price:  {type: [number, "null"]}
           total: {type: number}
+  outputs:
+    assets: [extracted_fields]
 ```
 
 ```yaml
@@ -315,20 +345,19 @@ type: dagster_community_components.LLMEvaluatorComponent
 attributes:
   asset_name: extraction_quality_score
   upstream_asset_key: invoice_extracted_fields
-  judge:
-    model: gpt-4o-mini
-    api_key_env_var: OPENAI_API_KEY
-  metrics:
-    - name: accuracy
-      prompt: "Do the extracted vendor + invoice_number + total match the source text?"
-      weight: 0.5
-    - name: completeness
-      prompt: "Are all line_items fully populated (no nulls in description / qty / unit_price)?"
-      weight: 0.3
-    - name: format
-      prompt: "Is the invoice_date parseable? Is currency a valid ISO code?"
-      weight: 0.2
+  answer_jsonpath: text               # the extract step's JSON text
+  evaluations:                        # built-in judges; each is one LLM call
+    - answer_relevance
+    - coherence
+  model: gpt-4o-mini
+  api_key_env_var: OPENAI_API_KEY
 ```
+
+`llm_evaluator` runs a fixed menu of judges (`answer_relevance`,
+`groundedness`, `context_relevance`, `harmfulness`, `helpfulness`,
+`coherence`), each scored 0-1 with a reason, and surfaces every score as
+`score.<name>` metadata. Custom rubric prompts and weighted overall scores
+are not supported by this component.
 
 ```yaml
 # defs/invoice_approval_gate/defs.yaml
@@ -336,12 +365,18 @@ type: dagster_community_components.HumanApprovalGateComponent
 attributes:
   asset_name: invoice_approval_gate
   upstream_asset_key: invoice_extracted_fields
-  # gate on the judge's numeric score — only pause if the extraction looks shaky
-  auto_pass_when: "extraction_quality_score.overall >= 0.85"
-  approval_dir: approvals/
-  # optional: allow the approver to patch the extraction inline
-  accepts_corrections: true
+  approval_dir: /tmp/approvals
+  default_approval_key: default       # unpartitioned: reads /tmp/approvals/default.json
+  deps: [extraction_quality_score]    # lineage: the approver reviews the judge scores first
 ```
+
+The gate is token-based: it fails with `approval_pending` until
+`<approval_dir>/<partition_key>.json` contains `{"approved": true, ...}`, and
+passes the upstream payload through once it does. It has no score-threshold
+auto-pass and no inline corrections: the approver reads the judge's
+`score.*` metadata on `extraction_quality_score` and decides whether to write
+the token. (A threshold-driven auto-approve would need a small custom asset
+in front of the gate.)
 
 For Slack quorum sign-off instead of file drop, drop a
 `SlackApprovalGateComponent` peer alongside the gate and let its
@@ -356,52 +391,79 @@ Two operational safeguards on the RPA layer, no custom Python.
 **License-cap concurrency.** RPA bot licenses are per-seat, and
 running more concurrent bots than you own licenses either queues in
 the vendor Control Room or silently drops jobs. `rpa_queue_concurrency_lock`
-declares a Dagster global concurrency pool tied to each vendor:
+keeps an event-log-backed concurrency pool per vendor:
 
 ```yaml
-# defs/rpa_concurrency/defs.yaml
+# defs/rpa_concurrency/defs.yaml  (one instance per pool; `---` separates documents)
 type: dagster_community_components.RPAQueueConcurrencyLockComponent
 attributes:
-  pools:
-    - key: uipath_unattended
-      limit: 8                   # 8 unattended licenses
-      applies_to_asset_keys: [uipath_extract_standard_pdf]
-    - key: aa_bots
-      limit: 4                   # 4 AA bot runners
-      applies_to_asset_keys: [aa_ocr_scanned_image]
-    - key: bp_process_pool
-      limit: 6
-      applies_to_asset_keys: [bp_edi_parser]
-    - key: pa_flow_runs
-      limit: 20                  # PA cloud flow API concurrency
-      applies_to_asset_keys: [pa_email_extract]
+  asset_name: uipath_unattended_slot
+  pool_key: uipath_unattended
+  max_concurrent: 8                  # 8 unattended licenses
+  on_capacity: wait                  # or skip | fail
+---
+type: dagster_community_components.RPAQueueConcurrencyLockComponent
+attributes:
+  asset_name: aa_bot_slot
+  pool_key: aa_bots
+  max_concurrent: 4                  # 4 AA bot runners
+---
+type: dagster_community_components.RPAQueueConcurrencyLockComponent
+attributes:
+  asset_name: bp_process_slot
+  pool_key: bp_process_pool
+  max_concurrent: 6
+---
+type: dagster_community_components.RPAQueueConcurrencyLockComponent
+attributes:
+  asset_name: pa_flow_slot
+  pool_key: pa_flow_runs
+  max_concurrent: 20                 # PA cloud flow API concurrency
 ```
 
-Dagster's scheduler enforces the cap across every run in flight —
-including backfills and sensor-triggered launches. No bot ever runs
-above the licensed limit.
+Each instance emits one slot-holding asset (`asset_name`) that acquires a
+slot in the named pool, and every asset sharing a `pool_key` shares one
+counter. Pool state is kept as acquire/release observations in the Dagster
+event log (stale acquires expire after `ttl_seconds`), so it counts across
+runs, backfills and sensor-launched runs. When the pool is full the step
+polls (`wait`), skips, or fails per `on_capacity`. Attach it to a bot with
+`upstream_asset_key`; it does not wrap other assets by name.
 
-**Per-bot health check.** `rpa_health_check` emits an asset check on
-each RPA asset — fails when the bot exceeded a wall-clock SLA or
-returned an empty payload:
+**Per-bot health check.** `rpa_health_check` attaches an asset check to an
+RPA asset: it fails when the latest materialization is older than
+`max_age_hours`, its `status` is not a success value, or (optionally) the
+output payload is empty:
 
 ```yaml
-# defs/rpa_health/defs.yaml
+# defs/rpa_health/defs.yaml  (one instance per bot asset)
 type: dagster_community_components.RPAHealthCheckComponent
 attributes:
-  checks:
-    - asset_key: uipath_extract_standard_pdf
-      max_duration_seconds: 90
-      require_non_empty_output: true
-    - asset_key: aa_ocr_scanned_image
-      max_duration_seconds: 60
-      require_non_empty_output: true
-    - asset_key: bp_edi_parser
-      max_duration_seconds: 45
-      require_non_empty_output: true
-    - asset_key: pa_email_extract
-      max_duration_seconds: 30
-      require_non_empty_output: true
+  target_asset: uipath_extract_standard_pdf
+  check_name: uipath_pdf_health
+  max_age_hours: 6.0
+  require_non_empty_output: true
+  severity: ERROR                    # ERROR blocks downstream, WARN only flags
+---
+type: dagster_community_components.RPAHealthCheckComponent
+attributes:
+  target_asset: aa_ocr_scanned_image
+  check_name: aa_ocr_health
+  max_age_hours: 6.0
+  require_non_empty_output: true
+---
+type: dagster_community_components.RPAHealthCheckComponent
+attributes:
+  target_asset: bp_edi_parser
+  check_name: bp_edi_health
+  max_age_hours: 6.0
+  require_non_empty_output: true
+---
+type: dagster_community_components.RPAHealthCheckComponent
+attributes:
+  target_asset: pa_email_extract
+  check_name: pa_email_health
+  max_age_hours: 6.0
+  require_non_empty_output: true
 ```
 
 A failed asset check surfaces in the Dagster UI + Insights + any

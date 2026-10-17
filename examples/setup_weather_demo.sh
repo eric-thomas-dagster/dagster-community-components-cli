@@ -6,7 +6,7 @@
 # a "metric per day" matrix, writes a CSV.
 #
 # Pipeline (5 components, all autoloaded by `dg`):
-#     rest_api_fetcher → datetime_parser → running_total → transpose → dataframe_to_csv
+#     rest_api_ingestion → datetime_parser → running_total → transpose → dataframe_to_csv
 
 set -euo pipefail
 
@@ -27,7 +27,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 5 community components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher    --auto-install
+$CLI add rest_api_ingestion    --auto-install
 $CLI add datetime_parser     --auto-install
 $CLI add running_total       --auto-install
 $CLI add transpose           --auto-install
@@ -35,8 +35,8 @@ $CLI add dataframe_to_csv    --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: weather_raw
   api_url: "https://api.open-meteo.com/v1/forecast?latitude=40.71&longitude=-74.01&daily=temperature_2m_max,temperature_2m_min,precipitation_sum&timezone=UTC&past_days=14&forecast_days=1"

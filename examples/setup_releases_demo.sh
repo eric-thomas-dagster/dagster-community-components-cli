@@ -6,7 +6,7 @@
 # writes a Parquet file.
 #
 # Pipeline (6 components, all autoloaded by `dg`):
-#     rest_api_fetcher → select_columns → datetime_parser → filter → sort → dataframe_to_parquet
+#     rest_api_ingestion → select_columns → datetime_parser → filter → sort → dataframe_to_parquet
 
 set -euo pipefail
 
@@ -27,7 +27,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 6 community components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher       --auto-install
+$CLI add rest_api_ingestion       --auto-install
 $CLI add select_columns         --auto-install
 $CLI add datetime_parser        --auto-install
 $CLI add filter                 --auto-install
@@ -36,8 +36,8 @@ $CLI add dataframe_to_parquet   --auto-install
 
 echo ">>> Writing demo defs.yaml for each component"
 
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: releases_raw
   api_url: "https://api.github.com/repos/dagster-io/dagster/releases?per_page=50"

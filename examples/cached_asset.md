@@ -65,7 +65,7 @@ With `wraps:`, `CachedAssetComponent` stacks over **any DCC component** with zer
 
 - `CachedAssetComponent { wraps: SnowflakeQueryComponent }` — cache a warehouse query result
 - `CachedAssetComponent { wraps: LLMPromptExecutorComponent }` — cache LLM responses (huge cost win)
-- `CachedAssetComponent { wraps: RestApiFetcherComponent }` — cache external API responses
+- `CachedAssetComponent { wraps: RestApiIngestionComponent }` — cache external API responses
 - `CachedAssetComponent { wraps: DataframeFromSqlComponent }` — cache SQL query results
 - `CachedAssetComponent { wraps: SyntheticDataGeneratorComponent }` — the demo shape
 

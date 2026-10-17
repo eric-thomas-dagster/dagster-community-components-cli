@@ -37,7 +37,6 @@ attributes:
   database_url_env_var: DATABASE_URL         # SQLAlchemy URL
   table_name: raw_orders
   max_messages: 100
-  poll_timeout_seconds: 5
   if_exists: append                          # 'append' | 'replace' | 'fail'
 ```
 

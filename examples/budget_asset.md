@@ -72,7 +72,7 @@ With `wraps:`, `BudgetAssetComponent` stacks over **any DCC component** with zer
 - `BudgetAssetComponent { wraps: LLMPromptExecutorComponent }` — budget an LLM call
 - `BudgetAssetComponent { wraps: SnowflakeQueryComponent }` — budget a Snowflake query (warehouse credits)
 - `BudgetAssetComponent { wraps: BigqueryQueryComponent }` — budget a BQ query (slot-seconds)
-- `BudgetAssetComponent { wraps: RestApiFetcherComponent }` — budget metered API pulls
+- `BudgetAssetComponent { wraps: RestApiIngestionComponent }` — budget metered API pulls
 - `BudgetAssetComponent { wraps: SyntheticDataGeneratorComponent }` — the demo shape
 
 ## Components used

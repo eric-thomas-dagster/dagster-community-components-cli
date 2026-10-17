@@ -42,7 +42,10 @@ import pandas as pd
 import dagster as dg
 
 # DuckDB SQLAlchemy URL for sql_transform component
-os.environ.setdefault("SQL_DB_URL", "duckdb:///$PROJECT_ABS/out/transformations_demo.duckdb")
+from pathlib import Path
+# <project>/src/<pkg>/defs/source_data/__init__.py -> project root is parents[4]
+# (quoted heredoc: shell variables are not expanded inside this file)
+os.environ.setdefault("SQL_DB_URL", f"duckdb:///{Path(__file__).resolve().parents[4]}/out/transformations_demo.duckdb")
 
 
 @dg.asset(group_name="ingest")

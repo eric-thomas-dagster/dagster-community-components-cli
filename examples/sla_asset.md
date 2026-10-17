@@ -78,7 +78,7 @@ With `wraps:`, `SlaAssetComponent` stacks over **any DCC component** with zero u
 - `SlaAssetComponent { wraps: BigqueryQueryComponent }` — SLA a warehouse query
 - `SlaAssetComponent { wraps: SnowflakeQueryComponent }` — SLA a Snowflake CTAS
 - `SlaAssetComponent { wraps: LLMPromptExecutorComponent }` — SLA an LLM call
-- `SlaAssetComponent { wraps: RestApiFetcherComponent }` — SLA an external API pull
+- `SlaAssetComponent { wraps: RestApiIngestionComponent }` — SLA an external API pull
 - `SlaAssetComponent { wraps: SyntheticDataGeneratorComponent }` — the demo shape
 
 ## Components used

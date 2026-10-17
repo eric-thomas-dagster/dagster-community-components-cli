@@ -80,13 +80,13 @@ CANONICAL_QUERIES: list[tuple[str, list[str]]] = [
     ("s3 parquet", ["s3_parquet_io_manager"]),
     # ─── Concepts / patterns ───────────────────────────────────────
     ("upsert", [
-        "polars_pipeline", "warehouse_pipeline", "rest_api_fetcher",
+        "polars_pipeline", "warehouse_pipeline", "rest_api_ingestion",
         "kafka_to_database_asset", "database_replication", "delta_ingestion",
         "adls_to_database_asset",
     ]),
-    ("partition rewrite", ["polars_pipeline", "ml_pipeline", "rest_api_fetcher"]),
-    ("idempotent write", ["polars_pipeline", "ml_pipeline", "warehouse_pipeline", "rest_api_fetcher"]),
-    ("backfill", ["polars_pipeline", "ml_pipeline", "warehouse_pipeline", "rest_api_fetcher"]),
+    ("partition rewrite", ["polars_pipeline", "ml_pipeline", "rest_api_ingestion"]),
+    ("idempotent write", ["polars_pipeline", "ml_pipeline", "warehouse_pipeline", "rest_api_ingestion"]),
+    ("backfill", ["polars_pipeline", "ml_pipeline", "warehouse_pipeline", "rest_api_ingestion"]),
     ("human in the loop", ["human_approval_gate", "slack_approval_gate"]),
     ("hitl", ["human_approval_gate", "slack_approval_gate", "teams_approval_gate"]),
     ("quality gate", ["provider_ab_evaluator", "llm_evaluator", "llm_judge"]),
@@ -108,7 +108,7 @@ CANONICAL_QUERIES: list[tuple[str, list[str]]] = [
     ("rag", ["rag_pipeline"]),
     ("retrieval augmented", ["rag_pipeline"]),
     # ─── Ingest / sink patterns ────────────────────────────────────
-    ("rest api", ["rest_api_fetcher"]),
+    ("rest api", ["rest_api_ingestion"]),
     ("oauth rest", ["oauth_rest_ingestion"]),
     ("openapi", ["openapi_asset"]),
     ("graphql", ["graphql_asset"]),
@@ -119,8 +119,8 @@ CANONICAL_QUERIES: list[tuple[str, list[str]]] = [
     ("github", ["github_ingestion"]),
     ("shopify", ["shopify_ingestion"]),
     # ─── Use-case (docs vocab, not code vocab) ─────────────────────
-    ("freight carrier", ["rest_api_fetcher"]),
-    ("per partition api", ["rest_api_fetcher"]),
+    ("freight carrier", ["rest_api_ingestion"]),
+    ("per partition api", ["rest_api_ingestion"]),
     ("nl to sql", ["databricks_genie_query"]),
     ("push metrics", ["dataframe_to_prometheus"]),
     # ─── Storage / persistence ─────────────────────────────────────

@@ -64,7 +64,7 @@ attributes:
 type: dagster_component_templates.DataframeToTableComponent
 attributes:
   database_url_env_var: HANA_URL          # set by an upstream op using sap_hana resource
-  table_name: dagster_aggregations
+  table: dagster_aggregations
   if_exists: replace
 ```
 

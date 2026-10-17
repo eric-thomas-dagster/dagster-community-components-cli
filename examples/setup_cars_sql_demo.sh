@@ -7,7 +7,7 @@
 # DB needed, no auth, just a file.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
-#     rest_api_fetcher → datetime_parser → formula → dataframe_to_table
+#     rest_api_ingestion → datetime_parser → formula → dataframe_to_table
 
 set -euo pipefail
 
@@ -26,7 +26,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 4 community components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher      --auto-install
+$CLI add rest_api_ingestion      --auto-install
 $CLI add datetime_parser       --auto-install
 $CLI add formula               --auto-install
 $CLI add dataframe_to_table    --auto-install
@@ -34,8 +34,8 @@ $CLI add dataframe_to_table    --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Ingest — vega's classic cars.json (it's a list of records, no json_path needed)
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: cars_raw
   api_url: https://raw.githubusercontent.com/vega/vega-datasets/main/data/cars.json
@@ -75,7 +75,7 @@ type: $PKG.components.dataframe_to_table.component.DataframeToTableComponent
 attributes:
   asset_name: cars_table
   upstream_asset_key: cars_with_decade
-  table_name: cars
+  table: cars
   database_url_env_var: DATABASE_URL
   if_exists: replace
   drop_timezone: true

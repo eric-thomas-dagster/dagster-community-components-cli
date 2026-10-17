@@ -49,13 +49,17 @@ echo ">>> Writing inline source asset"
 mkdir -p "src/$PKG/defs/source_data"
 cat > "src/$PKG/defs/source_data/__init__.py" <<'PYEOF'
 import os
+from pathlib import Path
 import pandas as pd
 import dagster as dg
 
-# SQLAlchemy URL for the dataframe_to_table sink (SQLite is dependency-free)
+# SQLAlchemy URL for the dataframe_to_table sink (SQLite is dependency-free).
+# This file lives at <project>/src/<pkg>/defs/source_data/__init__.py, so the
+# project root is parents[4] (the heredoc is quoted: no shell expansion here).
+_PROJECT_ROOT = Path(__file__).resolve().parents[4]
 os.environ.setdefault(
     "ORDERS_DB_URL",
-    "sqlite:///$PROJECT_ABS/out/local_sinks_demo/orders.db",
+    f"sqlite:///{_PROJECT_ROOT}/out/local_sinks_demo/orders.db",
 )
 
 
@@ -122,7 +126,7 @@ attributes:
   asset_name: orders_table
   upstream_asset_key: orders
   database_url_env_var: ORDERS_DB_URL
-  table_name: orders
+  table: orders
   if_exists: replace
   group_name: sinks
 EOF

@@ -6,7 +6,7 @@
 # (dot paths) and json_path_extractor (JSONPath), writes a flat CSV.
 #
 # Pipeline (4 components, all autoloaded by `dg`):
-#     rest_api_fetcher → nested_field_extractor → json_path_extractor → dataframe_to_csv
+#     rest_api_ingestion → nested_field_extractor → json_path_extractor → dataframe_to_csv
 
 set -euo pipefail
 
@@ -27,7 +27,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo ">>> Installing 4 community components into src/$PKG/components/ + defs/"
-$CLI add rest_api_fetcher          --auto-install
+$CLI add rest_api_ingestion          --auto-install
 $CLI add nested_field_extractor    --auto-install
 $CLI add json_path_extractor       --auto-install
 $CLI add dataframe_to_csv          --auto-install
@@ -35,8 +35,8 @@ $CLI add dataframe_to_csv          --auto-install
 echo ">>> Writing demo defs.yaml for each component"
 
 # 1. Search GitHub repos for "orchestrator" — items[] contains nested objects
-cat > "src/$PKG/defs/rest_api_fetcher/defs.yaml" <<EOF
-type: $PKG.components.rest_api_fetcher.component.RestApiFetcherComponent
+cat > "src/$PKG/defs/rest_api_ingestion/defs.yaml" <<EOF
+type: $PKG.components.rest_api_ingestion.component.RestApiIngestionComponent
 attributes:
   asset_name: repos_raw
   api_url: "https://api.github.com/search/repositories?q=orchestrator&per_page=10&sort=stars"

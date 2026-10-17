@@ -25,8 +25,9 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 mkdir -p $PROJECT_ABS/out/window_demo
 echo ">>> Generating synthetic stock prices"
-uv run python - <<'PY'
-import csv, random
+PROJECT_ABS="$PROJECT_ABS" uv run python - <<'PY'
+import csv, os, random
+PROJECT_ABS = os.environ["PROJECT_ABS"]
 random.seed(42)
 rows = []
 prices = {"AAPL": 180.0, "GOOG": 140.0, "MSFT": 380.0}
@@ -35,7 +36,7 @@ for day in range(1, 11):
         # random walk
         prices[sym] = round(p + random.uniform(-3, 3), 2)
         rows.append({"symbol": sym, "trade_date": f"2025-04-{day:02d}", "close": prices[sym]})
-with open("$PROJECT_ABS/out/window_demo/prices.csv", "w", newline="") as f:
+with open(f"{PROJECT_ABS}/out/window_demo/prices.csv", "w", newline="") as f:
     w = csv.DictWriter(f, fieldnames=rows[0].keys())
     w.writeheader(); w.writerows(rows)
 print(f"wrote {len(rows)} rows")

@@ -41,12 +41,12 @@ Two shipping shapes cover the ladder:
 |  | Tier | Dagster | Prefect equivalent |
 |---|---|---|---|
 | 1 | Local FS (dev)         | `@cached(cache_dir="/tmp/cache")`                                 | `@task(persist_result=True, result_storage=LocalFileSystem())` |
-| 2 | Local-with-IOM (prod-lite) | `FilesystemTaskCache(base_path="/data/cache")` via `task_asset` | `@task(result_storage=LocalFileSystem(basepath="/data/cache"))` |
-| 3 | Remote (prod)          | `IOManagerBackedTaskCache(io_manager_key="s3_pickle_io_manager")` via `task_asset` | `@task(result_storage=S3Bucket(...))` |
+| 2 | Local-with-IOM (prod-lite) | `FilesystemTaskCache(base_dir="/data/cache")` on the `@task` layer fn | `@task(result_storage=LocalFileSystem(basepath="/data/cache"))` |
+| 3 | Remote (prod)          | `IOManagerBackedTaskCache(S3PickleIOManager(...))` on the `@task` layer fn | `@task(result_storage=S3Bucket(...))` |
 
 Same vocabulary, three lines of YAML each, and the pattern doesn't
 change shape as you climb the ladder — you swap the `cache_dir` value
-or point at a different `io_manager_key`.
+or hand `IOManagerBackedTaskCache` a different IO manager.
 
 ## Tier 1 — local FS with `@cached`, the "three-line" default
 
@@ -146,28 +146,41 @@ Two backends ship in the box:
 
 ### Wiring a remote task cache
 
-Two YAML files:
+The cache binding lives on the `@task` decorator of a layer function (Python),
+not in YAML: `TaskAssetComponent` only takes `layers:` (ordered `name` +
+`compute: "module:fn"` pairs) and an optional `terminal:` reducer. The layer
+functions you point it at carry the cache.
 
-```yaml
-# defs/cache_io_manager/defs.yaml
-# Wire an S3-backed pickle IO manager as the cache backend.
-type: dagster_community_components.S3PickleIOManagerComponent
-attributes:
-  s3_bucket: my-prod-cache
-  s3_prefix: dagster-task-cache/
-  io_manager_key: cache_io_manager
+```python
+# my_project/features.py
+from dagster_community_components.task_asset import task, IOManagerBackedTaskCache
+from dagster_aws.s3 import S3PickleIOManager, S3Resource
+
+CACHE = IOManagerBackedTaskCache(
+    S3PickleIOManager(s3_resource=S3Resource(), s3_bucket="my-prod-cache", s3_prefix="dagster-task-cache/"),
+    ttl_seconds=3600,
+)
+
+def scan(context):
+    # first layer: (context) -> [(name, spec), ...]
+    return [(f"item_{i}", {"n": i}) for i in range(10)]
+
+@task(cache=CACHE, cache_key_fn=lambda ctx, spec: str(spec["n"]))
+def build_features(context, spec):
+    # last layer: (context, spec) -> value  (cached per item)
+    return {"n": spec["n"], "feature": spec["n"] ** 2}
 ```
 
 ```yaml
 # defs/expensive_features/defs.yaml
-# Task-asset with an IO-manager-backed cache.
 type: dagster_community_components.TaskAssetComponent
 attributes:
   asset_name: expensive_features
-  cache:
-    kind: io_manager_backed
-    io_manager_key: cache_io_manager
-  task_fn: "my_project.features:build_features"
+  layers:
+    - name: scan
+      compute: "my_project.features:scan"
+    - name: build_features
+      compute: "my_project.features:build_features"
 ```
 
 Callouts:
@@ -176,7 +189,7 @@ Callouts:
   automatically.** Anywhere the IO manager can write is a cache backend
   — S3, GCS, ADLS, DuckDB, Snowflake, filesystem, custom. Swap
   `S3PickleIOManagerComponent` for `GCSPickleIOManagerComponent` or
-  `AzureBlobPickleIOManagerComponent` and the cache silently moves.
+  `ADLS2PickleIOManager` and the cache silently moves.
 - **Compared to Prefect's `result_storage=S3Bucket(...)` block** —
   same net effect, but any DCC IO manager works without a per-backend
   wrapper. There are 30+ in the registry today; every one of them is a
@@ -224,7 +237,7 @@ def enriched_urls(context):
 | Custom cache-key                      | `cache_key_fn=my_fn`                             | `key_fn: "my_project:my_fn"`  (module:callable ref)                            |
 | Force one-run refresh                 | `.submit(refresh_cache=True)`                    | `--tags refresh_cache=true`                                                    |
 | Result persistence                    | `persist_result=True`                            | Cache file / IO manager (always persistent)                                    |
-| Remote result storage                 | `result_storage=S3Bucket(...)`                   | `IOManagerBackedTaskCache(io_manager_key=...)`                                 |
+| Remote result storage                 | `result_storage=S3Bucket(...)`                   | `@task(cache=IOManagerBackedTaskCache(<io_manager>))` (Python, on the layer fn) |
 | Log prints                            | `log_prints=True`                                | `@log_prints` companion decorator                                              |
 | On-completion / on-failure hooks      | `on_completion=[fn]`                             | `@on_hooks` companion decorator                                                |
 | Fan-out (dynamic per-item)            | `.map()`                                         | `task_asset` layers OR `@task` calls inside a `@task_asset`                    |

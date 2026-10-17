@@ -76,7 +76,7 @@ attributes:
   asset_name: orders_in_oracle
   upstream_asset_key: synthetic_orders
   database_url_env_var: ORACLE_URL   # oracle+oracledb://user:pass@host:port/?service_name=...
-  table_name: orders
+  table: orders
   if_exists: replace
 ```
 

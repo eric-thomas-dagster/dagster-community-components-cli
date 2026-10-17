@@ -69,10 +69,11 @@ Chain `dataframe_to_snowflake` downstream.
 ```yaml
 type: dagster_community_components.CognosWorkspaceComponent
 attributes:
-  base_url_env_var: COGNOS_URL
-  username_env_var: COGNOS_USER
-  password_env_var: COGNOS_PASSWORD
-  namespace_env_var: COGNOS_NAMESPACE
+  workspace:
+    base_url: "{{ env.COGNOS_URL }}"
+    username: "{{ env.COGNOS_USER }}"
+    password: "{{ env.COGNOS_PASSWORD }}"
+    namespace: "{{ env.COGNOS_NAMESPACE }}"
   folder_ids: ["/content/folder[@name='Finance']"]
   report_selector:
     by_pattern: ["Monthly*", "Quarterly*"]

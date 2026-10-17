@@ -75,7 +75,7 @@ Before `wraps:`, YAML users had to write Python callables and reference them via
 
 With `wraps:`, decorator components stack over **any DCC component** with zero user Python — defensive infrastructure that runs on every materialization even when the inner has nothing sensitive to scrub:
 
-- `SensitiveAssetComponent { wraps: RestApiFetcherComponent }` — API-key headers accidentally logged? Scrubbed.
+- `SensitiveAssetComponent { wraps: RestApiIngestionComponent }` — API-key headers accidentally logged? Scrubbed.
 - `SensitiveAssetComponent { wraps: SnowflakeQueryComponent }` — query results containing SSNs accidentally logged? Scrubbed.
 - `SensitiveAssetComponent { wraps: LLMPromptExecutorComponent }` — model prompt with a bearer token accidentally logged? Scrubbed.
 - `SensitiveAssetComponent { wraps: DataframeFromCsv }` — CSV field values accidentally logged? Scrubbed.

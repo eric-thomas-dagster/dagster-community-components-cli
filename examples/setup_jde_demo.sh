@@ -177,10 +177,11 @@ YAML
 cat > "src/$PKG/defs/jde_orchestrator_workspace/defs.yaml" <<YAML
 type: dagster_community_components.JDEOrchestratorWorkspaceComponent
 attributes:
-  base_url_env_var: JDE_AIS_URL
-  username_env_var: JDE_USER
-  password_env_var: JDE_PASSWORD
-  verify_ssl: false
+  workspace:
+    base_url: "{{ env.JDE_AIS_URL }}"
+    username: "{{ env.JDE_USER }}"
+    password: "{{ env.JDE_PASSWORD }}"
+    verify_ssl: false
   orchestration_selector:
     by_pattern: ["JDE_*"]
     exclude_by_pattern: ["*_deprecated"]
