@@ -113,6 +113,10 @@ getting a statistically-grounded verdict before replacing the live one).
 
 ## Related
 
+- [The Closed Context-Receipt Loop, Served Over Real MCP](context_engineering_mcp.md) — the
+  same loop, but `rag_pipeline` is replaced with a standalone FastMCP gateway + agent, so
+  serving runs entirely outside Dagster. Read that one once a real agent (not a Dagster run)
+  needs to answer each query.
 - [End-to-End RAG in Dagster](rag_complete.md) — the same RAG surface built from the
   **decomposed primitive** components (`document_chunker`, `embeddings_generator`,
   `vector_store_writer`, `vector_store_query`, `reranker`, `llm_prompt_executor`) one

@@ -1,6 +1,6 @@
 # RAG in Dagster — pick your shape
 
-Six walkthroughs, one thesis: **RAG in production isn't a pipeline. It's a set of stateful entities.**
+Seven walkthroughs, one thesis: **RAG in production isn't a pipeline. It's a set of stateful entities.**
 
 Every artifact — the corpus, the vector index, the retrieval-quality score, the prompt — becomes a first-class asset with lineage, versions, and checks. Rollback stops being a filesystem restore and becomes a partition selector. Quality regressions stop being Slack threads and become asset-check-gated blocks on downstream materialization.
 
@@ -17,6 +17,7 @@ Which walkthrough you want depends on where you are in the RAG journey.
 | **[Vector / RAG mega-demo](vector_rag.md)** | Classic embed → retrieve → rerank → RAG mega-demo, plus `conversation_memory` for multi-turn. | OpenAI | You want the classic OpenAI + ChromaDB + rerank stack with multi-turn conversation memory. |
 | **[Supabase pgvector RAG](supabase_rag.md)** | pgvector-backed RAG on a local Supabase instance. | OpenAI + local Supabase CLI | Your target vector store is Postgres/pgvector — you want a real DB backing the index, not an embedded one. |
 | **[The Closed Context-Receipt Loop](context_engineering.md)** | `context_engineering_pipeline` (build: chunk → classify → embed → index, stamping provenance) + `rag_pipeline` (serve: retrieve, recording a receipt per query) sharing one `context_receipt_store`. Real negative feedback on what got served, then a rebuild with the **identical recipe** excludes the chunks that kept failing. | No keys for the core loop (HuggingFace + sentence-transformers + ChromaDB + local SQLite); OpenAI-compatible optional for a generated answer on top | You've shipped retrieval and now need it to get better from real usage without hand-tuning the index after every bad answer. |
+| **[The Closed Context-Receipt Loop, Served Over Real MCP](context_engineering_mcp.md)** | Same loop, but Dagster does ONLY the build (`context_engineering_pipeline`). Serving + the agent run outside Dagster: a standalone FastMCP gateway (`search_context` / `record_feedback` / `explain`) + a standalone agent script that spawns it as a real stdio subprocess -- no Dagster import in the serving path at all. | No keys for the core loop; OpenAI-compatible optional for a generated answer | Retrieval needs to be callable by any MCP agent (Claude Desktop, Claude Code, your own backend), not routed through a Dagster run -- Dagster should stay the orchestrator, not the live request path. |
 
 ## Asset-graph shapes at a glance
 
@@ -50,6 +51,16 @@ articles → build (recipe R) → index ──▶ questions → serve ──▶ 
             (same recipe R; only feedback changed; bad chunks excluded)
 ```
 
+**Same loop, served outside Dagster ([Served Over Real MCP](context_engineering_mcp.md)):**
+
+```
+articles → build (recipe R) → index ──▶ FastMCP gateway ◀── agent (no Dagster import)
+                  ▲                            │                      │
+                  │                     search_context           record_feedback
+                  └──────────── rebuild reads feedback ◀──── real outcome (thumbs up/down)
+      (Dagster's only job: build + rebuild; serving is two plain processes)
+```
+
 ## Recommended reading order
 
 1. **[RAG as State, not as a Pipeline](rag_state.md)** — corpus + snapshot + eval, no API keys, ~3 min. See what an asset-check-gated regression looks like.
@@ -57,6 +68,7 @@ articles → build (recipe R) → index ──▶ questions → serve ──▶ 
 3. **[Planner + Specialists — When One Retrieval Isn't Enough](rag_supervisor.md)** — different orchestration pattern. Read this when a single retrieval isn't enough and you need a planner + specialists.
 4. **[Vector / RAG mega-demo](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)** — reach for these when your target vector store (ChromaDB with conversation memory / pgvector on Supabase) is the deciding factor.
 5. **[The Closed Context-Receipt Loop](context_engineering.md)** — read this once retrieval is live and you're getting real user feedback (thumbs up/down, escalations) on answers. Build and serve are two components, not one, and both read from / write to the same receipt store.
+6. **[Served Over Real MCP](context_engineering_mcp.md)** — read this once serving needs to live outside Dagster entirely (a real agent, not a Dagster run, answering each request). Same receipt loop, same provenance, just a FastMCP gateway + agent instead of `rag_pipeline`.
 
 ## The RAG component palette
 
