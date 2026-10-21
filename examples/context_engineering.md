@@ -1,10 +1,9 @@
 # The Closed Context-Receipt Loop
 
-`context_engineering_pipeline` (build side) and `rag_pipeline` (query side) are the
-two components dbt Labs' own [context engineering](https://docs.getdbt.com/blog/dbt-context-engineering)
-post is describing, applied to unstructured text instead of metrics: chunk, embed,
-govern, make it citeable — and close the loop so every rebuild learns from what was
-actually retrieved and how it turned out.
+`context_engineering_pipeline` (build side) and `rag_pipeline` (query side) are
+Dagster's own take on context engineering: chunk, embed, classify, and govern raw
+text into a searchable, citeable knowledge base — and close the loop so every
+rebuild learns from what was actually retrieved and how it turned out.
 
 This demo runs that whole loop with real components, nothing mocked: build a support
 knowledge base, serve the same question six times, record real negative feedback on
