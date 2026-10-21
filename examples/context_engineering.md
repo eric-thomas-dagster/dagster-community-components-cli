@@ -13,25 +13,31 @@ kept rating badly disappear from the index — with no manual re-tuning.
 ## Architecture
 
 ```
-support_kb_articles ──▶ support_kb ──▶ (chromadb index)
-(DataframeFromCsv)      (ContextEngineeringPipelineComponent:
-                          chunk → classify → embed → write_vector_store)
+support_kb_articles ──▶ support_kb_chunks ──▶ support_kb_classified ──▶ support_kb_embedded ──▶ support_kb ──▶ (chromadb index)
+(DataframeFromCsv)      (ContextEngineeringPipelineComponent, per_step_ops: true --
+                          chunk → classify → embed → write_vector_store, one real asset per step)
                           receipts: {resource_key: context_receipts,
                                      quarantine: {mode: exclude}}
-                                │
-                                ▼
-                     context_receipts (ContextReceiptStoreComponent,
-                                        local SQLite)
-                                ▲
-                                │
+                                                                                      │
+                                                                                      ▼
+                                                                    context_receipts (ContextReceiptStoreComponent,
+                                                                                       local SQLite)
+                                                                                      ▲
+                                                                                      │
 support_questions ──▶ support_answers
 (DataframeFromCsv)     (RAGPipelineComponent: retrieve [+ generate, optional])
                         receipts: {resource_key: context_receipts,
                                    context_name: support_kb}
 ```
 
+`per_step_ops: true` means `support_kb` isn't one asset node here -- it's four: `support_kb_chunks`,
+`support_kb_classified`, `support_kb_embedded`, and `support_kb` itself (the last step, `write_vector_store`,
+keeps the plain name, so `support_answers`' `context_name: support_kb` reference stays unchanged). Each one
+has its own materialization history and its own metadata, and (via Dagster's native
+re-execution-from-failure) can be retried independently.
+
 Both components write to and read from the **same** `context_receipts` resource.
-`support_kb` stamps every chunk with provenance (`source_asset_key`, `chunk_id`,
+`support_kb` (the final step) stamps every chunk with provenance (`source_asset_key`, `chunk_id`,
 `source_code_version`, ...) when it builds the index. `support_answers` reads that
 provenance back off whatever chunks it retrieves and records one receipt per query —
 no extra code, just the `receipts:` block on each component.
@@ -42,9 +48,10 @@ required for the core loop.
 
 ## What the script does
 
-1. **Build 1** — `support_kb_articles` → `support_kb` with `code_version: recipe-1`.
-   Six short support-KB articles (billing / shipping / other) get chunked, classified,
-   embedded, and indexed. Nothing has been learned yet.
+1. **Build 1** — `support_kb_articles` → `support_kb_chunks` → `support_kb_classified` →
+   `support_kb_embedded` → `support_kb` with `code_version: recipe-1`. Six short support-KB
+   articles (billing / shipping / other) get chunked, classified, embedded, and indexed —
+   each step its own asset node (`per_step_ops: true`). Nothing has been learned yet.
 2. **Serve the same question six times** — "Why was I charged twice for my
    subscription?" retrieves the same two chunks every time (identical query, same
    static index → identical ranking). Each materialization of `support_answers`
@@ -77,10 +84,13 @@ Browse the graph:
 ```bash
 cd context-engineering-demo
 uv run dg dev
-# http://localhost:3000
+# http://localhost:3000 -- support_kb_articles → support_kb_chunks →
+# support_kb_classified → support_kb_embedded → support_kb: one real asset
+# node per step (per_step_ops: true), each with its own materialization
+# history and metadata.
 ```
 
-Click `support_kb`'s second materialization to see the real `receipts_feedback`
+Click `support_kb`'s (the final node) second materialization to see the real `receipts_feedback`
 metadata (`quarantined_ids`, `scoped_to_recipe`, ...) Dagster recorded for that run.
 
 ## Try it yourself after the script finishes

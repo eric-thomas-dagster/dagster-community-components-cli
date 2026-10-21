@@ -6,7 +6,9 @@
 # receipts; a rebuild of the SAME recipe reads that feedback and excludes the
 # chunks people kept rating badly — the next query is served from different chunks.
 #
-#   support_kb_articles → support_kb (ContextEngineeringPipelineComponent:
+#   support_kb_articles → support_kb_chunks → support_kb_classified →
+#   support_kb_embedded → support_kb (ContextEngineeringPipelineComponent,
+#                          per_step_ops: true -- one real asset per step:
 #                          chunk → classify → embed → write_vector_store,
 #                          receipts: {quarantine: {mode: exclude}})
 #   support_questions → support_answers (RAGPipelineComponent: retrieve,
@@ -110,6 +112,7 @@ attributes:
   id_column: article_id
   text_column: body
   code_version: "recipe-1"
+  per_step_ops: true   # one real asset node per step -- see it as a 4-node chain in the UI, not one box
   receipts:
     resource_key: context_receipts
     quarantine: {mode: exclude}
@@ -185,9 +188,9 @@ fi
 
 # --- 7. Build 1: before any receipts exist ----------------------------------
 echo ""
-echo ">>> Build 1: support_kb_articles → support_kb (code_version=recipe-1, nothing learned yet)"
+echo ">>> Build 1: support_kb_articles → support_kb_chunks → support_kb_classified → support_kb_embedded → support_kb (code_version=recipe-1, nothing learned yet)"
 uv run dg launch --assets support_kb_articles 2>&1 | tail -3
-uv run dg launch --assets support_kb 2>&1 | tail -5
+uv run dg launch --assets group:knowledge_base 2>&1 | tail -5   # per_step_ops=true -> one non-subsettable multi-asset, select by group
 
 BEFORE_IDS="$(uv run python - <<'PY'
 import chromadb
@@ -229,7 +232,7 @@ done
 # --- 9. Build 2: SAME recipe, but now the build reads those receipts --------
 echo ""
 echo ">>> Build 2: SAME code_version (recipe-1) -- only real-world feedback changed"
-uv run dg launch --assets support_kb 2>&1 | tail -8
+uv run dg launch --assets group:knowledge_base 2>&1 | tail -8
 
 AFTER_IDS="$(uv run python - <<'PY'
 import chromadb
@@ -263,14 +266,18 @@ Browse the graph:
   cd $PROJECT_ABS
   uv run dg dev
   # http://localhost:3000
-  # knowledge_base group: support_kb_articles → support_kb
+  # knowledge_base group: support_kb_articles → support_kb_chunks →
+  # support_kb_classified → support_kb_embedded → support_kb -- one real
+  # asset node per step (per_step_ops: true), each with its own
+  # materialization history and metadata.
   # serving group: support_questions → support_answers
-  # Click support_kb's materializations to see receipts_feedback metadata
-  # (quarantined_ids, scoped_to_recipe, ...) on the Build 2 run.
+  # Click support_kb's (the final node) materializations to see
+  # receipts_feedback metadata (quarantined_ids, scoped_to_recipe, ...) on
+  # the Build 2 run.
 
 Re-run the loop yourself:
   uv run dg launch --assets support_answers   # ask again
-  uv run dg launch --assets support_kb        # rebuild, reading any new feedback
+  uv run dg launch --assets group:knowledge_base   # rebuild, reading any new feedback
 
 Add a real generated answer:
   export OPENAI_API_KEY=sk-...
