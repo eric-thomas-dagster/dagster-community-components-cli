@@ -120,5 +120,6 @@ python context_gateway.py          # stdio
   Dagster components (`rag_pipeline` as the serving layer instead of a FastMCP gateway). Start there if
   you'd rather have the query side show up as a Dagster asset with its own run history; come here once you
   need serving decoupled from the orchestrator.
-- [The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md) -- same per_step_ops
-  build side, but partitioned daily and built incrementally instead of all at once.
+- [The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md) -- same closed receipt
+  loop, served by `rag_pipeline` instead of a FastMCP gateway, with the build partitioned daily and
+  built incrementally instead of all at once.

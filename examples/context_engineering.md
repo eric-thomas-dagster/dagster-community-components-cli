@@ -127,9 +127,10 @@ getting a statistically-grounded verdict before replacing the live one).
   same loop, but `rag_pipeline` is replaced with a standalone FastMCP gateway + agent, so
   serving runs entirely outside Dagster. Read that one once a real agent (not a Dagster run)
   needs to answer each query.
-- [The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md) — same build-side
-  component, but partitioned daily instead of built all at once: each run reads only its own
-  day's new rows. Read that one once your corpus arrives incrementally, not in one batch.
+- [The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md) — the same closed
+  receipt loop, but the build is partitioned daily instead of built all at once: each run reads
+  only its own day's new rows, and a rebuild only re-processes the one partition whose chunk
+  picked up bad feedback. Read that one once your corpus arrives incrementally, not in one batch.
 - [End-to-End RAG in Dagster](rag_complete.md) — the same RAG surface built from the
   **decomposed primitive** components (`document_chunker`, `embeddings_generator`,
   `vector_store_writer`, `vector_store_query`, `reranker`, `llm_prompt_executor`) one

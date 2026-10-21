@@ -1,16 +1,21 @@
 #!/usr/bin/env bash
-# context_engineering_partitioned -- the closed context-receipt loop demos (context_engineering.md,
-# context_engineering_mcp.md) both build the whole corpus in one run. Real corpora instead arrive a
-# slice at a time (today's new tickets), and context_engineering_pipeline supports that: daily
-# partitions, one real asset per step (per_step_ops: true), each day's build reading only its own
-# slice of the source table -- never reprocessing, never wiping out, a prior day's chunks.
+# context_engineering_partitioned -- the same closed context-receipt loop as
+# context_engineering.md (build -> serve -> real feedback -> rebuild with the
+# identical recipe -> the chunks that kept failing are gone), but the build side
+# is daily-partitioned instead of built all at once: new tickets arrive a day at
+# a time, each partition's run reads only its own new row, and a rebuild only
+# ever re-processes the ONE partition whose chunk picked up bad feedback.
 #
 #   support_kb_chunks -> support_kb_classified -> support_kb_embedded -> support_kb
 #   (ContextEngineeringPipelineComponent, per_step_ops: true, partition_type: daily,
-#    source: {kind: warehouse_query} against a local DuckDB table filtered by {partition_key})
+#    source: {kind: warehouse_query} against a local DuckDB table filtered by
+#    {partition_key}, receipts: {quarantine: {mode: exclude}})
+#   support_questions -> support_answers (RAGPipelineComponent: retrieve,
+#    receipts: {resource_key: context_receipts})
 #
-# Free/local throughout: HuggingFace zero-shot classification + sentence-transformers embeddings +
-# a local ChromaDB index + a local DuckDB source table. No API key required.
+# Free/local throughout: HuggingFace zero-shot classification + sentence-transformers
+# embeddings + a local ChromaDB index + a local DuckDB source table + a local SQLite
+# receipt store. No API key required for the core loop.
 
 set -eo pipefail
 
@@ -42,9 +47,10 @@ uv add -q "$DCC_SRC" \
   duckdb \
   dagster-duckdb \
   "chromadb>=0.5.0" \
-  "sentence-transformers>=2.7.0"
+  "sentence-transformers>=2.7.0" \
+  "litellm>=1.30.0"
 
-# --- 4. Seed a DuckDB table spanning 3 days --------------------------------
+# --- 4. Seed a DuckDB table spanning 3 days + a question --------------------
 # One new ticket arrives per day. Nothing in this table is special per-partition
 # except the `day` column context_engineering_pipeline's {partition_key} filters on.
 uv run python - <<'PY'
@@ -60,6 +66,12 @@ con.execute("""
 con.close()
 PY
 
+mkdir -p docs
+cat > docs/support_questions.csv <<'CSV'
+query_id,query
+q1,Why was I charged twice for my subscription?
+CSV
+
 # --- 5. Write defs.yaml files -----------------------------------------------
 PKG="$(ls src/ | head -1)"
 DEFS="src/$PKG/defs"
@@ -72,10 +84,30 @@ attributes:
   database: ${PROJECT_ABS}/support_tickets.duckdb
 YAML
 
+mkdir -p "$DEFS/support_questions"
+cat > "$DEFS/support_questions/defs.yaml" <<YAML
+type: dagster_community_components.DataframeFromCsvComponent
+attributes:
+  asset_name: support_questions
+  file_path: ${PROJECT_ABS}/docs/support_questions.csv
+  group_name: source
+YAML
+
+mkdir -p "$DEFS/context_receipts"
+cat > "$DEFS/context_receipts/defs.yaml" <<YAML
+type: dagster_community_components.ContextReceiptStoreComponent
+attributes:
+  resource_key: context_receipts
+  database_path: ${PROJECT_ABS}/context-receipts.sqlite3
+  backend: sqlite
+YAML
+
 # per_step_ops: true -- same 4-node look as the other two demos. partition_type: daily +
 # source.sql's {partition_key} placeholder scope each day's run to its own new ticket only;
 # write_vector_store's default sync_mode=replace_sources never touches chunks from source rows
-# outside THIS run, so each day's build adds to the index instead of replacing it.
+# outside THIS run, so each day's build adds to the index instead of replacing it. code_version
+# stays IDENTICAL across every build below -- the point is that nothing about the recipe
+# changes, only accumulated real-world feedback (and which single partition gets rebuilt).
 mkdir -p "$DEFS/support_kb"
 cat > "$DEFS/support_kb/defs.yaml" <<YAML
 type: dagster_community_components.ContextEngineeringPipelineComponent
@@ -91,6 +123,9 @@ attributes:
   per_step_ops: true
   partition_type: daily
   partition_start: "2026-01-01"
+  receipts:
+    resource_key: context_receipts
+    quarantine: {mode: exclude}
   steps:
     - id: chunks
       op: chunk
@@ -113,6 +148,45 @@ attributes:
   group_name: knowledge_base
 YAML
 
+# ─────────────── Query side: rag_pipeline (same shape as context_engineering.md) ──
+mkdir -p "$DEFS/support_answers"
+cat > "$DEFS/support_answers/defs.yaml" <<YAML
+type: dagster_community_components.RAGPipelineComponent
+attributes:
+  asset_name: support_answers
+  upstream_asset_key: support_questions
+  query_column: query
+  receipts:
+    resource_key: context_receipts
+    context_name: support_kb
+  retrievers:
+    kb:
+      kind: chromadb
+      path: ${PROJECT_ABS}/vector_index
+      collection_name: support_kb
+      embedding:
+        provider: sentence_transformers
+        model: all-MiniLM-L6-v2
+  steps:
+    - id: found
+      op: retrieve
+      retriever: kb
+      top_k: 2
+YAML
+if [ -n "$OPENAI_API_KEY" ]; then
+cat >> "$DEFS/support_answers/defs.yaml" <<YAML
+    - id: answered
+      op: generate
+      source: found
+      model: gpt-4o-mini
+      api_key_env_var: OPENAI_API_KEY
+      system_prompt: "Answer using only the provided context. If the context does not answer the question, say so explicitly."
+YAML
+fi
+cat >> "$DEFS/support_answers/defs.yaml" <<YAML
+  group_name: serving
+YAML
+
 # --- 6. dg check defs -------------------------------------------------------
 echo ">>> dg check defs"
 if ! uv run dg check defs 2>&1 | tail -8; then
@@ -133,40 +207,91 @@ PY
   echo "    indexed chunk ids after $day: $IDS"
 done
 
-# --- 8. A semantic query against the day-3 ticket, right after its own build
+# --- 8. Serve the question 6 times, recording real negative feedback --------
+# The question matches the 2026-01-01 partition's ticket (billing_refund). rag_pipeline's
+# receipts: block records what it served, without any code here. Recording OUTCOMES (did the
+# answer help?) is deliberately an external-system job per the component's own design -- a
+# support UI's thumbs-down button, not a Dagster asset -- so this reads the new receipt id back
+# from the store and calls ContextReceiptStore.record_outcome directly, the same way a real
+# app would via its own backend.
 echo ""
-echo ">>> Searching for the day-3 ticket's topic -- indexed the moment its OWN partition built"
-uv run python - <<'PY'
+echo ">>> Serving the question 6 times, recording real thumbs-down each time"
+uv run dg launch --assets support_questions 2>&1 | tail -3
+: > rated_receipts.txt
+for i in 1 2 3 4 5 6; do
+  echo "    ─── round $i ───"
+  uv run dg launch --assets support_answers 2>&1 | tail -3
+  uv run python - <<'PY'
+from dagster_community_components.resources.context_receipt_store.component import ContextReceiptStore
+
+store = ContextReceiptStore("context-receipts.sqlite3")
+seen = set(open("rated_receipts.txt").read().split())
+new = set(store.find_by_source_asset("support_kb")) - seen
+assert len(new) == 1, f"expected exactly 1 new receipt this round, got {new}"
+rid = new.pop()
+served = [i["item_id"] for i in store.get_receipt(rid)["items"]]
+store.record_outcome(rid, signal="thumbs_down")
+with open("rated_receipts.txt", "a") as f:
+    f.write(rid + "\n")
+print(f"    receipt {rid} served {served} -> rated thumbs_down")
+PY
+done
+
+# --- 9. Rebuild ONLY the partition whose chunk got the bad feedback ---------
+# SAME code_version: only accumulated real-world feedback changed. Receipt feedback is looked
+# up by chunk id against THIS run's own batch, so rebuilding 2026-01-01 alone is enough -- the
+# 2026-01-02 / 2026-01-03 partitions were never served, have no feedback, and are left untouched.
+echo ""
+echo ">>> Rebuilding ONLY partition 2026-01-01 -- SAME code_version, only feedback changed"
+uv run dg launch --assets group:knowledge_base --partition 2026-01-01 2>&1 | tail -8
+
+AFTER_IDS="$(uv run python - <<'PY'
 import chromadb
-from sentence_transformers import SentenceTransformer
-model = SentenceTransformer("all-MiniLM-L6-v2")
-qv = model.encode(["how do I download my report"]).tolist()
-collection = chromadb.PersistentClient(path="vector_index").get_collection("support_kb")
-hits = collection.query(query_embeddings=qv, n_results=1)
-print(f"    top hit: {hits['ids'][0][0]} -- {hits['metadatas'][0][0].get('category')}")
+print(sorted(chromadb.PersistentClient(path="vector_index").get_collection("support_kb").get()["ids"]))
+PY
+)"
+echo "    indexed chunk ids: $AFTER_IDS"
+
+# --- 10. Ask the same question again -- served from a different chunk now --
+echo ""
+echo ">>> Asking the SAME question again"
+uv run dg launch --assets support_answers 2>&1 | tail -3
+uv run python - <<'PY'
+import pandas as pd
+df = pd.read_pickle(".dagster_home/storage/support_answers")
+served_now = [d["metadata"]["chunk_id"] for d in df["sources"].iloc[0]]
+print("    now served:", served_now)
 PY
 
-# --- 9. Done -----------------------------------------------------------------
+# --- 11. Done ---------------------------------------------------------------
 cat <<DONE
 
 ✓ context_engineering_partitioned demo done.
 
-Three independent builds, one per day, each reading only that day's new ticket --
-the index grew from 1 chunk to 3 across three runs, and no run touched a
-previous day's chunks.
+After day 3: billing_refund_0, export_broken_0, shipping_delay_0
+After rebuilding day 1 only: $AFTER_IDS
+(billing_refund_0 -- the chunk real users kept rating thumbs-down -- is gone;
+export_broken_0 and shipping_delay_0, from partitions that were never served,
+are untouched; same recipe, same code_version, only one day's partition
+rebuilt)
 
 Browse the graph:
   cd $PROJECT_ABS
   uv run dg dev
-  # http://localhost:3000 -- support_kb_chunks -> support_kb_classified ->
-  # support_kb_embedded -> support_kb: one real asset node per step
+  # http://localhost:3000
+  # knowledge_base group: support_kb_chunks -> support_kb_classified ->
+  # support_kb_embedded -> support_kb -- one real asset node per step
   # (per_step_ops: true), each partitioned daily starting 2026-01-01. Pick a
   # partition in the UI's partition selector and look at its own
   # materialization history independent of the others.
+  # serving group: support_questions -> support_answers
 
-Backfill the rest of a date range yourself:
+Re-run the loop yourself:
+  uv run dg launch --assets support_answers   # ask again
+  uv run dg launch --assets group:knowledge_base --partition 2026-01-01   # rebuild just that day
+
+Backfill further days yourself (after seeding more rows in support_tickets.duckdb):
   uv run dg launch --assets group:knowledge_base --partition-range "2026-01-04...2026-01-10"
-  # (after seeding more rows in support_tickets.duckdb for those days)
 
 Cleanup:
   rm -rf $PROJECT_ABS

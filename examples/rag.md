@@ -18,7 +18,7 @@ Which walkthrough you want depends on where you are in the RAG journey.
 | **[Supabase pgvector RAG](supabase_rag.md)** | pgvector-backed RAG on a local Supabase instance. | OpenAI + local Supabase CLI | Your target vector store is Postgres/pgvector — you want a real DB backing the index, not an embedded one. |
 | **[The Closed Context-Receipt Loop](context_engineering.md)** | `context_engineering_pipeline` (build: chunk → classify → embed → index, stamping provenance) + `rag_pipeline` (serve: retrieve, recording a receipt per query) sharing one `context_receipt_store`. Real negative feedback on what got served, then a rebuild with the **identical recipe** excludes the chunks that kept failing. | No keys for the core loop (HuggingFace + sentence-transformers + ChromaDB + local SQLite); OpenAI-compatible optional for a generated answer on top | You've shipped retrieval and now need it to get better from real usage without hand-tuning the index after every bad answer. |
 | **[The Closed Context-Receipt Loop, Served Over Real MCP](context_engineering_mcp.md)** | Same loop, but Dagster does ONLY the build (`context_engineering_pipeline`). Serving + the agent run outside Dagster: a standalone FastMCP gateway (`search_context` / `record_feedback` / `explain`) + a standalone agent script that spawns it as a real stdio subprocess -- no Dagster import in the serving path at all. | No keys for the core loop; OpenAI-compatible optional for a generated answer | Retrieval needs to be callable by any MCP agent (Claude Desktop, Claude Code, your own backend), not routed through a Dagster run -- Dagster should stay the orchestrator, not the live request path. |
-| **[The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md)** | `context_engineering_pipeline` with `partition_type: daily` + `per_step_ops: true` -- one build per day, each run reading only that day's new rows via `source.sql`'s `{partition_key}` placeholder. The index grows one day at a time; no run ever touches a prior day's chunks. | No keys | Your corpus arrives incrementally (new tickets, new docs each day), not all at once, and you want per-day addressability, retry, and run history instead of reprocessing everything on every rebuild. |
+| **[The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md)** | The same closed context-receipt loop as the entry above (`context_engineering_pipeline` + `rag_pipeline` sharing a `context_receipt_store`), but the build is `partition_type: daily` + `per_step_ops: true` -- one build per day, each run reading only that day's new rows via `source.sql`'s `{partition_key}` placeholder, and a rebuild only ever re-processes the ONE partition whose chunk picked up bad feedback. | No keys for the core loop; OpenAI-compatible optional for a generated answer | Your corpus arrives incrementally (new tickets, new docs each day), not all at once, and you want per-day addressability, retry, and scoped rebuilds instead of reprocessing the whole table every time. |
 
 ## Asset-graph shapes at a glance
 
@@ -65,10 +65,12 @@ articles → build (recipe R) → index ──▶ FastMCP gateway ◀── agen
 **Partitioned build, one day at a time ([The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md)):**
 
 ```
-day 1 build (2026-01-01) ──▶ index: [ticket_1]
-day 2 build (2026-01-02) ──▶ index: [ticket_1, ticket_2]       (day 1's chunk untouched)
-day 3 build (2026-01-03) ──▶ index: [ticket_1, ticket_2, ticket_3]   (day 1-2 untouched)
-(each build reads only its own partition's new rows; no rebuild reprocesses a prior day)
+day 1 build (2026-01-01) ──▶ index: [billing_refund]
+day 2 build (2026-01-02) ──▶ index: [billing_refund, shipping_delay]
+day 3 build (2026-01-03) ──▶ index: [billing_refund, shipping_delay, export_broken]
+(each build reads only its own partition's new row; same closed receipt loop as
+ context_engineering.md, but a rebuild only re-processes the ONE partition whose
+ chunk picked up bad feedback -- here, 2026-01-01)
 ```
 
 ## Recommended reading order
@@ -79,7 +81,7 @@ day 3 build (2026-01-03) ──▶ index: [ticket_1, ticket_2, ticket_3]   (day 
 4. **[Vector / RAG mega-demo](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)** — reach for these when your target vector store (ChromaDB with conversation memory / pgvector on Supabase) is the deciding factor.
 5. **[The Closed Context-Receipt Loop](context_engineering.md)** — read this once retrieval is live and you're getting real user feedback (thumbs up/down, escalations) on answers. Build and serve are two components, not one, and both read from / write to the same receipt store.
 6. **[Served Over Real MCP](context_engineering_mcp.md)** — read this once serving needs to live outside Dagster entirely (a real agent, not a Dagster run, answering each request). Same receipt loop, same provenance, just a FastMCP gateway + agent instead of `rag_pipeline`.
-7. **[The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md)** — read this once the corpus itself arrives incrementally, not all at once, and the build side needs per-day addressability and retry instead of one all-or-nothing rebuild.
+7. **[The Daily-Partitioned Knowledge Base](context_engineering_partitioned.md)** — same closed receipt loop as entry 5, but read this once the corpus itself arrives incrementally, not all at once, and a rebuild should only ever re-process the one partition whose chunk picked up bad feedback.
 
 ## The RAG component palette
 
