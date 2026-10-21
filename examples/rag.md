@@ -1,6 +1,6 @@
 # RAG in Dagster — pick your shape
 
-Five walkthroughs, one thesis: **RAG in production isn't a pipeline. It's a set of stateful entities.**
+Six walkthroughs, one thesis: **RAG in production isn't a pipeline. It's a set of stateful entities.**
 
 Every artifact — the corpus, the vector index, the retrieval-quality score, the prompt — becomes a first-class asset with lineage, versions, and checks. Rollback stops being a filesystem restore and becomes a partition selector. Quality regressions stop being Slack threads and become asset-check-gated blocks on downstream materialization.
 
@@ -16,6 +16,7 @@ Which walkthrough you want depends on where you are in the RAG journey.
 | **[Planner + Specialists — When One Retrieval Isn't Enough](rag_supervisor.md)** | Planner LLM reads a task, picks specialists from a bounded YAML-declared set, each pick is its own asset; a synthesizer combines. | OpenAI-compatible | Your task needs multiple specialist responses instead of one retrieval, and you need every routing decision inspectable weeks later. |
 | **[Vector / RAG mega-demo](vector_rag.md)** | Classic embed → retrieve → rerank → RAG mega-demo, plus `conversation_memory` for multi-turn. | OpenAI | You want the classic OpenAI + ChromaDB + rerank stack with multi-turn conversation memory. |
 | **[Supabase pgvector RAG](supabase_rag.md)** | pgvector-backed RAG on a local Supabase instance. | OpenAI + local Supabase CLI | Your target vector store is Postgres/pgvector — you want a real DB backing the index, not an embedded one. |
+| **[The Closed Context-Receipt Loop](context_engineering.md)** | `context_engineering_pipeline` (build: chunk → classify → embed → index, stamping provenance) + `rag_pipeline` (serve: retrieve, recording a receipt per query) sharing one `context_receipt_store`. Real negative feedback on what got served, then a rebuild with the **identical recipe** excludes the chunks that kept failing. | No keys for the core loop (HuggingFace + sentence-transformers + ChromaDB + local SQLite); OpenAI-compatible optional for a generated answer on top | You've shipped retrieval and now need it to get better from real usage without hand-tuning the index after every bad answer. |
 
 ## Asset-graph shapes at a glance
 
@@ -40,12 +41,22 @@ task → plan  ───────┼── specialist_b_result ──┼─�
                     └── specialist_c_result ──┘
 ```
 
+**Closed receipt loop ([The Closed Context-Receipt Loop](context_engineering.md)):**
+
+```
+articles → build (recipe R) → index ──▶ questions → serve ──▶ receipt
+                  ▲                                              │
+                  └──────────── rebuild reads feedback ◀── real outcome (thumbs up/down)
+            (same recipe R; only feedback changed; bad chunks excluded)
+```
+
 ## Recommended reading order
 
 1. **[RAG as State, not as a Pipeline](rag_state.md)** — corpus + snapshot + eval, no API keys, ~3 min. See what an asset-check-gated regression looks like.
 2. **[End-to-End RAG in Dagster](rag_complete.md)** — same corpus as the state-tracking demo, plus a full retrieve-then-generate pipeline running alongside. See every step of the pipeline as its own asset.
 3. **[Planner + Specialists — When One Retrieval Isn't Enough](rag_supervisor.md)** — different orchestration pattern. Read this when a single retrieval isn't enough and you need a planner + specialists.
 4. **[Vector / RAG mega-demo](vector_rag.md) / [Supabase pgvector RAG](supabase_rag.md)** — reach for these when your target vector store (ChromaDB with conversation memory / pgvector on Supabase) is the deciding factor.
+5. **[The Closed Context-Receipt Loop](context_engineering.md)** — read this once retrieval is live and you're getting real user feedback (thumbs up/down, escalations) on answers. Build and serve are two components, not one, and both read from / write to the same receipt store.
 
 ## The RAG component palette
 
@@ -57,12 +68,13 @@ task → plan  ───────┼── specialist_b_result ──┼─�
 | **Vector stores** | [`vector_store_writer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vector_store_writer) + [`vector_store_query`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vector_store_query) (Pinecone, Weaviate, ChromaDB, FAISS, Qdrant), [`vector_index_snapshot`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vector_index_snapshot) (versioned ChromaDB), [`supabase_vector_search_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/supabase_vector_search_asset) |
 | **Reranking** | [`reranker`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/reranker) (Cohere API or local cross-encoder) |
 | **Retrieval / Generation** | [`rag_pipeline`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/rag_pipeline) (end-to-end retrieve+generate), [`llm_prompt_executor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_prompt_executor), [`langchain_chain_asset`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/langchain_chain_asset) |
+| **Build + closed feedback loop** | [`context_engineering_pipeline`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/context_engineering_pipeline) (chunk → classify → embed → index, one YAML; stamps provenance, reads receipts back to quarantine/prune/rewrite-flag chunks on rebuild), [`context_receipt_store`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/resources/context_receipt_store) (shared resource both build and serve read/write — SQLite, BigQuery, or SQL backend) |
 | **Agents** | [`supervisor_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/supervisor_agent), [`iterative_supervisor_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/iterative_supervisor_agent), [`langgraph_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/langgraph_agent), [`catalog_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/catalog_agent), [`planned_catalog_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/planned_catalog_agent); provider-native: [`openai_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/openai_agent), [`anthropic_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/anthropic_agent), [`gemini_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/gemini_agent), [`snowflake_cortex_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/snowflake_cortex_agent), [`vercel_ai_gateway_agent`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/vercel_ai_gateway_agent) |
 | **Evaluators** | [`rag_eval`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/rag_eval) (retrieval quality + regression gate), [`llm_evaluator`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_evaluator), [`llm_judge`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/llm_judge) |
 | **Memory** | [`conversation_memory`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/conversation_memory) |
 | **Document extraction** | [`document_text_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_text_extractor), [`document_layout_analyzer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_layout_analyzer), [`document_ai_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_ai_extractor), [`document_summarizer`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/document_summarizer), [`entity_extractor`](https://github.com/eric-thomas-dagster/dagster-component-templates/tree/main/assets/ai/entity_extractor) |
 
-~40 components you can compose. The five walkthroughs above are well-lit paths through them; anything you build on top is a rearrangement of the same primitives.
+~40 components you can compose. The six walkthroughs above are well-lit paths through them; anything you build on top is a rearrangement of the same primitives.
 
 ## Artifacts are the graph
 
