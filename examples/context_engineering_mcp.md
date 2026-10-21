@@ -11,18 +11,30 @@ answers "does Dagster have to be the thing a live agent calls on every request."
 ## Architecture
 
 ```
-support_kb_articles ──▶ support_kb ──▶ (chromadb index + sqlite receipt store)
-(DataframeFromCsv)      (ContextEngineeringPipelineComponent)
-                                  │
-                                  │  Dagster's job ends here.
-                                  ▼
-                        context_gateway.py  (FastMCP server)
-                          search_context / record_feedback / explain
-                                  ▲
-                                  │  real MCP, stdio subprocess
-                                  │
-                              agent.py  (standalone agent, no Dagster import)
+support_kb_articles ──▶ support_kb_chunks ──▶ support_kb_classified ──▶ support_kb_embedded ──▶ support_kb
+(DataframeFromCsv)      (ContextEngineeringPipelineComponent, per_step_ops: true --
+                          chunk → classify → embed → write_vector_store, one real asset per step)
+                                                                                      │
+                                                                                      ▼
+                                                                (chromadb index + sqlite receipt store)
+                                                                                      │
+                                                                                      │  Dagster's job ends here.
+                                                                                      ▼
+                                                                    context_gateway.py  (FastMCP server)
+                                                                      search_context / record_feedback / explain
+                                                                                      ▲
+                                                                                      │  real MCP, stdio subprocess
+                                                                                      │
+                                                                                  agent.py  (standalone agent, no Dagster import)
 ```
+
+`per_step_ops: true` means `support_kb` isn't one asset node here -- it's four: `support_kb_chunks`,
+`support_kb_classified`, `support_kb_embedded`, and `support_kb` itself (the last step,
+`write_vector_store`, keeps the plain name so the gateway's `source_asset_key` reference stays unchanged).
+Each one has its own materialization history and its own metadata, and (via Dagster's native
+re-execution-from-failure) can be retried independently -- same shape as
+[`context_engineering.md`](context_engineering.md)'s own build side, just visible as separate nodes in the
+asset graph instead of one.
 
 `context_gateway.py` and `agent.py` are plain Python files sitting next to the Dagster project --
 not in `defs/`, not components, not known to Dagster at all. They just happen to read the same
@@ -30,8 +42,10 @@ ChromaDB path and SQLite file `support_kb` wrote.
 
 ## What the script does
 
-1. **Build 1** (Dagster) -- `support_kb_articles` → `support_kb`, `code_version: recipe-1`. Six support-KB
-   articles get chunked, classified, embedded, and indexed. Nothing learned yet.
+1. **Build 1** (Dagster) -- `support_kb_articles` → `support_kb_chunks` → `support_kb_classified` →
+   `support_kb_embedded` → `support_kb`, `code_version: recipe-1`. Six support-KB articles get chunked,
+   classified, embedded, and indexed -- each step its own asset node (`per_step_ops: true`). Nothing
+   learned yet.
 2. **Serve the same question six times** -- `agent.py` spawns `context_gateway.py` as a real subprocess
    over stdio (the same way Claude Desktop or Claude Code launches an MCP server) and calls its
    `search_context` tool. Each call **writes** a receipt (`ContextReceiptStore.record_retrieval`) with the
@@ -67,8 +81,10 @@ Browse the Dagster side:
 ```bash
 cd context-engineering-mcp-demo
 uv run dg dev
-# http://localhost:3000 -- just support_kb_articles → support_kb. No rag_pipeline,
-# no questions/answers assets: Dagster's whole job here is build + rebuild.
+# http://localhost:3000 -- support_kb_articles → support_kb_chunks →
+# support_kb_classified → support_kb_embedded → support_kb: one real asset node
+# per step. No rag_pipeline, no questions/answers assets: Dagster's whole job
+# here is build + rebuild.
 ```
 
 Talk to the gateway yourself after the script finishes:

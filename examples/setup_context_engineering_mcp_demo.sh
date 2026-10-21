@@ -7,7 +7,9 @@
 # long-running processes speaking real MCP (stdio, a genuine subprocess, the
 # same way Claude Desktop/Claude Code launch an MCP server):
 #
-#   support_kb_articles -> support_kb (ContextEngineeringPipelineComponent)
+#   support_kb_articles -> support_kb_chunks -> support_kb_classified ->
+#   support_kb_embedded -> support_kb (ContextEngineeringPipelineComponent,
+#                              per_step_ops: true -- one real asset per step)
 #                              |
 #                     (chromadb index + sqlite receipt store)
 #                              |
@@ -101,6 +103,7 @@ attributes:
   id_column: article_id
   text_column: body
   code_version: "recipe-1"
+  per_step_ops: true   # one real asset node per step -- see it as a 4-node chain in the UI, not one box
   receipts:
     resource_key: context_receipts
     quarantine: {mode: exclude}
@@ -306,9 +309,9 @@ fi
 
 # --- 8. Build 1: before any receipts exist ----------------------------------
 echo ""
-echo ">>> Build 1 (Dagster): support_kb_articles → support_kb (recipe-1, nothing learned yet)"
+echo ">>> Build 1 (Dagster): support_kb_articles → support_kb_chunks → support_kb_classified → support_kb_embedded → support_kb (recipe-1, nothing learned yet)"
 uv run dg launch --assets support_kb_articles 2>&1 | tail -3
-uv run dg launch --assets support_kb 2>&1 | tail -5
+uv run dg launch --assets group:knowledge_base 2>&1 | tail -5   # per_step_ops=true -> one non-subsettable multi-asset, select by group
 
 BEFORE_IDS="$(uv run python - <<'PY'
 import chromadb
@@ -331,7 +334,7 @@ done
 # --- 10. Build 2 (Dagster): SAME recipe, reads the receipts the gateway wrote
 echo ""
 echo ">>> Build 2 (Dagster): SAME code_version (recipe-1) -- only real-world feedback changed"
-uv run dg launch --assets support_kb 2>&1 | tail -8
+uv run dg launch --assets group:knowledge_base 2>&1 | tail -8
 
 AFTER_IDS="$(uv run python - <<'PY'
 import chromadb
@@ -359,10 +362,13 @@ served a single query to get there)
 Browse the Dagster side:
   cd $PROJECT_ABS
   uv run dg dev
-  # http://localhost:3000 -- just support_kb_articles → support_kb.
-  # No rag_pipeline, no questions/answers assets: Dagster's whole job here is
-  # build + rebuild. Click support_kb's Build 2 materialization to see
-  # receipts_feedback metadata (quarantined_ids, scoped_to_recipe, ...).
+  # http://localhost:3000 -- support_kb_articles → support_kb_chunks →
+  # support_kb_classified → support_kb_embedded → support_kb: one real asset
+  # node per step (per_step_ops: true), each with its own materialization
+  # history and metadata. No rag_pipeline, no questions/answers assets:
+  # Dagster's whole job here is build + rebuild. Click support_kb's (the
+  # final node) Build 2 materialization to see receipts_feedback metadata
+  # (quarantined_ids, scoped_to_recipe, ...).
 
 Talk to the gateway yourself:
   cd $PROJECT_ABS
