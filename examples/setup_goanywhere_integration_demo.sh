@@ -60,6 +60,14 @@ attributes:
   retry_delay_seconds: 60
   partition_start_date: "2024-01-01"
 
+  # Opt-in scaffold -- on here so the demo shows the full surface (off by
+  # default otherwise; only generate_external_monitor_sensor defaults true).
+  generate_rerun_job: true
+  generate_dashboard_job: true
+  generate_reconciliation: true
+  generate_inbound_trigger_sensor: true
+
+  # deps is per-project, not one list shared by every project.
   projects:
     - project_name: PARTNER_EDI_INBOUND
       asset_name: goanywhere_partner_edi_inbound
@@ -79,6 +87,7 @@ attributes:
       job_queue: SFTP_OUTBOUND
       mode: NORMAL
       priority: 8
+      deps: ["goanywhere_partner_edi_inbound"]
 
   source_files:
     - path: "/inbound/partners/processed"

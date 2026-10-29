@@ -60,6 +60,14 @@ attributes:
   retry_delay_seconds: 60
   partition_start_date: "2024-01-01"
 
+  # Opt-in scaffold -- on here so the demo shows the full surface (off by
+  # default otherwise; only generate_external_monitor_sensor defaults true).
+  generate_force_restart_job: true
+  generate_hold_release_cancel_jobs: true
+  generate_reconciliation: true
+  generate_inbound_trigger_sensor: true
+
+  # deps is per-job, not one list shared by every job.
   jobs:
     - job_name: EOD_LEDGER_CLOSE
       asset_name: opcon_eod_ledger_close
@@ -79,6 +87,7 @@ attributes:
       schedule_name: DAILY_FINANCE
       machine: AS400-PROD-01
       force_restart: true
+      deps: ["opcon_eod_ledger_close"]
 
   source_tables:
     - table_name: "FINANCE.GL_LEDGER"
