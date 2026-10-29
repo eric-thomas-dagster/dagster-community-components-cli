@@ -152,5 +152,7 @@ If you *are* doing a full migration off JAMS, the `airflow_dag_proxy` / `sql_tra
   - [`activebatch_integration`](activebatch_integration.md) — ActiveBatch (Windows-native peer)
   - [`controlm_integration`](controlm_integration.md) — BMC Control-M
   - [`runmyjobs_integration`](runmyjobs_integration.md) — Redwood RunMyJobs
+  - [`goanywhere_integration`](goanywhere_integration.md) — Fortra GoAnywhere MFT
+  - [`opcon_integration`](opcon_integration.md) — SMA/Continuous OpCon
 - Component reference: <https://dagster-component-ui.vercel.app/c/jams_integration>
 - Walkthrough index: [examples/README.md](README.md)
