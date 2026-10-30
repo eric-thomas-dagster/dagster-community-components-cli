@@ -67,6 +67,11 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
          set BEFORE the first push, so the Action's first run doesn't fail on
          a missing secret
        → `git commit` + `git push -u <remote> <branch>`
+       → **This push does NOT mean Dagster+ is deployed yet.** GitHub Actions
+         doesn't reliably trigger on the push that creates a branch — if this
+         was that first push, the script pushes one more harmless empty commit
+         right after, specifically to kick off the first real run. Only once
+         that's confirmed should you expect to see a run in the Actions tab.
        → Refuses to touch anything if this project dir is already nested inside
          a different git repo, to avoid creating a confusing nested repo.
 6/8  Confirms deployment target (org / deployment / build strategy)

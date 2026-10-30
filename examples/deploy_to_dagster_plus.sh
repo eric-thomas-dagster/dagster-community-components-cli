@@ -265,12 +265,20 @@ if [ "$GIT_PROVIDER" = "github" ] && [ -d .github/workflows ]; then
     echo "    Manual steps once you have it:"
     echo "      git init && git add -A && git commit -m 'Initial commit'"
     echo "      gh repo create <name> --private --source=. --remote=origin --push"
+    echo "      git commit --allow-empty -m 'trigger deploy' && git push"
+    echo "        (that last empty commit matters -- GitHub Actions doesn't reliably"
+    echo "         fire on the push that creates a branch, so without it the first"
+    echo "         deploy may just never happen)"
     [ -n "$CI_TOKEN" ] && echo "      gh secret set DAGSTER_CLOUD_API_TOKEN --body '<token from step 4>'"
   elif ! gh auth status >/dev/null 2>&1; then
     echo "    'gh' isn't authenticated. Run 'gh auth login', then either re-run this"
     echo "    script or do it manually:"
     echo "      git init && git add -A && git commit -m 'Initial commit'"
     echo "      gh repo create <name> --private --source=. --remote=origin --push"
+    echo "      git commit --allow-empty -m 'trigger deploy' && git push"
+    echo "        (that last empty commit matters -- GitHub Actions doesn't reliably"
+    echo "         fire on the push that creates a branch, so without it the first"
+    echo "         deploy may just never happen)"
   else
     NESTED_REPO=0
     if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
@@ -409,9 +417,29 @@ if [ "$GIT_PROVIDER" = "github" ] && [ -d .github/workflows ]; then
           fi
 
           CURRENT_BRANCH=$(git branch --show-current)
-          if git push -u "$REMOTE_NAME" "$CURRENT_BRANCH"; then
+          PUSH_OUTPUT=$(git push -u "$REMOTE_NAME" "$CURRENT_BRANCH" 2>&1) && PUSH_OK=1 || PUSH_OK=0
+          echo "$PUSH_OUTPUT" | sed 's/^/    /'
+          if [ "$PUSH_OK" -eq 1 ]; then
             echo "    ✓ pushed to $(gh repo view "$REMOTE_NWO" --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "$REMOTE_NWO") ($CURRENT_BRANCH)"
-            echo "    GitHub Actions should be running now — check the repo's Actions tab."
+            if echo "$PUSH_OUTPUT" | grep -q '\[new branch\]'; then
+              # GitHub Actions doesn't reliably fire on the very push that creates a
+              # branch -- the workflow run on this commit can silently never start.
+              # A no-op follow-up push is the documented workaround.
+              echo ""
+              echo "    This was the first push to this branch, so Dagster+ is NOT deployed yet --"
+              echo "    GitHub Actions doesn't reliably trigger on the push that creates a branch."
+              echo "    Pushing a harmless empty commit to kick off the first real run..."
+              git commit --allow-empty -q -m "Trigger initial Dagster+ deploy workflow"
+              if git push "$REMOTE_NAME" "$CURRENT_BRANCH" >/dev/null 2>&1; then
+                echo "    ✓ follow-up commit pushed — check the repo's Actions tab now."
+              else
+                echo "    ✗ follow-up push failed. The workflow is scaffolded and committed, but"
+                echo "      you'll need to push any small change yourself to trigger the first run:"
+                echo "        git commit --allow-empty -m 'trigger deploy' && git push $REMOTE_NAME $CURRENT_BRANCH"
+              fi
+            else
+              echo "    GitHub Actions should be running now — check the repo's Actions tab."
+            fi
           else
             echo "    ✗ push failed — check the remote and push manually:"
             echo "        git push -u $REMOTE_NAME $CURRENT_BRANCH"
@@ -421,6 +449,10 @@ if [ "$GIT_PROVIDER" = "github" ] && [ -d .github/workflows ]; then
         echo "    skipped — you can do this manually later:"
         echo "      git init && git add -A && git commit -m 'Initial commit'"
         echo "      gh repo create <name> --private --source=. --remote=origin --push"
+        echo "      git commit --allow-empty -m 'trigger deploy' && git push"
+        echo "        (that last empty commit matters -- GitHub Actions doesn't reliably"
+        echo "         fire on the push that creates a branch, so without it the first"
+        echo "         deploy may just never happen)"
       fi
     fi
   fi
