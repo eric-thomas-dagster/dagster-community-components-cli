@@ -25,7 +25,7 @@ curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
   | bash -s kitchen-sink-demo
 ```
 
-Already `cd`'d into a Dagster project (your own, or one you cloned)? The project dir argument is optional in that case — the script checks the current directory for a `[tool.dg]` project before erroring:
+Already `cd`'d into a Dagster project (your own, or one you cloned)? The project dir argument is optional in that case — the script checks the current directory for a dg project (either a `dg.toml` file, or a `pyproject.toml` with `[tool.dg]` — both are valid per dg's own project-config docs) before erroring:
 
 ```bash
 cd kitchen-sink-demo
@@ -46,6 +46,21 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        → Saves a USER token to ~/.dagster_cloud_cli/config.
        → THIS token is what powers the local deploy in step 8.
 3/8  [prompts] Run `dg plus deploy configure --git-provider github`?
+       If build.yaml or dagster_cloud.yaml already exists, this defaults to NO
+       instead of YES, with a warning -- re-running configure can overwrite an
+       already-customized build.yaml/Dockerfile/.github/workflows, and that's
+       not something `--with-ci`/`--non-interactive` should ever silently do.
+       Passes `--organization`/`--deployment` (same values step 6 confirms) and
+       `--yes` explicitly -- confirmed via the actual dagster-dg-cli source that
+       `dg plus deploy configure` bakes the org name, Cloud URL, and deployment
+       name LITERALLY into the generated `.github/workflows/dagster-plus-deploy.yml`
+       at scaffold time (not resolved dynamically when the Action runs later),
+       so if you don't pass these, a customer not using the default "prod"
+       deployment name would get a CI workflow pointed at the wrong deployment.
+       `--yes` avoids `dg`'s own internal confirmation prompts (deployment name,
+       overwrite-this-file, etc.) possibly hanging with no real TTY attached
+       (curl | bash) -- by this point you've already given your own explicit
+       consent via the prompt above.
        Auto-detects your agent type (Serverless vs Hybrid) and scaffolds:
        → build.yaml                              (modern code-location manifest)
        → Dockerfile + container_context.yaml     (Hybrid only -- the resource/sidecar/
@@ -65,9 +80,14 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        → `git init` (if this isn't a repo yet) + sets a local-only git identity
          if none is configured
        → Already have a pushable `origin` (you cloned your own repo)? Uses it
-         as-is, and commits/pushes ONLY the files this script generated
-         (build.yaml, Dockerfile, .github/workflows/) — never sweeps up other
-         uncommitted work sitting in your checkout.
+         as-is, and commits/pushes ONLY files step 3's `configure` call actually
+         touched THIS run (not "whatever's named build.yaml/Dockerfile right
+         now", and not the whole `.github/workflows/` directory — tracked by
+         file mtime against a marker set right before `configure` runs) — never
+         sweeps up other uncommitted work, or an unrelated pre-existing
+         Dockerfile/workflow file, sitting in your checkout. If step 3 didn't
+         run this time (e.g. you declined re-running configure on an
+         already-configured project), nothing gets added here at all.
        → `origin` exists but you can't push to it (e.g. you cloned someone
          else's public example)? Falls back to a second remote, `dagster-plus`,
          pointed at a repo under your own account instead.

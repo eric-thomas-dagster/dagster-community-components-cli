@@ -58,6 +58,23 @@ GITHUB_VISIBILITY=""
 CI_TOKEN=""
 GH_PUBLISHED=0  # set to 1 if step 5 actually pushes -- the scaffolded Action
                 # will deploy from that, so step 8 shouldn't also deploy locally
+CONFIGURED_WORKFLOW_FILES=()  # exactly which .github/workflows/*.yml this run's
+                               # `dg plus deploy configure` touched -- so step 5
+                               # never has to `git add` the whole directory and
+                               # risk sweeping up an unrelated workflow file
+CONFIGURE_RAN=0  # set to 1 only if `dg plus deploy configure` actually ran this
+                 # invocation -- Dockerfile/build.yaml are generic enough names
+                 # that "the file exists" isn't enough reason to stage it; this
+                 # run needs to actually be the one responsible for it
+
+# A dg project is marked by EITHER a pyproject.toml with a [tool.dg] table OR a
+# standalone dg.toml file -- both are valid per dg's own config-discovery docs
+# (https://docs.dagster.io/api/clis/dg-cli/dg-cli-configuration), pyproject.toml
+# is just the more common convention. Checking only pyproject.toml would wrongly
+# reject a real dg.toml-based project.
+is_dg_project() {
+  [ -f dg.toml ] || { [ -f pyproject.toml ] && grep -q "tool.dg" pyproject.toml; }
+}
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -84,7 +101,7 @@ if [ -z "$PROJECT_DIR" ]; then
   # No positional arg given -- if the current directory is itself a dg project
   # (e.g. you cd'd into it before running this), just use it instead of
   # forcing `| bash -s <dir>`.
-  if [ -f pyproject.toml ] && grep -q "tool.dg" pyproject.toml; then
+  if is_dg_project; then
     PROJECT_DIR="."
     echo "No project directory given -- using the current directory (it looks like a dg project)."
   else
@@ -101,8 +118,8 @@ fi
 cd "$PROJECT_DIR"
 PROJECT_DIR="$(pwd)"  # absolute, so later instructions (cd $PROJECT_DIR, etc.) are copy-pasteable regardless of how this was invoked
 
-if [ ! -f pyproject.toml ] || ! grep -q "tool.dg" pyproject.toml; then
-  echo "ERROR: $PROJECT_DIR doesn't look like a Dagster project (no [tool.dg] in pyproject.toml)."
+if ! is_dg_project; then
+  echo "ERROR: $PROJECT_DIR doesn't look like a Dagster project (no dg.toml, and no [tool.dg] in pyproject.toml)."
   exit 2
 fi
 
@@ -150,13 +167,27 @@ if [ ! -f build.yaml ] && [ ! -f dagster_cloud.yaml ]; then
   NEED_CONFIGURE=1
 fi
 
-WANT_CONFIGURE="N"
-if [ "$WITH_CI" -eq 1 ] || [ "$NEED_CONFIGURE" -eq 1 ]; then
-  WANT_CONFIGURE="y"
+if [ "$NEED_CONFIGURE" -eq 1 ]; then
+  # Nothing here yet -- safe to default yes, and safe for --with-ci/--non-interactive
+  # to force it, since there's nothing existing to overwrite.
+  WANT_CONFIGURE="Y"
+  if [ "$WITH_CI" -ne 1 ]; then
+    WANT_CONFIGURE=$(ask "    Run 'dg plus deploy configure' to scaffold build.yaml + CI workflows? [Y/n]:" "Y")
+  fi
 else
-  WANT_CONFIGURE=$(ask "    Run 'dg plus deploy configure' to scaffold build.yaml + CI workflows? [Y/n]:" "Y")
+  # build.yaml or dagster_cloud.yaml already exists -- this project was configured
+  # before, possibly by hand, possibly customized. Re-running configure CAN
+  # overwrite build.yaml/Dockerfile/.github/workflows (not every file dg writes
+  # is guaranteed to prompt before overwriting), so --with-ci and
+  # --non-interactive must NOT silently force this -- default to skipping, and
+  # say exactly why, even when nobody's watching the terminal interactively.
+  echo "    build.yaml or dagster_cloud.yaml already exists -- this project looks"
+  echo "    already configured. Re-running 'dg plus deploy configure' could overwrite"
+  echo "    build.yaml, Dockerfile, or .github/workflows if you've customized them."
+  WANT_CONFIGURE=$(ask "    Re-run 'dg plus deploy configure' anyway? [y/N]:" "N")
 fi
 if is_yes "$WANT_CONFIGURE"; then
+  CONFIGURE_RAN=1
   # Ask for git provider if not passed explicitly
   if [ "$GIT_PROVIDER_EXPLICIT" -eq 0 ]; then
     if [ -z "$GIT_PROVIDER" ]; then
@@ -212,17 +243,50 @@ if is_yes "$WANT_CONFIGURE"; then
       AGENT_PLATFORM=$(ask "    Agent platform [k8s/ecs/docker]:" "k8s")
     fi
 
-    REG_ARG=""; PLAT_ARG=""
-    [ -n "$REGISTRY_URL" ]   && REG_ARG="--registry-url $REGISTRY_URL"
-    [ -n "$AGENT_PLATFORM" ] && PLAT_ARG="--agent-platform $AGENT_PLATFORM"
-    echo "    Running: dg plus deploy configure hybrid --git-provider $GIT_PROVIDER $REG_ARG $PLAT_ARG"
+    # --organization/--deployment matter a lot here: `dg plus deploy configure`
+    # bakes the org name, Cloud URL, and deployment name LITERALLY into the
+    # generated .github/workflows/dagster-plus-deploy.yml at scaffold time (not
+    # resolved dynamically when the Action runs later) -- confirmed by reading
+    # the actual dagster-dg-cli source (configure_ci.py's TEMPLATE_ORGANIZATION_NAME
+    # / TEMPLATE_DEFAULT_DEPLOYMENT_NAME substitution). If we don't pass these
+    # explicitly, `dg` falls back to whatever's in the user's own `dg plus login`
+    # config, or a bare "prod" -- which may not be this customer's real
+    # deployment name. Pass the exact same org/deployment this script already
+    # resolved (and that step 6 later confirms with the user), so the CI-
+    # triggered deploy and the local deploy can't silently target different
+    # places. Also pass -y: we've already gotten explicit consent to run
+    # configure at all (see the NEED_CONFIGURE/"already exists" check above),
+    # so there's no reason to risk dg's OWN internal confirmation/prompt
+    # questions (deployment name, overwrite-this-file, etc.) hanging or
+    # aborting when there's no real TTY attached (curl | bash).
+    REG_ARG=""; PLAT_ARG=""; ORG_CONFIG_ARG=""
+    [ -n "$REGISTRY_URL" ]    && REG_ARG="--registry-url $REGISTRY_URL"
+    [ -n "$AGENT_PLATFORM" ]  && PLAT_ARG="--agent-platform $AGENT_PLATFORM"
+    [ -n "$DAGSTER_PLUS_ORG" ] && ORG_CONFIG_ARG="--organization $DAGSTER_PLUS_ORG"
+    echo "    Running: dg plus deploy configure hybrid --git-provider $GIT_PROVIDER --deployment $DAGSTER_PLUS_DEPLOYMENT $ORG_CONFIG_ARG $REG_ARG $PLAT_ARG --yes"
+    CONFIGURE_MARKER=$(mktemp)
     # shellcheck disable=SC2086
-    uv run dg plus deploy configure hybrid --git-provider "$GIT_PROVIDER" $REG_ARG $PLAT_ARG || true
+    uv run dg plus deploy configure hybrid --git-provider "$GIT_PROVIDER" --deployment "$DAGSTER_PLUS_DEPLOYMENT" $ORG_CONFIG_ARG $REG_ARG $PLAT_ARG --yes || true
   else
-    # Serverless: just go.
-    echo "    Running: dg plus deploy configure serverless --git-provider $GIT_PROVIDER"
-    uv run dg plus deploy configure serverless --git-provider "$GIT_PROVIDER" || true
+    # Serverless: just go. Same org/deployment/--yes reasoning as the hybrid
+    # branch above.
+    ORG_CONFIG_ARG=""
+    [ -n "$DAGSTER_PLUS_ORG" ] && ORG_CONFIG_ARG="--organization $DAGSTER_PLUS_ORG"
+    echo "    Running: dg plus deploy configure serverless --git-provider $GIT_PROVIDER --deployment $DAGSTER_PLUS_DEPLOYMENT $ORG_CONFIG_ARG --yes"
+    CONFIGURE_MARKER=$(mktemp)
+    # shellcheck disable=SC2086
+    uv run dg plus deploy configure serverless --git-provider "$GIT_PROVIDER" --deployment "$DAGSTER_PLUS_DEPLOYMENT" $ORG_CONFIG_ARG --yes || true
   fi
+  # Exactly which workflow file(s) this run's configure call touched (by mtime,
+  # relative to a marker created right before it ran) -- NOT "everything in
+  # .github/workflows", which could include an unrelated workflow someone else
+  # already had sitting there (mid-edit, uncommitted or otherwise).
+  if [ -d .github/workflows ]; then
+    while IFS= read -r -d '' wf; do
+      CONFIGURED_WORKFLOW_FILES+=("$wf")
+    done < <(find .github/workflows -maxdepth 1 -type f -newer "$CONFIGURE_MARKER" -print0 2>/dev/null)
+  fi
+  rm -f "$CONFIGURE_MARKER"
   echo ""
   echo "    ✓ generated artifacts:"
   ls -la build.yaml Dockerfile container_context.yaml .github/workflows/*.yml 2>/dev/null | sed 's/^/      /' || true
@@ -472,17 +536,24 @@ if [ "$GIT_PROVIDER" = "github" ] && [ -d .github/workflows ]; then
           fi
 
           # Fresh repo (we just ran git init): this IS the project, push all of it.
-          # Pre-existing repo (you cloned this): only add the deployment config
-          # this script generated -- never sweep up your other uncommitted work.
+          # Pre-existing repo (you cloned this): only add files THIS RUN actually
+          # generated/touched via `dg plus deploy configure` -- never sweep up
+          # other uncommitted work, and never assume an existing Dockerfile/
+          # build.yaml/workflow is ours to commit just because it exists on disk
+          # (e.g. a generic "Dockerfile" could easily be unrelated and mid-edit).
           if [ "$FRESH_REPO" -eq 1 ]; then
             git add -A
-          else
+          elif [ "$CONFIGURE_RAN" -eq 1 ]; then
             TO_ADD=()
             for f in build.yaml Dockerfile container_context.yaml dagster_cloud.yaml; do
               [ -f "$f" ] && TO_ADD+=("$f")
             done
-            [ -d .github/workflows ] && TO_ADD+=(".github/workflows")
+            [ ${#CONFIGURED_WORKFLOW_FILES[@]} -gt 0 ] && TO_ADD+=("${CONFIGURED_WORKFLOW_FILES[@]}")
             [ ${#TO_ADD[@]} -gt 0 ] && git add "${TO_ADD[@]}"
+          else
+            echo "    step 3's configure didn't run this time, so there's nothing new to"
+            echo "    add -- not touching build.yaml/Dockerfile/.github/workflows, in case"
+            echo "    anything with those names already in this checkout is unrelated."
           fi
 
           if ! git diff --cached --quiet; then
