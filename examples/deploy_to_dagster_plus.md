@@ -25,6 +25,13 @@ curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-communi
   | bash -s kitchen-sink-demo
 ```
 
+Already `cd`'d into a Dagster project (your own, or one you cloned)? The project dir argument is optional in that case — the script checks the current directory for a `[tool.dg]` project before erroring:
+
+```bash
+cd kitchen-sink-demo
+curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/deploy_to_dagster_plus.sh | bash
+```
+
 The script prompts you along the way. To accept defaults and skip prompts in CI:
 
 ```bash
@@ -41,8 +48,13 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
 3/8  [prompts] Run `dg plus deploy configure --git-provider github`?
        Auto-detects your agent type (Serverless vs Hybrid) and scaffolds:
        → build.yaml                              (modern code-location manifest)
-       → Dockerfile + container_context.yaml     (Hybrid only)
+       → Dockerfile + container_context.yaml     (Hybrid only -- the resource/sidecar/
+                                                    mount config file always gets written,
+                                                    but with everything commented out)
        → .github/workflows/*.yml                 (CI/CD)
+       → If it's still 100% commented out (i.e. untouched by anyone), offers to add a
+         default compute size for ECS/Kubernetes -- a common cause of a run getting
+         killed is under-sized compute, and this is the fix for it.
 4/8  [prompts, if .github/ exists] Create a CI API token?
        → A SEPARATE token for GitHub Actions runs (no browser available there).
        → Can be auto-set as a GitHub secret in step 5, or paste it in yourself.

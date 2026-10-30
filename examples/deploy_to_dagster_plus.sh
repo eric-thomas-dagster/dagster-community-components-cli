@@ -81,8 +81,17 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$PROJECT_DIR" ]; then
-  echo "Usage: $0 <project_dir> [--organization X] [--deployment Y] [--git-provider github|gitlab] [--non-interactive] [--with-ci] [--publish-to-github] [--github-repo NAME] [--github-visibility private|public]"
-  exit 2
+  # No positional arg given -- if the current directory is itself a dg project
+  # (e.g. you cd'd into it before running this), just use it instead of
+  # forcing `| bash -s <dir>`.
+  if [ -f pyproject.toml ] && grep -q "tool.dg" pyproject.toml; then
+    PROJECT_DIR="."
+    echo "No project directory given -- using the current directory (it looks like a dg project)."
+  else
+    echo "Usage: $0 <project_dir> [--organization X] [--deployment Y] [--git-provider github|gitlab] [--non-interactive] [--with-ci] [--publish-to-github] [--github-repo NAME] [--github-visibility private|public]"
+    echo "(Or just cd into your Dagster project first and run this with no arguments.)"
+    exit 2
+  fi
 fi
 if [ ! -d "$PROJECT_DIR" ]; then
   echo "ERROR: $PROJECT_DIR is not a directory. Run the demo setup first."
@@ -90,6 +99,7 @@ if [ ! -d "$PROJECT_DIR" ]; then
 fi
 
 cd "$PROJECT_DIR"
+PROJECT_DIR="$(pwd)"  # absolute, so later instructions (cd $PROJECT_DIR, etc.) are copy-pasteable regardless of how this was invoked
 
 if [ ! -f pyproject.toml ] || ! grep -q "tool.dg" pyproject.toml; then
   echo "ERROR: $PROJECT_DIR doesn't look like a Dagster project (no [tool.dg] in pyproject.toml)."
@@ -216,6 +226,74 @@ if is_yes "$WANT_CONFIGURE"; then
   echo ""
   echo "    ✓ generated artifacts:"
   ls -la build.yaml Dockerfile container_context.yaml .github/workflows/*.yml 2>/dev/null | sed 's/^/      /' || true
+
+  # `dg plus deploy configure hybrid` ALWAYS writes container_context.yaml, for
+  # every agent platform -- but its content is 100% commented-out placeholder
+  # examples, not active config. So "does it need resource sizing" is really
+  # "does it have any active (non-comment, non-blank) line yet", not "does the
+  # file exist" -- a plain existence check would never fire.
+  HAS_ACTIVE_CONTEXT=0
+  if [ -f container_context.yaml ] && grep -vE '^[[:space:]]*(#|$)' container_context.yaml | grep -q .; then
+    HAS_ACTIVE_CONTEXT=1
+  fi
+  if [ "$AGENT_TYPE" = "hybrid" ] && [ "$HAS_ACTIVE_CONTEXT" -eq 0 ]; then
+    echo ""
+    echo "    container_context.yaml was scaffolded but everything in it is commented"
+    echo "    out -- nothing's actually configured yet. Per-code-location, this is also"
+    echo "    where you'd set up sidecars, volume mounts, or IAM/service-account"
+    echo "    overrides -- full schema (the commented examples already in the file are"
+    echo "    a good reference for those):"
+    echo "      ECS:        https://docs.dagster.io/deployment/dagster-plus/hybrid/amazon-ecs/configuration-reference"
+    echo "      Kubernetes: https://docs.dagster.io/deployment/dagster-plus/hybrid/kubernetes/configuration"
+    if [ "$AGENT_PLATFORM" = "ecs" ] || [ "$AGENT_PLATFORM" = "k8s" ]; then
+      WANT_SIZING=$(ask "    A common cause of killed runs is under-sized compute -- set a default compute size now? [Y/n]:" "Y")
+      if is_yes "$WANT_SIZING"; then
+        {
+          echo ""
+          echo "# --- Added by deploy_to_dagster_plus.sh: default compute size ---"
+          if [ "$AGENT_PLATFORM" = "ecs" ]; then
+            cat <<'CCY'
+ecs:
+  server_resources: # code server that loads this code location
+    cpu: '256'
+    memory: '1024'
+  run_resources: # individual job runs
+    cpu: '4096'
+    memory: '16384'
+CCY
+          else
+            cat <<'CCY'
+k8s:
+  server_k8s_config: # code server that loads this code location
+    container_config:
+      resources:
+        limits:
+          cpu: 250m
+          memory: 1024Mi
+  run_k8s_config: # individual job runs
+    container_config:
+      resources:
+        limits:
+          cpu: 4000m
+          memory: 16384Mi
+CCY
+          fi
+        } >> container_context.yaml
+        echo "    ✓ added active resource config to container_context.yaml (appended --"
+        echo "      the commented examples already in the file, e.g. for sidecars/mounts,"
+        echo "      are left in place for reference). run_resources is 4 vCPU / 16GB,"
+        echo "      matching Dagster+ Serverless's own default run size. This is a"
+        echo "      starting point, not a guarantee: adjust per code location once you"
+        echo "      know its real memory footprint, especially if a run still gets"
+        echo "      OOM-killed."
+      else
+        echo "    skipped -- using agent defaults. If a run gets OOM-killed later, this is"
+        echo "    the file to fix: uncomment and set run_resources.memory (ECS) or"
+        echo "    run_k8s_config's resources.limits.memory (Kubernetes) for that code"
+        echo "    location."
+      fi
+    fi
+  fi
 
   if [ "$AGENT_TYPE" = "hybrid" ] && [ -n "$REGISTRY_URL" ]; then
     cat >&2 <<HINT
