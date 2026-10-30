@@ -31,26 +31,48 @@ The script prompts you along the way. To accept defaults and skip prompts in CI:
 curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-interactive
 ```
 
-## What the script does (7 steps)
+## What the script does (8 steps)
 
 ```
-1/7  Ensures dagster-cloud-cli is in dev deps                     (idempotent)
-2/7  Runs `dg plus login` if not already authed                   (browser OAuth)
+1/8  Ensures dagster-cloud-cli is in dev deps                     (idempotent)
+2/8  Runs `dg plus login` if not already authed                   (browser OAuth)
        → Saves a USER token to ~/.dagster_cloud_cli/config.
-       → THIS token is what powers the local deploy in step 7.
-3/7  [prompts] Run `dg plus deploy configure --git-provider github`?
+       → THIS token is what powers the local deploy in step 8.
+3/8  [prompts] Run `dg plus deploy configure --git-provider github`?
        Auto-detects your agent type (Serverless vs Hybrid) and scaffolds:
        → build.yaml                              (modern code-location manifest)
        → Dockerfile + container_context.yaml     (Hybrid only)
        → .github/workflows/*.yml                 (CI/CD)
-4/7  [prompts, if .github/ exists] Create a CI API token?
+4/8  [prompts, if .github/ exists] Create a CI API token?
        → A SEPARATE token for GitHub Actions runs (no browser available there).
-       → Paste into GitHub secret DAGSTER_CLOUD_API_TOKEN.
+       → Can be auto-set as a GitHub secret in step 5, or paste it in yourself.
        → Optional — skip this if you only deploy from your laptop.
-5/7  Confirms deployment target (org / deployment / build strategy)
+5/8  [prompts, if git-provider=github and .github/workflows exists] Publish to GitHub?
+       Only runs if the `gh` CLI is installed and authenticated — otherwise it
+       prints the equivalent manual commands and moves on.
+       → `git init` (if this isn't a repo yet) + sets a local-only git identity
+         if none is configured
+       → Already have a pushable `origin` (you cloned your own repo)? Uses it
+         as-is, and commits/pushes ONLY the files this script generated
+         (build.yaml, Dockerfile, .github/workflows/) — never sweeps up other
+         uncommitted work sitting in your checkout.
+       → `origin` exists but you can't push to it (e.g. you cloned someone
+         else's public example)? Falls back to a second remote, `dagster-plus`,
+         pointed at a repo under your own account instead.
+       → No usable remote at all? Asks for a repo name — attaches to it if it
+         already exists on GitHub, otherwise runs `gh repo create`. Since
+         there's nothing committed yet in this case, this first commit is the
+         whole project, not just the deployment config.
+       → `gh secret set DAGSTER_CLOUD_API_TOKEN` (if step 4 created a token) —
+         set BEFORE the first push, so the Action's first run doesn't fail on
+         a missing secret
+       → `git commit` + `git push -u <remote> <branch>`
+       → Refuses to touch anything if this project dir is already nested inside
+         a different git repo, to avoid creating a confusing nested repo.
+6/8  Confirms deployment target (org / deployment / build strategy)
        → You see exactly which deployment env vars + the deploy will target
          before any changes get made.
-6/7  Scans your project for env var references — and offers to set each one.
+7/8  Scans your project for env var references — and offers to set each one.
        → Greps for EnvVar("X"), os.environ["X"], *_env_var: X, ${env:X}.
        → Runs `dg plus pull env` first to see what's ALREADY set on this
          deployment, so we don't blindly overwrite. Existing vars get
@@ -61,7 +83,7 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        → Each provided value runs `dg plus create env X --value … --deployment …`.
        → Scan only catches the most common patterns — set any others manually:
            uv run dg plus create env MY_VAR --value '...' --deployment prod
-7/7  [prompts] Run dg plus deploy now?  (uses your step-2 user token, NOT the CI token)
+8/8  [prompts] Run dg plus deploy now?  (uses your step-2 user token, NOT the CI token)
 ```
 
 **Why two tokens?**
@@ -69,17 +91,20 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
 | Token | Lives in | Used by | Created by |
 |---|---|---|---|
 | **User login token** | `~/.dagster_cloud_cli/config` on your laptop | The local `dg plus deploy` from this script | `dg plus login` — step 2 |
-| **CI API token** | GitHub repo secret `DAGSTER_CLOUD_API_TOKEN` | GitHub Actions runs scaffolded in step 3 | `dg plus create ci-api-token` — step 4 |
+| **CI API token** | GitHub repo secret `DAGSTER_CLOUD_API_TOKEN` | GitHub Actions runs scaffolded in step 3 | `dg plus create ci-api-token` — step 4, set as a secret in step 5 |
 
-The CI token in step 4 is **optional for the current script run** — your `dg plus login` token from step 2 is what powers step 6. Step 4's token only matters if you want pushes to `main` to redeploy automatically via the GitHub Actions workflow.
+The CI token in step 4 is **optional for the current script run** — your `dg plus login` token from step 2 is what powers step 8. Step 4's token only matters if you want pushes to `main` to redeploy automatically via the GitHub Actions workflow — which is exactly what step 5 wires up.
 
 **Key on step 3:** uses the official `dg plus deploy configure` command — not hand-written YAML. That command auto-detects whether your Dagster+ workspace is Serverless or Hybrid, then writes the exact artifacts the official tooling expects. If you've migrated from a `dagster_cloud.yaml`-based project, the new build.yaml replaces it.
+
+**Step 5 closes a real gap:** steps 1-4 scaffold a GitHub Actions workflow, but none of the demo setup scripts `git init` a repo — so without step 5, that workflow has nothing to attach to and never runs until you set up git/GitHub yourself. Step 5 is entirely optional and skips cleanly (falling back to printed manual commands) if you don't have the `gh` CLI installed and authenticated, or if you answer no to its prompt.
 
 ## Prerequisites
 
 - **A Dagster+ account** — free 30-day trial at <https://dagster.io/plus>.
 - **`uv` + `uvx`** — already on your machine from running any demo.
 - A demo project on disk (created by one of the `setup_*_demo.sh` scripts).
+- **Optional, for step 5 (publish to GitHub):** the [`gh` CLI](https://cli.github.com), authenticated (`gh auth login`). Without it, step 5 just prints the manual git/gh commands and continues.
 
 ## Build strategy is auto-detected
 
@@ -103,7 +128,12 @@ You can force a specific strategy with `--build-strategy docker` or `--build-str
   --registry-url 123456789012.dkr.ecr.us-east-1.amazonaws.com/my-repo \
   --agent-platform k8s \
   --non-interactive \
-  --with-ci             # scaffold GitHub Actions without prompting
+  --with-ci \
+  --publish-to-github \
+  --github-repo my-demo-repo \
+  --github-visibility private
+# --with-ci            scaffolds GitHub Actions without prompting
+# --publish-to-github  runs git init + gh repo create + push without prompting
 ```
 
 | Flag | Default | When to set |
@@ -111,6 +141,9 @@ You can force a specific strategy with `--build-strategy docker` or `--build-str
 | `--organization` | from `dg plus login` | Override the org chosen at login time |
 | `--deployment` | `prod` | Deploy to a branch deployment or a non-prod env |
 | `--build-strategy` | auto-detect | Force `docker` or `python-executable` |
+| `--publish-to-github` | (off) | Run step 5 (git init / `gh repo create` / push) without the interactive prompt — needs `gh` installed + authenticated |
+| `--github-repo` | project dir name | Repo name for `gh repo create`, if one doesn't exist yet |
+| `--github-visibility` | `private` | `private` or `public`, for `gh repo create` |
 | `--agent-type` | prompt | `serverless` or `hybrid` |
 | `--registry-url` | prompt (Hybrid only) | Container registry URL for `docker push` / `docker pull` |
 | `--agent-platform` | prompt (Hybrid only) | `k8s` / `ecs` / `docker` — selects the right `container_context.yaml` shape |
@@ -185,9 +218,9 @@ For Kubernetes agents pulling private images, you'll also need an `imagePullSecr
 
 ## The CI API token
 
-If you opt in to step 5, the script runs `dg plus create ci-api-token` and prints the token once. Copy it immediately — Dagster+ won't show it again.
+If you opt in to step 4, the script runs `dg plus create ci-api-token` and prints the token once. Copy it immediately — Dagster+ won't show it again.
 
-Then in GitHub:
+If `gh` is installed and authenticated, step 5 sets it as the GitHub secret for you automatically. Otherwise, do it yourself:
 
 1. Your repo → Settings → Secrets and variables → Actions → New repository secret
 2. Name: `DAGSTER_CLOUD_API_TOKEN`
@@ -227,7 +260,7 @@ To add or update an env var anytime:
 uv run dg plus create env MY_KEY --value "..." --deployment prod
 ```
 
-If you opted into GitHub Actions in step 3, **you don't need to run anything manually** — pushing to `main` redeploys automatically.
+If you published to GitHub in step 5, **you don't need to run anything manually** — pushing to `main` redeploys automatically.
 
 ## Caveats: which demos work as-is on Serverless
 

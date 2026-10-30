@@ -9,6 +9,9 @@
 #     [--git-provider github|gitlab]
 #     [--non-interactive]    # skip prompts (CI use)
 #     [--with-ci]            # scaffold CI even without prompt
+#     [--publish-to-github]  # create/push a GitHub repo even without prompt
+#     [--github-repo NAME]   # repo name to create (default: project dir name)
+#     [--github-visibility private|public]  # default: private
 #
 # Example (interactive):
 #   curl -fsSL .../setup_kitchen_sink_demo.sh | bash
@@ -20,13 +23,18 @@
 #   3. Asks: scaffold deployment artifacts via `dg plus deploy configure`?
 #      → Creates build.yaml, Dockerfile (Hybrid only), .github/workflows/*
 #      Auto-detects whether your deployment is Serverless or Hybrid.
-#   4. Asks: create a CI API token? → prints once for GitHub secret
-#      Optional. The local deploy in step 7 uses your `dg plus login` token,
+#   4. Asks: create a CI API token? → can be auto-set as a GitHub secret in step 5
+#      Optional. The local deploy in step 8 uses your `dg plus login` token,
 #      not this one. The CI token is only for GitHub Actions runs.
-#   5. Scans your project for env var references (EnvVar, os.environ,
-#      *_env_var: X) and prompts you to set values via `dg plus create env`.
+#   5. Asks: publish this project to GitHub now (via the `gh` CLI)?
+#      → `git init` if needed, `gh repo create` if there's no remote yet,
+#        `gh secret set DAGSTER_CLOUD_API_TOKEN` (if step 4's token exists),
+#        then commit + push — so the Action scaffolded in step 3 can actually run.
+#      Skipped entirely if `gh` isn't installed/authed, or git-provider isn't github.
 #   6. Confirms deployment target.
-#   7. Runs `dg plus deploy` (build strategy auto-detected from agent type).
+#   7. Scans your project for env var references (EnvVar, os.environ,
+#      *_env_var: X) and prompts you to set values via `dg plus create env`.
+#   8. Runs `dg plus deploy` (build strategy auto-detected from agent type).
 #
 # Build strategy is auto-detected — leave --build-strategy unset and dg picks
 # PEX for Serverless, Docker for Hybrid. Override if you have a specific reason.
@@ -44,6 +52,10 @@ REGISTRY_URL=""         # required for hybrid
 AGENT_PLATFORM=""       # k8s | ecs | docker (hybrid only)
 NON_INTERACTIVE=0
 WITH_CI=0
+PUBLISH_TO_GITHUB=0
+GITHUB_REPO=""
+GITHUB_VISIBILITY=""
+CI_TOKEN=""
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -56,6 +68,9 @@ while [ "$#" -gt 0 ]; do
     --agent-platform) AGENT_PLATFORM="$2"; shift 2;;
     --non-interactive) NON_INTERACTIVE=1; shift;;
     --with-ci) WITH_CI=1; shift;;
+    --publish-to-github) PUBLISH_TO_GITHUB=1; shift;;
+    --github-repo) GITHUB_REPO="$2"; shift 2;;
+    --github-visibility) GITHUB_VISIBILITY="$2"; shift 2;;
     --help|-h)
       grep -E "^#( |$)" "$0" | sed 's/^# \{0,1\}//'
       exit 0;;
@@ -64,7 +79,7 @@ while [ "$#" -gt 0 ]; do
 done
 
 if [ -z "$PROJECT_DIR" ]; then
-  echo "Usage: $0 <project_dir> [--organization X] [--deployment Y] [--git-provider github|gitlab] [--non-interactive] [--with-ci]"
+  echo "Usage: $0 <project_dir> [--organization X] [--deployment Y] [--git-provider github|gitlab] [--non-interactive] [--with-ci] [--publish-to-github] [--github-repo NAME] [--github-visibility private|public]"
   exit 2
 fi
 if [ ! -d "$PROJECT_DIR" ]; then
@@ -92,8 +107,8 @@ ask() {
 }
 is_yes() { case "$1" in y|Y|yes|YES|Yes) return 0;; *) return 1;; esac }
 
-# ── 1/6: dev deps ─────────────────────────────────────────────────────────────
-echo "==> 1/6: Ensuring dagster-cloud-cli is in dev deps"
+# ── 1/8: dev deps ─────────────────────────────────────────────────────────────
+echo "==> 1/8: Ensuring dagster-cloud-cli is in dev deps"
 if ! grep -q "dagster-cloud-cli" pyproject.toml; then
   uv add --dev -q dagster-cloud-cli
   echo "    ✓ added"
@@ -101,8 +116,8 @@ else
   echo "    ✓ already present"
 fi
 
-# ── 2/6: login ────────────────────────────────────────────────────────────────
-echo "==> 2/6: Checking Dagster+ login"
+# ── 2/8: login ────────────────────────────────────────────────────────────────
+echo "==> 2/8: Checking Dagster+ login"
 if ! uv run dg plus config view >/dev/null 2>&1; then
   echo "    No saved config. Running 'dg plus login' — opens a browser tab."
   echo "    No account? Free trial: https://dagster.io/plus"
@@ -116,8 +131,8 @@ if [ -z "$DAGSTER_PLUS_ORG" ]; then
   DAGSTER_PLUS_ORG=$(uv run dg plus config view 2>/dev/null | grep -E "^organization" | awk '{print $2}' || true)
 fi
 
-# ── 3/6: scaffold deployment artifacts (build.yaml + Dockerfile + CI) ────────
-echo "==> 3/6: Deployment artifacts (build.yaml, CI workflows, Dockerfile)"
+# ── 3/8: scaffold deployment artifacts (build.yaml + Dockerfile + CI) ────────
+echo "==> 3/8: Deployment artifacts (build.yaml, CI workflows, Dockerfile)"
 NEED_CONFIGURE=0
 if [ ! -f build.yaml ] && [ ! -f dagster_cloud.yaml ]; then
   NEED_CONFIGURE=1
@@ -217,29 +232,204 @@ else
   echo "    skipped"
 fi
 
-# ── 4/6: CI API token ────────────────────────────────────────────────────────
+# ── 4/8: CI API token ────────────────────────────────────────────────────────
 if [ -d .github/workflows ]; then
-  echo "==> 4/6: GitHub Actions CI API token (optional — only for unattended CI runs)"
-  echo "    The local deploy in step 6 uses your 'dg plus login' token from step 2."
+  echo "==> 4/8: GitHub Actions CI API token (optional — only for unattended CI runs)"
+  echo "    The local deploy in step 8 uses your 'dg plus login' token from step 2."
   echo "    A separate CI token is needed if you want GitHub Actions to deploy on push."
   WANT_TOKEN=$(ask "    Create a Dagster+ CI API token now? [y/N]:" "N")
+  if [ "$PUBLISH_TO_GITHUB" -eq 1 ]; then WANT_TOKEN="Y"; fi
   if is_yes "$WANT_TOKEN"; then
+    CI_TOKEN=$(uv run dg plus create ci-api-token)
     echo ""
     echo "    Token (copy now, it won't be shown again):"
-    uv run dg plus create ci-api-token | sed 's/^/      /'
+    echo "$CI_TOKEN" | sed 's/^/      /'
     echo ""
-    echo "    Add this in GitHub: Settings → Secrets and variables → Actions → New repository secret"
+    echo "    The next step can set this as a GitHub secret for you automatically."
+    echo "    Otherwise: Settings → Secrets and variables → Actions → New repository secret"
     echo "      Name:  DAGSTER_CLOUD_API_TOKEN"
     echo "      Value: (the token above)"
   else
     echo "    skipped (you can run 'dg plus create ci-api-token' later)"
   fi
 else
-  echo "==> 4/6: GitHub Actions CI API token — skipped (no .github/workflows/ to wire up)"
+  echo "==> 4/8: GitHub Actions CI API token — skipped (no .github/workflows/ to wire up)"
 fi
 
-# ── 5/7: deployment target — CONFIRM FIRST (env-var step depends on it) ─────
-echo "==> 5/7: Deployment target"
+# ── 5/8: publish to GitHub (optional — lets the scaffolded Action actually run) ──
+if [ "$GIT_PROVIDER" = "github" ] && [ -d .github/workflows ]; then
+  echo "==> 5/8: Publish to GitHub"
+
+  if ! command -v gh >/dev/null 2>&1; then
+    echo "    'gh' (GitHub CLI) not found — skipping. Install: https://cli.github.com"
+    echo "    Manual steps once you have it:"
+    echo "      git init && git add -A && git commit -m 'Initial commit'"
+    echo "      gh repo create <name> --private --source=. --remote=origin --push"
+    [ -n "$CI_TOKEN" ] && echo "      gh secret set DAGSTER_CLOUD_API_TOKEN --body '<token from step 4>'"
+  elif ! gh auth status >/dev/null 2>&1; then
+    echo "    'gh' isn't authenticated. Run 'gh auth login', then either re-run this"
+    echo "    script or do it manually:"
+    echo "      git init && git add -A && git commit -m 'Initial commit'"
+    echo "      gh repo create <name> --private --source=. --remote=origin --push"
+  else
+    NESTED_REPO=0
+    if git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+      TOPLEVEL=$(git rev-parse --show-toplevel)
+      if [ "$TOPLEVEL" != "$(pwd -P)" ]; then
+        echo "    ⚠️  $(pwd) is nested inside an existing git repo at $TOPLEVEL."
+        echo "       Skipping auto git-init/push to avoid a confusing nested repo — set this up manually if needed."
+        NESTED_REPO=1
+      fi
+    fi
+
+    if [ "$NESTED_REPO" -eq 0 ]; then
+      DEFAULT_PUBLISH="N"
+      [ "$WITH_CI" -eq 1 ] && DEFAULT_PUBLISH="Y"
+      WANT_PUBLISH=$(ask "    Push this project to GitHub now, so the Action can run on future pushes? [y/N]:" "$DEFAULT_PUBLISH")
+      if [ "$PUBLISH_TO_GITHUB" -eq 1 ]; then WANT_PUBLISH="Y"; fi
+
+      if is_yes "$WANT_PUBLISH"; then
+        FRESH_REPO=0
+        if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+          git init -q -b main
+          echo "    ✓ git init"
+          FRESH_REPO=1
+        fi
+
+        if [ -z "$(git config user.email 2>/dev/null || true)" ]; then
+          echo "    No git identity configured for this repo."
+          GIT_NAME=$(ask "    git user.name:" "$(whoami)")
+          GIT_EMAIL=$(ask "    git user.email:" "${GIT_NAME}@users.noreply.github.com")
+          git config user.name "$GIT_NAME"
+          git config user.email "$GIT_EMAIL"
+        fi
+
+        # Resolve which remote to push to.
+        #   - If 'origin' already exists AND you can push to it (e.g. you
+        #     cloned your own repo), use it as-is — this is the "fix up an
+        #     existing repo" path.
+        #   - If 'origin' exists but you have no push access (e.g. you cloned
+        #     someone else's public example repo), don't try to push there —
+        #     fall back to a second remote ('dagster-plus') pointed at a repo
+        #     under your own account instead.
+        #   - If there's no 'origin' at all, ask for a repo name and either
+        #     attach to it (if it already exists on GitHub) or create it.
+        REMOTE_NAME="origin"
+        HAVE_REMOTE=0
+        if git remote get-url origin >/dev/null 2>&1; then
+          # Raw configured URL, not `git remote get-url` -- that silently applies
+          # any url.*.insteadOf rewrite (e.g. a common SSH-over-HTTPS rule), which
+          # would feed the wrong string into the owner/repo parsing below.
+          ORIGIN_URL=$(git config --get remote.origin.url)
+          ORIGIN_NWO=$(echo "$ORIGIN_URL" | sed -E 's#^git@github\.com:##; s#^https://github\.com/##; s#\.git$##')
+          ORIGIN_PERM=""
+          if echo "$ORIGIN_NWO" | grep -qE '^[^/]+/[^/]+$'; then
+            ORIGIN_PERM=$(gh repo view "$ORIGIN_NWO" --json viewerPermission -q .viewerPermission 2>/dev/null || true)
+          fi
+          case "$ORIGIN_PERM" in
+            WRITE|ADMIN|MAINTAIN)
+              HAVE_REMOTE=1
+              echo "    ✓ 'origin' ($ORIGIN_NWO) is pushable — using it"
+              ;;
+            *)
+              echo "    'origin' is $ORIGIN_URL, but you don't have push access to it"
+              echo "    (e.g. this looks like a clone of someone else's repo)."
+              REMOTE_NAME="dagster-plus"
+              git remote get-url "$REMOTE_NAME" >/dev/null 2>&1 && HAVE_REMOTE=1
+              ;;
+          esac
+        elif git remote get-url "$REMOTE_NAME" >/dev/null 2>&1; then
+          HAVE_REMOTE=1
+        fi
+
+        if [ "$HAVE_REMOTE" -eq 0 ]; then
+          DEFAULT_REPO_NAME=$(basename "$(pwd)" | tr -c 'A-Za-z0-9_.-' '-')
+          if [ -z "$GITHUB_REPO" ]; then
+            GITHUB_REPO=$(ask "    GitHub repo (new or existing) to push to:" "$DEFAULT_REPO_NAME")
+          fi
+          GH_LOGIN=$(gh api user --jq .login 2>/dev/null || true)
+          if echo "$GITHUB_REPO" | grep -q '/'; then
+            REPO_NWO="$GITHUB_REPO"
+          else
+            REPO_NWO="${GH_LOGIN:+$GH_LOGIN/}$GITHUB_REPO"
+          fi
+          if [ -n "$REPO_NWO" ] && gh repo view "$REPO_NWO" >/dev/null 2>&1; then
+            REPO_URL=$(gh repo view "$REPO_NWO" --json url -q .url)
+            git remote add "$REMOTE_NAME" "${REPO_URL}.git" 2>/dev/null || git remote set-url "$REMOTE_NAME" "${REPO_URL}.git"
+            echo "    ✓ $REPO_NWO already exists on GitHub — attached as '$REMOTE_NAME'"
+          else
+            if [ -z "$GITHUB_VISIBILITY" ]; then
+              GITHUB_VISIBILITY=$(ask "    Visibility for the new repo [private/public]:" "private")
+            fi
+            [ "$GITHUB_VISIBILITY" != "public" ] && GITHUB_VISIBILITY="private"
+            echo "    Running: gh repo create $GITHUB_REPO --$GITHUB_VISIBILITY --source=. --remote=$REMOTE_NAME"
+            if gh repo create "$GITHUB_REPO" "--$GITHUB_VISIBILITY" --source=. --remote="$REMOTE_NAME"; then
+              echo "    ✓ created $(gh repo view "$GITHUB_REPO" --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "$GITHUB_REPO")"
+            else
+              echo "    ✗ 'gh repo create' failed (name taken, no permission, etc.) — set up the remote manually:"
+              echo "        gh repo create <name> --private --source=. --remote=$REMOTE_NAME"
+            fi
+          fi
+        fi
+
+        if git remote get-url "$REMOTE_NAME" >/dev/null 2>&1; then
+          REMOTE_NWO=$(git config --get remote."$REMOTE_NAME".url | sed -E 's#^git@github\.com:##; s#^https://github\.com/##; s#\.git$##')
+          if [ -n "$CI_TOKEN" ]; then
+            if gh secret set DAGSTER_CLOUD_API_TOKEN --body "$CI_TOKEN" --repo "$REMOTE_NWO" >/dev/null 2>&1; then
+              echo "    ✓ GitHub secret DAGSTER_CLOUD_API_TOKEN set"
+            else
+              echo "    ✗ couldn't set the GitHub secret automatically — set it manually:"
+              echo "        gh secret set DAGSTER_CLOUD_API_TOKEN --body '<token from step 4>' --repo $REMOTE_NWO"
+            fi
+          fi
+
+          # Fresh repo (we just ran git init): this IS the project, push all of it.
+          # Pre-existing repo (you cloned this): only add the deployment config
+          # this script generated -- never sweep up your other uncommitted work.
+          if [ "$FRESH_REPO" -eq 1 ]; then
+            git add -A
+          else
+            TO_ADD=()
+            for f in build.yaml Dockerfile container_context.yaml dagster_cloud.yaml; do
+              [ -f "$f" ] && TO_ADD+=("$f")
+            done
+            [ -d .github/workflows ] && TO_ADD+=(".github/workflows")
+            [ ${#TO_ADD[@]} -gt 0 ] && git add "${TO_ADD[@]}"
+          fi
+
+          if ! git diff --cached --quiet; then
+            if [ "$FRESH_REPO" -eq 1 ]; then
+              git commit -q -m "Initial Dagster+ deployment setup"
+            else
+              git commit -q -m "Add Dagster+ deployment config (build.yaml, CI workflow)"
+            fi
+            echo "    ✓ committed"
+          else
+            echo "    (nothing to commit)"
+          fi
+
+          CURRENT_BRANCH=$(git branch --show-current)
+          if git push -u "$REMOTE_NAME" "$CURRENT_BRANCH"; then
+            echo "    ✓ pushed to $(gh repo view "$REMOTE_NWO" --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "$REMOTE_NWO") ($CURRENT_BRANCH)"
+            echo "    GitHub Actions should be running now — check the repo's Actions tab."
+          else
+            echo "    ✗ push failed — check the remote and push manually:"
+            echo "        git push -u $REMOTE_NAME $CURRENT_BRANCH"
+          fi
+        fi
+      else
+        echo "    skipped — you can do this manually later:"
+        echo "      git init && git add -A && git commit -m 'Initial commit'"
+        echo "      gh repo create <name> --private --source=. --remote=origin --push"
+      fi
+    fi
+  fi
+else
+  echo "==> 5/8: Publish to GitHub — skipped (git-provider isn't github, or no .github/workflows scaffolded)"
+fi
+
+# ── 6/8: deployment target — CONFIRM FIRST (env-var step depends on it) ─────
+echo "==> 6/8: Deployment target"
 ORG_ARG=""; DEPLOY_ARG=""; BUILD_ARG=""
 [ -n "$DAGSTER_PLUS_ORG" ]        && ORG_ARG="--organization $DAGSTER_PLUS_ORG"
 [ -n "$DAGSTER_PLUS_DEPLOYMENT" ] && DEPLOY_ARG="--deployment $DAGSTER_PLUS_DEPLOYMENT"
@@ -255,8 +445,8 @@ if [ "$NON_INTERACTIVE" -ne 1 ]; then
   fi
 fi
 
-# ── 6/7: env vars (uses confirmed deployment + checks what's already set) ────
-echo "==> 6/7: Scanning your project for env var references"
+# ── 7/8: env vars (uses confirmed deployment + checks what's already set) ────
+echo "==> 7/8: Scanning your project for env var references"
 # Greps for the common reference patterns:
 #   - Python:  EnvVar("X"), os.environ["X"], os.getenv("X")
 #   - YAML:    *_env_var: X     and     ${env:X}
@@ -377,9 +567,9 @@ else
   echo "    dynamically-constructed env-var names, set those manually."
 fi
 
-# ── 7/7: deploy ──────────────────────────────────────────────────────────────
+# ── 8/8: deploy ──────────────────────────────────────────────────────────────
 echo ""
-WANT_DEPLOY=$(ask "==> 7/7: Run 'dg plus deploy' now? [Y/n]:" "Y")
+WANT_DEPLOY=$(ask "==> 8/8: Run 'dg plus deploy' now? [Y/n]:" "Y")
 if is_yes "$WANT_DEPLOY"; then
   # shellcheck disable=SC2086
   uv run dg plus deploy $BUILD_ARG $ORG_ARG $DEPLOY_ARG
@@ -413,8 +603,8 @@ If your token has expired (after ~30 days):
 Add or update an env var anytime:
   uv run dg plus create env MY_KEY --value "..." --deployment $DAGSTER_PLUS_DEPLOYMENT
 
-If you scaffolded GitHub Actions in step 3, pushing to 'main' will redeploy
-automatically — no local command needed.
+If you published to GitHub in step 5, pushing to 'main' will redeploy
+automatically from here on — no local command needed.
 ──────────────────────────────────────────────────────────────────────────────
 
 Docs: https://docs.dagster.io/api/clis/dg-cli/dg-plus
