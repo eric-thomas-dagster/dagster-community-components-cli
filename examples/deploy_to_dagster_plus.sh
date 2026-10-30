@@ -56,6 +56,8 @@ PUBLISH_TO_GITHUB=0
 GITHUB_REPO=""
 GITHUB_VISIBILITY=""
 CI_TOKEN=""
+GH_PUBLISHED=0  # set to 1 if step 5 actually pushes -- the scaffolded Action
+                # will deploy from that, so step 8 shouldn't also deploy locally
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -420,6 +422,7 @@ if [ "$GIT_PROVIDER" = "github" ] && [ -d .github/workflows ]; then
           PUSH_OUTPUT=$(git push -u "$REMOTE_NAME" "$CURRENT_BRANCH" 2>&1) && PUSH_OK=1 || PUSH_OK=0
           echo "$PUSH_OUTPUT" | sed 's/^/    /'
           if [ "$PUSH_OK" -eq 1 ]; then
+            GH_PUBLISHED=1
             echo "    ✓ pushed to $(gh repo view "$REMOTE_NWO" --json nameWithOwner -q .nameWithOwner 2>/dev/null || echo "$REMOTE_NWO") ($CURRENT_BRANCH)"
             if echo "$PUSH_OUTPUT" | grep -q '\[new branch\]'; then
               # GitHub Actions doesn't reliably fire on the very push that creates a
@@ -601,12 +604,24 @@ fi
 
 # ── 8/8: deploy ──────────────────────────────────────────────────────────────
 echo ""
-WANT_DEPLOY=$(ask "==> 8/8: Run 'dg plus deploy' now? [Y/n]:" "Y")
+if [ "$GH_PUBLISHED" -eq 1 ]; then
+  echo "    You published to GitHub in step 5 -- the scaffolded Action will build and"
+  echo "    deploy this automatically once it runs, so a local deploy here would just"
+  echo "    be a redundant duplicate (defaulting to skip)."
+  WANT_DEPLOY=$(ask "==> 8/8: Run 'dg plus deploy' now anyway? [y/N]:" "N")
+else
+  WANT_DEPLOY=$(ask "==> 8/8: Run 'dg plus deploy' now? [Y/n]:" "Y")
+fi
 if is_yes "$WANT_DEPLOY"; then
   # shellcheck disable=SC2086
   uv run dg plus deploy $BUILD_ARG $ORG_ARG $DEPLOY_ARG
 else
-  echo "    Skipped. Run manually:"
+  if [ "$GH_PUBLISHED" -eq 1 ]; then
+    echo "    Skipped -- the GitHub Action is deploying this instead. Check the repo's"
+    echo "    Actions tab for progress. If you ever need to deploy locally too:"
+  else
+    echo "    Skipped. Run manually:"
+  fi
   echo "      cd $PROJECT_DIR"
   echo "      uv run dg plus deploy $BUILD_ARG $ORG_ARG $DEPLOY_ARG"
   exit 0

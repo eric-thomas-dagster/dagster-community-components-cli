@@ -89,6 +89,9 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        → Scan only catches the most common patterns — set any others manually:
            uv run dg plus create env MY_VAR --value '...' --deployment prod
 8/8  [prompts] Run dg plus deploy now?  (uses your step-2 user token, NOT the CI token)
+       → If step 5 actually published to GitHub, this defaults to NO instead of
+         YES -- the scaffolded Action is already going to build and deploy this,
+         so running a local deploy too would just be a redundant duplicate.
 ```
 
 **Why two tokens?**
