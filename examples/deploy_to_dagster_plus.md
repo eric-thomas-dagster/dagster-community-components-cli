@@ -46,21 +46,9 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        → Saves a USER token to ~/.dagster_cloud_cli/config.
        → THIS token is what powers the local deploy in step 8.
 3/8  [prompts] Run `dg plus deploy configure --git-provider github`?
-       If build.yaml or dagster_cloud.yaml already exists, this defaults to NO
-       instead of YES, with a warning -- re-running configure can overwrite an
-       already-customized build.yaml/Dockerfile/.github/workflows, and that's
-       not something `--with-ci`/`--non-interactive` should ever silently do.
-       Passes `--organization`/`--deployment` (same values step 6 confirms) and
-       `--yes` explicitly -- confirmed via the actual dagster-dg-cli source that
-       `dg plus deploy configure` bakes the org name, Cloud URL, and deployment
-       name LITERALLY into the generated `.github/workflows/dagster-plus-deploy.yml`
-       at scaffold time (not resolved dynamically when the Action runs later),
-       so if you don't pass these, a customer not using the default "prod"
-       deployment name would get a CI workflow pointed at the wrong deployment.
-       `--yes` avoids `dg`'s own internal confirmation prompts (deployment name,
-       overwrite-this-file, etc.) possibly hanging with no real TTY attached
-       (curl | bash) -- by this point you've already given your own explicit
-       consent via the prompt above.
+       Defaults to NO if build.yaml/dagster_cloud.yaml already exists, to avoid
+       overwriting an already-configured project.
+       Passes --organization/--deployment/--yes -- see "Key on step 3" below.
        Auto-detects your agent type (Serverless vs Hybrid) and scaffolds:
        → build.yaml                              (modern code-location manifest)
        → Dockerfile + container_context.yaml     (Hybrid only -- the resource/sidecar/
@@ -75,37 +63,10 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        → Can be auto-set as a GitHub secret in step 5, or paste it in yourself.
        → Optional — skip this if you only deploy from your laptop.
 5/8  [prompts, if git-provider=github and .github/workflows exists] Publish to GitHub?
-       Only runs if the `gh` CLI is installed and authenticated — otherwise it
-       prints the equivalent manual commands and moves on.
-       → `git init` (if this isn't a repo yet) + sets a local-only git identity
-         if none is configured
-       → Already have a pushable `origin` (you cloned your own repo)? Uses it
-         as-is, and commits/pushes ONLY files step 3's `configure` call actually
-         touched THIS run (not "whatever's named build.yaml/Dockerfile right
-         now", and not the whole `.github/workflows/` directory — tracked by
-         file mtime against a marker set right before `configure` runs) — never
-         sweeps up other uncommitted work, or an unrelated pre-existing
-         Dockerfile/workflow file, sitting in your checkout. If step 3 didn't
-         run this time (e.g. you declined re-running configure on an
-         already-configured project), nothing gets added here at all.
-       → `origin` exists but you can't push to it (e.g. you cloned someone
-         else's public example)? Falls back to a second remote, `dagster-plus`,
-         pointed at a repo under your own account instead.
-       → No usable remote at all? Asks for a repo name — attaches to it if it
-         already exists on GitHub, otherwise runs `gh repo create`. Since
-         there's nothing committed yet in this case, this first commit is the
-         whole project, not just the deployment config.
-       → `gh secret set DAGSTER_CLOUD_API_TOKEN` (if step 4 created a token) —
-         set BEFORE the first push, so the Action's first run doesn't fail on
-         a missing secret
-       → `git commit` + `git push -u <remote> <branch>`
-       → **This push does NOT mean Dagster+ is deployed yet.** GitHub Actions
-         doesn't reliably trigger on the push that creates a branch — if this
-         was that first push, the script pushes one more harmless empty commit
-         right after, specifically to kick off the first real run. Only once
-         that's confirmed should you expect to see a run in the Actions tab.
-       → Refuses to touch anything if this project dir is already nested inside
-         a different git repo, to avoid creating a confusing nested repo.
+       git init + gh repo create/attach + commit + push, and auto-sets the CI
+       secret. Falls back to printed manual commands if `gh` isn't installed
+       or authenticated. See "Publish to GitHub" below for the safety details
+       (existing repos, nested repos, first-push quirks).
 6/8  Confirms deployment target (org / deployment / build strategy)
        → You see exactly which deployment env vars + the deploy will target
          before any changes get made.
@@ -136,6 +97,8 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
 The CI token in step 4 is **optional for the current script run** — your `dg plus login` token from step 2 is what powers step 8. Step 4's token only matters if you want pushes to `main` to redeploy automatically via the GitHub Actions workflow — which is exactly what step 5 wires up.
 
 **Key on step 3:** uses the official `dg plus deploy configure` command — not hand-written YAML. That command auto-detects whether your Dagster+ workspace is Serverless or Hybrid, then writes the exact artifacts the official tooling expects. If you've migrated from a `dagster_cloud.yaml`-based project, the new build.yaml replaces it.
+
+It also bakes your org name and deployment name *literally* into the generated `.github/workflows/dagster-plus-deploy.yml` — confirmed from the `dagster-dg-cli` source, not assumed. That's why the script passes `--organization`/`--deployment` explicitly instead of leaving it to `dg`'s own defaults: otherwise a customer not using the default "prod" deployment would get a CI workflow pointed at the wrong one. `--yes` is passed too, so `dg`'s own confirmation prompts can't hang with no real TTY attached — by that point you've already consented via this script's own prompt.
 
 **Step 5 closes a real gap:** steps 1-4 scaffold a GitHub Actions workflow, but none of the demo setup scripts `git init` a repo — so without step 5, that workflow has nothing to attach to and never runs until you set up git/GitHub yourself. Step 5 is entirely optional and skips cleanly (falling back to printed manual commands) if you don't have the `gh` CLI installed and authenticated, or if you answer no to its prompt.
 
@@ -255,6 +218,15 @@ echo $GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
 ```
 
 For Kubernetes agents pulling private images, you'll also need an `imagePullSecret` attached to the agent's service account — see the [Hybrid agent docs](https://docs.dagster.io/guides/deploy/dagster-plus/hybrid).
+
+## Publish to GitHub (step 5)
+
+- **Already have a pushable `origin`** (you cloned your own repo)? Uses it as-is, and only commits files step 3's `configure` call actually touched this run — not the whole `.github/workflows/` directory, not "any file named Dockerfile that happens to exist." Never sweeps up other uncommitted work sitting in your checkout. If step 3 didn't run this time, nothing gets added here at all.
+- **`origin` exists but you can't push to it** (e.g. you cloned someone else's public example)? Falls back to a second remote, `dagster-plus`, pointed at a repo under your own account.
+- **No usable remote at all?** Asks for a repo name — attaches to it if it already exists on GitHub, otherwise runs `gh repo create`. Since nothing's committed yet in this case, the first commit is the whole project, not just the deployment config.
+- Sets the `DAGSTER_CLOUD_API_TOKEN` secret (if step 4 created one) *before* pushing, so the Action's first run doesn't fail on a missing secret.
+- **The push succeeding does NOT mean Dagster+ is deployed yet.** GitHub Actions doesn't reliably trigger on the push that creates a branch — if this was that first push, the script pushes one more empty commit right after, specifically to kick off the first real run.
+- Refuses to touch anything if this project dir is nested inside a different git repo.
 
 ## The CI API token
 
