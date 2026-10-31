@@ -40,10 +40,13 @@
 #     convention used by `self_healing_pipeline.md`. A real candidate for a
 #     future registry component.
 #   • Qwen2.5-0.5B-Instruct is genuinely small (~1GB download) and runs
-#     fine on CPU -- no GPU required, but the first run downloads the
-#     model from the Hub (needs network once; fully offline after that,
-#     including in a Dagster+ Serverless container if the model is baked
-#     into the image or a persistent volume).
+#     fine on CPU -- no GPU required. Locally this downloads once and
+#     caches. On Dagster+, containers and disk are EPHEMERAL (Serverless
+#     and Hybrid both) -- without baking the model into a custom base
+#     image (`dagster-cloud serverless upload-base-image`, then
+#     `--base-image-tag`/`--base-image` on deploy), every scheduled run
+#     re-downloads it from scratch, not just the first one. See the
+#     walkthrough's "Running this on Dagster+ for real" section.
 #   • This is the in-process alternative to pointing litellm_inference_asset
 #     at a local llama.cpp/Ollama server (model: openai/<name>, a custom
 #     api_base) -- that approach works great locally but the server process
@@ -237,8 +240,15 @@ Why this (not llama.cpp/Ollama) for Dagster+:
   to a server running on your own laptop -- you'd need Hybrid with an
   agent on the same network, or a tunnel. transformers.pipeline() loads
   the model IN-PROCESS instead, so this exact code runs the same way in
-  a Dagster+ Serverless container (bake the model into your image, or let
-  it download on first run if your deployment allows outbound network).
+  a Dagster+ container.
+
+  IMPORTANT for a real Dagster+ deployment: containers/disk are EPHEMERAL
+  (Serverless and Hybrid both) -- without baking the model into a custom
+  base image, EVERY scheduled run re-downloads it from HuggingFace, not
+  just the first one. Build a Dockerfile that pre-runs the pipeline() call
+  once, `dagster-cloud serverless upload-base-image`, then deploy with
+  `--base-image-tag`/`--base-image`. See the walkthrough's "Running this
+  on Dagster+ for real" section for the exact commands.
 
 Production variants:
   • Swap Qwen2.5-0.5B-Instruct for a larger Qwen model if you have the

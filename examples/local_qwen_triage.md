@@ -12,6 +12,26 @@ This repo already has an [Ollama demo](ollama.md) and litellm reaches any OpenAI
 
 `transformers.pipeline()` loads the model **in-process** instead — no server, no port, no network call after the one-time Hub download. The exact same code runs identically on your laptop and inside a Dagster+ Serverless container. This demo is the in-process answer to "can we use a local, open-weight Qwen model" — genuinely portable, not just genuinely local.
 
+## Running this on Dagster+ for real (not just locally) — bake the model in, don't rely on runtime download
+
+Dagster+ containers and disk are **ephemeral** — nothing persists between separate runs, Serverless or Hybrid. Without the mitigation below, **every single scheduled run re-downloads both models from scratch**, not just "the first run" — in this demo's own live test, that download (done unauthenticated, which HuggingFace rate-limits hard) was the dominant chunk of a 6-minute run. Actual token generation, once a model is loaded, is fast: all 4 drafts in this demo's real run completed in roughly 1-2 seconds total on plain CPU.
+
+The real fix is a **custom base image with the model weights pre-baked in** — this works on Dagster+ Serverless too, not just Hybrid:
+
+```dockerfile
+# In the Dockerfile you build for `dagster-cloud serverless upload-base-image`
+RUN pip install "dagster-cloud[serverless]" transformers torch
+RUN python -c "from transformers import pipeline; pipeline('text-generation', model='Qwen/Qwen2.5-0.5B-Instruct')"
+```
+
+```bash
+dagster-cloud serverless upload-base-image local-image:tag   # prints a tag
+# then reference it: --base-image-tag=<tag> on deploy-python-executable (PEX, the
+# default deploy mode), or --base-image=<tag> on a full `deploy`
+```
+
+With the model already on disk in the image, container start pays only the (near-instant, per this demo's own test) in-memory weight-load — no network call at all. On Hybrid, the same idea applies to whatever custom image your agent runs. Skipping this step is fine for an occasional manual run; for anything scheduled, bake the model in.
+
 ## Why a plain `@asset` for drafting
 
 No registry component does per-row **local** (`transformers.pipeline`-based) text generation over a DataFrame column today. [`huggingface_pipeline`](huggingface.md) is the closest existing component and *is* genuinely local/in-process, but by design takes a plain `inputs: [...]` list with no DataFrame in or out (its own docstring: *"For batch inference over a DataFrame column, use the task-specific components instead"* — there isn't one yet for text-generation specifically). `draft_replies` here is a small plain `@asset`, the same "glue where no component fits yet" convention [`self_healing_pipeline.md`](self_healing_pipeline.md) uses — and a real candidate for a future registry component.
@@ -65,6 +85,7 @@ uv run dg dev
 
 ## Production variants
 
+- **Bake the model into a custom base image before deploying to Dagster+** — see "Running this on Dagster+ for real" above. Without it, every scheduled run re-downloads from HuggingFace.
 - Swap `Qwen/Qwen2.5-0.5B-Instruct` for a larger Qwen model if you have the compute (7B+ wants a GPU for reasonable latency).
 - Swap `unitary/toxic-bert` for `s-nlp/roberta-toxicity-classifier`, or `method: openai_moderation` / `method: llm` if you'd rather use a hosted check.
 - Swap `synthetic_data_generator` for your real ticket source (`upstream_asset_key` on `text_moderator` already points at any DataFrame-producing asset).
