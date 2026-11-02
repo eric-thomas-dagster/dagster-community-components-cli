@@ -21,8 +21,15 @@
 #   1. Verifies the project dir is a dg project
 #   2. Adds dagster-cloud-cli to dev deps; runs `dg plus login` if not authed
 #   3. Asks: scaffold deployment artifacts via `dg plus deploy configure`?
+#      → `git init`s first if needed (configure requires a git repo and
+#        hard-errors without one).
 #      → Creates build.yaml, Dockerfile (Hybrid only), .github/workflows/*
 #      Auto-detects whether your deployment is Serverless or Hybrid.
+#      → Adds `dagster-cloud` as a real dependency for Serverless (its PEX
+#        build fails without it; `dagster-cloud-cli` from step 2 doesn't count).
+#      → Patches the generated workflow with a `permissions:` block granting
+#        pull-requests: write (missing from the template; without it the
+#        branch-deployment PR comment step silently 403s).
 #      If the project uses a state-backed component (dbt Cloud, Fivetran,
 #      Fabric, Power BI, etc.) and the resulting workflow has no
 #      "refresh-defs-state" step (e.g. configure was skipped because the
@@ -32,7 +39,8 @@
 #      Optional. The local deploy in step 8 uses your `dg plus login` token,
 #      not this one. The CI token is only for GitHub Actions runs.
 #   5. Asks: publish this project to GitHub now (via the `gh` CLI)?
-#      → `git init` if needed, `gh repo create` if there's no remote yet,
+#      → `git init` if needed (usually already done in step 3), `gh repo
+#        create` if there's no remote yet,
 #        `gh secret set DAGSTER_CLOUD_API_TOKEN` (if step 4's token exists),
 #        then commit + push — so the Action scaffolded in step 3 can actually run.
 #      Skipped entirely if `gh` isn't installed/authed, or git-provider isn't github.
@@ -193,6 +201,17 @@ else
 fi
 if is_yes "$WANT_CONFIGURE"; then
   CONFIGURE_RAN=1
+  # `dg plus deploy configure` hard-errors ("No git repository found. Must be
+  # run from a git repository...") if there's no repo yet -- confirmed on a
+  # real live run, and reproduced directly against dg 1.13.28. Step 5 (publish
+  # to GitHub) is the only other place this script runs `git init`, and it's
+  # both optional and later than this, so a repo must exist here regardless
+  # of whether the user ever chooses to publish. Harmless to do unconditionally:
+  # a local-only git repo with no remote costs nothing if publishing is skipped.
+  if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
+    git init -q -b main
+    echo "    ✓ git init ('dg plus deploy configure' requires a git repository)"
+  fi
   # Ask for git provider if not passed explicitly
   if [ "$GIT_PROVIDER_EXPLICIT" -eq 0 ]; then
     if [ -z "$GIT_PROVIDER" ]; then
@@ -281,6 +300,21 @@ if is_yes "$WANT_CONFIGURE"; then
     CONFIGURE_MARKER=$(mktemp)
     # shellcheck disable=SC2086
     uv run dg plus deploy configure serverless --git-provider "$GIT_PROVIDER" --deployment "$DAGSTER_PLUS_DEPLOYMENT" $ORG_CONFIG_ARG --yes || true
+
+    # Serverless's PEX build needs the `dagster-cloud` runtime package as a
+    # real (non-dev) dependency -- a different package from `dagster-cloud-cli`
+    # (step 1/8, dev-only, just the CLI). Without it the build fails with
+    # "dagster_cloud package dependency was expected but not found" --
+    # confirmed on a real live run, and `configure` doesn't add it itself
+    # (confirmed directly against dg 1.13.28). Matched on `"dagster-cloud` not
+    # immediately followed by `-` so this doesn't false-match the
+    # already-present `dagster-cloud-cli` dev dependency.
+    if ! grep -qE '"dagster-cloud["=<>~! ]' pyproject.toml; then
+      echo "    Serverless builds also need the 'dagster-cloud' runtime package"
+      echo "    (distinct from 'dagster-cloud-cli' added in step 1/8) -- adding it."
+      uv add -q dagster-cloud
+      echo "    ✓ added dagster-cloud"
+    fi
   fi
   # Exactly which workflow file(s) this run's configure call touched (by mtime,
   # relative to a marker created right before it ran) -- NOT "everything in
@@ -292,6 +326,30 @@ if is_yes "$WANT_CONFIGURE"; then
     done < <(find .github/workflows -maxdepth 1 -type f -newer "$CONFIGURE_MARKER" -print0 2>/dev/null)
   fi
   rm -f "$CONFIGURE_MARKER"
+
+  # The generated workflow's "Update PR comment for branch deployments" step
+  # posts to the PR using the default GITHUB_TOKEN, which many orgs/repos
+  # default to read-only -- without an explicit `permissions:` block granting
+  # pull-requests: write, that step 403s. GitHub Actions swallows this (the
+  # job still shows green), so it fails silently. Confirmed: the dg
+  # 1.13.28-generated workflow (both Serverless and Hybrid) has no top-level
+  # `permissions:` key at all. Safe to patch unconditionally here -- these are
+  # files THIS run just generated, not something pre-existing to respect.
+  if [ ${#CONFIGURED_WORKFLOW_FILES[@]} -gt 0 ]; then
+    for wf in "${CONFIGURED_WORKFLOW_FILES[@]}"; do
+      [ -f "$wf" ] || continue
+      if ! grep -q '^permissions:' "$wf"; then
+        if grep -q '^name:' "$wf"; then
+          awk '/^name:/ && !p { print; print "permissions:"; print "  contents: read"; print "  pull-requests: write"; p=1; next } { print }' "$wf" > "$wf.tmp"
+        else
+          { printf 'permissions:\n  contents: read\n  pull-requests: write\n'; cat "$wf"; } > "$wf.tmp"
+        fi
+        mv "$wf.tmp" "$wf"
+        echo "    ✓ added 'permissions: pull-requests: write' to $wf (needed for the PR-comment step)"
+      fi
+    done
+  fi
+
   echo ""
   echo "    ✓ generated artifacts:"
   ls -la build.yaml Dockerfile container_context.yaml .github/workflows/*.yml 2>/dev/null | sed 's/^/      /' || true
@@ -497,10 +555,22 @@ if [ "$GIT_PROVIDER" = "github" ] && [ -d .github/workflows ]; then
       if [ "$PUBLISH_TO_GITHUB" -eq 1 ]; then WANT_PUBLISH="Y"; fi
 
       if is_yes "$WANT_PUBLISH"; then
-        FRESH_REPO=0
         if ! git rev-parse --is-inside-work-tree >/dev/null 2>&1; then
           git init -q -b main
           echo "    ✓ git init"
+        fi
+
+        # "Fresh" means no commits exist yet -- NOT "did this script just run
+        # git init". Step 3 may already have created the repo (it needs one
+        # for `dg plus deploy configure`), or a repo may already exist here
+        # with zero commits (e.g. someone ran `git init` by hand before this
+        # script, which is exactly what step 3's own error message tells you
+        # to do if you skip configure). Confirmed via a real live run: without
+        # this fix, that case fell into the "pre-existing repo" branch below,
+        # which only stages the files `configure` touched -- so the pushed
+        # repo held CI config and no project to build.
+        FRESH_REPO=0
+        if ! git rev-parse --verify -q HEAD >/dev/null 2>&1; then
           FRESH_REPO=1
         fi
 

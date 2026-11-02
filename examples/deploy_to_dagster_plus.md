@@ -49,12 +49,26 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        Defaults to NO if build.yaml/dagster_cloud.yaml already exists, to avoid
        overwriting an already-configured project.
        Passes --organization/--deployment/--yes -- see "Key on step 3" below.
+       → `git init`s first if there's no repo yet -- `dg plus deploy configure`
+         hard-errors without one ("No git repository found"), confirmed directly
+         against the real CLI. Harmless if you never publish in step 5.
        Auto-detects your agent type (Serverless vs Hybrid) and scaffolds:
-       → build.yaml                              (modern code-location manifest)
+       → build.yaml                              (Hybrid only -- confirmed Serverless
+                                                    doesn't get one)
        → Dockerfile + container_context.yaml     (Hybrid only -- the resource/sidecar/
                                                     mount config file always gets written,
                                                     but with everything commented out)
        → .github/workflows/*.yml                 (CI/CD)
+       → [Serverless only] Adds `dagster-cloud` as a real (non-dev) dependency if
+         missing -- its PEX build fails without it ("dagster_cloud package dependency
+         was expected but not found"), confirmed on a real live deploy. The
+         `dagster-cloud-cli` dev dependency from step 1 is a different package and
+         doesn't satisfy this.
+       → Patches the generated workflow(s) with a `permissions:` block (contents:
+         read, pull-requests: write) if missing -- confirmed the dg 1.13.28 template
+         (both Serverless and Hybrid) has none, so the branch-deployment PR-comment
+         step 403s against the default read-only GITHUB_TOKEN, silently (the job
+         still shows green).
        → If it's still 100% commented out (i.e. untouched by anyone), offers to add a
          default compute size for ECS/Kubernetes -- a common cause of a run getting
          killed is under-sized compute, and this is the fix for it.
@@ -108,7 +122,7 @@ The CI token in step 4 is **optional for the current script run** — your `dg p
 
 It also bakes your org name and deployment name *literally* into the generated `.github/workflows/dagster-plus-deploy.yml` — confirmed from the `dagster-dg-cli` source, not assumed. That's why the script passes `--organization`/`--deployment` explicitly instead of leaving it to `dg`'s own defaults: otherwise a customer not using the default "prod" deployment would get a CI workflow pointed at the wrong one. `--yes` is passed too, so `dg`'s own confirmation prompts can't hang with no real TTY attached — by that point you've already consented via this script's own prompt.
 
-**Step 5 closes a real gap:** steps 1-4 scaffold a GitHub Actions workflow, but none of the demo setup scripts `git init` a repo — so without step 5, that workflow has nothing to attach to and never runs until you set up git/GitHub yourself. Step 5 is entirely optional and skips cleanly (falling back to printed manual commands) if you don't have the `gh` CLI installed and authenticated, or if you answer no to its prompt.
+**Step 5 closes a real gap:** steps 1-4 scaffold a GitHub Actions workflow, but none of the demo setup scripts `git init` a repo themselves — so without step 5 (or step 3's own git-init, see above), that workflow has nothing to attach to and never runs until you set up git/GitHub yourself. Step 5 is entirely optional and skips cleanly (falling back to printed manual commands) if you don't have the `gh` CLI installed and authenticated, or if you answer no to its prompt. By the time step 5 runs, step 3 has usually already created the repo (with no commits yet) — step 5 correctly treats "a repo exists but has zero commits" the same as "no repo at all": the first commit it makes carries the whole project, not just whatever `configure` touched, so the pushed repo isn't just CI config with nothing to build.
 
 ## Prerequisites
 
@@ -311,6 +325,21 @@ uv run dg plus create env DATABASE_URL --value "..." --deployment prod
 **`Asset materialization failed: timeout`** — Serverless agents have a default 1h step timeout. Configure via run-config tags if you need longer.
 
 **Hybrid build wants Docker but you don't have a registry** — Hybrid only supports Docker images; the Hybrid agent has no PEX runtime. You need to provision a registry (ECR / GAR / ACR / GHCR / Docker Hub) and pass `--registry-url <url>` before deploying. There's no PEX shortcut for Hybrid.
+
+**`No git repository found. Must be run from a git repository...`** — `dg plus deploy configure` requires one; confirmed directly against the CLI. The script now `git init`s before calling it (step 3), so this shouldn't surface anymore — if you see it, you're likely running `dg plus deploy configure` directly rather than through this script.
+
+**Serverless build fails: `dagster_cloud package dependency was expected but not found`** — The PEX build needs the `dagster-cloud` runtime package as a real dependency; `dagster-cloud-cli` (added in step 1) is a separate dev-only package and doesn't satisfy this. The script now adds it automatically for Serverless projects in step 3; if you configured manually instead, run `uv add dagster-cloud` yourself.
+
+**Code server crashes on startup with a protobuf/grpcio error** — Serverless's runtime pins a specific `protobuf`/`grpcio` version; a newer `grpcio-health-checking` built against a newer protobuf gencode can mismatch it (e.g. gencode 7 vs. a runtime on protobuf 6.x). This isn't something the script can pin safely — the runtime version moves over time, and hardcoding a pin here would go stale and start causing the exact problem it was meant to fix. If you hit this, check your currently-installed `protobuf`/`grpcio`/`grpcio-health-checking` versions against what the Serverless code server actually has, and pin down to compatible versions for now.
+
+**Branch-deployment PR comment never appears (or the workflow step fails silently)** — The generated workflow posts to the PR using the default `GITHUB_TOKEN`, which many orgs/repos default to read-only; without `permissions: pull-requests: write`, that step 403s and GitHub Actions swallows the failure (the job still shows green). Confirmed against the actual dg 1.13.28 template (both Serverless and Hybrid) — it ships with no `permissions:` block at all. The script now patches this in automatically right after `configure` runs (step 3). If your workflow predates that fix, add the block manually at the top level of `.github/workflows/dagster-plus-deploy.yml`:
+```yaml
+permissions:
+  contents: read
+  pull-requests: write
+```
+
+**Branch deployments are flaky (some PR runs hang in "Deploy to Dagster Cloud" for 20+ minutes)** — Observed on a real live run: one PR deploy finished in ~4 minutes, two others hung until manually cancelled, with no root cause identified. Not something this script can detect or fix. If you're demoing this, open the PR early and keep a finished branch deployment ready as a fallback.
 
 **Deployed assets use stale (or missing) data from dbt Cloud/Fivetran/Fabric/Power BI/etc.** — These are state-backed components: their defs are built from state fetched once and cached, not re-fetched on every code server load. The deploy workflow needs a "Refresh defs state" step to pick up current state before each deploy. Current `dg` versions add this automatically via `dg plus deploy configure`, but this script won't regenerate an already-configured project's workflow (see step 3) — if yours predates that step, the script warns you with the exact fix when it detects a state-backed component and a workflow missing the step.
 
