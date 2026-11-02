@@ -23,6 +23,11 @@
 #   3. Asks: scaffold deployment artifacts via `dg plus deploy configure`?
 #      → Creates build.yaml, Dockerfile (Hybrid only), .github/workflows/*
 #      Auto-detects whether your deployment is Serverless or Hybrid.
+#      If the project uses a state-backed component (dbt Cloud, Fivetran,
+#      Fabric, Power BI, etc.) and the resulting workflow has no
+#      "refresh-defs-state" step (e.g. configure was skipped because the
+#      project was already configured by an older `dg`), warns with the
+#      exact step to add manually.
 #   4. Asks: create a CI API token? → can be auto-set as a GitHub secret in step 5
 #      Optional. The local deploy in step 8 uses your `dg plus login` token,
 #      not this one. The CI token is only for GitHub Actions runs.
@@ -374,6 +379,57 @@ HINT
   fi
 else
   echo "    skipped"
+fi
+
+# State-backed components (dbt Cloud, Fivetran, Airbyte, Tableau, Looker,
+# Sigma, Power BI, Omni, Azure Data Factory, Fabric, and this catalog's own
+# *_workspace components) build their defs from state that's fetched ONCE
+# and cached -- NOT re-fetched on every code server load. Current `dg`
+# versions add a "Refresh defs state" step to the generated workflow
+# automatically (confirmed against dg 1.13.28's serverless + hybrid
+# templates), but this script deliberately won't overwrite an
+# already-configured project's workflow (see the NEED_CONFIGURE check
+# above) -- so a workflow scaffolded by an older `dg` (before that step
+# existed) is never silently repaired. Warn explicitly rather than let a
+# deploy silently ship stale (or entirely missing, on a fresh clone) state.
+STATE_BACKED_PATTERN='dagster_dbt\.DbtProjectComponent|dagster_fivetran\.|dagster_airbyte\.|dagster_tableau\.|dagster_looker\.|dagster_sigma\.|dagster_powerbi\.|dagster_omni\.|AzureDataFactoryComponent|FabricWorkspaceComponent|CognosWorkspaceComponent|SnowflakeWorkspaceComponent|InformaticaWorkspaceComponent|InformaticaPowerCenterWorkspaceComponent|SsisWorkspaceComponent|PrefectWorkspaceComponent|MLflowWorkspaceComponent|QlikComposeWorkspaceComponent|QlikReplicateWorkspaceComponent|TalendCloudWorkspaceComponent|TM1WorkspaceComponent|HvrHubWorkspaceComponent|JDEOrchestratorWorkspaceComponent|SqlServerStoredProcedureWorkspaceComponent'
+USES_STATE_BACKED=0
+if find . -name defs.yaml -not -path "*/.venv/*" 2>/dev/null | xargs grep -lE "$STATE_BACKED_PATTERN" >/dev/null 2>&1; then
+  USES_STATE_BACKED=1
+fi
+if [ "$USES_STATE_BACKED" -eq 1 ]; then
+  HAS_REFRESH_STEP=0
+  if [ -d .github/workflows ] && grep -rlq "refresh-defs-state" .github/workflows/*.yml 2>/dev/null; then
+    HAS_REFRESH_STEP=1
+  fi
+  if [ "$HAS_REFRESH_STEP" -eq 0 ]; then
+    REF_ACTION_VERSION=""
+    if [ -d .github/workflows ]; then
+      REF_ACTION_VERSION=$(grep -ohE "dagster-io/dagster-cloud-action/actions/utils/dg-cli@[^ \"]+" .github/workflows/*.yml 2>/dev/null | head -1 | sed 's/.*@//')
+    fi
+    echo ""
+    echo "    ⚠️  This project uses a state-backed component (dbt Cloud, Fivetran,"
+    echo "    Fabric, Power BI, or similar), but no .github/workflows/*.yml here has a"
+    echo "    'refresh-defs-state' step. Without it, a deploy ships whatever cached"
+    echo "    state happens to be on disk -- stale, or missing entirely on a fresh"
+    echo "    clone/CI runner -- not what the external system actually looks like now."
+    echo "    Fix it one of two ways:"
+    echo "      1. Re-run this script and opt in when asked to re-run"
+    echo "         'dg plus deploy configure' (current dg versions add this step"
+    echo "         automatically) -- review the diff before committing, in case you've"
+    echo "         customized build.yaml/Dockerfile/the workflow since it was scaffolded."
+    echo "      2. Add this step manually to .github/workflows/*.yml, right before the"
+    echo "         build-and-push step:"
+    echo "           - name: Refresh defs state"
+    if [ -n "$REF_ACTION_VERSION" ]; then
+      echo "             uses: dagster-io/dagster-cloud-action/actions/utils/dg-cli@$REF_ACTION_VERSION"
+    else
+      echo "             uses: dagster-io/dagster-cloud-action/actions/utils/dg-cli@<same version as this file's other steps>"
+    fi
+    echo '             with:'
+    echo '               command: "plus deploy refresh-defs-state --target-path=."'
+    echo ""
+  fi
 fi
 
 # ── 4/8: CI API token ────────────────────────────────────────────────────────

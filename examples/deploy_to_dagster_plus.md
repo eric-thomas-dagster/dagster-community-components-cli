@@ -58,6 +58,14 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
        → If it's still 100% commented out (i.e. untouched by anyone), offers to add a
          default compute size for ECS/Kubernetes -- a common cause of a run getting
          killed is under-sized compute, and this is the fix for it.
+       → [check, always runs] If the project uses a state-backed component (dbt Cloud,
+         Fivetran, Airbyte, Tableau, Looker, Sigma, Power BI, Omni, Fabric, or this
+         catalog's own *_workspace components) but the workflow has no
+         "refresh-defs-state" step -- e.g. configure was skipped above because the
+         project was already configured, possibly by an older `dg` that predates this
+         step -- warns with the exact step to add manually. Current `dg` versions add
+         it to the workflow automatically; this script only catches the case where
+         that workflow is never regenerated.
 4/8  [prompts, if .github/ exists] Create a CI API token?
        → A SEPARATE token for GitHub Actions runs (no browser available there).
        → Can be auto-set as a GitHub secret in step 5, or paste it in yourself.
@@ -303,6 +311,8 @@ uv run dg plus create env DATABASE_URL --value "..." --deployment prod
 **`Asset materialization failed: timeout`** — Serverless agents have a default 1h step timeout. Configure via run-config tags if you need longer.
 
 **Hybrid build wants Docker but you don't have a registry** — Hybrid only supports Docker images; the Hybrid agent has no PEX runtime. You need to provision a registry (ECR / GAR / ACR / GHCR / Docker Hub) and pass `--registry-url <url>` before deploying. There's no PEX shortcut for Hybrid.
+
+**Deployed assets use stale (or missing) data from dbt Cloud/Fivetran/Fabric/Power BI/etc.** — These are state-backed components: their defs are built from state fetched once and cached, not re-fetched on every code server load. The deploy workflow needs a "Refresh defs state" step to pick up current state before each deploy. Current `dg` versions add this automatically via `dg plus deploy configure`, but this script won't regenerate an already-configured project's workflow (see step 3) — if yours predates that step, the script warns you with the exact fix when it detects a state-backed component and a workflow missing the step.
 
 ## Full reference
 
