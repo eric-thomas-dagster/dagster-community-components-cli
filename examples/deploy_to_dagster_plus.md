@@ -96,9 +96,20 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
          before any changes get made.
 7/8  Scans your project for env var references — and offers to set each one.
        → Greps for EnvVar("X"), os.environ["X"], *_env_var: X, ${env:X}.
+         The *_env_var: pattern requires a non-identifier character (or end of
+         line) right after the name, so it doesn't also match a Python type
+         annotation like `foo_env_var: Optional[str]` and report a bogus
+         single-letter var ("O" from "Optional") -- confirmed on a real live
+         run (kitchen-sink-demo's dataframe_to_csv component has exactly this
+         field shape).
        → Runs `dg plus pull env` first to see what's ALREADY set on this
          deployment, so we don't blindly overwrite. Existing vars get
          a "kept" status by default; you can opt in to overwrite.
+       → Deletes the `.env` file `dg plus pull env` writes right after reading
+         the key names out of it -- it holds this deployment's actual secret
+         VALUES in plaintext, and only the names are needed. No reason to
+         leave real secrets on disk (or risk them showing on screen later,
+         e.g. mid-demo).
        → For each new (not-yet-on-Dagster+) name:
            - If already set in your shell: shows a preview + asks "Use this value? [Y/n/skip]"
            - If not set: prompts for a value (Enter to skip)
@@ -332,7 +343,7 @@ uv run dg plus create env DATABASE_URL --value "..." --deployment prod
 
 **Serverless build fails: `dagster_cloud package dependency was expected but not found`** (or Hybrid's Docker build fails on `Could not find the dagster-cloud package`) — Both agent types need the `dagster-cloud` runtime package as a real dependency; `dagster-cloud-cli` (added in step 1) is a separate dev-only package and doesn't satisfy this. The script now adds it automatically in step 3 regardless of agent type; if you configured manually instead, run `uv add dagster-cloud` yourself.
 
-**Code server crashes on startup with a protobuf/grpcio error** — Serverless's runtime pins a specific `protobuf`/`grpcio` version; a newer `grpcio-health-checking` built against a newer protobuf gencode can mismatch it (e.g. gencode 7 vs. a runtime on protobuf 6.x). This isn't something the script can pin safely — the runtime version moves over time, and hardcoding a pin here would go stale and start causing the exact problem it was meant to fix. If you hit this, check your currently-installed `protobuf`/`grpcio`/`grpcio-health-checking` versions against what the Serverless code server actually has, and pin down to compatible versions for now.
+**Code server crashes on startup with a protobuf/grpcio error** — Serverless's runtime injects a specific `protobuf` version into the code server (confirmed: 6.33.x, via `/otel-auto-instrumentation-python/`); a lockfile that resolves a newer `protobuf`/`grpcio`/`grpcio-health-checking` (e.g. gencode 7) crashes it at startup with `VersionError, "Code server failed to start"`. This isn't something *this* script can pin safely in general — the runtime version moves over time, and hardcoding a pin here for every demo would go stale and start causing the exact problem it was meant to fix. `setup_kitchen_sink_demo.sh` pins `protobuf>=6.33,<7`, `grpcio<1.78`, `grpcio-health-checking<1.78` for that one demo (next to its existing `yarl` pin), since it's a bounded, maintained target where the pin can be revisited when it breaks. Other demos' setup scripts don't have this pin yet — if you hit this elsewhere, check your currently-installed versions against what the Serverless code server actually has, and pin down to compatible versions for now.
 
 **Branch-deployment PR comment never appears (or the workflow step fails silently)** — The generated workflow posts to the PR using the default `GITHUB_TOKEN`, which many orgs/repos default to read-only; without `permissions: pull-requests: write`, that step 403s and GitHub Actions swallows the failure (the job still shows green). Confirmed against the actual dg 1.13.28 template (both Serverless and Hybrid) — it ships with no `permissions:` block at all. The script now patches this in automatically right after `configure` runs (step 3). If your workflow predates that fix, add the block manually at the top level of `.github/workflows/dagster-plus-deploy.yml`:
 ```yaml

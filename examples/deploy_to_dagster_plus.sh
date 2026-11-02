@@ -769,7 +769,14 @@ ENV_VARS=$(
   {
     grep -rhoE 'EnvVar\("([A-Z_][A-Z0-9_]*)"\)' src/ 2>/dev/null | sed -E 's/EnvVar\("([^"]+)"\)/\1/'
     grep -rhoE 'os\.(environ\[|getenv\()"([A-Z_][A-Z0-9_]*)"' src/ 2>/dev/null | sed -E 's/.*"([A-Z_][A-Z0-9_]*)"/\1/'
-    grep -rhoE '_env_var:\s*([A-Z_][A-Z0-9_]*)' src/ 2>/dev/null | sed -E 's/.*:\s*//'
+    # Requires a non-identifier char (or end of line) right after the captured
+    # name -- otherwise this also matches Python type annotations shaped like
+    # `foo_env_var: Optional[str]`, where the naive version stops at the first
+    # lowercase letter and reports a bogus single-letter var ("O" from
+    # "Optional"). Confirmed: kitchen-sink-demo's dataframe_to_csv/component.py
+    # has `connection_url_env_var: Optional[str] = Field(...)`, which produced
+    # exactly that false positive on a real live run.
+    grep -rhoE '_env_var:\s*[A-Z_][A-Z0-9_]*([^A-Za-z0-9_]|$)' src/ 2>/dev/null | sed -E 's/.*:\s*//; s/[^A-Z0-9_]*$//'
     grep -rhoE '\$\{env:([A-Z_][A-Z0-9_]*)\}' src/ 2>/dev/null | sed -E 's/\$\{env:([^}]+)\}/\1/'
   } | sort -u | grep -vE "$EXCLUDE_PATTERN" || true
 )
@@ -790,6 +797,15 @@ else
   EXISTING_KEYS=""
   if uv run dg plus pull env >/dev/null 2>&1 && [ -f .env ]; then
     EXISTING_KEYS=$(grep -oE '^[A-Z_][A-Z0-9_]*=' .env 2>/dev/null | sed 's/=$//')
+  fi
+  if [ -f .env ]; then
+    # It's gitignored, so it won't get committed -- but it holds this
+    # deployment's actual secret VALUES in plaintext, and only the key names
+    # above are needed from it. No reason to leave real secrets sitting on
+    # disk (or risk them showing on screen later, e.g. mid-demo).
+    rm -f .env
+    echo "    (deleted the .env file 'dg plus pull env' just wrote -- it held this"
+    echo "    deployment's actual secret values; only the key names above were needed)"
   fi
   if [ -n "$EXISTING_KEYS" ]; then
     echo "    Already in Dagster+ deployment '$DAGSTER_PLUS_DEPLOYMENT':"
