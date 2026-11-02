@@ -43,7 +43,9 @@ PKG="$(ls src/ | head -1)"
 echo ">>> Adding runtime + dev deps"
 uv add -q pandas numpy
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
-uv add -q 'protobuf>=6.33,<7' 'grpcio<1.78' 'grpcio-health-checking<1.78'  # workaround: Dagster+ Serverless injects protobuf 6.33.x into the code server (/otel-auto-instrumentation-python/); a lockfile resolving protobuf 7 crashes it at startup (VersionError, "Code server failed to start")
+# (the protobuf/grpcio Serverless pin that used to live here moved to
+# deploy_to_dagster_plus.sh step 3 -- it's universal to every demo deployed
+# to Serverless, not specific to this one, so it's handled centrally there)
 uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"

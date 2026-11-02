@@ -318,6 +318,31 @@ if is_yes "$WANT_CONFIGURE"; then
     uv add -q dagster-cloud
     echo "    ✓ added dagster-cloud"
   fi
+
+  # Serverless-only, and universal, not demo-specific -- confirmed directly: a
+  # completely bare `create-dagster project` scaffold with zero components
+  # already resolves protobuf 7.x and grpcio-health-checking 1.85.x today,
+  # purely from `dagster`'s own transitive deps. Serverless's managed runtime
+  # injects protobuf 6.33.x into the code server at startup (via
+  # /otel-auto-instrumentation-python/); a project lockfile resolving
+  # protobuf 7 crashes it (VersionError, "Code server failed to start"),
+  # confirmed on a real live deploy. `dagster-cloud-cli` itself already forces
+  # a PARTIAL workaround during the PEX build (`_EXTRA_BUILD_CONSTRAINTS =
+  # ["grpcio-health-checking<1.82"]` in dagster_cloud_cli.core.pex_builder.deps,
+  # confirmed by reading that module directly) -- it wasn't enough on its own
+  # during the live test, which also needed protobuf and grpcio pinned
+  # directly. Hybrid builds its own Docker image with nothing injected by
+  # Dagster+ at runtime, so this is Serverless-only. This WILL go stale
+  # whenever Dagster lifts its own protobuf<7 cap (that dagster_cloud_cli
+  # comment says as much) -- when these versions stop being the live
+  # constraint, delete this block rather than attempt to auto-detect it.
+  if [ "$AGENT_TYPE" = "serverless" ] && ! grep -qE '"protobuf[">=<~! ]' pyproject.toml; then
+    echo "    Serverless's runtime currently needs protobuf<7 (and compatible grpcio/"
+    echo "    grpcio-health-checking) -- pinning, since a fresh project resolves"
+    echo "    protobuf 7 by default today and that crashes the code server at startup."
+    uv add -q 'protobuf>=6.33,<7' 'grpcio<1.78' 'grpcio-health-checking<1.78'
+    echo "    ✓ pinned protobuf/grpcio/grpcio-health-checking"
+  fi
   # Exactly which workflow file(s) this run's configure call touched (by mtime,
   # relative to a marker created right before it ran) -- NOT "everything in
   # .github/workflows", which could include an unrelated workflow someone else
