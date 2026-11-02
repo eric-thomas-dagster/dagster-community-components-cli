@@ -59,11 +59,13 @@ curl -fsSL .../deploy_to_dagster_plus.sh | bash -s -- kitchen-sink-demo --non-in
                                                     mount config file always gets written,
                                                     but with everything commented out)
        → .github/workflows/*.yml                 (CI/CD)
-       → [Serverless only] Adds `dagster-cloud` as a real (non-dev) dependency if
-         missing -- its PEX build fails without it ("dagster_cloud package dependency
-         was expected but not found"), confirmed on a real live deploy. The
-         `dagster-cloud-cli` dev dependency from step 1 is a different package and
-         doesn't satisfy this.
+       → Adds `dagster-cloud` as a real (non-dev) dependency if missing -- required
+         either way: Serverless's PEX build fails without it ("dagster_cloud package
+         dependency was expected but not found", confirmed on a real live deploy),
+         and Hybrid's generated Dockerfile has its own explicit check that fails the
+         image build the same way (`RUN if ! dagster-cloud --version; then ... exit
+         1`, confirmed by reading the generated Dockerfile). The `dagster-cloud-cli`
+         dev dependency from step 1 is a different package and doesn't satisfy this.
        → Patches the generated workflow(s) with a `permissions:` block (contents:
          read, pull-requests: write) if missing -- confirmed the dg 1.13.28 template
          (both Serverless and Hybrid) has none, so the branch-deployment PR-comment
@@ -328,7 +330,7 @@ uv run dg plus create env DATABASE_URL --value "..." --deployment prod
 
 **`No git repository found. Must be run from a git repository...`** — `dg plus deploy configure` requires one; confirmed directly against the CLI. The script now `git init`s before calling it (step 3), so this shouldn't surface anymore — if you see it, you're likely running `dg plus deploy configure` directly rather than through this script.
 
-**Serverless build fails: `dagster_cloud package dependency was expected but not found`** — The PEX build needs the `dagster-cloud` runtime package as a real dependency; `dagster-cloud-cli` (added in step 1) is a separate dev-only package and doesn't satisfy this. The script now adds it automatically for Serverless projects in step 3; if you configured manually instead, run `uv add dagster-cloud` yourself.
+**Serverless build fails: `dagster_cloud package dependency was expected but not found`** (or Hybrid's Docker build fails on `Could not find the dagster-cloud package`) — Both agent types need the `dagster-cloud` runtime package as a real dependency; `dagster-cloud-cli` (added in step 1) is a separate dev-only package and doesn't satisfy this. The script now adds it automatically in step 3 regardless of agent type; if you configured manually instead, run `uv add dagster-cloud` yourself.
 
 **Code server crashes on startup with a protobuf/grpcio error** — Serverless's runtime pins a specific `protobuf`/`grpcio` version; a newer `grpcio-health-checking` built against a newer protobuf gencode can mismatch it (e.g. gencode 7 vs. a runtime on protobuf 6.x). This isn't something the script can pin safely — the runtime version moves over time, and hardcoding a pin here would go stale and start causing the exact problem it was meant to fix. If you hit this, check your currently-installed `protobuf`/`grpcio`/`grpcio-health-checking` versions against what the Serverless code server actually has, and pin down to compatible versions for now.
 

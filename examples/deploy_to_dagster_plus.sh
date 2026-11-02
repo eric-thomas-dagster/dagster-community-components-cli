@@ -300,21 +300,23 @@ if is_yes "$WANT_CONFIGURE"; then
     CONFIGURE_MARKER=$(mktemp)
     # shellcheck disable=SC2086
     uv run dg plus deploy configure serverless --git-provider "$GIT_PROVIDER" --deployment "$DAGSTER_PLUS_DEPLOYMENT" $ORG_CONFIG_ARG --yes || true
+  fi
 
-    # Serverless's PEX build needs the `dagster-cloud` runtime package as a
-    # real (non-dev) dependency -- a different package from `dagster-cloud-cli`
-    # (step 1/8, dev-only, just the CLI). Without it the build fails with
-    # "dagster_cloud package dependency was expected but not found" --
-    # confirmed on a real live run, and `configure` doesn't add it itself
-    # (confirmed directly against dg 1.13.28). Matched on `"dagster-cloud` not
-    # immediately followed by `-` so this doesn't false-match the
-    # already-present `dagster-cloud-cli` dev dependency.
-    if ! grep -qE '"dagster-cloud["=<>~! ]' pyproject.toml; then
-      echo "    Serverless builds also need the 'dagster-cloud' runtime package"
-      echo "    (distinct from 'dagster-cloud-cli' added in step 1/8) -- adding it."
-      uv add -q dagster-cloud
-      echo "    ✓ added dagster-cloud"
-    fi
+  # Both agent types need the `dagster-cloud` runtime package as a real
+  # (non-dev) dependency -- a different package from `dagster-cloud-cli`
+  # (step 1/8, dev-only, just the CLI). Serverless's PEX build fails with
+  # "dagster_cloud package dependency was expected but not found"; Hybrid's
+  # generated Dockerfile has its own explicit check (`RUN if ! dagster-cloud
+  # --version; then ... exit 1`) that fails the image build the same way.
+  # Confirmed directly against dg 1.13.28 for both agent types -- `configure`
+  # doesn't add this dependency itself either way. Matched on `"dagster-cloud`
+  # not immediately followed by `-` so this doesn't false-match the
+  # already-present `dagster-cloud-cli` dev dependency.
+  if ! grep -qE '"dagster-cloud["=<>~! ]' pyproject.toml; then
+    echo "    $AGENT_TYPE builds also need the 'dagster-cloud' runtime package"
+    echo "    (distinct from 'dagster-cloud-cli' added in step 1/8) -- adding it."
+    uv add -q dagster-cloud
+    echo "    ✓ added dagster-cloud"
   fi
   # Exactly which workflow file(s) this run's configure call touched (by mtime,
   # relative to a marker created right before it ran) -- NOT "everything in
