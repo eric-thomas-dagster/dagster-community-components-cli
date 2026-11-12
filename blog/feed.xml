@@ -5,15 +5,15 @@
     <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/tree/main/blog</link>
     <description>Long-form posts from Eric Thomas on the Dagster community components registry — design essays, component tours, honest retrospectives.</description>
     <language>en-us</language>
-    <lastBuildDate>Thu, 12 Nov 2026 02:12:29 +0000</lastBuildDate>
+    <lastBuildDate>Thu, 12 Nov 2026 02:17:13 +0000</lastBuildDate>
     <atom:link href="https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/feed.xml" rel="self" type="application/rss+xml" />
     <item>
-      <title>For a daily digest, use a Claude routine. Here's where that stops.</title>
+      <title>The digest that outgrew its routine</title>
       <link>https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/blog/claude-writes-it-who-keeps-it-running.md</link>
       <guid isPermaLink="false">https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/blog/claude-writes-it-who-keeps-it-running.md</guid>
       <pubDate>Wed, 11 Nov 2026 00:00:00 +0000</pubDate>
       <dc:creator xmlns:dc="http://purl.org/dc/elements/1.1/">Eric Thomas</dc:creator>
-      <description>A calendar digest is the perfect vibe-coding project, and Claude's own routines will run it in the cloud with your laptop closed. So when does a pipeline need an orchestrator? An honest look at where a routine is enough, where it stops, and which community components cover the other side.</description>
+      <description>A daily calendar digest is the perfect first project, and a Claude routine runs it fine. Then it grows: more sources, more readers, someone who depends on it. A walk through the four moments a routine starts to strain, what I'd move into a pipeline at each one, and what I'd leave alone.</description>
     </item>
     <item>
       <title>Airflow shipped a new decorator for batch-mode LLM calls. I built the same thing as one ordinary Dagster component instead.</title>
