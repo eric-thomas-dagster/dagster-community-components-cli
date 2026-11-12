@@ -1,73 +1,46 @@
 ---
-title: "For a daily digest, use a Claude routine. Here's where that stops."
+title: "The digest that outgrew its routine"
 date: 2026-11-11
 author: Eric Thomas
-description: "A calendar digest is the perfect vibe-coding project, and Claude's own routines will run it in the cloud with your laptop closed. So when does a pipeline need an orchestrator? An honest look at where a routine is enough, where it stops, and which community components cover the other side."
+description: "A daily calendar digest is the perfect first project, and a Claude routine runs it fine. Then it grows: more sources, more readers, someone who depends on it. A walk through the four moments a routine starts to strain, what I'd move into a pipeline at each one, and what I'd leave alone."
 ---
 
-# For a daily digest, use a Claude routine. Here's where that stops.
+# The digest that outgrew its routine
 
 **Eric Thomas · November 2026**
 
-*This is an independent community project, not an official Dagster Labs position — my own components, my own reading of Anthropic's docs, my own opinions.*
+*This is an independent community project, not an official Dagster Labs position — my own components, my own reading of Anthropic's docs, my own opinions. The story below is a composite of how I'd expect this to go, not one real team's account.*
 
 ---
 
-Take the most "vibe coder" project there is: read my calendar, summarize the day, send me the digest each morning.
+Start with the most "vibe coder" project there is: read my calendar, summarize the day, send me the digest each morning.
 
-Claude Code will write it in one sitting. And you may not need to run it anywhere else, because Claude [now runs it for you](https://claude.com/blog/introducing-routines-in-claude-code). A **routine** is a saved prompt, plus the repositories and connectors it needs, that runs on Anthropic's cloud on a schedule, from an API call, or in response to a GitHub event. Per [Anthropic's docs](https://code.claude.com/docs/en/routines.md), it doesn't need your computer on. Your MCP connectors (Calendar, Gmail, Slack, Linear and so on) are included by default, so the "authorize once" part is handled too. Each run is kept as a full session you can open and read.
+Claude Code writes it in one sitting, and then you don't even have to host it. A Claude [routine](https://claude.com/blog/introducing-routines-in-claude-code) is a saved prompt plus the repositories and connectors it needs, and it runs on Anthropic's cloud on a schedule, from an API call, or on a GitHub event. Per [the docs](https://code.claude.com/docs/en/routines.md) it doesn't need your computer on, and your MCP connectors are included by default.
 
-For a calendar digest, that's the answer. Use a routine. If that's your project, close this tab.
+For one person's calendar, that's the right answer. Use the routine. I mean it.
 
-So when does an orchestrator earn its place? I think the dividing line is where the work stops being *one prompt with some tools* and becomes *a pipeline with parts*.
+The interesting question is what happens next, because digests don't stay small.
 
-## Where a routine is the right tool
+## Moment one: it stops being one source
 
-A routine is an agent with a prompt. It's at its best when:
+Within a month the digest wants more than the calendar. Today's open pull requests. The tickets assigned to you. The three Slack threads you were mentioned in. The prompt grows a paragraph for each source, and every morning the model re-reads and re-assembles all of it from scratch.
 
-- The job is naturally language-shaped: summarize, triage, draft, review.
-- The inputs are a handful of connectors, not a data volume.
-- One run is one coherent piece of reasoning, and reading the transcript is how you check it.
-- It's yours, or your small team's.
+Two things start to feel off. The output wobbles from day to day, because gathering the facts and writing about them are the same step, so a slightly different reading of the PR list changes the whole briefing. And when it's wrong you can't tell which part went wrong without reading the transcript.
 
-Digest, inbox triage, weekly PR roundups, reminders: that's the territory. I'd reach for it first.
-
-## Where it stops
-
-These are the places I'd expect a routine to feel wrong, not failures of Anthropic's product, just a different shape of problem.
-
-**The job is data, not conversation.** Pulling a few hundred thousand rows, joining two sources, writing a table: you don't want a model reasoning through each step. You want code you can test, with the model used for the one step that needs it. In a pipeline, the LLM call is *an asset*, and the rest is plain Python or SQL.
-
-**Steps have dependencies.** "Run B only after A finished, and only if A's data is fresh." A routine fires on a schedule, an API call or an event. A pipeline asks what's stale and runs just that, then re-runs one failed step without redoing the rest.
-
-**You need per-step history, not per-run history.** A routine's record is a session transcript. For a pipeline you want to ask "what did the `todays_events` step return last Tuesday, and how did it differ from Wednesday?" That's asset metadata and materialization history, not a conversation.
-
-**Volume.** Routines have run caps tied to your plan; at launch they were reported as a handful to a couple of dozen runs a day depending on tier, and they draw on your subscription usage. Fine for a digest. Not for something that should run every few minutes or per record.
-
-**A team needs to own it.** Someone else needs to see what ran, get paged, and change it without asking whose session it was.
-
-**You want it to be dull and deterministic.** Everything above comes down to one preference: put the model only where a model helps, and keep the rest boring.
-
-## What the community components cover on the other side
-
-The registry has ordinary components for the pipeline version of the digest. They're YAML, and each step becomes an asset with its own history.
-
-**An MCP server registered once**, with headers read from environment variables so no secret sits in a file:
+**What I'd move:** the gathering. Each source becomes its own step with its own stored result, and the model's only job is to write about what's already been collected.
 
 ```yaml
+# calendar_mcp/defs.yaml — register the server once
 type: dagster_community_components.MCPServerResourceComponent
 attributes:
   resource_key: calendar_mcp
   name: calendar
-  type: http
-  url: https://mcp.example.com/mcp/
-  headers_env:
-    Authorization: CALENDAR_TOKEN
+  type: stdio
+  command: [uv, run, python, calendar_server.py]
 ```
 
-**A tool call that's a real asset.** `MCPToolCallComponent` points at that server with `server_resource_key`, names the tool, and each run calls it and stores what came back, with latency, response size and a preview as metadata:
-
 ```yaml
+# todays_events/defs.yaml — one source = one asset
 type: dagster_community_components.MCPToolCallComponent
 attributes:
   asset_name: todays_events
@@ -77,22 +50,95 @@ attributes:
     range: today
 ```
 
-That's the same connector a routine would use, but the result is now a step in a graph: you can look at it, diff it against yesterday, and put a model call or a SQL transform downstream.
+That's the same MCP connector a routine would use. The difference is that the result is now a step you can look at, re-run on its own, and compare with yesterday's. A PR source, a tickets source and a Slack source are three more files like it, and the writing step depends on all of them.
 
-**An API without a connector.** `openapi_tool_server` turns an OpenAPI spec into one asset per operation.
+I ran the first of these end to end while writing this post: the asset starts the server, calls `list_events`, and stores the result with the latency, size and a preview as metadata.
 
-**Letting an agent act within limits.** `dagster_workflow_tools` lets an agent materialize assets or run jobs as real, tagged Dagster runs against a hard allow-list, so it can do the three things you named and nothing else.
+## Moment two: other people want one
 
-**Not redoing work.** `sitemap_crawler_ingestion` has a `skip_unchanged` mode, and the context-engineering pipeline reuses embeddings for chunks that didn't change. Don't recompute what didn't change.
+A teammate sees it and wants their own. Then the team does. Now it's eight digests a morning, each with its own calendar and its own sources.
 
-## They're not opposed
+A routine is one prompt with one configuration, so eight readers means eight routines to keep in sync, and routines have run caps tied to your plan (reported as a handful to a couple of dozen a day at launch, when they were a research preview, so check what applies to you). A change to the format means editing eight prompts.
 
-I don't think this is routine versus orchestrator. A routine can *call* a pipeline, and a pipeline can run an agent step. The honest shape is:
+**What I'd move:** the structure. One pipeline, parameterized by person, so changing the briefing format is one edit. The gathering steps are deterministic code, so they cost nothing in model calls, and only the writing step spends tokens.
 
-- Start with a routine. It's the fastest path from an idea to something running.
-- When the job grows data, dependencies, or an owner other than you, move the data parts into a pipeline and leave the language parts as agent steps.
-- Keep the connectors the same. MCP is the shared layer, which is why a registered server and a tool-call asset look so much like what a routine already uses.
+## Moment three: somebody relies on it
 
-If you have a digest that outgrew a routine, I'd like to hear what broke first.
+The first time the digest says a meeting is cancelled when it isn't, it stops being a toy. Someone asks: *what did it see, what did it write, and why?*
 
-*Components referenced above are in the [community registry](https://dagster-component-ui.vercel.app); each has an example YAML and README. Routines details are from [Anthropic's docs](https://code.claude.com/docs/en/routines.md) and [announcement](https://claude.com/blog/introducing-routines-in-claude-code); routines were a research preview when I read them, so check current limits.*
+With a routine you can open that run's session and read what happened, and that's a real record. What you can't easily do is ask the same question across a month, run a test against it, or hold a bad one before it's sent.
+
+**What I'd move:** the accountability. A check on the digest ("every event in the input appears in the output") that fails visibly instead of sending. A hold before it reaches anyone important. And a history per step, shared by the team and surviving anyone leaving, so "what did the calendar step return at 6:30 last Tuesday" has an answer that doesn't depend on whose account ran it.
+
+This is the moment I'd point a skeptical boss at. It's less about the digest than about being able to show your work.
+
+## Moment four: the digest feeds something else
+
+Then the briefing starts to be an input. It goes into a weekly rollup. A dashboard shows whether it went out. A Slack bot quotes it. Now "run it at 6:30" isn't enough: the rollup must wait for the daily digests, the dashboard needs to know if today's is fresh, and a failed morning must be re-run without redoing the five that worked.
+
+That's dependency and freshness tracking. It's a different shape of problem from "run this prompt at this time", and it's what asset-based orchestration is for.
+
+## What I'd leave as a routine
+
+Not all of it moves. The thing that's actually good at language, writing the three-sentence briefing from collected facts, is exactly what a routine or any model call is for. In the pipeline it's one asset:
+
+```python
+@dg.asset(group_name="digest")
+def daily_digest(context, todays_events: str) -> str:
+    response = litellm.completion(model=model, messages=[...])
+    ...
+```
+
+And the two aren't exclusive. A routine can call a pipeline, and a pipeline can run an agent step. The split I'd aim for: **the model handles words, and everything around it is code you can test and re-run.**
+
+## The honest summary
+
+| Stage | Stay on a routine | Move to a pipeline |
+|---|---|---|
+| One person, one or two sources | ✅ | |
+| Many sources, flaky output | | The gathering steps |
+| Many readers, many digests | | The structure, parameterized |
+| Somebody depends on it | | Checks, holds, shared history |
+| Feeds other things | | Dependencies and freshness |
+
+If you're at the top of that table, I'd stop reading and use the routine.
+
+## Try the first step
+
+The two files above are real. This is the small server they point at (it needs the `mcp` package, version 2 — on 1.x import `FastMCP` from `mcp.server.fastmcp` instead):
+
+```python
+# calendar_server.py
+from mcp.server.mcpserver import MCPServer
+
+mcp = MCPServer("calendar")
+
+
+@mcp.tool()
+def list_events(range: str = "today") -> list[dict]:
+    return [
+        {"start": "09:30", "title": "Standup", "attendees": 6},
+        {"start": "14:00", "title": "1:1 with Sam", "attendees": 2},
+    ]
+
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+Then:
+
+```bash
+uvx create-dagster@latest project digest --uv-sync
+cd digest
+uv add dagster-community-components mcp
+# put calendar_server.py in the project root and the two defs.yaml files under src/digest/defs/
+uv run dg check defs
+uv run dg launch --assets todays_events
+```
+
+Swap the stand-in server for a real calendar MCP server and you have the first moment's version of the pipeline.
+
+If you have a digest that outgrew a routine, I'd like to hear which of the four moments came first.
+
+*Components referenced above are in the [community registry](https://dagster-component-ui.vercel.app); each has an example YAML and README. Routines details are from [Anthropic's docs](https://code.claude.com/docs/en/routines.md) and [announcement](https://claude.com/blog/introducing-routines-in-claude-code).*
