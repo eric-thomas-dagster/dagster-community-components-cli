@@ -75,7 +75,9 @@ What I'd want instead:
 - **A hold before it goes to anyone who matters.**
 - **The same history for every day, owned by the team**, not one person's account, so it survives anyone leaving.
 
-None of that is about the model. It's the boring code around it, which is exactly the part worth keeping deterministic. This is the moment I'd point a skeptical boss at, because it's less about the digest than about being able to show your work.
+None of that is about the model. It's the boring code around it, which is exactly the part worth keeping deterministic.
+
+The word for this is **auditability**: being able to reconstruct what happened and show it to someone who wasn't there. It's what a skeptical boss asks for, and it's what a regulator asks for in a much bigger version of the same story. A pipeline's records (stored outputs, check results, who approved what, per-step history) are the raw material for that. They aren't a compliance certification on their own, and I wouldn't claim they are, but you can't build an audit trail out of a chat you scrolled through.
 
 ## Moment four: the digest feeds something else
 
@@ -94,7 +96,7 @@ def daily_digest(context, todays_events: str) -> str:
     ...
 ```
 
-And the two aren't exclusive. A routine can call a pipeline, and a pipeline can run an agent step. The split I'd aim for: **the model handles words, and everything around it is code you can test and re-run.** A routine for the words, a pipeline for the proof.
+And the two aren't exclusive. A routine can call a pipeline, and a pipeline can run an agent step. The split I'd aim for: **the model handles words, and everything around it is code you can test, re-run and audit.** A routine for the words, a pipeline for the proof.
 
 ## The honest summary
 
@@ -103,7 +105,7 @@ And the two aren't exclusive. A routine can call a pipeline, and a pipeline can 
 | One person, one or two sources | ✅ | |
 | Many sources, flaky output | | The gathering steps |
 | Many readers, many digests | | The structure, parameterized |
-| Somebody depends on it | | Checks, holds, shared history |
+| Somebody depends on it | | Auditability: checks, holds, shared history |
 | Feeds other things | | Dependencies and freshness |
 
 If you're at the top of that table, I'd stop reading and use the routine.
