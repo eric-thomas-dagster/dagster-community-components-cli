@@ -11,8 +11,6 @@ description: "A calendar digest is the perfect vibe-coding project, and Claude's
 
 *This is an independent community project, not an official Dagster Labs position — my own components, my own reading of Anthropic's docs, my own opinions.*
 
-*Update: an earlier version of this post claimed a personal user needs an orchestrator just to keep a script running. That undersold Claude's routines. This is the corrected version.*
-
 ---
 
 Take the most "vibe coder" project there is: read my calendar, summarize the day, send me the digest each morning.
@@ -94,10 +92,6 @@ I don't think this is routine versus orchestrator. A routine can *call* a pipeli
 - Start with a routine. It's the fastest path from an idea to something running.
 - When the job grows data, dependencies, or an owner other than you, move the data parts into a pipeline and leave the language parts as agent steps.
 - Keep the connectors the same. MCP is the shared layer, which is why a registered server and a tool-call asset look so much like what a routine already uses.
-
-## What I got wrong the first time
-
-My first draft listed running when the laptop is closed, handling credentials once, and keeping history as the reasons a personal user would need an orchestrator. A routine covers the first two outright and gives you a version of the third. What it doesn't give you is the pipeline shape: per-step assets, dependencies, deterministic steps, and no dependence on a plan's run cap. That, not the schedule, is the real argument.
 
 If you have a digest that outgrew a routine, I'd like to hear what broke first.
 
