@@ -54,7 +54,7 @@ That's the same MCP connector a routine would use. The difference is that the re
 
 I ran the first of these end to end while writing this post: the asset starts the server, calls `list_events`, and stores the result with the latency, size and a preview as metadata.
 
-## Moment two: other people want one
+## Moment two: other people want it
 
 A teammate sees it and wants their own. Then the team does. Now it's eight digests a morning, each with its own calendar and its own sources.
 
@@ -64,13 +64,18 @@ A routine is one prompt with one configuration, so eight readers means eight rou
 
 ## Moment three: somebody relies on it
 
-The first time the digest says a meeting is cancelled when it isn't, it stops being a toy. Someone asks: *what did it see, what did it write, and why?*
+Picture the digest telling a VP her 2pm was cancelled. It wasn't. She missed it. Now someone asks the most expensive question an AI workflow can get: *what did it see, and why did it say that?*
 
-With a routine you can open that run's session and read what happened, and that's a real record. What you can't easily do is ask the same question across a month, run a test against it, or hold a bad one before it's sent.
+With a routine you can open that run's session and read what happened. That's a transcript, and it's a real one. It's fine when the digest is yours. It's thin when a team depends on it, because a transcript is something you read, not something you can ask across a month, test, or stop before it's sent.
 
-**What I'd move:** the accountability. A check on the digest ("every event in the input appears in the output") that fails visibly instead of sending. A hold before it reaches anyone important. And a history per step, shared by the team and surviving anyone leaving, so "what did the calendar step return at 6:30 last Tuesday" has an answer that doesn't depend on whose account ran it.
+What I'd want instead:
 
-This is the moment I'd point a skeptical boss at. It's less about the digest than about being able to show your work.
+- **Each step's output stored on its own**, so "what did the calendar step return at 6:30 last Tuesday" has an answer.
+- **A check that fails the run** if the digest leaves out a meeting that's in the input, so a bad digest fails visibly instead of being sent.
+- **A hold before it goes to anyone who matters.**
+- **The same history for every day, owned by the team**, not one person's account, so it survives anyone leaving.
+
+None of that is about the model. It's the boring code around it, which is exactly the part worth keeping deterministic. This is the moment I'd point a skeptical boss at, because it's less about the digest than about being able to show your work.
 
 ## Moment four: the digest feeds something else
 
@@ -89,7 +94,7 @@ def daily_digest(context, todays_events: str) -> str:
     ...
 ```
 
-And the two aren't exclusive. A routine can call a pipeline, and a pipeline can run an agent step. The split I'd aim for: **the model handles words, and everything around it is code you can test and re-run.**
+And the two aren't exclusive. A routine can call a pipeline, and a pipeline can run an agent step. The split I'd aim for: **the model handles words, and everything around it is code you can test and re-run.** A routine for the words, a pipeline for the proof.
 
 ## The honest summary
 
