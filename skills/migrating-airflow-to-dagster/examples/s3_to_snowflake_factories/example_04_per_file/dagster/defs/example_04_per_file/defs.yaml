@@ -1,0 +1,15 @@
+type: ex04_trial.components.s3_per_file_load.S3PerFileLoad
+
+attributes:
+  name: example_04_s3_to_snowflake_dynamic_task_mapping
+  schedule: "@daily"
+  timezone: America/Chicago
+  stage: RAW_ORDERS_STAGE
+  table: ORDERS_RAW
+  snowflake_schema: RAW
+  database: ANALYTICS
+  warehouse: LOAD_WH
+  file_format: CSV_FILE_FORMAT
+  copy_options: "ON_ERROR = CONTINUE"
+  landing_prefix: orders/
+  archive_prefix: processed/orders/

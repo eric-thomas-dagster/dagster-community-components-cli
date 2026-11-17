@@ -586,6 +586,18 @@ def _eval_fstring(node: ast.AST, env: dict[str, str]) -> str | None:
     return None
 
 
+def find_loader_calls(tree: ast.AST, rel: str) -> list[dict[str, Any]]:
+    """Calls that load dag-factory YAML: load_yaml_dags(...), DagFactory(...).generate_dags(...)."""
+    out = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Call) and _dotted(node.func).split(".")[-1] in ("load_yaml_dags", "DagFactory", "_DagFactory", "generate_dags"):
+            kws = {k.arg: _src(k.value) for k in node.keywords if k.arg in ("config_filepath", "dags_folder", "config_dict", "defaults_config_path")}
+            first = _src(node.args[0]) if node.args and _dotted(node.func).split(".")[-1] in ("DagFactory", "_DagFactory") else ""
+            out.append({"kind": "dagfactory_loader", "dag_id": "", "file": rel, "line": node.lineno, "call": _dotted(node.func),
+                        "config": {**kws, **({"config_filepath": first} if first else {})}, "signals": {}})
+    return out
+
+
 def find_factory_calls(tree: ast.AST, names: set[str], rel: str) -> list[dict[str, Any]]:
     """Calls to DAG factory functions with their literal configuration.
 
@@ -675,6 +687,8 @@ def scan_dag_factory(path: Path, rel: str) -> list[dict[str, Any]]:
     if not isinstance(data, dict):
         return []
     out: list[dict[str, Any]] = []
+    if path.name in ("defaults.yml", "defaults.yaml"):
+        return []                          # dag-factory reads these as shared defaults, never as DAG definitions
     # Blueprint: one DAG per file; each step instantiates a blueprint
     if isinstance(data.get("steps"), dict) and any(isinstance(v, dict) and "blueprint" in v for v in data["steps"].values()):
         dag_id = str(data.get("dag_id") or path.stem.replace(".dag", ""))
@@ -691,18 +705,24 @@ def scan_dag_factory(path: Path, rel: str) -> list[dict[str, Any]]:
                         "trigger_rule": None, "mapped": False, "upstream": list(st.get("depends_on") or []),
                         "outlets": "", "inlets": "", "signals": {}})
         return out
+    default = data.get("default") if isinstance(data.get("default"), dict) else {}
     for dag_id, cfg in data.items():
-        if not isinstance(cfg, dict):
-            continue
+        if dag_id == "default" or not isinstance(cfg, dict):
+            continue                        # the `default` block is inherited by the other DAGs, it is not a DAG
         tasks = _norm_tasks(cfg.get("tasks"))
-        if not tasks or not any("operator" in t for t in tasks.values()):
+        if not tasks:
             continue
+        # DAG-level defaults merge from `default` (verified: schedule applied in dag-factory 1.1.0); `default.tasks` do NOT
+        # merge into a DAG's tasks by id (verified: that build fails), so a task without operator/decorator is unbuildable.
+        invalid = [tid for tid, t in tasks.items() if "operator" not in t and "decorator" not in t]
+        cfg = {**{k: v for k, v in default.items() if k != "tasks"}, **cfg}   # DAG-level defaults (schedule, catchup, tags, default_args)
         sched = cfg.get("schedule") or cfg.get("schedule_interval")
         out.append({"kind": "dag_factory", "dag_id": str(dag_id), "file": rel, "line": 1,
                     "schedule": {"kind": "cron" if isinstance(sched, str) else "unspecified", "raw": str(sched),
                                  "cron": CRON_PRESETS.get(sched, sched) if isinstance(sched, str) else None},
                     "catchup": cfg.get("catchup"), "max_active_runs": cfg.get("max_active_runs"), "tags": cfg.get("tags"),
-                    "default_args": cfg.get("default_args") or {}, "edges": [], "signals": {}, "task_ids": sorted(tasks), "factory": None})
+                    "default_args": cfg.get("default_args") or {}, "edges": [], "signals": {}, "task_ids": sorted(tasks), "factory": None,
+                    "unbuildable_tasks": invalid})
         for tid, t in tasks.items():
             out.append({"kind": "task", "dag_id": str(dag_id), "task_id": tid, "file": rel, "line": 1,
                         "operator": str(t.get("operator", "")).split(".")[-1], "style": "dag_factory",
@@ -711,10 +731,39 @@ def scan_dag_factory(path: Path, rel: str) -> list[dict[str, Any]]:
     return out
 
 
+def find_families(raw: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Group YAML-defined DAGs that have the same structure and differ only in parameter values.
+
+    N copies of one pipeline for N countries, tenants or tables is the usual dag-factory use. The Dagster
+    answer is rarely N assets: it is one asset partitioned by the varying value, or one component instance per value.
+    """
+    by_dag: dict[str, list[dict[str, Any]]] = {}
+    for u in raw:
+        if u["kind"] == "task":
+            by_dag.setdefault(u["dag_id"], []).append(u)
+    groups: dict[str, list[dict[str, Any]]] = {}
+    for u in raw:
+        if u["kind"] not in ("dag_factory", "blueprint_dag"):
+            continue
+        shape = json.dumps({"sched": u["schedule"].get("raw"), "tasks": sorted(
+            (t["task_id"], t["operator"], sorted(t.get("upstream", []))) for t in by_dag.get(u["dag_id"], []))}, default=str)
+        groups.setdefault(shape, []).append(u)
+    families = []
+    for members in groups.values():
+        if len(members) < 2:
+            continue
+        families.append({"kind": "dag_family", "dag_id": "", "name": ", ".join(sorted(m["dag_id"] for m in members))[:120],
+                         "members": sorted(m["dag_id"] for m in members), "file": members[0]["file"], "line": 1, "signals": {}})
+    return families
+
+
 def suggest(unit: dict[str, Any]) -> tuple[str, str]:
     """Suggested classification and reason for one unit."""
     if unit["kind"] == "unparsed":
         return "JUDG", unit["reason"]
+    if unit["kind"] == "dag_family":
+        return "REDESIGN", (f"{len(unit['members'])} DAGs with the same structure that differ only in parameter values: model as one "
+                            "asset partitioned by the varying value (static or dynamic partitions) or one component instance per value, not N assets")
     if unit["kind"] == "taskgroup_template":
         return "JUDG", f"reusable TaskGroup builder `{unit['name']}`: becomes a shared function or component that emits the same assets for each configuration"
     if unit["kind"] == "blueprint_template":
@@ -722,6 +771,8 @@ def suggest(unit: dict[str, Any]) -> tuple[str, str]:
     if unit["kind"] == "factory_call":
         where = f" (inside a loop over {unit['loop_over']})" if unit["in_loop"] else ""
         return "JUDG", f"configuration for factory `{unit['factory']}`{where}: becomes one component instance (a defs.yaml entry)"
+    if unit["kind"] == "dagfactory_loader":
+        return "JUDG", "dag-factory loader: the YAML it points at defines DAGs; a file that fails to build is logged and skipped, not raised"
     if unit["kind"] == "blueprint_dag":
         return "JUDG", "Blueprint DAG file: one component instance per step"
     if unit["kind"] == "task":
@@ -782,6 +833,9 @@ def suggest(unit: dict[str, Any]) -> tuple[str, str]:
         reasons.append("outlets/inlets on the DAG itself: Airflow rejects this (they are task arguments); confirm which task produces the dataset")
     if unit["kind"] == "dag_factory":
         reasons.append("dag-factory YAML: a config-driven DAG; candidate for a component when the shape repeats")
+        if unit.get("unbuildable_tasks"):
+            klass = "JUDG"
+            reasons.append(f"tasks {unit['unbuildable_tasks']} have no operator or decorator: dag-factory logs this and skips the whole file, so Airflow may not produce these DAGs at all")
     if unit["kind"] == "cosmos":
         klass = "JUDG"
         reasons.append("Cosmos DbtDag: dagster-dbt")
@@ -798,6 +852,7 @@ def build_manifest(root: Path, exclude: set[str]) -> dict[str, Any]:
             raw.extend(scan_python(p, rel))
         elif p.suffix in (".yml", ".yaml"):
             raw.extend(scan_dag_factory(p, rel))
+    raw.extend(find_families(raw))
     names = {u["factory"] for u in raw if u.get("factory")}
     if names:
         for p in sorted(root.rglob("*.py")):
@@ -808,6 +863,15 @@ def build_manifest(root: Path, exclude: set[str]) -> dict[str, Any]:
             except SyntaxError:
                 continue
             raw.extend(find_factory_calls(tree, names, str(p.relative_to(root))))
+    for p in sorted(root.rglob("*.py")):
+        if any(part in SKIP_DIRS or part in exclude for part in p.relative_to(root).parts):
+            continue
+        src = p.read_text(errors="replace")
+        if "dagfactory" in src or "dag_factory" in src:
+            try:
+                raw.extend(find_loader_calls(ast.parse(src), str(p.relative_to(root))))
+            except SyntaxError:
+                pass
     by_dag: dict[str, dict[str, int]] = {}
     for u in raw:
         if u["kind"] == "task":

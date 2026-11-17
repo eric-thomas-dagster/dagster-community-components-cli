@@ -355,10 +355,20 @@
    },
    "classification": "JUDG",
    "classification_reason": "Airflow Variables/Connections: map to env vars, secrets and resources (Phase 5); tasks: 4 JUDG, 3 REDESIGN",
-   "status": "deferred",
-   "evidence": "",
-   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
-   "target": {}
+   "status": "complete",
+   "evidence": "dg check defs loads (separate project: example_04 produces the same table as example_01, so the two designs cannot coexist in one deployment); validate_defs target matches; parity: 24/24 against the real Airflow DAG (compare4.py)",
+   "reason": "",
+   "target": {
+    "jobs": [
+     "example_04_s3_to_snowflake_dynamic_task_mapping"
+    ],
+    "schedules": [
+     {
+      "name": "example_04_s3_to_snowflake_dynamic_task_mapping_schedule",
+      "cron": "0 0 * * *"
+     }
+    ]
+   }
   },
   {
    "id": "A012",
@@ -387,10 +397,12 @@
    },
    "classification": "JUDG",
    "classification_reason": "provider operator: dagster-aws or a registry component",
-   "status": "deferred",
-   "evidence": "",
-   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
-   "target": {}
+   "status": "complete",
+   "evidence": "dg check defs loads (separate project: example_04 produces the same table as example_01, so the two designs cannot coexist in one deployment); validate_defs target matches; parity: 24/24 against the real Airflow DAG (compare4.py)",
+   "reason": "",
+   "target": {
+    "none": "folded into the schedule: it lists the day's prefix, registers each file as a dynamic partition and requests one run per file"
+   }
   },
   {
    "id": "A013",
@@ -421,10 +433,12 @@
    },
    "classification": "JUDG",
    "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
-   "status": "deferred",
-   "evidence": "",
-   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
-   "target": {}
+   "status": "complete",
+   "evidence": "dg check defs loads (separate project: example_04 produces the same table as example_01, so the two designs cannot coexist in one deployment); validate_defs target matches; parity: 24/24 against the real Airflow DAG (compare4.py)",
+   "reason": "",
+   "target": {
+    "none": "plumbing replaced by the partition key (the file) plus landed_files() and archive_key_for(), both checked against Airflow's own task functions"
+   }
   },
   {
    "id": "A014",
@@ -455,10 +469,19 @@
    },
    "classification": "REDESIGN",
    "classification_reason": "provider operator: official dagster-snowflake or a registry component; dynamic task mapping: dynamic partitions or a multi-asset/graph",
-   "status": "deferred",
-   "evidence": "",
-   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
-   "target": {}
+   "status": "complete",
+   "evidence": "dg check defs loads (separate project: example_04 produces the same table as example_01, so the two designs cannot coexist in one deployment); validate_defs target matches; parity: 24/24 against the real Airflow DAG (compare4.py)",
+   "reason": "",
+   "target": {
+    "assets": [
+     "analytics/raw/orders_raw"
+    ],
+    "deps": {
+     "analytics/raw/orders_raw": [
+      "s3/example-landing-bucket/orders"
+     ]
+    }
+   }
   },
   {
    "id": "A015",
@@ -489,10 +512,12 @@
    },
    "classification": "JUDG",
    "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
-   "status": "deferred",
-   "evidence": "",
-   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
-   "target": {}
+   "status": "complete",
+   "evidence": "dg check defs loads (separate project: example_04 produces the same table as example_01, so the two designs cannot coexist in one deployment); validate_defs target matches; parity: 24/24 against the real Airflow DAG (compare4.py)",
+   "reason": "",
+   "target": {
+    "none": "plumbing replaced by the partition key (the file) plus landed_files() and archive_key_for(), both checked against Airflow's own task functions"
+   }
   },
   {
    "id": "A016",
@@ -524,10 +549,19 @@
    },
    "classification": "REDESIGN",
    "classification_reason": "provider operator: dagster-aws or a registry component; dynamic task mapping: dynamic partitions or a multi-asset/graph",
-   "status": "deferred",
-   "evidence": "",
-   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
-   "target": {}
+   "status": "complete",
+   "evidence": "dg check defs loads (separate project: example_04 produces the same table as example_01, so the two designs cannot coexist in one deployment); validate_defs target matches; parity: 24/24 against the real Airflow DAG (compare4.py)",
+   "reason": "",
+   "target": {
+    "assets": [
+     "s3/example-landing-bucket/processed/orders"
+    ],
+    "deps": {
+     "s3/example-landing-bucket/processed/orders": [
+      "analytics/raw/orders_raw"
+     ]
+    }
+   }
   },
   {
    "id": "A017",
@@ -558,10 +592,12 @@
    },
    "classification": "JUDG",
    "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
-   "status": "deferred",
-   "evidence": "",
-   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
-   "target": {}
+   "status": "complete",
+   "evidence": "dg check defs loads (separate project: example_04 produces the same table as example_01, so the two designs cannot coexist in one deployment); validate_defs target matches; parity: 24/24 against the real Airflow DAG (compare4.py)",
+   "reason": "",
+   "target": {
+    "none": "plumbing replaced by the partition key (the file) plus landed_files() and archive_key_for(), both checked against Airflow's own task functions"
+   }
   },
   {
    "id": "A018",
@@ -593,10 +629,19 @@
    },
    "classification": "REDESIGN",
    "classification_reason": "provider operator: dagster-aws or a registry component; dynamic task mapping: dynamic partitions or a multi-asset/graph",
-   "status": "deferred",
-   "evidence": "",
-   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
-   "target": {}
+   "status": "complete",
+   "evidence": "dg check defs loads (separate project: example_04 produces the same table as example_01, so the two designs cannot coexist in one deployment); validate_defs target matches; parity: 24/24 against the real Airflow DAG (compare4.py)",
+   "reason": "",
+   "target": {
+    "assets": [
+     "s3/example-landing-bucket/processed/orders"
+    ],
+    "deps": {
+     "s3/example-landing-bucket/processed/orders": [
+      "analytics/raw/orders_raw"
+     ]
+    }
+   }
   },
   {
    "id": "A019",

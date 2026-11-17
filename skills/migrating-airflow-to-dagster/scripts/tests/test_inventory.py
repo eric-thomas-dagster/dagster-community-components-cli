@@ -231,3 +231,39 @@ def test_globals_registration_is_signalled(fmanifest):
 def test_dag_id_from_a_variable_is_resolved(fmanifest):
     ids = {u["dag_id"] for u in fmanifest["units"] if u["kind"] == "dag"}
     assert {"stem_var", "named_constant_dag"} <= ids and "dag_id" not in ids      # file-stem variable and a string constant
+
+
+DFX = HERE / "fixtures_dagfactory"
+
+
+@pytest.fixture(scope="module")
+def dfm():
+    return inventory.build_manifest(DFX, set())
+
+
+def test_dagfactory_default_block_and_defaults_file_are_not_dags(dfm):
+    ids = {u["dag_id"] for u in dfm["units"] if u["kind"] == "dag_factory"}
+    assert "default" not in ids and "defaults" not in ids
+    assert {"module3_dynamic_dag_Australia", "module3_dynamic_dag_Japan", "machine_learning"} <= ids
+
+
+def test_dagfactory_dict_tasks_use_the_key_as_task_id(dfm):
+    ts = {u["task_id"] for u in dfm["units"] if u["kind"] == "task" and u["dag_id"] == "module3_dynamic_dag_Brazil"}
+    assert ts == {"task_process_s3_data"}          # Airflow's id is the dict key, not the inner task_id (verified against dag-factory 1.1.0)
+
+
+def test_identical_dags_form_a_family(dfm):
+    fam = [u for u in dfm["units"] if u["kind"] == "dag_family"]
+    countries = next(f for f in fam if "module3_dynamic_dag_India" in f["members"])
+    assert len(countries["members"]) == 4 and countries["classification"] == "REDESIGN"
+    assert "partitioned" in countries["classification_reason"]
+
+
+def test_unbuildable_dagfactory_yaml_is_flagged(dfm):
+    d = next(u for u in dfm["units"] if u["kind"] == "dag_factory" and u["dag_id"] == "machine_learning")
+    assert d["unbuildable_tasks"] == ["load"] and "skips the whole file" in d["classification_reason"]
+
+
+def test_loader_call_is_recorded(dfm):
+    ld = next(u for u in dfm["units"] if u["kind"] == "dagfactory_loader")
+    assert ld["call"] == "load_yaml_dags" and "dags_folder" in ld["config"]

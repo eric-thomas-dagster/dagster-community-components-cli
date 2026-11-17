@@ -44,6 +44,18 @@ def main(argv: list[str] | None = None) -> int:
         from airflow.utils.db import initdb     # Airflow 2 reads dataset tables while parsing; give it a throwaway DB
         initdb()
 
+    import logging
+    logged: list[str] = []
+
+    class _Catch(logging.Handler):
+        def emit(self, record: logging.LogRecord) -> None:
+            msg = record.getMessage()
+            if record.levelno >= logging.ERROR and ("Failed to load dag" in msg or "dag-factory" in msg.lower() or "dagfactory" in record.name):
+                exc = f": {record.exc_info[1]}" if record.exc_info and record.exc_info[1] else ""
+                logged.append(f"{msg}{exc}"[:400])
+
+    logging.getLogger().addHandler(_Catch())
+
     dags: dict[str, dict] = {}
     errors: dict[str, str] = {}
     for folder in [f.resolve() for f in a.folders]:   # dag-factory and others require absolute paths
@@ -56,6 +68,8 @@ def main(argv: list[str] | None = None) -> int:
         for dag_id, dag in bag.dags.items():
             sched = getattr(dag, "schedule", None) or getattr(dag, "timetable", None) or getattr(dag, "schedule_interval", None)
             dags[dag_id] = {"file": os.path.relpath(dag.fileloc, folder), "tasks": sorted(dag.task_dict), "schedule": str(sched)[:200]}
+    for i, msg in enumerate(logged):          # dag-factory logs a failure and skips the file: no DAG, no import error
+        errors[f"(logged failure {i + 1})"] = msg
     a.out.write_text(json.dumps({"dags": dags, "import_errors": errors}, indent=1) + "\n")
     print(f"airflow parsed {len(dags)} DAGs, {sum(len(d['tasks']) for d in dags.values())} tasks; {len(errors)} file(s) failed to import")
     for f, e in list(errors.items())[:10]:

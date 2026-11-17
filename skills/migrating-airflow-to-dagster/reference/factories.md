@@ -34,3 +34,12 @@ Factory output is only fully visible at runtime. Run `airflow_truth.py` and `rec
 ## Parity for factory-built DAGs
 
 Compare against the **real Airflow DAG objects**, not a re-reading of the source: load the project with Airflow's DagBag, pull each operator's actual arguments, generate the operator's SQL with its hook mocked (nothing executes), and compare with what the Dagster asset does under fake resources. `examples/s3_to_snowflake_factories/parity/` has the harness (`af_side.py`, `dg_side.py`, `compare_parity.py`).
+
+## dag-factory specifics (verified against dag-factory 1.1.0 in Airflow 3.4)
+
+- **Task id.** When `tasks` is a mapping, the task id is the mapping key, not the inner `task_id` field. When it is a list, it is `task_id`.
+- **`default` is not a DAG.** DAG-level values in the `default` block (schedule, catchup, tags, default_args) are inherited by every DAG in the file. `default.tasks` is **not** merged into a DAG's tasks by id: a task with no `operator` or `decorator` makes the whole file fail to build.
+- **`defaults.yml` and `defaults.yaml` are never DAG definitions.**
+- **Failures are logged, not raised.** A YAML file that fails to build is skipped with an error in the log; Airflow shows no import error and no DAG. The static scan flags tasks with no operator, `airflow_truth.py` records the logged failures, and `reconcile.py` lists static DAGs Airflow did not produce.
+- **Loaders.** `load_yaml_dags(globals(), dags_folder=...)` loads every non-defaults YAML in the folder; paths must be absolute. A YAML file no loader reaches defines no DAGs: the scanner records `dagfactory_loader` units so you can check.
+- **Families.** DAG blocks that have the same structure and differ only in parameter values (the AWS blog's seven countries) are reported as a `dag_family`. Convert the family to one asset partitioned by the varying value: `examples/dagfactory_family/` checks that the partitions equal the `op_args` of the DAGs dag-factory actually generated, the callable runs once per partition with that value, and one schedule at the shared cron requests every partition.

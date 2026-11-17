@@ -1,0 +1,36 @@
+default:
+  default_args:
+    start_date: '2024-01-01'
+  schedule: 0 0 * * *
+  catchup: false
+  tags:
+    - dynamic
+  tasks:
+    - task_id: "extract"
+      operator: airflow.providers.standard.operators.bash.BashOperator
+      bash_command: "echo extract"
+    - task_id: "transform"
+      operator: airflow.providers.standard.operators.bash.BashOperator
+      bash_command: "echo transform"
+      dependencies:
+      - extract
+    - task_id: "load"
+      operator: airflow.providers.standard.operators.bash.BashOperator
+      dependencies:
+      - transform
+
+
+machine_learning:
+  tasks:
+    - task_id: "load"
+      bash_command: "echo machine_larning"
+
+data_science:
+  tasks:
+    - task_id: "load"
+      bash_command: "echo data_science"
+
+artificial_intelligence:
+  tasks:
+    - task_id: "load"
+      bash_command: "echo artificial_intelligence"

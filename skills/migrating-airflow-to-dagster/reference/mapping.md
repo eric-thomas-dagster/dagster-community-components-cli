@@ -41,7 +41,7 @@ Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirm
 | Sensors (`S3KeySensor`, `ExternalTaskSensor`, ...) | Dagster sensor, or declarative automation (`eager`, `on_cron`) | JUDG | Poke interval and timeout semantics differ |
 | `TriggerDagRunOperator` | Asset dependency or automation condition | JUDG | |
 | `BranchPythonOperator`, `@task.branch`, `ShortCircuit` | Conditional logic in an asset, asset checks, or dynamic outputs | REDESIGN | |
-| Dynamic task mapping (`.expand`) | Dynamic partitions, or a multi-asset / graph with dynamic outputs | REDESIGN | |
+| Dynamic task mapping (`.expand`) | Static partitions for a known list; dynamic partitions for items found at run time | REDESIGN | One asset partitioned by the item, not N assets. See `reference/dynamic-mapping.md` and its worked example |
 | `SubDagOperator` | Flatten into the parent graph | REDESIGN | |
 | `trigger_rule` other than `all_success` | No direct equivalent; checks, run-status hooks or automation conditions | JUDG | |
 
@@ -79,6 +79,15 @@ Measured by comparing the scan with Airflow's own parse (DagBag) of five public 
 | astronomer/2-9-example-dags (2.10.5) | 18 / 18 | 100% of 44 | 0 | 0 |
 | matsudan/airflow-dag-examples (3.4.0) | 13 / 13 | 71% of 48 | 29% | 0 |
 | astronomer/reusable_dag_examples, factories (3.4.0) | 6 static / 9 (reconcile closes the gap) | n/a | n/a | n/a |
+| astronomer/2-4-example-dags (2.10.5) | 10 / 10 | 100% of 31 | 0 | 0 |
+| astronomer/2-5-example-dags (2.10.5) | 9 / 9 | 96% of 25 | 4% | 0 |
+| astronomer/2-6-example-dags (2.10.5) | 12 / 12 | 69% of 62 | 31% | 0 |
+| astronomer/2-7-example-dags (2.10.5) | 14 / 14 | 100% of 139 | 0 | 0 |
+| astronomer/2-8-example-dags (2.10.5) | 11 / 11 | 100% of 23 | 0 | 0 |
+| astronomer/astro-example-dags (2.10.5) | 1 / 1 | 100% of 2 | 0 | 0 |
+| astronomer/astro-ide-example-dags-airflow3 (3.4.0) | 22 / 22 | 55% of 176 | 45% | 0 |
+| astronomer/airflow-example-dags (2.10.5) | 3 / 3 | 5% of 58 | 95% (loop-generated) | 0 |
+| astronomer/ds-ml-example-dags | no ground truth: its ML dependencies did not import | n/a | n/a | n/a |
 
 The scan also lists DAGs Airflow did not produce, all from files Airflow failed to import (missing providers or a source newer than the installed provider). The first runs of this comparison found real gaps that are now fixed and tested: TaskGroup id prefixes, `__1` call suffixes, operators in comprehensions, `@setup`/`@teardown`/`@task_group`/`@asset`, reused DAG variable names, ids computed from `Path(__file__)` or a module-level constant, and the factory patterns in `reference/factories.md`. Re-run the comparison on your own repo rather than assuming these numbers carry over.
 

@@ -1,0 +1,48 @@
+default:
+  default_args:
+    owner: airflow
+    start_date: 2022-01-01
+    retries: 1
+    retry_delay_sec: 300
+  schedule: "*/10 * * * *"
+  catchup: false
+
+module3_dynamic_dag_Australia:
+  tasks:
+    task_process_s3_data:
+      task_id: process_s3_data
+      operator: airflow.providers.standard.operators.python.PythonOperator
+      python_callable_name: process_s3_data
+      python_callable_file: /usr/local/airflow/dags/process_s3_data.py
+      op_args:
+        - "Australia"
+
+module3_dynamic_dag_Brazil:
+  tasks:
+    task_process_s3_data:
+      task_id: process_s3_data
+      operator: airflow.providers.standard.operators.python.PythonOperator
+      python_callable_name: process_s3_data
+      python_callable_file: /usr/local/airflow/dags/process_s3_data.py
+      op_args:
+        - "Brazil"
+
+module3_dynamic_dag_India:
+  tasks:
+    task_process_s3_data:
+      task_id: process_s3_data
+      operator: airflow.providers.standard.operators.python.PythonOperator
+      python_callable_name: process_s3_data
+      python_callable_file: /usr/local/airflow/dags/process_s3_data.py
+      op_args:
+        - "India"
+
+module3_dynamic_dag_Japan:
+  tasks:
+    task_process_s3_data:
+      task_id: process_s3_data
+      operator: airflow.providers.standard.operators.python.PythonOperator
+      python_callable_name: process_s3_data
+      python_callable_file: /usr/local/airflow/dags/process_s3_data.py
+      op_args:
+        - "Japan"

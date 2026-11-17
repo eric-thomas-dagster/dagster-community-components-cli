@@ -4,7 +4,7 @@ Source: https://github.com/astronomer/reusable_dag_examples (Astro Runtime 3.2, 
 
 ## Result
 
-`manifest.json`: 61 units, 27 complete, 34 deferred with reasons, 0 pending (`status.py summary` exits 0). `dg check defs` loads 7 assets, 3 jobs, 3 schedules.
+`manifest.json`: 61 units, 35 complete, 26 deferred with reasons, 0 pending (`status.py summary` exits 0). The main project loads 7 assets, 3 jobs, 3 schedules; example 4 is a separate project (`example_04_per_file/`) because it is an alternative design for the same table.
 
 ```
 s3/example-landing-bucket/{orders,customers,products}   shared upstream source assets (defined once)
@@ -25,7 +25,7 @@ One component class (`dagster/components/s3_to_snowflake_load.py`) and one YAML 
 | example_02 customers, products | complete | instances |
 | example_02 orders (hourly) | deferred | same table as example_01 at hourly cadence; one asset cannot have two partitionings or two producers |
 | example_03, 05, 06 | deferred | duplicate producers of `orders_raw`; their COPY SQL is byte-identical to example_01's. Differences for the owner: wrapper steps (03), fixed -05:00 timezone and no post-load (05), UTC and no post-load (06) |
-| example_04 | deferred | per-file dynamic task mapping (copy, archive, delete): redesign |
+| example_04 | complete, in its own project | per-file dynamic task mapping redesigned with dynamic partitions (see below). It produces `orders_raw` like example_01, so only one of the two designs can be deployed |
 | example_astronauts | deferred | out of scope |
 
 ## Findings
@@ -54,4 +54,24 @@ One component class (`dagster/components/s3_to_snowflake_load.py`) and one YAML 
 
 ## What this does not prove
 
+(Example 4's own caveats are at the end of its section.)
+
 Nothing ran against real S3 or Snowflake. The fakes mirror what the real resource classes attach; they are not the real services. Airflow's own rendering of `{{ ds }}` was not run independently (the rule was checked against the timetable's logical dates). Operator-level behavior outside the SQL and prefix (timeouts, connection pooling, `autocommit`) was not compared. The deferred DAGs were not converted.
+
+## Example 4: dynamic task mapping as dynamic partitions
+
+`example_04_per_file/`: a `S3PerFileLoad` component. A schedule at Airflow's cadence lists the day's prefix, registers each landed file as a dynamic partition and requests one run per file. The partitioned table asset does the COPY; one downstream asset archives the file and deletes the original. The listing and the three kwargs-builder tasks disappear. Details and pitfalls: `reference/dynamic-mapping.md`.
+
+Parity against the real Airflow DAG (`parity/af_side4.py` runs the DAG's own task functions and mapped operators with the hooks mocked; `parity/compare4.py`): 24 of 24 checks match, covering the files mapped over (folder placeholder dropped, a key with a space kept), the COPY SQL, session overrides, the boto calls Airflow's hook makes for archive and delete, per-file order, the listing prefix at three ticks, skipping a day with no files, cron and timezone, and no duplicate partitions on re-evaluation.
+
+| Airflow | Dagster | Delta |
+|---|---|---|
+| mapped COPY, archive, delete per file, downstream mapped tasks `all_success` over every upstream instance | one partition per file | **per-file independence.** A failed COPY leaves that file in place; other files still archive and delete (`parity/dg_fail4.py`). Airflow's side is inferred from the DAG's real trigger rules, not executed |
+| ephemeral mapped instances | persistent dynamic partitions | partitions accumulate; prune old ones |
+| `list_landing_files` | the schedule | the listing is no longer a task you can retry on its own |
+
+Not proven: the schedule adds partitions through `context.instance`, which was verified in-process on a local persistent instance only. Whether a deployed daemon allows it was not tested; the documented alternative is a sensor with `SensorResult(dynamic_partitions_requests=...)`.
+
+## Reusing the scripts
+
+The scripts under `parity/` and `example_04_per_file/parity/` use relative paths from the layout of the session that produced them (a scratch directory holding the Airflow repo copy, an Airflow 3 environment and the Dagster project). Treat them as templates: the technique is to load the real DAGs with Airflow's DagBag, run each operator with its hook mocked, and compare with the Dagster asset under fake resources.
