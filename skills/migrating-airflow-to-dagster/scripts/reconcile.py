@@ -20,7 +20,7 @@ from pathlib import Path
 
 def reconcile(manifest: dict, truth: dict) -> dict:
     units = manifest["units"]
-    dag_units = {u["dag_id"]: u for u in units if u["kind"] in ("dag", "cosmos", "dag_factory")}
+    dag_units = {u["dag_id"]: u for u in units if u["kind"] in ("dag", "cosmos", "dag_factory", "blueprint_dag") and not u.get("factory")}
     tasks: dict[str, list[dict]] = {}
     for u in units:
         if u["kind"] == "task":

@@ -127,6 +127,8 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 |---|---|
 | What maps to what, and how sure we are | `reference/mapping.md` |
 | Parity checks that justify advancing judgment units | `reference/parity.md` |
+| DAG factories, Blueprint, dag-factory, loops that generate DAGs | `reference/factories.md` |
+| A worked factory conversion (six factories to one component) | `examples/s3_to_snowflake_factories/MIGRATION.md` |
 | A completed worked conversion | `examples/three_dags/MIGRATION.md` |
 | Observe, bridge, native; Airlift and the script-orchestrator component | `reference/tiers.md` |
 

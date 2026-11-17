@@ -13,13 +13,14 @@ Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirm
 | TaskGroup | Asset `group_name` | MECH | |
 | Task dependencies (`>>`) | Asset `deps` | MECH | Edges between non-data tasks collapse |
 | Dataset / Asset outlets and inlets | Asset keys and deps | MECH | URIs become key paths; Airflow Asset URIs map naturally to Dagster keys |
+| Several DAGs writing the same table | One producing asset; the others depend on it or are deferred | JUDG | Many definitions may depend on an asset; only one may produce it. See `reference/factories.md` rule 1 |
 | Dataset-triggered schedule (`schedule=[...]`) | Asset deps with an automation condition such as `AutomationCondition.eager()` | JUDG | Verify; semantics differ from "all datasets updated since last run" |
 
 ## Scheduling
 
 | Airflow | Dagster | Class | Notes |
 |---|---|---|---|
-| `schedule` cron or preset (`@daily` = `0 0 * * *`, `@hourly`, `@weekly`, `@monthly`, `@yearly`) | `ScheduleDefinition(cron_schedule=...)` | MECH | Set `execution_timezone`; Airflow cron is evaluated in the DAG timezone |
+| `schedule` cron or preset (`@daily` = `0 0 * * *`, `@hourly`, `@weekly`, `@monthly`, `@yearly`) | `ScheduleDefinition(cron_schedule=...)` | MECH if no date templates; JUDG if the tasks use `ds` or the logical date | Set `execution_timezone`. The cron is the same; what a tick means is not. Airflow 3: trigger timetable, logical date = the tick, no data interval. Airflow 2: data-interval timetable, the run covers the interval that just ended. Date-templated tasks need a partition choice that matches the version: see `reference/factories.md` rule 3 |
 | `@once` | Manual job, or a one-off | JUDG | |
 | `schedule=None` | Job with no schedule | MECH | |
 | `timedelta` schedule | Cron approximation or a custom schedule | JUDG | A fixed interval from the start date is not a cron |
@@ -69,7 +70,17 @@ Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirm
 
 ## Scanner accuracy and limits
 
-Measured by comparing the scan with Airflow 3.4.0's own parse of the example DAGs in `apache/airflow` (main): all 118 DAGs the parser produced were found; of 427 task ids in matched DAGs, 75% matched exactly, 25% sit in DAGs where the scan holds a unit flagged `dynamic_id`, `in_loop` or `mapped` (the real ids are only known at parse time), and none were unaccounted for. The scan also reported 4 DAGs Airflow did not produce, all from files Airflow failed to import (missing optional providers or a source newer than the installed provider). An exact match was only reached after fixing real gaps this comparison exposed (TaskGroup id prefixes, `__1` call suffixes, operators in comprehensions, `@setup`/`@teardown`/`@task_group`/`@asset`, reused DAG variable names, `Path(__file__).stem` ids), so re-run the comparison on your own repo rather than assuming the number carries over.
+Measured by comparing the scan with Airflow's own parse (DagBag) of five public repos. "Exact" is task ids equal to Airflow's; "flagged" is tasks in DAGs where the scan holds a `dynamic_id`, `in_loop` or `mapped` unit because the real ids exist only at parse time; "unaccounted" is neither.
+
+| Repo (Airflow used for the parse) | DAGs found / Airflow produced | Task ids exact | Flagged | Unaccounted |
+|---|---|---|---|---|
+| apache/airflow example DAGs, main (3.4.0) | 118 / 118 | 75% of 427 | 25% | 0 |
+| astronomer/2-10-example-dags (2.10.5) | 25 / 25 | 100% of 55 | 0 | 0 |
+| astronomer/2-9-example-dags (2.10.5) | 18 / 18 | 100% of 44 | 0 | 0 |
+| matsudan/airflow-dag-examples (3.4.0) | 13 / 13 | 71% of 48 | 29% | 0 |
+| astronomer/reusable_dag_examples, factories (3.4.0) | 6 static / 9 (reconcile closes the gap) | n/a | n/a | n/a |
+
+The scan also lists DAGs Airflow did not produce, all from files Airflow failed to import (missing providers or a source newer than the installed provider). The first runs of this comparison found real gaps that are now fixed and tested: TaskGroup id prefixes, `__1` call suffixes, operators in comprehensions, `@setup`/`@teardown`/`@task_group`/`@asset`, reused DAG variable names, ids computed from `Path(__file__)` or a module-level constant, and the factory patterns in `reference/factories.md`. Re-run the comparison on your own repo rather than assuming these numbers carry over.
 
 What the static scan models: DAGs by `with DAG`, `DAG(...)`, `@dag` and `@asset`; tasks at their call sites with group prefixes and Airflow's duplicate-call suffixes; `.override`, `.partial`, `.expand`, `.loop`; `>>`, `<<`, `chain`, `set_downstream`, TaskFlow argument passing; dag-factory YAML.
 

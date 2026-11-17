@@ -1,0 +1,18 @@
+type: reusable_trial.components.s3_to_snowflake_load.S3ToSnowflakeLoad
+
+attributes:
+  name: example_01_s3_to_snowflake_python_factory
+  schedule: "@daily"
+  partitions: daily
+  stage: RAW_ORDERS_STAGE
+  prefix: "orders/{{ ds_nodash }}/"
+  table: ORDERS_RAW
+  copy_options: ON_ERROR = CONTINUE
+  post_load_sql_file: post_load_transform.sql
+  database: ANALYTICS
+  warehouse: LOAD_WH
+  file_format: CSV_FILE_FORMAT
+  snowflake_schema: RAW
+  start_date: "2026-07-01"
+  retries: 2
+  timezone: America/Chicago

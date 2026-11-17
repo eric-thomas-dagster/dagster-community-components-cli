@@ -1,0 +1,9 @@
+dag_id: report_bp
+schedule: "@daily"
+steps:
+  load:
+    blueprint: s3_load
+    table: ORDERS
+  publish:
+    blueprint: publish
+    depends_on: [load]

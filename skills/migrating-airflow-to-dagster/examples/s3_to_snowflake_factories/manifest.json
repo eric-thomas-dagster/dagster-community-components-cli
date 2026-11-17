@@ -1,0 +1,2021 @@
+{
+ "version": 1,
+ "root": "<repo>",
+ "units": [
+  {
+   "id": "A001",
+   "kind": "blueprint_template",
+   "dag_id": "",
+   "name": "S3ToSnowflakeDagArgs",
+   "file": "dags/blueprints/dag_args.py",
+   "line": 28,
+   "signals": {},
+   "classification": "REDESIGN",
+   "classification_reason": "Blueprint `S3ToSnowflakeDagArgs`: a config-driven template, which is what a Dagster component is; migrate it as ONE component",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "Replaced by the S3ToSnowflakeLoad component (one class, one YAML instance per DAG); component loads under dg check defs and passes 19/19 parity checks."
+   }
+  },
+  {
+   "id": "A002",
+   "kind": "taskgroup_template",
+   "dag_id": "",
+   "name": "render",
+   "file": "dags/blueprints/s3_to_snowflake.py",
+   "line": 49,
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "reusable TaskGroup builder `render`: becomes a shared function or component that emits the same assets for each configuration",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "Replaced by the S3ToSnowflakeLoad component (one class, one YAML instance per DAG); component loads under dg check defs and passes 19/19 parity checks."
+   }
+  },
+  {
+   "id": "A003",
+   "kind": "blueprint_template",
+   "dag_id": "",
+   "name": "S3ToSnowflake",
+   "file": "dags/blueprints/s3_to_snowflake.py",
+   "line": 40,
+   "signals": {},
+   "classification": "REDESIGN",
+   "classification_reason": "Blueprint `S3ToSnowflake`: a config-driven template, which is what a Dagster component is; migrate it as ONE component",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "Replaced by the S3ToSnowflakeLoad component (one class, one YAML instance per DAG); component loads under dg check defs and passes 19/19 parity checks."
+   }
+  },
+  {
+   "id": "A004",
+   "kind": "dag_factory",
+   "dag_id": "example_06_s3_to_snowflake_dag_factory",
+   "file": "dags/dag_factory/example_06_s3_to_snowflake_dag_factory.yaml",
+   "line": 1,
+   "schedule": {
+    "kind": "cron",
+    "raw": "@daily",
+    "cron": "0 0 * * *"
+   },
+   "catchup": null,
+   "max_active_runs": null,
+   "tags": null,
+   "default_args": {},
+   "edges": [],
+   "signals": {},
+   "task_ids": [
+    "build_load_manifest",
+    "copy_into_snowflake",
+    "list_landing_files"
+   ],
+   "factory": null,
+   "task_classes": {
+    "JUDG": 2,
+    "MECH": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "dag-factory YAML: a config-driven DAG; candidate for a component when the shape repeats; tasks: 2 JUDG, 1 MECH",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: UTC schedule; no post-load SQL; no log_load_manifest step.",
+   "target": {}
+  },
+  {
+   "id": "A005",
+   "kind": "task",
+   "dag_id": "example_06_s3_to_snowflake_dag_factory",
+   "task_id": "list_landing_files",
+   "file": "dags/dag_factory/example_06_s3_to_snowflake_dag_factory.yaml",
+   "line": 1,
+   "operator": "S3ListOperator",
+   "style": "dag_factory",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "provider operator: dagster-aws or a registry component",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: UTC schedule; no post-load SQL; no log_load_manifest step.",
+   "target": {}
+  },
+  {
+   "id": "A006",
+   "kind": "task",
+   "dag_id": "example_06_s3_to_snowflake_dag_factory",
+   "task_id": "build_load_manifest",
+   "file": "dags/dag_factory/example_06_s3_to_snowflake_dag_factory.yaml",
+   "line": 1,
+   "operator": "PythonOperator",
+   "style": "dag_factory",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "upstream": [
+    "list_landing_files"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "MECH",
+   "classification_reason": "python callable: asset or op running the same function",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: UTC schedule; no post-load SQL; no log_load_manifest step.",
+   "target": {}
+  },
+  {
+   "id": "A007",
+   "kind": "task",
+   "dag_id": "example_06_s3_to_snowflake_dag_factory",
+   "task_id": "copy_into_snowflake",
+   "file": "dags/dag_factory/example_06_s3_to_snowflake_dag_factory.yaml",
+   "line": 1,
+   "operator": "CopyFromExternalStageToSnowflakeOperator",
+   "style": "dag_factory",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "upstream": [
+    "build_load_manifest"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "provider operator: official dagster-snowflake or a registry component",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: UTC schedule; no post-load SQL; no log_load_manifest step.",
+   "target": {}
+  },
+  {
+   "id": "A008",
+   "kind": "dag",
+   "dag_id": "example_03_s3_to_snowflake_task_group",
+   "file": "dags/example_03_s3_to_snowflake_task_group.py",
+   "line": 25,
+   "schedule": {
+    "kind": "cron",
+    "raw": "@daily",
+    "cron": "0 0 * * *"
+   },
+   "catchup": false,
+   "max_active_runs": null,
+   "tags": [
+    "example",
+    "s3",
+    "snowflake",
+    "task-group"
+   ],
+   "default_args": {
+    "owner": "data-team",
+    "retries": 2
+   },
+   "edges": [
+    [
+     "prepare_load_window",
+     "publish_load_complete"
+    ]
+   ],
+   "dynamic_dag_id": false,
+   "factory": null,
+   "signals": {
+    "connection_id": 1,
+    "jinja_template": 1
+   },
+   "task_ids": [
+    "prepare_load_window",
+    "publish_load_complete"
+   ],
+   "task_classes": {
+    "MECH": 1,
+    "JUDG": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "Airflow Variables/Connections: map to env vars, secrets and resources (Phase 5); tasks: 1 JUDG, 1 MECH",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: wraps the load group with prepare_load_window and publish_load_complete steps.",
+   "target": {}
+  },
+  {
+   "id": "A009",
+   "kind": "task",
+   "dag_id": "example_03_s3_to_snowflake_task_group",
+   "task_id": "prepare_load_window",
+   "file": "dags/example_03_s3_to_snowflake_task_group.py",
+   "line": 39,
+   "operator": "@task",
+   "style": "python",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "connection_id": 1,
+    "jinja_template": 1
+   },
+   "classification": "MECH",
+   "classification_reason": "TaskFlow task: asset or op running the same function",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: wraps the load group with prepare_load_window and publish_load_complete steps.",
+   "target": {}
+  },
+  {
+   "id": "A010",
+   "kind": "task",
+   "dag_id": "example_03_s3_to_snowflake_task_group",
+   "task_id": "publish_load_complete",
+   "file": "dags/example_03_s3_to_snowflake_task_group.py",
+   "line": 59,
+   "operator": "@task",
+   "style": "python",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": true,
+   "upstream": [
+    "prepare_load_window"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "connection_id": 1,
+    "jinja_template": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: wraps the load group with prepare_load_window and publish_load_complete steps.",
+   "target": {}
+  },
+  {
+   "id": "A011",
+   "kind": "dag",
+   "dag_id": "example_04_s3_to_snowflake_dynamic_task_mapping",
+   "file": "dags/example_04_s3_to_snowflake_dynamic_task_mapping.py",
+   "line": 38,
+   "schedule": {
+    "kind": "cron",
+    "raw": "@daily",
+    "cron": "0 0 * * *"
+   },
+   "catchup": false,
+   "max_active_runs": null,
+   "tags": [
+    "example",
+    "s3",
+    "snowflake",
+    "dynamic-task-mapping"
+   ],
+   "default_args": {
+    "owner": "data-team",
+    "retries": 2
+   },
+   "edges": [
+    [
+     "archive_kwargs",
+     "archive_landing_file"
+    ],
+    [
+     "archive_landing_file",
+     "delete_landing_file"
+    ],
+    [
+     "copy_file_batches",
+     "copy_file_into_snowflake"
+    ],
+    [
+     "copy_file_into_snowflake",
+     "archive_landing_file"
+    ],
+    [
+     "delete_kwargs",
+     "delete_landing_file"
+    ],
+    [
+     "list_landing_files",
+     "archive_kwargs"
+    ],
+    [
+     "list_landing_files",
+     "copy_file_batches"
+    ],
+    [
+     "list_landing_files",
+     "delete_kwargs"
+    ]
+   ],
+   "dynamic_dag_id": false,
+   "factory": null,
+   "signals": {
+    "jinja_template": 1,
+    "connection_id": 4,
+    "dynamic_task_mapping": 3,
+    "xcom": 3
+   },
+   "task_ids": [
+    "archive_kwargs",
+    "archive_landing_file",
+    "copy_file_batches",
+    "copy_file_into_snowflake",
+    "delete_kwargs",
+    "delete_landing_file",
+    "list_landing_files"
+   ],
+   "task_classes": {
+    "JUDG": 4,
+    "REDESIGN": 3
+   },
+   "classification": "JUDG",
+   "classification_reason": "Airflow Variables/Connections: map to env vars, secrets and resources (Phase 5); tasks: 4 JUDG, 3 REDESIGN",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
+   "target": {}
+  },
+  {
+   "id": "A012",
+   "kind": "task",
+   "dag_id": "example_04_s3_to_snowflake_dynamic_task_mapping",
+   "task_id": "list_landing_files",
+   "file": "dags/example_04_s3_to_snowflake_dynamic_task_mapping.py",
+   "line": 41,
+   "operator": "S3ListOperator",
+   "style": "operator",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "jinja_template": 1,
+    "connection_id": 4,
+    "dynamic_task_mapping": 3,
+    "xcom": 3
+   },
+   "classification": "JUDG",
+   "classification_reason": "provider operator: dagster-aws or a registry component",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
+   "target": {}
+  },
+  {
+   "id": "A013",
+   "kind": "task",
+   "dag_id": "example_04_s3_to_snowflake_dynamic_task_mapping",
+   "task_id": "copy_file_batches",
+   "file": "dags/example_04_s3_to_snowflake_dynamic_task_mapping.py",
+   "line": 90,
+   "operator": "@task",
+   "style": "python",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": true,
+   "upstream": [
+    "list_landing_files"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "jinja_template": 1,
+    "connection_id": 4,
+    "dynamic_task_mapping": 3,
+    "xcom": 3
+   },
+   "classification": "JUDG",
+   "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
+   "target": {}
+  },
+  {
+   "id": "A014",
+   "kind": "task",
+   "dag_id": "example_04_s3_to_snowflake_dynamic_task_mapping",
+   "task_id": "copy_file_into_snowflake",
+   "file": "dags/example_04_s3_to_snowflake_dynamic_task_mapping.py",
+   "line": 80,
+   "operator": "CopyFromExternalStageToSnowflakeOperator",
+   "style": "operator",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": true,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [
+    "copy_file_batches"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "jinja_template": 1,
+    "connection_id": 4,
+    "dynamic_task_mapping": 3,
+    "xcom": 3
+   },
+   "classification": "REDESIGN",
+   "classification_reason": "provider operator: official dagster-snowflake or a registry component; dynamic task mapping: dynamic partitions or a multi-asset/graph",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
+   "target": {}
+  },
+  {
+   "id": "A015",
+   "kind": "task",
+   "dag_id": "example_04_s3_to_snowflake_dynamic_task_mapping",
+   "task_id": "archive_kwargs",
+   "file": "dags/example_04_s3_to_snowflake_dynamic_task_mapping.py",
+   "line": 95,
+   "operator": "@task",
+   "style": "python",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": true,
+   "upstream": [
+    "list_landing_files"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "jinja_template": 1,
+    "connection_id": 4,
+    "dynamic_task_mapping": 3,
+    "xcom": 3
+   },
+   "classification": "JUDG",
+   "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
+   "target": {}
+  },
+  {
+   "id": "A016",
+   "kind": "task",
+   "dag_id": "example_04_s3_to_snowflake_dynamic_task_mapping",
+   "task_id": "archive_landing_file",
+   "file": "dags/example_04_s3_to_snowflake_dynamic_task_mapping.py",
+   "line": 92,
+   "operator": "S3CopyObjectOperator",
+   "style": "operator",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": true,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [
+    "archive_kwargs",
+    "copy_file_into_snowflake"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "jinja_template": 1,
+    "connection_id": 4,
+    "dynamic_task_mapping": 3,
+    "xcom": 3
+   },
+   "classification": "REDESIGN",
+   "classification_reason": "provider operator: dagster-aws or a registry component; dynamic task mapping: dynamic partitions or a multi-asset/graph",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
+   "target": {}
+  },
+  {
+   "id": "A017",
+   "kind": "task",
+   "dag_id": "example_04_s3_to_snowflake_dynamic_task_mapping",
+   "task_id": "delete_kwargs",
+   "file": "dags/example_04_s3_to_snowflake_dynamic_task_mapping.py",
+   "line": 100,
+   "operator": "@task",
+   "style": "python",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": true,
+   "upstream": [
+    "list_landing_files"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "jinja_template": 1,
+    "connection_id": 4,
+    "dynamic_task_mapping": 3,
+    "xcom": 3
+   },
+   "classification": "JUDG",
+   "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
+   "target": {}
+  },
+  {
+   "id": "A018",
+   "kind": "task",
+   "dag_id": "example_04_s3_to_snowflake_dynamic_task_mapping",
+   "task_id": "delete_landing_file",
+   "file": "dags/example_04_s3_to_snowflake_dynamic_task_mapping.py",
+   "line": 97,
+   "operator": "S3DeleteObjectsOperator",
+   "style": "operator",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": true,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [
+    "archive_landing_file",
+    "delete_kwargs"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "jinja_template": 1,
+    "connection_id": 4,
+    "dynamic_task_mapping": 3,
+    "xcom": 3
+   },
+   "classification": "REDESIGN",
+   "classification_reason": "provider operator: dagster-aws or a registry component; dynamic task mapping: dynamic partitions or a multi-asset/graph",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "REDESIGN: dynamic task mapping runs COPY, archive-copy and delete once per landed file. Options: dynamic partitions (one per file key) with a sensor, or one asset that loops; the archive/delete steps are side effects, not data products. Not converted in this trial.",
+   "target": {}
+  },
+  {
+   "id": "A019",
+   "kind": "blueprint_dag",
+   "dag_id": "example_05_s3_to_snowflake_blueprint",
+   "file": "dags/example_05_s3_to_snowflake_blueprint.dag.yaml",
+   "line": 1,
+   "schedule": {
+    "kind": "cron",
+    "raw": "@daily",
+    "cron": "0 0 * * *"
+   },
+   "catchup": false,
+   "max_active_runs": null,
+   "tags": [
+    "example",
+    "s3",
+    "snowflake",
+    "blueprint"
+   ],
+   "default_args": {
+    "owner": "data-team",
+    "retries": 2
+   },
+   "edges": [],
+   "signals": {},
+   "task_ids": [
+    "load_orders"
+   ],
+   "factory": null,
+   "task_classes": {
+    "JUDG": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "Blueprint DAG file: one component instance per step; tasks: 1 JUDG",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: schedule timezone is a fixed -05:00 offset (no DST) rather than America/Chicago; no post-load SQL.",
+   "target": {}
+  },
+  {
+   "id": "A020",
+   "kind": "task",
+   "dag_id": "example_05_s3_to_snowflake_blueprint",
+   "task_id": "load_orders",
+   "file": "dags/example_05_s3_to_snowflake_blueprint.dag.yaml",
+   "line": 1,
+   "operator": "blueprint:s3_to_snowflake",
+   "style": "blueprint",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "provider operator: official dagster-snowflake or a registry component",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: schedule timezone is a fixed -05:00 offset (no DST) rather than America/Chicago; no post-load SQL.",
+   "target": {}
+  },
+  {
+   "id": "A021",
+   "kind": "dag",
+   "dag_id": "example_astronauts",
+   "file": "dags/exampledag.py",
+   "line": 36,
+   "schedule": {
+    "kind": "cron",
+    "raw": "@daily",
+    "cron": "0 0 * * *"
+   },
+   "catchup": null,
+   "max_active_runs": null,
+   "tags": [
+    "example"
+   ],
+   "default_args": {
+    "owner": "Astro",
+    "retries": 3
+   },
+   "edges": [
+    [
+     "get_astronauts",
+     "print_astronaut_craft"
+    ]
+   ],
+   "dynamic_dag_id": false,
+   "factory": null,
+   "signals": {
+    "xcom": 1,
+    "dataset_or_asset": 1,
+    "dynamic_task_mapping": 1,
+    "dataset_lineage": 1
+   },
+   "task_ids": [
+    "get_astronauts",
+    "print_astronaut_craft"
+   ],
+   "task_classes": {
+    "JUDG": 1,
+    "REDESIGN": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "tasks: 1 JUDG, 1 REDESIGN",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Astro starter example (API call plus dynamic mapping), not part of the S3-to-Snowflake family; out of scope for this trial.",
+   "target": {}
+  },
+  {
+   "id": "A022",
+   "kind": "task",
+   "dag_id": "example_astronauts",
+   "task_id": "get_astronauts",
+   "file": "dags/exampledag.py",
+   "line": 93,
+   "operator": "@task",
+   "style": "python",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "[Asset('current_astronauts')]",
+   "inlets": "",
+   "signals": {
+    "xcom": 1,
+    "dataset_or_asset": 1,
+    "dynamic_task_mapping": 1,
+    "dataset_lineage": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "TaskFlow task: asset or op running the same function; XCom in this file: decide per edge between fusing, explicit storage or an IO manager",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Astro starter example (API call plus dynamic mapping), not part of the S3-to-Snowflake family; out of scope for this trial.",
+   "target": {}
+  },
+  {
+   "id": "A023",
+   "kind": "task",
+   "dag_id": "example_astronauts",
+   "task_id": "print_astronaut_craft",
+   "file": "dags/exampledag.py",
+   "line": 92,
+   "operator": "@task",
+   "style": "python",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": true,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": true,
+   "upstream": [
+    "get_astronauts"
+   ],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "xcom": 1,
+    "dataset_or_asset": 1,
+    "dynamic_task_mapping": 1,
+    "dataset_lineage": 1
+   },
+   "classification": "REDESIGN",
+   "classification_reason": "TaskFlow task: asset or op running the same function; dynamic task mapping: dynamic partitions or a multi-asset/graph",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Astro starter example (API call plus dynamic mapping), not part of the S3-to-Snowflake family; out of scope for this trial.",
+   "target": {}
+  },
+  {
+   "id": "A024",
+   "kind": "dag",
+   "dag_id": "_s3_to_snowflake_dag",
+   "file": "dags/reusable_s3_to_snowflake/templates.py",
+   "line": 87,
+   "schedule": {
+    "kind": "expression",
+    "raw": "config.schedule"
+   },
+   "catchup": null,
+   "max_active_runs": null,
+   "tags": null,
+   "default_args": {
+    "owner": "config.owner",
+    "retries": "config.retries"
+   },
+   "edges": [],
+   "dynamic_dag_id": false,
+   "factory": "build_s3_to_snowflake_dag",
+   "signals": {
+    "task_group": 1,
+    "connection_id": 3,
+    "xcom": 1
+   },
+   "task_ids": [
+    "config.group_id.copy_into_snowflake",
+    "config.group_id.list_landing_files",
+    "post_load_transform"
+   ],
+   "task_classes": {
+    "JUDG": 3
+   },
+   "classification": "REDESIGN",
+   "classification_reason": "DAG built inside factory function `build_s3_to_snowflake_dag`: migrate the function once as a Dagster component with a config model; each call (see the factory_call units) becomes an instance; tasks: 3 JUDG",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "Replaced by the S3ToSnowflakeLoad component (one class, one YAML instance per DAG); component loads under dg check defs and passes 19/19 parity checks."
+   }
+  },
+  {
+   "id": "A025",
+   "kind": "task",
+   "dag_id": "_s3_to_snowflake_dag",
+   "task_id": "config.group_id.list_landing_files",
+   "file": "dags/reusable_s3_to_snowflake/templates.py",
+   "line": 25,
+   "operator": "S3ListOperator",
+   "style": "operator",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "task_group": 1,
+    "connection_id": 3,
+    "xcom": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "provider operator: dagster-aws or a registry component",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "Replaced by the S3ToSnowflakeLoad component (one class, one YAML instance per DAG); component loads under dg check defs and passes 19/19 parity checks."
+   }
+  },
+  {
+   "id": "A026",
+   "kind": "task",
+   "dag_id": "_s3_to_snowflake_dag",
+   "task_id": "config.group_id.copy_into_snowflake",
+   "file": "dags/reusable_s3_to_snowflake/templates.py",
+   "line": 52,
+   "operator": "CopyFromExternalStageToSnowflakeOperator",
+   "style": "operator",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "task_group": 1,
+    "connection_id": 3,
+    "xcom": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "provider operator: official dagster-snowflake or a registry component",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "Replaced by the S3ToSnowflakeLoad component (one class, one YAML instance per DAG); component loads under dg check defs and passes 19/19 parity checks."
+   }
+  },
+  {
+   "id": "A027",
+   "kind": "task",
+   "dag_id": "_s3_to_snowflake_dag",
+   "task_id": "post_load_transform",
+   "file": "dags/reusable_s3_to_snowflake/templates.py",
+   "line": 93,
+   "operator": "SQLExecuteQueryOperator",
+   "style": "operator",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {
+    "task_group": 1,
+    "connection_id": 3,
+    "xcom": 1
+   },
+   "classification": "JUDG",
+   "classification_reason": "SQL operator: check registry/official integration for the warehouse",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "Replaced by the S3ToSnowflakeLoad component (one class, one YAML instance per DAG); component loads under dg check defs and passes 19/19 parity checks."
+   }
+  },
+  {
+   "id": "A028",
+   "kind": "taskgroup_template",
+   "dag_id": "",
+   "name": "s3_to_snowflake_task_group",
+   "file": "dags/reusable_s3_to_snowflake/templates.py",
+   "line": 22,
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "reusable TaskGroup builder `s3_to_snowflake_task_group`: becomes a shared function or component that emits the same assets for each configuration",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "Replaced by the S3ToSnowflakeLoad component (one class, one YAML instance per DAG); component loads under dg check defs and passes 19/19 parity checks."
+   }
+  },
+  {
+   "id": "A029",
+   "kind": "factory_call",
+   "factory": "build_s3_to_snowflake_dag",
+   "file": "dags/example_01_s3_to_snowflake_python_factory.py",
+   "line": 18,
+   "signals": {},
+   "dag_id": "example_01_s3_to_snowflake_python_factory",
+   "config": {
+    "dag_id": "example_01_s3_to_snowflake_python_factory",
+    "schedule": "@daily",
+    "stage": "RAW_ORDERS_STAGE",
+    "prefix": "orders/{{ ds_nodash }}/",
+    "table": "ORDERS_RAW",
+    "schema": "RAW",
+    "database": "ANALYTICS",
+    "warehouse": "LOAD_WH",
+    "file_format": "CSV_FILE_FORMAT",
+    "copy_options": "ON_ERROR = CONTINUE",
+    "post_load_sql": "post_load_transform.sql",
+    "template_searchpath": [
+     "/usr/local/airflow/include/sql/s3_to_snowflake"
+    ],
+    "snowflake_conn_id": "snowflake_default",
+    "tags": [
+     "example",
+     "s3",
+     "snowflake",
+     "python-factory"
+    ]
+   },
+   "in_loop": false,
+   "loop_over": "",
+   "classification": "JUDG",
+   "classification_reason": "configuration for factory `build_s3_to_snowflake_dag`: becomes one component instance (a defs.yaml entry)",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "assets": [
+     "analytics/raw/orders_raw"
+    ],
+    "deps": {
+     "analytics/raw/orders_raw": [
+      "s3/example-landing-bucket/orders"
+     ]
+    }
+   }
+  },
+  {
+   "id": "A030",
+   "kind": "factory_call",
+   "factory": "build_s3_to_snowflake_dag",
+   "file": "dags/example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 45,
+   "signals": {},
+   "dag_id": "example_02_s3_to_snowflake_generated_customers",
+   "config": {
+    "dag_id": "example_02_s3_to_snowflake_generated_customers",
+    "database": "ANALYTICS",
+    "warehouse": "LOAD_WH",
+    "file_format": "CSV_FILE_FORMAT",
+    "snowflake_conn_id": "snowflake_default",
+    "tags": [
+     "example",
+     "s3",
+     "snowflake",
+     "dynamic-dag-generation"
+    ],
+    "schedule": "@daily",
+    "stage": "RAW_CUSTOMERS_STAGE",
+    "prefix": "customers/{{ ds_nodash }}/",
+    "table": "CUSTOMERS_RAW",
+    "schema": "RAW"
+   },
+   "in_loop": false,
+   "loop_over": "",
+   "expanded_from": "sorted(LOAD_CONFIGS.items())['customers']",
+   "classification": "JUDG",
+   "classification_reason": "configuration for factory `build_s3_to_snowflake_dag`: becomes one component instance (a defs.yaml entry)",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "assets": [
+     "analytics/raw/customers_raw"
+    ],
+    "deps": {
+     "analytics/raw/customers_raw": [
+      "s3/example-landing-bucket/customers"
+     ]
+    }
+   }
+  },
+  {
+   "id": "A031",
+   "kind": "factory_call",
+   "factory": "build_s3_to_snowflake_dag",
+   "file": "dags/example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 45,
+   "signals": {},
+   "dag_id": "example_02_s3_to_snowflake_generated_orders",
+   "config": {
+    "dag_id": "example_02_s3_to_snowflake_generated_orders",
+    "database": "ANALYTICS",
+    "warehouse": "LOAD_WH",
+    "file_format": "CSV_FILE_FORMAT",
+    "snowflake_conn_id": "snowflake_default",
+    "tags": [
+     "example",
+     "s3",
+     "snowflake",
+     "dynamic-dag-generation"
+    ],
+    "schedule": "0 * * * *",
+    "stage": "RAW_ORDERS_STAGE",
+    "prefix": "orders/{{ ds_nodash }}/",
+    "table": "ORDERS_RAW",
+    "schema": "RAW"
+   },
+   "in_loop": false,
+   "loop_over": "",
+   "expanded_from": "sorted(LOAD_CONFIGS.items())['orders']",
+   "classification": "JUDG",
+   "classification_reason": "configuration for factory `build_s3_to_snowflake_dag`: becomes one component instance (a defs.yaml entry)",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Hourly variant of the orders load: same table as example_01 but hourly cadence vs daily. One asset cannot have two partitionings or two producers; owner decision needed. Hourly tick and ds semantics were verified (27 ticks) for when it is chosen.",
+   "target": {}
+  },
+  {
+   "id": "A032",
+   "kind": "factory_call",
+   "factory": "build_s3_to_snowflake_dag",
+   "file": "dags/example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 45,
+   "signals": {},
+   "dag_id": "example_02_s3_to_snowflake_generated_products",
+   "config": {
+    "dag_id": "example_02_s3_to_snowflake_generated_products",
+    "database": "ANALYTICS",
+    "warehouse": "LOAD_WH",
+    "file_format": "CSV_FILE_FORMAT",
+    "snowflake_conn_id": "snowflake_default",
+    "tags": [
+     "example",
+     "s3",
+     "snowflake",
+     "dynamic-dag-generation"
+    ],
+    "schedule": "@daily",
+    "stage": "RAW_PRODUCTS_STAGE",
+    "prefix": "products/{{ ds_nodash }}/",
+    "table": "PRODUCTS_RAW",
+    "schema": "RAW"
+   },
+   "in_loop": false,
+   "loop_over": "",
+   "expanded_from": "sorted(LOAD_CONFIGS.items())['products']",
+   "classification": "JUDG",
+   "classification_reason": "configuration for factory `build_s3_to_snowflake_dag`: becomes one component instance (a defs.yaml entry)",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "assets": [
+     "analytics/raw/products_raw"
+    ],
+    "deps": {
+     "analytics/raw/products_raw": [
+      "s3/example-landing-bucket/products"
+     ]
+    }
+   }
+  },
+  {
+   "id": "A033",
+   "kind": "task",
+   "dag_id": "example_03_s3_to_snowflake_task_group",
+   "task_id": "load_orders_from_s3.build_load_manifest",
+   "file": "example_03_s3_to_snowflake_task_group.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: wraps the load group with prepare_load_window and publish_load_complete steps.",
+   "target": {}
+  },
+  {
+   "id": "A034",
+   "kind": "task",
+   "dag_id": "example_03_s3_to_snowflake_task_group",
+   "task_id": "load_orders_from_s3.copy_into_snowflake",
+   "file": "example_03_s3_to_snowflake_task_group.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: wraps the load group with prepare_load_window and publish_load_complete steps.",
+   "target": {}
+  },
+  {
+   "id": "A035",
+   "kind": "task",
+   "dag_id": "example_03_s3_to_snowflake_task_group",
+   "task_id": "load_orders_from_s3.list_landing_files",
+   "file": "example_03_s3_to_snowflake_task_group.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: wraps the load group with prepare_load_window and publish_load_complete steps.",
+   "target": {}
+  },
+  {
+   "id": "A036",
+   "kind": "task",
+   "dag_id": "example_03_s3_to_snowflake_task_group",
+   "task_id": "load_orders_from_s3.log_load_manifest",
+   "file": "example_03_s3_to_snowflake_task_group.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: wraps the load group with prepare_load_window and publish_load_complete steps.",
+   "target": {}
+  },
+  {
+   "id": "A037",
+   "kind": "dag",
+   "dag_id": "example_01_s3_to_snowflake_python_factory",
+   "file": "example_01_s3_to_snowflake_python_factory.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "schedule": {
+    "kind": "runtime",
+    "raw": "@daily"
+   },
+   "catchup": null,
+   "max_active_runs": null,
+   "tags": null,
+   "default_args": {},
+   "edges": [],
+   "signals": {},
+   "task_ids": [
+    "post_load_transform",
+    "s3_to_snowflake.build_load_manifest",
+    "s3_to_snowflake.copy_into_snowflake",
+    "s3_to_snowflake.list_landing_files",
+    "s3_to_snowflake.log_load_manifest"
+   ],
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: a construct the static scan does not model",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "jobs": [
+     "example_01_s3_to_snowflake_python_factory"
+    ],
+    "schedules": [
+     {
+      "name": "example_01_s3_to_snowflake_python_factory_schedule",
+      "cron": "0 0 * * *"
+     }
+    ]
+   }
+  },
+  {
+   "id": "A038",
+   "kind": "task",
+   "dag_id": "example_01_s3_to_snowflake_python_factory",
+   "task_id": "post_load_transform",
+   "file": "example_01_s3_to_snowflake_python_factory.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "assets": [
+     "example_01_s3_to_snowflake_python_factory/post_load_transform"
+    ],
+    "deps": {
+     "example_01_s3_to_snowflake_python_factory/post_load_transform": [
+      "analytics/raw/orders_raw"
+     ]
+    }
+   }
+  },
+  {
+   "id": "A039",
+   "kind": "task",
+   "dag_id": "example_01_s3_to_snowflake_python_factory",
+   "task_id": "s3_to_snowflake.build_load_manifest",
+   "file": "example_01_s3_to_snowflake_python_factory.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/orders_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  },
+  {
+   "id": "A040",
+   "kind": "task",
+   "dag_id": "example_01_s3_to_snowflake_python_factory",
+   "task_id": "s3_to_snowflake.copy_into_snowflake",
+   "file": "example_01_s3_to_snowflake_python_factory.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "assets": [
+     "analytics/raw/orders_raw"
+    ],
+    "deps": {
+     "analytics/raw/orders_raw": [
+      "s3/example-landing-bucket/orders"
+     ]
+    }
+   }
+  },
+  {
+   "id": "A041",
+   "kind": "task",
+   "dag_id": "example_01_s3_to_snowflake_python_factory",
+   "task_id": "s3_to_snowflake.list_landing_files",
+   "file": "example_01_s3_to_snowflake_python_factory.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/orders_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  },
+  {
+   "id": "A042",
+   "kind": "task",
+   "dag_id": "example_01_s3_to_snowflake_python_factory",
+   "task_id": "s3_to_snowflake.log_load_manifest",
+   "file": "example_01_s3_to_snowflake_python_factory.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/orders_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  },
+  {
+   "id": "A043",
+   "kind": "task",
+   "dag_id": "example_05_s3_to_snowflake_blueprint",
+   "task_id": "load_orders.build_load_manifest",
+   "file": "loader.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: schedule timezone is a fixed -05:00 offset (no DST) rather than America/Chicago; no post-load SQL.",
+   "target": {}
+  },
+  {
+   "id": "A044",
+   "kind": "task",
+   "dag_id": "example_05_s3_to_snowflake_blueprint",
+   "task_id": "load_orders.copy_into_snowflake",
+   "file": "loader.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: schedule timezone is a fixed -05:00 offset (no DST) rather than America/Chicago; no post-load SQL.",
+   "target": {}
+  },
+  {
+   "id": "A045",
+   "kind": "task",
+   "dag_id": "example_05_s3_to_snowflake_blueprint",
+   "task_id": "load_orders.list_landing_files",
+   "file": "loader.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: schedule timezone is a fixed -05:00 offset (no DST) rather than America/Chicago; no post-load SQL.",
+   "target": {}
+  },
+  {
+   "id": "A046",
+   "kind": "task",
+   "dag_id": "example_05_s3_to_snowflake_blueprint",
+   "task_id": "load_orders.log_load_manifest",
+   "file": "loader.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Duplicate producer of ANALYTICS.RAW.ORDERS_RAW (example_01 produces it). A Dagster asset has one producing definition; many may depend on it. COPY SQL for ds=2026-07-01 is byte-identical to example_01's (compare_parity.py). Owner decision needed on which schedule wins; differences: schedule timezone is a fixed -05:00 offset (no DST) rather than America/Chicago; no post-load SQL.",
+   "target": {}
+  },
+  {
+   "id": "A047",
+   "kind": "dag",
+   "dag_id": "example_02_s3_to_snowflake_generated_orders",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "schedule": {
+    "kind": "runtime",
+    "raw": "0 * * * *"
+   },
+   "catchup": null,
+   "max_active_runs": null,
+   "tags": null,
+   "default_args": {},
+   "edges": [],
+   "signals": {},
+   "task_ids": [
+    "s3_to_snowflake.build_load_manifest",
+    "s3_to_snowflake.copy_into_snowflake",
+    "s3_to_snowflake.list_landing_files",
+    "s3_to_snowflake.log_load_manifest"
+   ],
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: a construct the static scan does not model",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Hourly variant of the orders load: same table as example_01 but hourly cadence vs daily. One asset cannot have two partitionings or two producers; owner decision needed. Hourly tick and ds semantics were verified (27 ticks) for when it is chosen.",
+   "target": {}
+  },
+  {
+   "id": "A048",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_orders",
+   "task_id": "s3_to_snowflake.build_load_manifest",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Hourly variant of the orders load: same table as example_01 but hourly cadence vs daily. One asset cannot have two partitionings or two producers; owner decision needed. Hourly tick and ds semantics were verified (27 ticks) for when it is chosen.",
+   "target": {}
+  },
+  {
+   "id": "A049",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_orders",
+   "task_id": "s3_to_snowflake.copy_into_snowflake",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Hourly variant of the orders load: same table as example_01 but hourly cadence vs daily. One asset cannot have two partitionings or two producers; owner decision needed. Hourly tick and ds semantics were verified (27 ticks) for when it is chosen.",
+   "target": {}
+  },
+  {
+   "id": "A050",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_orders",
+   "task_id": "s3_to_snowflake.list_landing_files",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Hourly variant of the orders load: same table as example_01 but hourly cadence vs daily. One asset cannot have two partitionings or two producers; owner decision needed. Hourly tick and ds semantics were verified (27 ticks) for when it is chosen.",
+   "target": {}
+  },
+  {
+   "id": "A051",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_orders",
+   "task_id": "s3_to_snowflake.log_load_manifest",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "deferred",
+   "evidence": "",
+   "reason": "Hourly variant of the orders load: same table as example_01 but hourly cadence vs daily. One asset cannot have two partitionings or two producers; owner decision needed. Hourly tick and ds semantics were verified (27 ticks) for when it is chosen.",
+   "target": {}
+  },
+  {
+   "id": "A052",
+   "kind": "dag",
+   "dag_id": "example_02_s3_to_snowflake_generated_customers",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "schedule": {
+    "kind": "runtime",
+    "raw": "@daily"
+   },
+   "catchup": null,
+   "max_active_runs": null,
+   "tags": null,
+   "default_args": {},
+   "edges": [],
+   "signals": {},
+   "task_ids": [
+    "s3_to_snowflake.build_load_manifest",
+    "s3_to_snowflake.copy_into_snowflake",
+    "s3_to_snowflake.list_landing_files",
+    "s3_to_snowflake.log_load_manifest"
+   ],
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: a construct the static scan does not model",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "jobs": [
+     "example_02_s3_to_snowflake_generated_customers"
+    ],
+    "schedules": [
+     {
+      "name": "example_02_s3_to_snowflake_generated_customers_schedule",
+      "cron": "0 0 * * *"
+     }
+    ]
+   }
+  },
+  {
+   "id": "A053",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_customers",
+   "task_id": "s3_to_snowflake.build_load_manifest",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/customers_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  },
+  {
+   "id": "A054",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_customers",
+   "task_id": "s3_to_snowflake.copy_into_snowflake",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "assets": [
+     "analytics/raw/customers_raw"
+    ],
+    "deps": {
+     "analytics/raw/customers_raw": [
+      "s3/example-landing-bucket/customers"
+     ]
+    }
+   }
+  },
+  {
+   "id": "A055",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_customers",
+   "task_id": "s3_to_snowflake.list_landing_files",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/customers_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  },
+  {
+   "id": "A056",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_customers",
+   "task_id": "s3_to_snowflake.log_load_manifest",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/customers_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  },
+  {
+   "id": "A057",
+   "kind": "dag",
+   "dag_id": "example_02_s3_to_snowflake_generated_products",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "schedule": {
+    "kind": "runtime",
+    "raw": "@daily"
+   },
+   "catchup": null,
+   "max_active_runs": null,
+   "tags": null,
+   "default_args": {},
+   "edges": [],
+   "signals": {},
+   "task_ids": [
+    "s3_to_snowflake.build_load_manifest",
+    "s3_to_snowflake.copy_into_snowflake",
+    "s3_to_snowflake.list_landing_files",
+    "s3_to_snowflake.log_load_manifest"
+   ],
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: a construct the static scan does not model",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "jobs": [
+     "example_02_s3_to_snowflake_generated_products"
+    ],
+    "schedules": [
+     {
+      "name": "example_02_s3_to_snowflake_generated_products_schedule",
+      "cron": "0 0 * * *"
+     }
+    ]
+   }
+  },
+  {
+   "id": "A058",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_products",
+   "task_id": "s3_to_snowflake.build_load_manifest",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/products_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  },
+  {
+   "id": "A059",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_products",
+   "task_id": "s3_to_snowflake.copy_into_snowflake",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "assets": [
+     "analytics/raw/products_raw"
+    ],
+    "deps": {
+     "analytics/raw/products_raw": [
+      "s3/example-landing-bucket/products"
+     ]
+    }
+   }
+  },
+  {
+   "id": "A060",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_products",
+   "task_id": "s3_to_snowflake.list_landing_files",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/products_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  },
+  {
+   "id": "A061",
+   "kind": "task",
+   "dag_id": "example_02_s3_to_snowflake_generated_products",
+   "task_id": "s3_to_snowflake.log_load_manifest",
+   "file": "example_02_s3_to_snowflake_dynamic_dag_generation.py",
+   "line": 0,
+   "origin": "airflow_runtime",
+   "operator": "unknown (runtime-only)",
+   "style": "runtime",
+   "pool": null,
+   "retries": null,
+   "trigger_rule": null,
+   "mapped": false,
+   "dynamic_id": false,
+   "in_loop": false,
+   "implicit_xcom": false,
+   "upstream": [],
+   "outlets": "",
+   "inlets": "",
+   "signals": {},
+   "classification": "JUDG",
+   "classification_reason": "found only by Airflow's parser: read the source and add it to the plan",
+   "status": "complete",
+   "evidence": "dg check defs loads; validate_defs target matches; parity: 19/19 checks (COPY SQL, S3 prefix, session overrides, manifest, cron, ds at ticks) against the real Airflow DAG objects",
+   "reason": "",
+   "target": {
+    "none": "step folded into the analytics/raw/products_raw asset (list/manifest/log produce no data product; the manifest is recorded as metadata)"
+   }
+  }
+ ],
+ "reconciled_with": {
+  "import_errors": {}
+ }
+}

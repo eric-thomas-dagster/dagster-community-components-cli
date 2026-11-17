@@ -39,9 +39,14 @@ def main(argv: list[str] | None = None) -> int:
         print(f"Airflow is not importable in this environment: {e}", file=sys.stderr)
         return 2
 
+    import airflow
+    if airflow.__version__.startswith("2."):
+        from airflow.utils.db import initdb     # Airflow 2 reads dataset tables while parsing; give it a throwaway DB
+        initdb()
+
     dags: dict[str, dict] = {}
     errors: dict[str, str] = {}
-    for folder in a.folders:
+    for folder in [f.resolve() for f in a.folders]:   # dag-factory and others require absolute paths
         try:
             bag = DagBag(dag_folder=str(folder), include_examples=False, safe_mode=False)
         except TypeError:

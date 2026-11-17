@@ -62,6 +62,8 @@ def _dotted(node: ast.AST) -> str:
         return f"{base}.{node.attr}" if base else node.attr
     if isinstance(node, ast.Call):
         return _dotted(node.func)
+    if isinstance(node, ast.Subscript):
+        return _dotted(node.value)
     return ""
 
 
@@ -158,9 +160,13 @@ class FileScan(ast.NodeVisitor):
         self.edges: list[tuple[str, str, str | None]] = []
         self.signals: dict[str, int] = {}
         self.named_dicts: dict[str, ast.Dict] = {}
+        self.str_vars: dict[str, str] = {}             # module-level `name = "literal"` / `name = ...__file__...` -> value
         self.dag_vars: dict[str, str] = {}              # variable name -> latest unique DAG key
         self._loop_depth = 0
         self._mapped_group = 0
+        self._func_stack: list[str] = []
+        self.group_templates: dict[str, int] = {}     # plain functions that build a TaskGroup -> line
+        self.blueprints: dict[str, int] = {}          # Blueprint subclasses -> line
         self._dag_stack: list[str] = []
         self._group_stack: list[str] = []
         self._task_body = 0
@@ -186,8 +192,12 @@ class FileScan(ast.NodeVisitor):
     def _register_dag(self, key: str, call: ast.Call, line: int, dag_id: str | None = None) -> str:
         node = _kw(call, "dag_id")
         did, dynamic = dag_id or _const(node), False
+        if did is None and isinstance(node, ast.Name) and node.id in self.str_vars:
+            did = self.str_vars[node.id]
         if did is None and node is None and call.args:
             did = _const(call.args[0])
+            if did is None and isinstance(call.args[0], ast.Name):
+                did = self.str_vars.get(call.args[0].id)
         if did is None and node is not None:
             if "__file__" in _src(node):
                 did = Path(self.path).stem          # the common `dag_id=Path(__file__).stem` idiom
@@ -206,6 +216,8 @@ class FileScan(ast.NodeVisitor):
         if _kw(call, "outlets") is not None or _kw(call, "inlets") is not None:
             info["dag_level_outlets"] = True   # outlets/inlets are task arguments; Airflow's DAG rejects them
             self._sig("dag_level_outlets")
+        if self._func_stack:
+            info["factory"] = self._func_stack[0]   # DAG created inside a plain function: that function is a DAG factory
         ukey = f"{key}@{line}"
         self.dag_vars[key] = ukey
         self.dags[ukey] = info
@@ -232,6 +244,8 @@ class FileScan(ast.NodeVisitor):
                 dags += 1
             elif last == "TaskGroup":
                 self._sig("task_group")
+                if self._func_stack:
+                    self.group_templates.setdefault(self._func_stack[0], node.lineno)
                 gid = _const(_kw(ctx, "group_id")) or (_const(ctx.args[0]) if ctx.args else None) or _src(_kw(ctx, "group_id"))
                 no_prefix = _const(_kw(ctx, "prefix_group_id")) is False
                 self._group_stack.append("" if no_prefix else self._unique(self._current_dag(), f"group:{gid}").replace("group:", "", 1))
@@ -277,7 +291,14 @@ class FileScan(ast.NodeVisitor):
             self.generic_visit(node)                   # signals only: calls inside a task body are not tasks
             self._task_body -= 1
         else:
+            self._func_stack.append(node.name)
             self.generic_visit(node)
+            self._func_stack.pop()
+
+    def visit_ClassDef(self, node: ast.ClassDef) -> None:
+        if any(_dotted(b).split(".")[-1].startswith("Blueprint") for b in node.bases):
+            self.blueprints[node.name] = node.lineno
+        self.generic_visit(node)
 
     visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
 
@@ -394,8 +415,15 @@ class FileScan(ast.NodeVisitor):
     def visit_Assign(self, node: ast.Assign) -> None:
         var = node.targets[0].id if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) else None
         v = node.value
+        tgt = node.targets[0] if len(node.targets) == 1 else None
+        if isinstance(tgt, ast.Subscript) and _dotted(tgt.value) == "globals":
+            self._sig("dynamic_dag_generation")   # globals()[dag_id] = dag: DAGs registered by a loop or factory
         if var and isinstance(v, ast.Dict):
             self.named_dicts[var] = v
+        if var and isinstance(v, ast.Constant) and isinstance(v.value, str):
+            self.str_vars[var] = v.value
+        elif var and "__file__" in _src(v):
+            self.str_vars[var] = Path(self.path).stem          # dag_id = os.path.basename(__file__).replace(".py", "")
         ids: list[str] = []
         if isinstance(v, ast.Call) and _dotted(v.func).split(".")[-1] in ("DAG", "DbtDag"):
             self._seen.add(id(v))
@@ -510,7 +538,7 @@ def scan_python(path: Path, rel: str) -> list[dict[str, Any]]:
         return [{"kind": "unparsed", "file": rel, "line": e.lineno or 0, "reason": f"syntax error: {e.msg}"}]
     fs = FileScan(rel, source)
     fs.visit(tree)
-    if not fs.dags and not fs.tasks:
+    if not fs.dags and not fs.tasks and not fs.blueprints and not fs.group_templates:
         return []
 
     single = next(iter(fs.dags)) if len(fs.dags) == 1 else None
@@ -521,7 +549,7 @@ def scan_python(path: Path, rel: str) -> list[dict[str, Any]]:
         d_edges = sorted({(u, v) for u, v, _ in fs.edges if u in ids and v in ids})
         out.append({"kind": d["kind"], "dag_id": d["dag_id"], "file": rel, "line": d["line"], "schedule": d["schedule"],
                     "catchup": d["catchup"], "max_active_runs": d["max_active_runs"], "tags": d["tags"],
-                    "default_args": d["default_args"], "edges": [list(e) for e in d_edges], "dynamic_dag_id": d["dynamic_dag_id"],
+                    "default_args": d["default_args"], "edges": [list(e) for e in d_edges], "dynamic_dag_id": d["dynamic_dag_id"], "factory": d.get("factory"),
                     "signals": fs.signals, "task_ids": sorted(ids)})
         for t in d_tasks:
             out.append({"kind": "task", "dag_id": d["dag_id"], "task_id": t["task_id"], "file": rel, "line": t["line"],
@@ -530,10 +558,112 @@ def scan_python(path: Path, rel: str) -> list[dict[str, Any]]:
                         "implicit_xcom": t.get("implicit_xcom", False),
                         "upstream": sorted({u for u, v in d_edges if v == t["task_id"]}),
                         "outlets": t.get("outlets", ""), "inlets": t.get("inlets", ""), "signals": fs.signals})
+    for name, line in fs.group_templates.items():
+        out.append({"kind": "taskgroup_template", "dag_id": "", "name": name, "file": rel, "line": line, "signals": {}})
+    for name, line in fs.blueprints.items():
+        out.append({"kind": "blueprint_template", "dag_id": "", "name": name, "file": rel, "line": line, "signals": {}})
     return out
 
 
+def _literal_or_src(node: ast.AST) -> Any:
+    v = _const(node)
+    return v if v is not None or (isinstance(node, ast.Constant) and node.value is None) else f"<{_src(node)}>"
+
+
+def _eval_fstring(node: ast.AST, env: dict[str, str]) -> str | None:
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return node.value
+    if isinstance(node, ast.JoinedStr):
+        parts = []
+        for v in node.values:
+            if isinstance(v, ast.Constant):
+                parts.append(str(v.value))
+            elif isinstance(v, ast.FormattedValue) and isinstance(v.value, ast.Name) and v.value.id in env:
+                parts.append(env[v.value.id])
+            else:
+                return None
+        return "".join(parts)
+    return None
+
+
+def find_factory_calls(tree: ast.AST, names: set[str], rel: str) -> list[dict[str, Any]]:
+    """Calls to DAG factory functions with their literal configuration.
+
+    A call inside `for key, value in [sorted(]DICT.items()[)]` with `**value` is expanded into one call per
+    dictionary entry (the common "one DAG per config entry" pattern), so each real configuration is listed.
+    """
+    found: list[dict[str, Any]] = []
+    dicts = {n.targets[0].id: n.value for n in getattr(tree, "body", [])
+             if isinstance(n, ast.Assign) and len(n.targets) == 1 and isinstance(n.targets[0], ast.Name) and isinstance(n.value, ast.Dict)}
+
+    def loop_ctx(node: ast.For) -> tuple[str, str, ast.Dict] | None:
+        it = node.iter
+        if isinstance(it, ast.Call) and _dotted(it.func) == "sorted" and it.args:
+            it = it.args[0]
+        if (isinstance(it, ast.Call) and isinstance(it.func, ast.Attribute) and it.func.attr == "items"
+                and isinstance(it.func.value, ast.Name) and it.func.value.id in dicts
+                and isinstance(node.target, ast.Tuple) and len(node.target.elts) == 2
+                and all(isinstance(e, ast.Name) for e in node.target.elts)):
+            return node.target.elts[0].id, node.target.elts[1].id, dicts[it.func.value.id]  # type: ignore[union-attr]
+        return None
+
+    def walk(node: ast.AST, depth: int, loop_src: str, ctx: tuple[str, str, ast.Dict] | None) -> None:
+        for child in ast.iter_child_nodes(node):
+            d, ls, c = depth, loop_src, ctx
+            if isinstance(child, (ast.For, ast.AsyncFor)):
+                d, ls, c = depth + 1, _src(child.iter), (loop_ctx(child) if isinstance(child, ast.For) else None) or ctx
+            elif isinstance(child, (ast.While, ast.ListComp, ast.SetComp, ast.GeneratorExp, ast.DictComp)):
+                d = depth + 1
+            if isinstance(child, ast.Call) and _dotted(child.func).split(".")[-1] in names:
+                nodes: dict[str, ast.AST] = {}
+                unpacked: list[str] = []
+                for a in [*child.args, *child.keywords]:
+                    inner = a.value if isinstance(a, ast.keyword) else a
+                    if isinstance(inner, ast.Call):                         # a config object, e.g. Config(dag_id=..., ...)
+                        for k in inner.keywords:
+                            if k.arg:
+                                nodes[k.arg] = k.value
+                            else:
+                                unpacked.append(_src(k.value))
+                for k in child.keywords:
+                    if k.arg:
+                        nodes[k.arg] = k.value
+                base = {k: _literal_or_src(v) for k, v in nodes.items()}
+                unit = {"kind": "factory_call", "factory": _dotted(child.func).split(".")[-1], "file": rel,
+                        "line": child.lineno, "signals": {}}
+                if c and d and c[1] in unpacked:
+                    key_var, val_var, dnode = c
+                    for kn, vn in zip(dnode.keys, dnode.values):
+                        key = _const(kn)
+                        if not isinstance(key, str) or not isinstance(vn, ast.Dict):
+                            continue
+                        merged = dict(base)
+                        merged.update({_const(k2): _literal_or_src(v2) for k2, v2 in zip(vn.keys, vn.values) if isinstance(_const(k2), str)})
+                        did = _eval_fstring(nodes["dag_id"], {key_var: key}) if "dag_id" in nodes else None
+                        if did:
+                            merged["dag_id"] = did
+                        found.append({**unit, "dag_id": str(merged.get("dag_id", "")), "config": merged, "in_loop": False,
+                                      "loop_over": "", "expanded_from": f"{ls}[{key!r}]"})
+                else:
+                    cfg = dict(base)
+                    cfg.update({f"**{u}": "<unpacked>" for u in unpacked})
+                    found.append({**unit, "dag_id": str(cfg.get("dag_id", "")), "config": cfg, "in_loop": d > 0, "loop_over": ls if d else ""})
+            walk(child, d, ls, c)
+
+    walk(tree, 0, "", None)
+    return found
+
+
+def _norm_tasks(tasks: Any) -> dict[str, dict[str, Any]]:
+    if isinstance(tasks, dict):
+        return {str(k): v for k, v in tasks.items() if isinstance(v, dict)}
+    if isinstance(tasks, list):
+        return {str(t.get("task_id", f"task_{i}")): t for i, t in enumerate(tasks) if isinstance(t, dict)}
+    return {}
+
+
 def scan_dag_factory(path: Path, rel: str) -> list[dict[str, Any]]:
+    """dag-factory YAML (tasks as a mapping or a list) and Blueprint `*.dag.yaml` files (steps)."""
     try:
         import yaml
     except ImportError:
@@ -545,19 +675,36 @@ def scan_dag_factory(path: Path, rel: str) -> list[dict[str, Any]]:
     if not isinstance(data, dict):
         return []
     out: list[dict[str, Any]] = []
+    # Blueprint: one DAG per file; each step instantiates a blueprint
+    if isinstance(data.get("steps"), dict) and any(isinstance(v, dict) and "blueprint" in v for v in data["steps"].values()):
+        dag_id = str(data.get("dag_id") or path.stem.replace(".dag", ""))
+        sched = data.get("schedule")
+        out.append({"kind": "blueprint_dag", "dag_id": dag_id, "file": rel, "line": 1,
+                    "schedule": {"kind": "cron" if isinstance(sched, str) else "unspecified", "raw": str(sched),
+                                 "cron": CRON_PRESETS.get(sched, sched) if isinstance(sched, str) else None},
+                    "catchup": data.get("catchup"), "max_active_runs": None, "tags": data.get("tags"),
+                    "default_args": {k: data[k] for k in ("owner", "retries") if k in data}, "edges": [], "signals": {},
+                    "task_ids": sorted(data["steps"]), "factory": None})
+        for sid, st in data["steps"].items():
+            out.append({"kind": "task", "dag_id": dag_id, "task_id": str(sid), "file": rel, "line": 1,
+                        "operator": f"blueprint:{st.get('blueprint')}", "style": "blueprint", "pool": None, "retries": None,
+                        "trigger_rule": None, "mapped": False, "upstream": list(st.get("depends_on") or []),
+                        "outlets": "", "inlets": "", "signals": {}})
+        return out
     for dag_id, cfg in data.items():
-        if not (isinstance(cfg, dict) and isinstance(cfg.get("tasks"), dict)):
+        if not isinstance(cfg, dict):
             continue
-        if not any(isinstance(t, dict) and "operator" in t for t in cfg["tasks"].values()):
+        tasks = _norm_tasks(cfg.get("tasks"))
+        if not tasks or not any("operator" in t for t in tasks.values()):
             continue
         sched = cfg.get("schedule") or cfg.get("schedule_interval")
         out.append({"kind": "dag_factory", "dag_id": str(dag_id), "file": rel, "line": 1,
                     "schedule": {"kind": "cron" if isinstance(sched, str) else "unspecified", "raw": str(sched),
                                  "cron": CRON_PRESETS.get(sched, sched) if isinstance(sched, str) else None},
                     "catchup": cfg.get("catchup"), "max_active_runs": cfg.get("max_active_runs"), "tags": cfg.get("tags"),
-                    "default_args": cfg.get("default_args") or {}, "edges": [], "signals": {}, "task_ids": sorted(cfg["tasks"])})
-        for tid, t in cfg["tasks"].items():
-            out.append({"kind": "task", "dag_id": str(dag_id), "task_id": str(tid), "file": rel, "line": 1,
+                    "default_args": cfg.get("default_args") or {}, "edges": [], "signals": {}, "task_ids": sorted(tasks), "factory": None})
+        for tid, t in tasks.items():
+            out.append({"kind": "task", "dag_id": str(dag_id), "task_id": tid, "file": rel, "line": 1,
                         "operator": str(t.get("operator", "")).split(".")[-1], "style": "dag_factory",
                         "pool": t.get("pool"), "retries": t.get("retries"), "trigger_rule": t.get("trigger_rule"),
                         "mapped": False, "upstream": list(t.get("dependencies") or []), "outlets": "", "inlets": "", "signals": {}})
@@ -568,6 +715,15 @@ def suggest(unit: dict[str, Any]) -> tuple[str, str]:
     """Suggested classification and reason for one unit."""
     if unit["kind"] == "unparsed":
         return "JUDG", unit["reason"]
+    if unit["kind"] == "taskgroup_template":
+        return "JUDG", f"reusable TaskGroup builder `{unit['name']}`: becomes a shared function or component that emits the same assets for each configuration"
+    if unit["kind"] == "blueprint_template":
+        return "REDESIGN", f"Blueprint `{unit['name']}`: a config-driven template, which is what a Dagster component is; migrate it as ONE component"
+    if unit["kind"] == "factory_call":
+        where = f" (inside a loop over {unit['loop_over']})" if unit["in_loop"] else ""
+        return "JUDG", f"configuration for factory `{unit['factory']}`{where}: becomes one component instance (a defs.yaml entry)"
+    if unit["kind"] == "blueprint_dag":
+        return "JUDG", "Blueprint DAG file: one component instance per step"
     if unit["kind"] == "task":
         klass, note = ("MECH", "TaskFlow task: asset or op running the same function") if unit["operator"].startswith("@") \
             else classify_operator(unit["operator"])
@@ -596,6 +752,9 @@ def suggest(unit: dict[str, Any]) -> tuple[str, str]:
             extra.append("XCom in this file: decide per edge between fusing, explicit storage or an IO manager")
         return klass, "; ".join([note, *extra])
     # dag-level
+    if unit.get("factory"):
+        return "REDESIGN", (f"DAG built inside factory function `{unit['factory']}`: migrate the function once as a Dagster component "
+                            "with a config model; each call (see the factory_call units) becomes an instance")
     reasons, klass = [], "MECH"
     sk = unit["schedule"]["kind"]
     if sk in ("timetable", "expression", "continuous"):
@@ -621,6 +780,8 @@ def suggest(unit: dict[str, Any]) -> tuple[str, str]:
     if unit["signals"].get("dag_level_outlets"):
         klass = "JUDG"
         reasons.append("outlets/inlets on the DAG itself: Airflow rejects this (they are task arguments); confirm which task produces the dataset")
+    if unit["kind"] == "dag_factory":
+        reasons.append("dag-factory YAML: a config-driven DAG; candidate for a component when the shape repeats")
     if unit["kind"] == "cosmos":
         klass = "JUDG"
         reasons.append("Cosmos DbtDag: dagster-dbt")
@@ -637,6 +798,16 @@ def build_manifest(root: Path, exclude: set[str]) -> dict[str, Any]:
             raw.extend(scan_python(p, rel))
         elif p.suffix in (".yml", ".yaml"):
             raw.extend(scan_dag_factory(p, rel))
+    names = {u["factory"] for u in raw if u.get("factory")}
+    if names:
+        for p in sorted(root.rglob("*.py")):
+            if any(part in SKIP_DIRS or part in exclude for part in p.relative_to(root).parts):
+                continue
+            try:
+                tree = ast.parse(p.read_text(errors="replace"))
+            except SyntaxError:
+                continue
+            raw.extend(find_factory_calls(tree, names, str(p.relative_to(root))))
     by_dag: dict[str, dict[str, int]] = {}
     for u in raw:
         if u["kind"] == "task":
@@ -646,7 +817,7 @@ def build_manifest(root: Path, exclude: set[str]) -> dict[str, Any]:
     units = []
     for n, u in enumerate(raw, 1):
         klass, why = suggest(u)
-        if u["kind"] in ("dag", "cosmos", "dag_factory"):
+        if u["kind"] in ("dag", "cosmos", "dag_factory", "blueprint_dag"):
             counts = by_dag.get(u["dag_id"], {})
             u["task_classes"] = counts
             if counts.get("REDESIGN") or counts.get("JUDG"):
@@ -671,7 +842,7 @@ def main(argv: list[str] | None = None) -> int:
     counts: dict[str, int] = {}
     for u in m["units"]:
         counts[u["classification"]] = counts.get(u["classification"], 0) + 1
-    dags = sum(1 for u in m["units"] if u["kind"] in ("dag", "cosmos", "dag_factory"))
+    dags = sum(1 for u in m["units"] if u["kind"] in ("dag", "cosmos", "dag_factory", "blueprint_dag"))
     tasks = sum(1 for u in m["units"] if u["kind"] == "task")
     print(f"wrote {args.out}: {len(m['units'])} units ({dags} DAGs, {tasks} tasks); " +
           ", ".join(f"{k} {v}" for k, v in sorted(counts.items())))

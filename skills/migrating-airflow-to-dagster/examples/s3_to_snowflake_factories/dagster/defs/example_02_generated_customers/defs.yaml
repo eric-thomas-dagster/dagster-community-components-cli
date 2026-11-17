@@ -1,0 +1,16 @@
+type: reusable_trial.components.s3_to_snowflake_load.S3ToSnowflakeLoad
+
+attributes:
+  name: example_02_s3_to_snowflake_generated_customers
+  schedule: "@daily"
+  partitions: daily
+  stage: RAW_CUSTOMERS_STAGE
+  prefix: "customers/{{ ds_nodash }}/"
+  table: CUSTOMERS_RAW
+  database: ANALYTICS
+  warehouse: LOAD_WH
+  file_format: CSV_FILE_FORMAT
+  snowflake_schema: RAW
+  start_date: "2026-07-01"
+  retries: 2
+  timezone: America/Chicago

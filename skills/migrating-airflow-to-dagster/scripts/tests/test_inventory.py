@@ -188,3 +188,46 @@ def test_reconcile_adds_what_only_airflow_knows():
     added = [u for u in m["units"] if u.get("origin") == "airflow_runtime"]
     assert {(u["kind"], u.get("task_id") or u["dag_id"]) for u in added} == {("dag", "factory_made"), ("task", "t2"), ("task", "x")}
     assert all(u["classification"] == "JUDG" and u["status"] == "pending" for u in added)
+
+
+FACT = HERE / "fixtures_factory"
+
+
+@pytest.fixture(scope="module")
+def fmanifest():
+    return inventory.build_manifest(FACT, set())
+
+
+def test_factory_function_is_a_template_not_a_dag(fmanifest):
+    t = next(u for u in fmanifest["units"] if u["kind"] == "dag" and u.get("factory"))
+    assert t["factory"] == "build_load_dag" and t["classification"] == "REDESIGN" and "component" in t["classification_reason"]
+    assert any(u["kind"] == "taskgroup_template" and u["name"] == "load_group" for u in fmanifest["units"])
+
+
+def test_factory_calls_are_listed_and_loop_over_dict_is_expanded(fmanifest):
+    calls = {u["dag_id"]: u for u in fmanifest["units"] if u["kind"] == "factory_call"}
+    assert set(calls) == {"one_off", "gen_customers", "gen_orders"}
+    assert calls["one_off"]["config"]["table"] == "T1" and not calls["one_off"]["in_loop"]
+    g = calls["gen_orders"]
+    assert g["config"] == {"dag_id": "gen_orders", "warehouse": "WH", "schedule": "0 * * * *", "table": "ORDERS"}
+    assert "LOADS" in g["expanded_from"]
+
+
+def test_blueprint_and_dag_factory_yaml(fmanifest):
+    kinds = {(u["kind"], u.get("dag_id") or u.get("name")) for u in fmanifest["units"]}
+    assert ("blueprint_template", "S3Load") in kinds and ("blueprint_dag", "report_bp") in kinds
+    assert ("dag_factory", "orders_dag") in kinds                         # tasks given as a list
+    ts = {u["task_id"]: u for u in fmanifest["units"] if u["kind"] == "task" and u["dag_id"] == "orders_dag"}
+    assert ts["load"]["upstream"] == ["list_files"]
+    bp = {u["task_id"]: u for u in fmanifest["units"] if u["kind"] == "task" and u["dag_id"] == "report_bp"}
+    assert bp["publish"]["upstream"] == ["load"] and bp["load"]["operator"] == "blueprint:s3_load"
+
+
+def test_globals_registration_is_signalled(fmanifest):
+    sigs = {k for u in fmanifest["units"] for k in u.get("signals", {})}
+    assert "dynamic_dag_generation" in sigs or any(u["kind"] == "factory_call" for u in fmanifest["units"])
+
+
+def test_dag_id_from_a_variable_is_resolved(fmanifest):
+    ids = {u["dag_id"] for u in fmanifest["units"] if u["kind"] == "dag"}
+    assert {"stem_var", "named_constant_dag"} <= ids and "dag_id" not in ids      # file-stem variable and a string constant
