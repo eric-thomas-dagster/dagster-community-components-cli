@@ -98,6 +98,12 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d["timetable"].update(kind="asset_triggered", assets=["a", "b"], asset_logic="mixed"), "mixes AND and OR"),
     (lambda d: d["timetable"].update(kind="other"), "schedule type"),
     (lambda d: d.update(catchup=True), "catchup"),
+    (lambda d: d["tasks"][0].update(depends_on_past=True), "depends_on_past"),
+    (lambda d: d["tasks"][0].update(pool_slots=2), "pool_slots=2"),
+    (lambda d: d["tasks"][0].update(callbacks=["on_failure_callback"]), "task callbacks"),
+    (lambda d: d["tasks"][0].update(retry_exponential_backoff=True), "retry_exponential_backoff"),
+    (lambda d: d["tasks"][0].update(max_active_tis_per_dag=1), "max_active_tis_per_dag"),
+    (lambda d: d["tasks"][0].update(type="PythonOperator", execution_timeout_s=30.0), "execution_timeout on a non-shell task"),
 ])
 def test_unsupported_constructs_defer_the_whole_dag_with_a_reason(mut, why):
     d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"})])
@@ -235,3 +241,21 @@ def test_report_ranks_operators_with_integration_hints(tmp_path):
     ops = json.loads((tmp_path / "r.json").read_text())["operators"]
     assert ops["BashOperator"]["mapped_by_converter"] and ops["BashOperator"]["registry"] == ["shell_command_asset"]
     assert not ops["KubernetesPodOperator"]["mapped_by_converter"] and "k8s_job_asset" in ops["KubernetesPodOperator"]["registry"]
+
+
+def test_bash_execution_timeout_is_enforced_as_a_failure():
+    code, _ = convert(dag([task("b", "BashOperator", template_fields={"bash_command": "sleep 5"}, execution_timeout_s=1.0)], kind="manual"))
+    assert "timeout=1.0" in code
+    ns = {}
+    exec(C.RUNTIME.split("def copy_into_sql")[0].replace("from __future__ import annotations", ""), ns)
+    class Ctx:
+        class log:
+            info = staticmethod(lambda *_: None)
+    import dagster as dg
+    with pytest.raises(dg.Failure, match="execution_timeout of 1.0 s exceeded"):
+        ns["run_shell"](Ctx, "sleep 5", timeout=1.0)
+
+
+def test_default_pre_post_execute_methods_are_not_callbacks():
+    d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"}, callbacks=["pre_execute", "post_execute"])], kind="manual")
+    convert(d)       # must not defer

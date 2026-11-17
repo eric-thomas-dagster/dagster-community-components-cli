@@ -363,6 +363,21 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"{tid}: setup/teardown")
         if t["trigger_rule"] != "all_success":
             reasons.append(f"{tid}: trigger_rule {t['trigger_rule']}")
+        # every behavior-affecting task setting is mapped or defers the DAG: none is silently ignored
+        for flag, why in (("depends_on_past", "depends_on_past"), ("wait_for_downstream", "wait_for_downstream"),
+                          ("retry_exponential_backoff", "retry_exponential_backoff"), ("sla_s", "an SLA")):
+            if t.get(flag):
+                reasons.append(f"{tid}: {why}")
+        for flag in ("max_active_tis_per_dag", "max_active_tis_per_dagrun"):
+            if t.get(flag):
+                reasons.append(f"{tid}: {flag}")
+        if t.get("pool_slots") not in (None, 1):
+            reasons.append(f"{tid}: pool_slots={t['pool_slots']}")
+        cbs = [c for c in (t.get("callbacks") or []) if c.startswith("on_")]     # pre/post_execute are default no-op methods, not callbacks
+        if cbs:
+            reasons.append(f"{tid}: task callbacks {cbs}")
+        if t.get("execution_timeout_s") and ty not in BASH | BASH_DEC:
+            reasons.append(f"{tid}: execution_timeout on a non-shell task (a Python callable cannot be interrupted safely)")
         if len(t["outlets"]) > 1:
             reasons.append(f"{tid}: {len(t['outlets'])} outlets")
         if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS:
@@ -470,7 +485,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             cmd = t["template_fields"].get("bash_command")
             if not isinstance(cmd, str):
                 raise Defer(f"{tid}: bash_command is not a string")
-            body = f"    run_shell(context, {cmd!r}, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r})"
+            body = f"    run_shell(context, {cmd!r}, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})"
             deco.append("kinds={'shell'}")
             pre = ""
         elif ty in PY_TASKS | BASH_DEC:
@@ -485,7 +500,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if ty in BASH_DEC:
                 body = (f"    cmd = {pyname}({call})\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                         f"        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
-                        f"    run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r})")
+                        f"    run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})")
                 deco.append("kinds={'shell'}")
             else:
                 body = f"    return {pyname}({call})" if not ret_none else f"    {pyname}({call})"
@@ -546,7 +561,10 @@ def run_shell(context: dg.AssetExecutionContext, command: str, env: Optional[dic
     """Run a BashOperator command with `bash -c`, as Airflow does."""
     full_env = {**os.environ, **{k: str(v) for k, v in (env or {}).items()}}
     context.log.info(f"$ {command}")
-    proc = subprocess.run(["bash", "-c", command], capture_output=True, text=True, env=full_env, cwd=cwd, timeout=timeout)
+    try:
+        proc = subprocess.run(["bash", "-c", command], capture_output=True, text=True, env=full_env, cwd=cwd, timeout=timeout)
+    except subprocess.TimeoutExpired as e:           # Airflow raises AirflowTaskTimeout: the task fails
+        raise dg.Failure(description=f"execution_timeout of {timeout} s exceeded", metadata={"command": command}) from e
     if proc.stdout:
         context.log.info(proc.stdout)
     if proc.returncode != 0:

@@ -132,6 +132,14 @@ def _task_ir(task: Any) -> dict[str, Any]:
         # Airflow 2 decorated mapped tasks are DecoratedMappedOperator, a SUBCLASS of MappedOperator: test the whole MRO
         "is_mapped": any(c.__name__ == "MappedOperator" for c in type(task).__mro__) or bool(getattr(task, "is_mapped", False)),
         "is_setup": bool(getattr(task, "is_setup", False)), "is_teardown": bool(getattr(task, "is_teardown", False)),
+        # settings that change behavior: the converter maps them or defers the DAG, never ignores them
+        "depends_on_past": bool(getattr(task, "depends_on_past", False)), "wait_for_downstream": bool(getattr(task, "wait_for_downstream", False)),
+        "max_active_tis_per_dag": getattr(task, "max_active_tis_per_dag", None), "max_active_tis_per_dagrun": getattr(task, "max_active_tis_per_dagrun", None),
+        "pool_slots": getattr(task, "pool_slots", 1), "retry_exponential_backoff": bool(getattr(task, "retry_exponential_backoff", False)),
+        "max_retry_delay_s": task.max_retry_delay.total_seconds() if getattr(task, "max_retry_delay", None) else None,
+        "sla_s": task.sla.total_seconds() if getattr(task, "sla", None) else None,
+        "callbacks": [a for a in ("on_failure_callback", "on_success_callback", "on_retry_callback", "on_skipped_callback", "on_execute_callback")
+                      if getattr(task, a, None)],          # not pre_execute/post_execute: every operator has those as default no-op methods
         "outlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "outlets", None) or [])],
         "inlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "inlets", None) or [])],
         "template_fields": {},
