@@ -51,7 +51,7 @@ Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirm
 | `retries`, `retry_delay` | `RetryPolicy` | MECH | `retry_exponential_backoff` maps to a backoff setting; verify |
 | `pool` | Dagster pool (`pool=` on the asset or op) | MECH | Limits are configured in Dagster (Dagster+ or the instance), not in code; list each pool and limit in the report |
 | `execution_timeout` | Op/asset timeout or an inner timeout | JUDG | |
-| XCom (`xcom_push/pull`, `.output`, TaskFlow returns) | Return values with an IO manager, explicit storage, or fusing steps | JUDG | Decide per edge; do not assume an XCom backend exists |
+| XCom (`xcom_push/pull`, `.output`, and TaskFlow return values passed to another task, which are implicit XComs) | Return values with an IO manager, explicit storage, or fusing steps | JUDG | Decide per edge; do not assume an XCom backend exists |
 | Variables | Environment variables or secrets | MECH | `dg plus create env` for Dagster+; never commit values |
 | Connections (`conn_id`) | Resources configured from env vars | JUDG | |
 | Jinja templates (`{{ ds }}`, `{{ data_interval_start }}`) | Partition key or run config | JUDG | |
@@ -69,4 +69,4 @@ Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirm
 
 ## Known scanner limits
 
-The scanner is static. It does not resolve DAGs built in loops or factories, operators created through helper functions, or imported DAG fragments. It flags unparsable files as `unparsed`. When the manifest's DAG count disagrees with the Airflow instance's, trust the instance and extend the scan.
+The scanner is static. It keeps tasks whose `task_id` is computed (loops, f-strings, factories) and flags them `dynamic_id`: one source task may become many, so confirm against a parsed DAG. It does not resolve operators created in helper functions defined in other files, or imported DAG fragments. It flags unparsable files as `unparsed`. When the manifest's DAG count disagrees with the Airflow instance's, trust the instance and extend the scan.

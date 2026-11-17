@@ -28,7 +28,7 @@ def task(m, dag_id, task_id):
 
 def test_finds_all_dags_and_ignores_non_airflow(manifest):
     ids = {u["dag_id"] for u in manifest["units"] if u["kind"] in ("dag", "cosmos", "dag_factory")}
-    assert ids == {"nightly_etl", "clean_pipeline", "branchy", "daily_report"}
+    assert ids == {"nightly_etl", "clean_pipeline", "branchy", "daily_report", "loopy"}
 
 
 def test_classic_dag_schedule_edges_and_signals(manifest):
@@ -37,7 +37,7 @@ def test_classic_dag_schedule_edges_and_signals(manifest):
     assert d["default_args"]["retries"] == 2
     assert d["edges"] == [["extract", "transform"], ["start", "extract"], ["transform", "load"]]
     assert d["signals"]["airflow_variable"] == 1 and d["signals"]["jinja_template"] >= 1
-    assert d["classification"] == "MECH"
+    assert d["classification"] == "JUDG" and "1 JUDG" in d["classification_reason"]   # the all_done task
 
 
 def test_classic_task_rules(manifest):
@@ -85,7 +85,7 @@ def test_status_gate(manifest, tmp_path):
 def test_cli_writes_manifest(tmp_path):
     out = tmp_path / "m.json"
     r = subprocess.run([sys.executable, str(HERE.parent / "inventory.py"), str(FIX), "--out", str(out)], capture_output=True, text=True)
-    assert r.returncode == 0 and "4 DAGs" in r.stdout
+    assert r.returncode == 0 and "5 DAGs" in r.stdout
     assert json.loads(out.read_text())["units"]
 
 
@@ -103,3 +103,31 @@ def test_validate_defs_matches_plan():
     passed, unplanned, problems = validate_defs.check(m, defs)
     assert passed == ["A1", "A2"] and unplanned == ["A3"]
     assert any("deps" in p for p in problems) and any("cron" in p for p in problems)
+
+
+def test_loop_generated_task_ids_are_kept_and_flagged(manifest):
+    t = task(manifest, "loopy", "f'step_{i}'")
+    assert t["dynamic_id"] and t["classification"] == "JUDG" and "computed at parse time" in t["classification_reason"]
+
+
+def test_branch_variants_are_redesign_and_marker_is_a_task(manifest):
+    assert task(manifest, "loopy", "pick")["classification"] == "REDESIGN"
+    assert task(manifest, "loopy", "marker")["operator"] == "ExternalTaskMarker"
+
+
+def test_taskflow_functions_defined_outside_dag_attach_to_calling_dag(manifest):
+    ids = {u["task_id"] for u in manifest["units"] if u["kind"] == "task" and u["dag_id"] == "loopy"}
+    assert {"produce", "consume"} <= ids
+    assert ["produce", "consume"] in dag(manifest, "loopy")["edges"]
+
+
+def test_dag_reflects_its_tasks(manifest):
+    d = dag(manifest, "loopy")
+    assert d["classification"] == "JUDG" and d["task_classes"]["REDESIGN"] == 1
+    assert dag(manifest, "nightly_etl")["task_classes"]["JUDG"] == 1
+
+
+def test_taskflow_argument_passing_is_implicit_xcom(manifest):
+    t = task(manifest, "clean_pipeline", "summarize")
+    assert t["implicit_xcom"] and t["classification"] == "JUDG" and "implicit XCom" in t["classification_reason"]
+    assert not task(manifest, "clean_pipeline", "clean_rows")["implicit_xcom"]

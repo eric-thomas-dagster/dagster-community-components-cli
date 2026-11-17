@@ -26,9 +26,8 @@ CRON_PRESETS = {
 
 # operator/decorator -> (classification, note). First match wins; order matters.
 OPERATOR_RULES: list[tuple[str, str, str]] = [
-    ("BranchPython", "REDESIGN", "branching: model as conditional asset logic, asset checks or an op with dynamic outputs"),
+    ("Branch", "REDESIGN", "branching: model as conditional asset logic, asset checks or an op with dynamic outputs"),
     ("ShortCircuit", "REDESIGN", "short-circuit: model as a skip inside the asset or an automation condition"),
-    ("BranchDateTime", "REDESIGN", "branching on time: schedule or conditional logic"),
     ("SubDag", "REDESIGN", "SubDAG: flatten into the parent job/asset graph"),
     ("TriggerDagRun", "JUDG", "cross-DAG trigger: usually an asset dependency or automation condition"),
     ("ExternalTaskSensor", "JUDG", "cross-DAG wait: usually an asset dependency"),
@@ -134,6 +133,7 @@ class FileScan(ast.NodeVisitor):
         self.edges: list[tuple[str, str, str | None]] = []   # (up_task_id, down_task_id, dag_hint)
         self.signals: dict[str, int] = {}
         self.named_dicts: dict[str, ast.Dict] = {}
+        self.call_sites: dict[str, set[str]] = {}   # task_id -> DAG keys whose body calls it
         self._dag_stack: list[str] = []
         self.source = source
 
@@ -243,17 +243,21 @@ class FileScan(ast.NodeVisitor):
                     return v
             return None
 
-        if not (last.endswith("Operator") or last.endswith("Sensor") or last.endswith("Trigger") or "Operator" in last):
+        if kw("task_id") is None:
             return
-        task_id = _const(kw("task_id"))
-        if task_id is None:
-            return
+        if not (self._current_dag() or kw("dag") is not None or last.endswith(("Operator", "Sensor", "Trigger", "Marker"))):
+            return  # a stray call with a task_id keyword outside any DAG context
+        task_node = kw("task_id")
+        task_id = _const(task_node)
+        dynamic_id = task_id is None
+        if dynamic_id:
+            task_id = _src(task_node)  # keep it: f-strings and names are built by a factory or loop
         dag_var = kw("dag")
         info = {"task_id": task_id, "line": line, "operator": last, "style": "operator",
                 "pool": _const(kw("pool")), "retries": _const(kw("retries")),
                 "trigger_rule": _const(kw("trigger_rule")), "mapped": mapped,
                 "dag_hint": (dag_var.id if isinstance(dag_var, ast.Name) else None) or self._current_dag(),
-                "var": var, "outlets": _src(kw("outlets")) if kw("outlets") else "",
+                "var": var, "dynamic_id": dynamic_id, "outlets": _src(kw("outlets")) if kw("outlets") else "",
                 "inlets": _src(kw("inlets")) if kw("inlets") else ""}
         if info["outlets"] or info["inlets"]:
             self._sig("dataset_lineage")
@@ -271,6 +275,8 @@ class FileScan(ast.NodeVisitor):
             if fn in self.taskflow_funcs and var:
                 self.var_to_task[var] = self.taskflow_funcs[fn]["task_id"]
                 self._taskflow_edges(node.value)
+            elif fn in self.taskflow_funcs and self._current_dag():
+                self.call_sites.setdefault(self.taskflow_funcs[fn]["task_id"], set()).add(self._current_dag())
         self.generic_visit(node)
 
     def visit_Expr(self, node: ast.Expr) -> None:
@@ -296,9 +302,14 @@ class FileScan(ast.NodeVisitor):
         down = self.taskflow_funcs.get(_dotted(call.func))
         if not down:
             return
+        if self._current_dag():
+            self.call_sites.setdefault(down["task_id"], set()).add(self._current_dag())
+        known = set(self.var_to_task.values()) | {t["task_id"] for t in self.taskflow_funcs.values()}
         for a in [*call.args, *[k.value for k in call.keywords]]:
             for up in self._names(a):
                 self.edges.append((up, down["task_id"], self._current_dag()))
+                if up in known:
+                    down["implicit_xcom"] = True   # the upstream return value travels as an XCom
 
     def _names(self, node: ast.AST) -> list[str]:
         if isinstance(node, ast.Name):
@@ -382,7 +393,8 @@ def scan_python(path: Path, rel: str) -> list[dict[str, Any]]:
     single = next(iter(fs.dags)) if len(fs.dags) == 1 else None
     out: list[dict[str, Any]] = []
     for key, d in fs.dags.items():
-        d_tasks = [t for t in fs.tasks if (t["dag_hint"] == key) or (t["dag_hint"] is None and single == key)
+        d_tasks = [t for t in fs.tasks if (t["dag_hint"] == key) or key in fs.call_sites.get(t["task_id"], ())
+                   or (t["dag_hint"] is None and single == key and t["task_id"] not in fs.call_sites)
                    or (t["dag_hint"] is not None and t["dag_hint"] not in fs.dags and single == key)]
         ids = {t["task_id"] for t in d_tasks}
         d_edges = sorted({(u, v) for u, v, _ in fs.edges if u in ids and v in ids})
@@ -393,7 +405,7 @@ def scan_python(path: Path, rel: str) -> list[dict[str, Any]]:
         for t in d_tasks:
             out.append({"kind": "task", "dag_id": d["dag_id"], "task_id": t["task_id"], "file": rel, "line": t["line"],
                         "operator": t["operator"], "style": t["style"], "pool": t["pool"], "retries": t["retries"],
-                        "trigger_rule": t["trigger_rule"], "mapped": t["mapped"],
+                        "trigger_rule": t["trigger_rule"], "mapped": t["mapped"], "dynamic_id": t.get("dynamic_id", False), "implicit_xcom": t.get("implicit_xcom", False),
                         "upstream": sorted({u for u, v in d_edges if v == t["task_id"]}),
                         "outlets": t.get("outlets", ""), "inlets": t.get("inlets", ""), "signals": fs.signals})
     return out
@@ -442,12 +454,18 @@ def suggest(unit: dict[str, Any]) -> tuple[str, str]:
         if unit["operator"] == "@task.sensor":
             klass, note = "JUDG", "sensor task: Dagster sensor or declarative automation"
         extra = []
+        if unit.get("dynamic_id"):
+            klass = "JUDG" if klass == "MECH" else klass
+            extra.append("task_id is computed at parse time (factory or loop): one source task may become many tasks; confirm the expansion against a parsed DAG")
         if unit["mapped"]:
             klass = "REDESIGN"
             extra.append("dynamic task mapping: dynamic partitions or a multi-asset/graph")
         if unit["trigger_rule"] and unit["trigger_rule"] != "all_success":
             klass = "JUDG" if klass == "MECH" else klass
             extra.append(f"trigger_rule={unit['trigger_rule']}: no direct equivalent; model with checks, hooks or automation conditions")
+        if unit.get("implicit_xcom") and klass == "MECH":
+            klass = "JUDG"
+            extra.append("receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager")
         if unit["signals"].get("xcom") and klass == "MECH":
             klass = "JUDG"
             extra.append("XCom in this file: decide per edge between fusing, explicit storage or an IO manager")
@@ -491,9 +509,21 @@ def build_manifest(root: Path, exclude: set[str]) -> dict[str, Any]:
             raw.extend(scan_python(p, rel))
         elif p.suffix in (".yml", ".yaml"):
             raw.extend(scan_dag_factory(p, rel))
+    by_dag: dict[str, dict[str, int]] = {}
+    for u in raw:
+        if u["kind"] == "task":
+            k, _ = suggest(u)
+            by_dag.setdefault(u["dag_id"], {}).setdefault(k, 0)
+            by_dag[u["dag_id"]][k] += 1
     units = []
     for n, u in enumerate(raw, 1):
         klass, why = suggest(u)
+        if u["kind"] in ("dag", "cosmos", "dag_factory"):
+            counts = by_dag.get(u["dag_id"], {})
+            u["task_classes"] = counts
+            if counts.get("REDESIGN") or counts.get("JUDG"):
+                klass = "JUDG" if klass == "MECH" else klass
+                why = "; ".join(filter(None, [why if why != "plain DAG: job plus schedule" else "", "tasks: " + ", ".join(f"{v} {k}" for k, v in sorted(counts.items()))]))
         units.append({"id": f"A{n:03d}", **u, "classification": klass, "classification_reason": why,
                       "status": "pending", "evidence": "", "reason": "", "target": {}})
     return {"version": 1, "root": str(root), "units": units}
@@ -509,7 +539,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"not a directory: {args.repo}", file=sys.stderr)
         return 2
     m = build_manifest(args.repo, set(args.exclude))
-    args.out.write_text(json.dumps(m, indent=2) + "\n")
+    args.out.write_text(json.dumps(m, indent=2, default=str) + "\n")
     counts: dict[str, int] = {}
     for u in m["units"]:
         counts[u["classification"]] = counts.get(u["classification"], 0) + 1
