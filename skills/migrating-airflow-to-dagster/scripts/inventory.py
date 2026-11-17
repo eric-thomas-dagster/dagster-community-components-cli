@@ -121,21 +121,52 @@ def parse_schedule(call: ast.Call) -> dict[str, Any]:
     return {"kind": "expression", "raw": _src(node)}
 
 
+WRAP_ATTRS = {"override", "expand", "partial", "expand_kwargs", "loop"}
+TASK_LIKE_DECOS = {"setup", "teardown"}
+
+
+def _unwrap(call: ast.Call) -> tuple[ast.AST, list[ast.Call], list[str]]:
+    """Peel `X.override(...)(...)`, `X.partial(...).expand(...)` into (base node, every call in the chain, attrs)."""
+    calls, attrs, node = [call], [], call.func
+    while True:
+        if isinstance(node, ast.Attribute) and node.attr in WRAP_ATTRS:
+            attrs.append(node.attr)
+            node = node.value
+        elif isinstance(node, ast.Call):
+            calls.append(node)
+            node = node.func
+        else:
+            break
+    return node, calls, attrs
+
+
 class FileScan(ast.NodeVisitor):
-    """Collect DAGs, tasks, edges and migration-relevant signals from one Python file."""
+    """Collect DAGs, tasks, edges and migration-relevant signals from one Python file.
+
+    Tasks are created where Airflow creates them: at the call site. TaskGroup contexts prefix task ids
+    (`group.task`); repeated calls of one @task or group get Airflow's `__1`, `__2` suffixes.
+    """
 
     def __init__(self, path: str, source: str) -> None:
         self.path = path
-        self.dags: dict[str, dict[str, Any]] = {}       # dag var-or-id -> info
+        self.source = source
+        self.dags: dict[str, dict[str, Any]] = {}
         self.tasks: list[dict[str, Any]] = []
-        self.taskflow_funcs: dict[str, dict[str, Any]] = {}
-        self.var_to_task: dict[str, str] = {}
-        self.edges: list[tuple[str, str, str | None]] = []   # (up_task_id, down_task_id, dag_hint)
+        self.taskflow: dict[str, dict[str, Any]] = {}      # @task function name -> info
+        self.groupfuncs: dict[str, ast.FunctionDef] = {}   # @task_group function name -> node
+        self.var_to_tasks: dict[str, list[str]] = {}
+        self.edges: list[tuple[str, str, str | None]] = []
         self.signals: dict[str, int] = {}
         self.named_dicts: dict[str, ast.Dict] = {}
-        self.call_sites: dict[str, set[str]] = {}   # task_id -> DAG keys whose body calls it
+        self.dag_vars: dict[str, str] = {}              # variable name -> latest unique DAG key
+        self._loop_depth = 0
+        self._mapped_group = 0
         self._dag_stack: list[str] = []
-        self.source = source
+        self._group_stack: list[str] = []
+        self._task_body = 0
+        self._seen: set[int] = set()
+        self._call_ids: dict[int, list[str]] = {}
+        self._counts: dict[tuple[str | None, str], int] = {}
 
     # -- helpers -------------------------------------------------------------------------------------------------
     def _sig(self, name: str) -> None:
@@ -144,12 +175,27 @@ class FileScan(ast.NodeVisitor):
     def _current_dag(self) -> str | None:
         return self._dag_stack[-1] if self._dag_stack else None
 
+    def _prefix(self) -> str:
+        return ".".join(g for g in self._group_stack if g)
+
+    def _unique(self, dag: str | None, tid: str) -> str:
+        n = self._counts.get((dag, tid), 0)
+        self._counts[(dag, tid)] = n + 1
+        return tid if n == 0 else f"{tid}__{n}"
+
     def _register_dag(self, key: str, call: ast.Call, line: int, dag_id: str | None = None) -> str:
-        did = dag_id or _const(_kw(call, "dag_id")) or (_const(call.args[0]) if call.args else None) or key
-        info = {"dag_id": str(did), "line": line, "schedule": parse_schedule(call),
+        node = _kw(call, "dag_id")
+        did, dynamic = dag_id or _const(node), False
+        if did is None and node is None and call.args:
+            did = _const(call.args[0])
+        if did is None and node is not None:
+            if "__file__" in _src(node):
+                did = Path(self.path).stem          # the common `dag_id=Path(__file__).stem` idiom
+            else:
+                did, dynamic = _src(node), True
+        info = {"dag_id": str(did or key), "line": line, "schedule": parse_schedule(call), "dynamic_dag_id": dynamic,
                 "catchup": _const(_kw(call, "catchup")), "max_active_runs": _const(_kw(call, "max_active_runs")),
-                "tags": _const(_kw(call, "tags")), "has_default_args": _kw(call, "default_args") is not None,
-                "default_args": {}, "kind": "dag"}
+                "tags": _const(_kw(call, "tags")), "default_args": {}, "kind": "dag"}
         da = _kw(call, "default_args")
         if isinstance(da, ast.Name):
             da = self.named_dicts.get(da.id)
@@ -160,140 +206,224 @@ class FileScan(ast.NodeVisitor):
         if _kw(call, "outlets") is not None or _kw(call, "inlets") is not None:
             info["dag_level_outlets"] = True   # outlets/inlets are task arguments; Airflow's DAG rejects them
             self._sig("dag_level_outlets")
-        self.dags[key] = info
-        return key
+        ukey = f"{key}@{line}"
+        self.dag_vars[key] = ukey
+        self.dags[ukey] = info
+        return ukey
 
-    # -- DAG discovery -------------------------------------------------------------------------------------------
+    def _add_task(self, **t: Any) -> None:
+        t.setdefault("pool", None); t.setdefault("retries", None); t.setdefault("trigger_rule", None)
+        t.setdefault("mapped", False); t.setdefault("dynamic_id", False); t.setdefault("implicit_xcom", False)
+        t.setdefault("outlets", ""); t.setdefault("inlets", "")
+        t["in_loop"] = self._loop_depth > 0
+        self.tasks.append(t)
+
+    # -- DAG and group discovery ---------------------------------------------------------------------------------
     def visit_With(self, node: ast.With) -> None:
-        pushed = 0
+        dags = groups = 0
         for item in node.items:
             ctx = item.context_expr
-            if isinstance(ctx, ast.Call) and _dotted(ctx.func).split(".")[-1] == "DAG":
+            if not isinstance(ctx, ast.Call):
+                continue
+            last = _dotted(ctx.func).split(".")[-1]
+            if last == "DAG":
                 var = item.optional_vars.id if isinstance(item.optional_vars, ast.Name) else f"dag@{node.lineno}"
                 self._dag_stack.append(self._register_dag(var, ctx, node.lineno))
-                pushed += 1
-            elif isinstance(ctx, ast.Call) and _dotted(ctx.func).split(".")[-1] == "TaskGroup":
+                dags += 1
+            elif last == "TaskGroup":
                 self._sig("task_group")
+                gid = _const(_kw(ctx, "group_id")) or (_const(ctx.args[0]) if ctx.args else None) or _src(_kw(ctx, "group_id"))
+                no_prefix = _const(_kw(ctx, "prefix_group_id")) is False
+                self._group_stack.append("" if no_prefix else self._unique(self._current_dag(), f"group:{gid}").replace("group:", "", 1))
+                groups += 1
         self.generic_visit(node)
-        for _ in range(pushed):
+        for _ in range(dags):
             self._dag_stack.pop()
+        for _ in range(groups):
+            self._group_stack.pop()
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
-        dag_deco = None
-        task_deco = None
+        kind, deco_call = None, None
         for d in node.decorator_list:
             name = _dotted(d.func if isinstance(d, ast.Call) else d)
+            last = name.split(".")[-1]
+            call = d if isinstance(d, ast.Call) else None
             if name in ("dag", "airflow.decorators.dag", "airflow.sdk.dag"):
-                dag_deco = d
-            elif name in TASK_DECORATORS or name.endswith(".task"):
-                task_deco = (name, d)
-        if dag_deco is not None:
-            call = dag_deco if isinstance(dag_deco, ast.Call) else ast.Call(func=ast.Name("dag"), args=[], keywords=[])
-            key = self._register_dag(node.name, call, node.lineno, dag_id=_const(_kw(call, "dag_id")) or node.name)
+                kind, deco_call = "dag", call or ast.Call(func=ast.Name("dag"), args=[], keywords=[])
+            elif last == "task_group":
+                kind, deco_call = "group", call
+            elif last == "asset" and "airflow" in self.source:
+                kind, deco_call = "asset", call or ast.Call(func=ast.Name("asset"), args=[], keywords=[])
+            elif name in TASK_DECORATORS or name.endswith(".task") or last in TASK_LIKE_DECOS:
+                kind, deco_call = f"task:{name}", call
+        if kind == "dag":
+            key = self._register_dag(node.name, deco_call, node.lineno, dag_id=_const(_kw(deco_call, "dag_id")) or node.name)
             self._dag_stack.append(key)
             self.generic_visit(node)
             self._dag_stack.pop()
-            return
-        if task_deco is not None:
-            name, d = task_deco
-            call = d if isinstance(d, ast.Call) else None
-            task_id = (_const(_kw(call, "task_id")) if call else None) or node.name
-            info = {"task_id": task_id, "line": node.lineno, "operator": f"@{name}", "style": TASK_DECORATORS.get(name, "python"),
-                    "func": node.name, "pool": _const(_kw(call, "pool")) if call else None,
-                    "retries": _const(_kw(call, "retries")) if call else None,
-                    "trigger_rule": _const(_kw(call, "trigger_rule")) if call else None,
-                    "mapped": False, "dag_hint": self._current_dag(), "var": None}
-            self.taskflow_funcs[node.name] = info
-            self.tasks.append(info)
-        self.generic_visit(node)
+        elif kind == "group":
+            self.groupfuncs[node.name] = node          # expanded at each call site, like Airflow
+            self._group_id = _const(_kw(deco_call, "group_id")) if deco_call else None
+            node._gid = self._group_id or node.name    # type: ignore[attr-defined]
+        elif kind == "asset":
+            did = _const(_kw(deco_call, "name")) or node.name
+            key = self._register_dag(f"asset:{node.name}", deco_call, node.lineno, dag_id=did)
+            self._add_task(task_id=did, line=node.lineno, operator="@asset", style="asset", dag_hint=key, var=None)
+        elif kind and kind.startswith("task:"):
+            name = kind[5:]
+            self.taskflow[node.name] = {"base_id": (_const(_kw(deco_call, "task_id")) if deco_call else None) or node.name,
+                                        "operator": f"@{name}", "style": TASK_DECORATORS.get(name, "python"), "call": deco_call}
+            self._task_body += 1
+            self.generic_visit(node)                   # signals only: calls inside a task body are not tasks
+            self._task_body -= 1
+        else:
+            self.generic_visit(node)
 
     visit_AsyncFunctionDef = visit_FunctionDef  # type: ignore[assignment]
 
-    # -- tasks ---------------------------------------------------------------------------------------------------
-    def _operator_task(self, call: ast.Call, var: str | None, line: int) -> None:
-        cls = _dotted(call.func)
-        last = cls.split(".")[-1]
-        if last == "DAG":
-            if var:
-                self._register_dag(var, call, line)
-            return
-        if last in ("DbtDag", "DbtTaskGroup"):
-            self._sig("cosmos")
-            if last == "DbtDag":
-                key = self._register_dag(var or f"cosmos@{line}", call, line)
-                self.dags[key]["kind"] = "cosmos"
-            return
-        mapped = False
-        chain = [call]
-        # x = Operator.partial(...).expand(...): keyword arguments live on every call in the chain
-        if isinstance(call.func, ast.Attribute) and call.func.attr in ("expand", "expand_kwargs", "partial"):
-            mapped = True
-            inner = call.func.value
-            while isinstance(inner, ast.Call) and isinstance(inner.func, ast.Attribute) and inner.func.attr in ("partial", "expand", "expand_kwargs"):
-                chain.append(inner)
-                inner = inner.func.value
-            if isinstance(inner, ast.Call):
-                chain.append(inner)
-                inner = inner.func
-            cls = _dotted(inner)
-            last = cls.split(".")[-1]
-            self._sig("dynamic_task_mapping")
+    # -- task instantiation --------------------------------------------------------------------------------------
+    def _instantiate(self, call: ast.Call) -> list[str]:
+        if id(call) in self._seen:
+            return self._call_ids.get(id(call), [])
+        self._seen.add(id(call))
+        ids = self._make(call)
+        self._call_ids[id(call)] = ids
+        return ids
 
-        def kw(name: str) -> ast.AST | None:
+    def _make(self, call: ast.Call) -> list[str]:
+        if self._task_body:
+            return []
+        base, chain, attrs = _unwrap(call)
+        for c in chain:
+            self._seen.add(id(c))
+        name = _dotted(base)
+        last = name.split(".")[-1]
+
+        tf0 = self.taskflow.get(name)
+        if tf0 is not None and tf0["call"] is not None:
+            chain = [*chain, tf0["call"]]   # decorator keywords (retries, pool, outlets, ...) apply to every instance
+
+        def kw(n: str) -> ast.AST | None:
             for c in chain:
-                v = _kw(c, name)
+                v = _kw(c, n)
                 if v is not None:
                     return v
             return None
 
-        if kw("task_id") is None:
-            return
-        if not (self._current_dag() or kw("dag") is not None or last.endswith(("Operator", "Sensor", "Trigger", "Marker"))):
-            return  # a stray call with a task_id keyword outside any DAG context
-        task_node = kw("task_id")
-        task_id = _const(task_node)
-        dynamic_id = task_id is None
-        if dynamic_id:
-            task_id = _src(task_node)  # keep it: f-strings and names are built by a factory or loop
-        dag_var = kw("dag")
-        info = {"task_id": task_id, "line": line, "operator": last, "style": "operator",
-                "pool": _const(kw("pool")), "retries": _const(kw("retries")),
-                "trigger_rule": _const(kw("trigger_rule")), "mapped": mapped,
-                "dag_hint": (dag_var.id if isinstance(dag_var, ast.Name) else None) or self._current_dag(),
-                "var": var, "dynamic_id": dynamic_id, "outlets": _src(kw("outlets")) if kw("outlets") else "",
-                "inlets": _src(kw("inlets")) if kw("inlets") else ""}
-        if info["outlets"] or info["inlets"]:
-            self._sig("dataset_lineage")
-        self.tasks.append(info)
-        if var:
-            self.var_to_task[var] = task_id
+        if name in self.groupfuncs and set(attrs) <= WRAP_ATTRS:
+            fn = self.groupfuncs[name]
+            gid = self._unique(self._current_dag(), f"group:{fn._gid}").replace("group:", "", 1)  # type: ignore[attr-defined]
+            mapped_group = any(a in ("expand", "expand_kwargs") for a in attrs)
+            looped = "loop" in attrs
+            if looped:
+                self._sig("task_loop")     # Airflow 3.x group.loop(...): iteration count is decided at run time
+            body_ids = {id(n) for stmt in fn.body for n in ast.walk(stmt)}   # the same AST is expanded once per call
+            self._seen -= body_ids
+            for k in body_ids:
+                self._call_ids.pop(k, None)
+            self._group_stack.append(gid)
+            self._mapped_group += mapped_group
+            self._loop_depth += looped
+            for stmt in fn.body:
+                self.visit(stmt)
+            self._loop_depth -= looped
+            self._mapped_group -= mapped_group
+            self._group_stack.pop()
+            return []
 
+        tf = self.taskflow.get(name)
+        dag_var = kw("dag")
+        dag_key = self.dag_vars.get(dag_var.id, dag_var.id) if isinstance(dag_var, ast.Name) else self._current_dag()
+        if tf is not None:
+            if dag_key is None:
+                return []
+            node, base_id, operator, style = kw("task_id"), None, tf["operator"], tf["style"]
+            base_id = _const(node) if node is not None else tf["base_id"]
+            dynamic = node is not None and base_id is None
+            base_id = _src(node) if dynamic else base_id
+        elif kw("task_id") is not None and (self._current_dag() or dag_var is not None or last.endswith(("Operator", "Sensor", "Trigger", "Marker"))):
+            node = kw("task_id")
+            base_id, dynamic = _const(node), False
+            if base_id is None:
+                base_id, dynamic = _src(node), True
+            operator, style = last, "operator"
+        else:
+            return []
+        if last in ("DbtDag", "DbtTaskGroup"):
+            self._sig("cosmos")
+            return []
+        mapped = any(a in ("expand", "expand_kwargs", "partial") for a in attrs) or self._mapped_group > 0
+        if mapped:
+            self._sig("dynamic_task_mapping")
+        tid = self._unique(dag_key, f"{self._prefix()}.{base_id}" if self._prefix() else str(base_id))
+        implicit = False
+        for c in chain:
+            for a in [*c.args, *[k.value for k in c.keywords]]:
+                ups = self._arg_ids(a)
+                for u in ups:
+                    self.edges.append((u, tid, dag_key))
+                if ups and tf is not None:
+                    implicit = True
+        outlets, inlets = kw("outlets"), kw("inlets")
+        if outlets is not None or inlets is not None:
+            self._sig("dataset_lineage")
+        self._add_task(task_id=tid, line=call.lineno, operator=operator, style=style, pool=_const(kw("pool")),
+                       retries=_const(kw("retries")), trigger_rule=_const(kw("trigger_rule")), mapped=mapped,
+                       dynamic_id=dynamic, implicit_xcom=implicit, dag_hint=dag_key, var=None,
+                       outlets=_src(outlets) if outlets is not None else "", inlets=_src(inlets) if inlets is not None else "")
+        return [tid]
+
+    def _arg_ids(self, node: ast.AST) -> list[str]:
+        """Task ids that an argument expression depends on (variables, nested task calls, .output, subscripts)."""
+        if isinstance(node, ast.Name):
+            return list(self.var_to_tasks.get(node.id, []))
+        if isinstance(node, (ast.List, ast.Tuple, ast.Set)):
+            return [i for e in node.elts for i in self._arg_ids(e)]
+        if isinstance(node, ast.Dict):
+            return [i for v in node.values for i in self._arg_ids(v)]
+        if isinstance(node, ast.Starred):
+            return self._arg_ids(node.value)
+        if isinstance(node, (ast.Attribute, ast.Subscript)):
+            return self._arg_ids(node.value)
+        if isinstance(node, ast.Call):
+            ids = self._instantiate(node)
+            return ids
+        return []
+
+    # -- statements ----------------------------------------------------------------------------------------------
     def visit_Assign(self, node: ast.Assign) -> None:
         var = node.targets[0].id if len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) else None
-        if var and isinstance(node.value, ast.Dict):
-            self.named_dicts[var] = node.value
-        if isinstance(node.value, ast.Call):
-            self._operator_task(node.value, var, node.lineno)
-            fn = _dotted(node.value.func)
-            if fn in self.taskflow_funcs and var:
-                self.var_to_task[var] = self.taskflow_funcs[fn]["task_id"]
-                self._taskflow_edges(node.value)
-            elif fn in self.taskflow_funcs and self._current_dag():
-                self.call_sites.setdefault(self.taskflow_funcs[fn]["task_id"], set()).add(self._current_dag())
+        v = node.value
+        if var and isinstance(v, ast.Dict):
+            self.named_dicts[var] = v
+        ids: list[str] = []
+        if isinstance(v, ast.Call) and _dotted(v.func).split(".")[-1] in ("DAG", "DbtDag"):
+            self._seen.add(id(v))
+            if _dotted(v.func).endswith("DbtDag"):
+                self._sig("cosmos")
+            key = self._register_dag(var or f"dag@{node.lineno}", v, node.lineno)
+            if _dotted(v.func).endswith("DbtDag"):
+                self.dags[key]["kind"] = "cosmos"
+        elif isinstance(v, ast.Call):
+            ids = self._instantiate(v)
+        elif isinstance(v, (ast.List, ast.Tuple)):
+            ids = [i for e in v.elts if isinstance(e, ast.Call) for i in self._instantiate(e)]
+        elif isinstance(v, (ast.ListComp, ast.GeneratorExp, ast.SetComp)) and isinstance(v.elt, ast.Call):
+            ids = self._instantiate(v.elt)
+        if var and ids:
+            self.var_to_tasks[var] = ids
         self.generic_visit(node)
 
     def visit_Expr(self, node: ast.Expr) -> None:
         v = node.value
         if isinstance(v, ast.Call):
-            self._operator_task(v, None, node.lineno)
+            self._instantiate(v)
             fn = _dotted(v.func)
-            if fn in self.taskflow_funcs:
-                self._taskflow_edges(v)
             last = fn.split(".")[-1]
             if last in ("set_downstream", "set_upstream") and isinstance(v.func, ast.Attribute) and v.args:
                 a, b = self._names(v.func.value), self._names(v.args[0])
                 self._link(a, b) if last == "set_downstream" else self._link(b, a)
-            if fn.split(".")[-1] == "chain" or fn == "chain":
+            if last == "chain":
                 groups = [self._names(a) for a in v.args]
                 for x, y in zip(groups, groups[1:]):
                     self._link(x, y)
@@ -301,31 +431,12 @@ class FileScan(ast.NodeVisitor):
             self._shift(v)
         self.generic_visit(node)
 
-    def _taskflow_edges(self, call: ast.Call) -> None:
-        down = self.taskflow_funcs.get(_dotted(call.func))
-        if not down:
-            return
-        if self._current_dag():
-            self.call_sites.setdefault(down["task_id"], set()).add(self._current_dag())
-        known = set(self.var_to_task.values()) | {t["task_id"] for t in self.taskflow_funcs.values()}
-        for a in [*call.args, *[k.value for k in call.keywords]]:
-            for up in self._names(a):
-                self.edges.append((up, down["task_id"], self._current_dag()))
-                if up in known:
-                    down["implicit_xcom"] = True   # the upstream return value travels as an XCom
-
     def _names(self, node: ast.AST) -> list[str]:
-        if isinstance(node, ast.Name):
-            return [self.var_to_task.get(node.id, node.id)]
-        if isinstance(node, (ast.List, ast.Tuple)):
-            return [n for e in node.elts for n in self._names(e)]
-        if isinstance(node, ast.Call):
-            fn = _dotted(node.func)
-            if fn in self.taskflow_funcs:
-                return [self.taskflow_funcs[fn]["task_id"]]
+        if isinstance(node, ast.Call) and isinstance(node.func, ast.Attribute) and node.func.attr in ("as_setup", "as_teardown"):
+            return self._names(node.func.value)
         if isinstance(node, ast.BinOp):
             return self._names(node.right if isinstance(node.op, ast.RShift) else node.left)
-        return []
+        return self._arg_ids(node)
 
     def _link(self, ups: list[str], downs: list[str]) -> None:
         for u in ups:
@@ -343,8 +454,17 @@ class FileScan(ast.NodeVisitor):
         self._link(right, left)
         return right
 
-    # -- signals -------------------------------------------------------------------------------------------------
+    def _loop(self, node: ast.AST) -> None:
+        self._loop_depth += 1
+        self.generic_visit(node)
+        self._loop_depth -= 1
+
+    visit_For = visit_While = visit_ListComp = visit_SetComp = visit_GeneratorExp = visit_DictComp = _loop  # type: ignore[assignment]
+
+    # -- signals and stray task calls ----------------------------------------------------------------------------
     def visit_Call(self, node: ast.Call) -> None:
+        if id(node) not in self._seen:
+            self._instantiate(node)
         fn = _dotted(node.func)
         last = fn.split(".")[-1]
         if fn.endswith("Variable.get") or fn.endswith("Variable.set") or fn == "Variable.get":
@@ -396,19 +516,18 @@ def scan_python(path: Path, rel: str) -> list[dict[str, Any]]:
     single = next(iter(fs.dags)) if len(fs.dags) == 1 else None
     out: list[dict[str, Any]] = []
     for key, d in fs.dags.items():
-        d_tasks = [t for t in fs.tasks if (t["dag_hint"] == key) or key in fs.call_sites.get(t["task_id"], ())
-                   or (t["dag_hint"] is None and single == key and t["task_id"] not in fs.call_sites)
-                   or (t["dag_hint"] is not None and t["dag_hint"] not in fs.dags and single == key)]
+        d_tasks = [t for t in fs.tasks if t["dag_hint"] == key or (single == key and (t["dag_hint"] is None or t["dag_hint"] not in fs.dags))]
         ids = {t["task_id"] for t in d_tasks}
         d_edges = sorted({(u, v) for u, v, _ in fs.edges if u in ids and v in ids})
         out.append({"kind": d["kind"], "dag_id": d["dag_id"], "file": rel, "line": d["line"], "schedule": d["schedule"],
                     "catchup": d["catchup"], "max_active_runs": d["max_active_runs"], "tags": d["tags"],
-                    "default_args": d["default_args"], "edges": [list(e) for e in d_edges],
+                    "default_args": d["default_args"], "edges": [list(e) for e in d_edges], "dynamic_dag_id": d["dynamic_dag_id"],
                     "signals": fs.signals, "task_ids": sorted(ids)})
         for t in d_tasks:
             out.append({"kind": "task", "dag_id": d["dag_id"], "task_id": t["task_id"], "file": rel, "line": t["line"],
                         "operator": t["operator"], "style": t["style"], "pool": t["pool"], "retries": t["retries"],
-                        "trigger_rule": t["trigger_rule"], "mapped": t["mapped"], "dynamic_id": t.get("dynamic_id", False), "implicit_xcom": t.get("implicit_xcom", False),
+                        "trigger_rule": t["trigger_rule"], "mapped": t["mapped"], "dynamic_id": t.get("dynamic_id", False), "in_loop": t.get("in_loop", False),
+                        "implicit_xcom": t.get("implicit_xcom", False),
                         "upstream": sorted({u for u, v in d_edges if v == t["task_id"]}),
                         "outlets": t.get("outlets", ""), "inlets": t.get("inlets", ""), "signals": fs.signals})
     return out
@@ -460,6 +579,9 @@ def suggest(unit: dict[str, Any]) -> tuple[str, str]:
         if unit.get("dynamic_id"):
             klass = "JUDG" if klass == "MECH" else klass
             extra.append("task_id is computed at parse time (factory or loop): one source task may become many tasks; confirm the expansion against a parsed DAG")
+        if unit.get("in_loop") and not unit.get("dynamic_id"):
+            klass = "JUDG" if klass == "MECH" else klass
+            extra.append("created inside a loop or comprehension: the number of copies is only known when Airflow parses the file")
         if unit["mapped"]:
             klass = "REDESIGN"
             extra.append("dynamic task mapping: dynamic partitions or a multi-asset/graph")

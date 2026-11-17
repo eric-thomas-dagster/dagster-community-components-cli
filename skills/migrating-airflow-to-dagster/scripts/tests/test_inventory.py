@@ -28,7 +28,7 @@ def task(m, dag_id, task_id):
 
 def test_finds_all_dags_and_ignores_non_airflow(manifest):
     ids = {u["dag_id"] for u in manifest["units"] if u["kind"] in ("dag", "cosmos", "dag_factory")}
-    assert ids == {"nightly_etl", "clean_pipeline", "branchy", "daily_report", "loopy"}
+    assert ids == {"nightly_etl", "clean_pipeline", "branchy", "daily_report", "loopy", "groups_and_suffixes", "second", "my_asset"}
 
 
 def test_classic_dag_schedule_edges_and_signals(manifest):
@@ -85,7 +85,7 @@ def test_status_gate(manifest, tmp_path):
 def test_cli_writes_manifest(tmp_path):
     out = tmp_path / "m.json"
     r = subprocess.run([sys.executable, str(HERE.parent / "inventory.py"), str(FIX), "--out", str(out)], capture_output=True, text=True)
-    assert r.returncode == 0 and "5 DAGs" in r.stdout
+    assert r.returncode == 0 and "8 DAGs" in r.stdout
     assert json.loads(out.read_text())["units"]
 
 
@@ -140,3 +140,51 @@ def test_dag_level_outlets_are_flagged(tmp_path):
     m = inventory.build_manifest(tmp_path, set())
     d = next(u for u in m["units"] if u["kind"] == "dag")
     assert d["classification"] == "JUDG" and "Airflow rejects this" in d["classification_reason"]
+
+
+def _tasks(m, dag_id):
+    return {u["task_id"]: u for u in m["units"] if u["kind"] == "task" and u["dag_id"] == dag_id}
+
+
+def test_dag_id_from_file_stem_and_reused_variable_names(manifest):
+    ids = {u["dag_id"] for u in manifest["units"] if u["kind"] == "dag"}
+    assert "groups_and_suffixes" in ids and "second" in ids          # dag_id=Path(__file__).stem; both DAGs bound to `dag`
+    assert set(_tasks(manifest, "second")) == {"only"}
+
+
+def test_task_group_prefixes_and_call_suffixes(manifest):
+    t = _tasks(manifest, "groups_and_suffixes")
+    assert {"section.t1", "section.t2", "say", "say__1", "renamed"} <= set(t)
+    assert {"grp.a", "grp.b", "grp__1.a", "grp__1.b"} <= set(t)       # Airflow's naming for repeated groups
+    d = dag(manifest, "groups_and_suffixes")
+    assert ["section.t1", "section.t2"] in d["edges"] and ["grp.a", "grp.b"] in d["edges"]
+
+
+def test_comprehension_and_loop_created_tasks_are_flagged(manifest):
+    t = _tasks(manifest, "groups_and_suffixes")
+    flag = next(v for k, v in t.items() if k.startswith("f'flag_"))
+    assert flag["dynamic_id"] and flag["classification"] == "JUDG"
+    assert t["in_loop"]["in_loop"] and "inside a loop" in t["in_loop"]["classification_reason"]
+    assert any(e[0] == "section.t2" and e[1].startswith("f'flag_") for e in dag(manifest, "groups_and_suffixes")["edges"])   # chain(t2, *flags)
+
+
+def test_airflow3_asset_decorator_is_a_dag_with_one_task(manifest):
+    assert set(_tasks(manifest, "my_asset")) == {"my_asset"}
+
+
+def test_reconcile_adds_what_only_airflow_knows():
+    import reconcile
+
+    m = {"units": [
+        {"id": "A001", "kind": "dag", "dag_id": "d", "file": "d.py"},
+        {"id": "A002", "kind": "task", "dag_id": "d", "task_id": "t1", "dynamic_id": False, "in_loop": False, "mapped": False},
+        {"id": "A003", "kind": "dag", "dag_id": "ghost", "file": "g.py"},
+    ]}
+    truth = {"dags": {"d": {"file": "d.py", "tasks": ["t1", "t2"], "schedule": "None"},
+                      "factory_made": {"file": "f.py", "tasks": ["x"], "schedule": "@daily"}}, "import_errors": {}}
+    stats = reconcile.reconcile(m, truth)
+    assert stats["tasks_exact"] == 1 and stats["tasks_added"] == 2 and stats["dags_added"] == 1
+    assert stats["static_dags_unconfirmed"] == ["ghost"]
+    added = [u for u in m["units"] if u.get("origin") == "airflow_runtime"]
+    assert {(u["kind"], u.get("task_id") or u["dag_id"]) for u in added} == {("dag", "factory_made"), ("task", "t2"), ("task", "x")}
+    assert all(u["classification"] == "JUDG" and u["status"] == "pending" for u in added)

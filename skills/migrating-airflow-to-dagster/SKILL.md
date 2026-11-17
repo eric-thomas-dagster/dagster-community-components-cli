@@ -73,7 +73,14 @@ python3 scripts/inventory.py <airflow_repo> --out manifest.json
 
 Every DAG and task becomes a unit with file and line, schedule, signals (XCom, Variables, Connections, Jinja, trigger rules, dynamic mapping, datasets) and a suggested class: MECH (mechanical), JUDG (judgment), REDESIGN (needs a design decision). The scanner never imports DAG code, so it is safe on untrusted repos. It reports `unparsed` units for files it could not read; treat those as findings.
 
-If an Airflow instance is reachable, compare the manifest's DAG list with `af dags list` and resolve differences before going on. Confirm or change each suggested class using `reference/mapping.md`. A construct with no row in the mapping is itself a finding: record it, do not guess.
+A static scan cannot see everything (factories, loops, constructs it does not model), so close the gap with Airflow's own view. Either compare against `af dags list`, or, in a sandbox with Airflow and the project's providers installed and code you trust, run:
+
+```
+python3 scripts/airflow_truth.py <dags_folder> --out truth.json     # EXECUTES the DAG files, like Airflow's parser
+python3 scripts/reconcile.py manifest.json truth.json
+```
+
+`reconcile.py` adds a pending JUDG unit for every DAG or task only Airflow knows about, so nothing is omitted silently, and it lists static DAGs Airflow did not produce (usually files that failed to import; `truth.json` records the import errors). Confirm or change each suggested class using `reference/mapping.md`. A construct with no row in the mapping is itself a finding: record it, do not guess.
 
 ### Phase 1.5: Go/no-go
 
@@ -128,5 +135,7 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | Script | Purpose |
 |---|---|
 | `scripts/inventory.py` | Scan the Airflow repo into a manifest (read-only) |
+| `scripts/airflow_truth.py` | Dump Airflow's own DAG and task lists (executes DAG code; sandbox only) |
+| `scripts/reconcile.py` | Merge that runtime view into the manifest so nothing is omitted |
 | `scripts/validate_defs.py` | Gates: definitions load and match each unit's plan |
 | `scripts/status.py` | Per-unit state machine and the completeness gate |
