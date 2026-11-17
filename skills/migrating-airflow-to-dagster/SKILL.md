@@ -21,6 +21,36 @@ There are three ways in, and one project often uses more than one. See `referenc
 
 The scanner, manifest and gates below are for tier 3 and for deciding what stays in tiers 1-2.
 
+## Companion skills
+
+This skill covers the migration method. It does not duplicate Dagster or Airflow reference material; load these alongside it.
+
+**`dagster-expert` (required).** The authority for the target side. Use it instead of recalling Dagster APIs from memory (hard rule 5), and create the target project with `uvx create-dagster project <name> --uv-sync`, never by hand.
+
+| Phase or construct | `dagster-expert` reference to read |
+|---|---|
+| New project, layout | `references/cli/create-dagster.md`, `references/cli/scaffold/defs.md` |
+| Assets, deps, metadata, partitions (tasks, datasets, `catchup`, `.expand`) | `references/assets/INDEX.md` and its pages |
+| Schedules, timezones | `references/automation/schedules.md` |
+| Dataset triggers, sensors, `depends_on_past`, cross-DAG waits | `references/automation/choosing-automation.md`, `references/automation/declarative-automation/INDEX.md`, `references/automation/sensors/` |
+| Provider operators (Snowflake, S3, dbt, Spark, ...) | `references/integrations/INDEX.md`, then the registry search below |
+| Variables, Connections, secrets | `references/env-vars.md`, `references/cli/plus/INDEX.md` |
+| Gates (`dg check defs`, `dg list defs --json`, `dg launch`) | `references/cli/check.md`, `references/cli/list-defs.md`, `references/cli/launch.md` |
+| Components for repeated DAG shapes (dag-factory) | `references/components/` |
+
+For the long tail of operators with no official integration, search the community registry (`dagster-component search "<term>" --json`) before writing anything.
+
+**An Airflow skill (optional, source side).** Astronomer publishes Apache-2.0 skills in `astronomer/agents` (https://github.com/astronomer/agents). The `airflow` skill drives a live instance through an `af` CLI. It is a third-party dependency: use it when present, and fall back to the static scan and a person when it is not. It earns its place in these steps:
+
+| Phase | Use it for |
+|---|---|
+| 1 Inventory | `af dags list` is the ground truth the static scan is checked against: the DAG counts must agree, or the difference is a finding (factory-generated DAGs). `af dags errors` should line up with `unparsed` units. `af dags source <dag_id>` retrieves code when the repo is unavailable (MWAA, Composer, Astro). |
+| 5 Platform layer | Listing Connections, Variables and Pools to build the secrets and pool map. |
+| 6 Parity | `af runs list` and `af dags stats` for durations and failure rates to compare against Dagster; `testing-dags` to run the source DAG and capture baseline outputs. |
+| 6 Cutover | `af dags pause` / `unpause`. These change production: only with the user's explicit approval, one domain at a time. Everything else above is read-only. |
+
+The `migrating-airflow-2-to-3` skill is only needed when the source is Airflow 2.x and the user also wants it upgraded first. It is not a prerequisite for migrating to Dagster.
+
 ## Hard rules
 
 1. **Never stub.** A unit is either translated and passing its gate, or deferred with a written reason. A body that just returns success is a failure.
@@ -33,7 +63,7 @@ The scanner, manifest and gates below are for tier 3 and for deciding what stays
 
 ### Phase 0: Preflight
 
-Confirm the Airflow version (2.x or 3.x), how DAGs are defined (plain Python, TaskFlow, dag-factory YAML, Cosmos), where they run (self-managed, MWAA, Composer, Astro), the target Dagster setup (project layout, Dagster+ or open source), and repo access. Baseline the Airflow test suite; record pre-existing failures so they are not blamed on the migration.
+Load `dagster-expert` (and the Airflow skill if the user has one). Confirm the Airflow version (2.x or 3.x), how DAGs are defined (plain Python, TaskFlow, dag-factory YAML, Cosmos), where they run (self-managed, MWAA, Composer, Astro), the target Dagster setup (project layout, Dagster+ or open source), and repo access. Baseline the Airflow test suite; record pre-existing failures so they are not blamed on the migration.
 
 ### Phase 1: Inventory (read-only)
 
@@ -43,7 +73,7 @@ python3 scripts/inventory.py <airflow_repo> --out manifest.json
 
 Every DAG and task becomes a unit with file and line, schedule, signals (XCom, Variables, Connections, Jinja, trigger rules, dynamic mapping, datasets) and a suggested class: MECH (mechanical), JUDG (judgment), REDESIGN (needs a design decision). The scanner never imports DAG code, so it is safe on untrusted repos. It reports `unparsed` units for files it could not read; treat those as findings.
 
-Confirm or change each suggested class using `reference/mapping.md`. A construct with no row in the mapping is itself a finding: record it, do not guess.
+If an Airflow instance is reachable, compare the manifest's DAG list with `af dags list` and resolve differences before going on. Confirm or change each suggested class using `reference/mapping.md`. A construct with no row in the mapping is itself a finding: record it, do not guess.
 
 ### Phase 1.5: Go/no-go
 
