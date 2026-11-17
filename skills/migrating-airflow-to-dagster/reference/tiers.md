@@ -1,0 +1,31 @@
+# Tiers: observe, bridge, native
+
+## Tier 1: Observe (Airlift)
+
+`dagster-airlift` peers an Airflow instance with a Dagster code location through the Airflow REST API. Every Airflow DAG loads as an asset definition and a sensor polls Airflow for run history. No Airflow changes are needed. You then map tasks to the assets they produce (`assets_with_task_mappings`) so lineage reflects the data, not the tasks. Expect a delay between a task finishing in Airflow and the asset materializing in Dagster (the sensor's polling interval).
+
+Good for: visibility and stakeholder buy-in before any rewrite.
+
+## Tier 2: Bridge
+
+- **Airlift proxying.** Once an asset is executable in Dagster, a task can be proxied so Dagster executes it while Airflow still schedules. Proxy state is tracked in YAML and is reversible per task or per DAG. All assets mapped to a proxied DAG must be executable in Dagster. The Airflow docs for Dagster note that the newer Airlift component is the recommended starting point for new users; check the current Dagster docs for which flow applies to your versions.
+- **`script_orchestrator` component** (the `script_scheduling_and_orchestration` project). Runs existing Airflow DAGs, Prefect flows and plain scripts inside Dagster without code changes, reads Airflow Assets/Datasets for lineage, supports dag-factory YAML, injects Airflow connections and variables, and handles Cosmos dbt. Good for moving scheduling and observability to Dagster while the DAG code is rewritten gradually. It is a bridge, not an architecture: it keeps a translation layer to maintain.
+
+Good for: moving scheduling off Airflow before the rewrite, one DAG at a time, with rollback one step away.
+
+## Tier 3: Native
+
+The rest of this skill. DAGs become assets, components, schedules and sensors. Choose it per DAG when the DAG is stable, understood and worth keeping. Typical order: leaf DAGs first, then dependency order; shared infrastructure (resources, secrets) first of all.
+
+## Choosing per DAG
+
+| Situation | Tier |
+|---|---|
+| Need visibility only | 1 |
+| Need to retire the Airflow scheduler soon, code rewrite later | 2 |
+| Simple DAG, clear data products | 3 |
+| Heavy provider-operator use with no registry or official component | 2 until a component exists |
+| Branching, dynamic mapping or custom timetable | 2 first, redesign deliberately |
+| Code nobody understands but works | 2, then decide whether to rewrite at all |
+
+Record the tier on each unit's `target` or notes so the report shows what was bridged and what was rewritten.

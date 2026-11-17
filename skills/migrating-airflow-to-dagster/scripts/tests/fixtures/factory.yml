@@ -1,0 +1,13 @@
+default:
+  default_args:
+    owner: data
+daily_report:
+  schedule_interval: "@daily"
+  tasks:
+    build:
+      operator: airflow.operators.bash.BashOperator
+      bash_command: "echo build"
+    publish:
+      operator: airflow.operators.bash.BashOperator
+      bash_command: "echo publish"
+      dependencies: [build]
