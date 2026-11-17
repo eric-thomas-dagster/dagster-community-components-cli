@@ -157,6 +157,9 @@ class FileScan(ast.NodeVisitor):
             for k, v in zip(da.keys, da.values):
                 if isinstance(k, ast.Constant) and isinstance(k.value, str):
                     info["default_args"][k.value] = _const(v) if _const(v) is not None else _src(v)
+        if _kw(call, "outlets") is not None or _kw(call, "inlets") is not None:
+            info["dag_level_outlets"] = True   # outlets/inlets are task arguments; Airflow's DAG rejects them
+            self._sig("dag_level_outlets")
         self.dags[key] = info
         return key
 
@@ -493,6 +496,9 @@ def suggest(unit: dict[str, Any]) -> tuple[str, str]:
         reasons.append("SLA: freshness policy or alert")
     if unit["signals"].get("airflow_variable") or unit["signals"].get("airflow_connection") or unit["signals"].get("connection_id"):
         reasons.append("Airflow Variables/Connections: map to env vars, secrets and resources (Phase 5)")
+    if unit["signals"].get("dag_level_outlets"):
+        klass = "JUDG"
+        reasons.append("outlets/inlets on the DAG itself: Airflow rejects this (they are task arguments); confirm which task produces the dataset")
     if unit["kind"] == "cosmos":
         klass = "JUDG"
         reasons.append("Cosmos DbtDag: dagster-dbt")

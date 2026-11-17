@@ -88,7 +88,7 @@ Before translating, answer what this team gives up and whether each loss has an 
 
 ### Phase 3: Trial
 
-Migrate two or three representative DAGs end to end through the gates before fanning out: one plain scheduled DAG, one with a sensor or dataset trigger, one with XCom or branching. What the trial teaches updates your mapping rules before you scale.
+Migrate two or three representative DAGs end to end through the gates before fanning out: one plain scheduled DAG, one with a sensor or dataset trigger, one with XCom or branching. What the trial teaches updates your mapping rules before you scale. `examples/three_dags/` is a completed trial (plain scheduled DAG, dataset producer and consumer) with the source, the Dagster result, the manifest and the equivalence rows: read it as the nearby already-migrated example.
 
 ### Phase 4: Migrate, domain by domain
 
@@ -119,6 +119,8 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | Need | Read |
 |---|---|
 | What maps to what, and how sure we are | `reference/mapping.md` |
+| Parity checks that justify advancing judgment units | `reference/parity.md` |
+| A completed worked conversion | `examples/three_dags/MIGRATION.md` |
 | Observe, bridge, native; Airlift and the script-orchestrator component | `reference/tiers.md` |
 
 ## Scripts

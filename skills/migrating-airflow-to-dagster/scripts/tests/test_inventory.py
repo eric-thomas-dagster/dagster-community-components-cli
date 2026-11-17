@@ -131,3 +131,12 @@ def test_taskflow_argument_passing_is_implicit_xcom(manifest):
     t = task(manifest, "clean_pipeline", "summarize")
     assert t["implicit_xcom"] and t["classification"] == "JUDG" and "implicit XCom" in t["classification_reason"]
     assert not task(manifest, "clean_pipeline", "clean_rows")["implicit_xcom"]
+
+
+def test_dag_level_outlets_are_flagged(tmp_path):
+    f = tmp_path / "d.py"
+    f.write_text("from airflow import Dataset\nfrom airflow.decorators import dag, task\n"
+                 "@dag(schedule='@daily', outlets=[Dataset('s3://b/x')])\ndef d():\n    @task\n    def t():\n        return 1\n    t()\n")
+    m = inventory.build_manifest(tmp_path, set())
+    d = next(u for u in m["units"] if u["kind"] == "dag")
+    assert d["classification"] == "JUDG" and "Airflow rejects this" in d["classification_reason"]

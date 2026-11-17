@@ -1,0 +1,465 @@
+{
+  "version": 1,
+  "root": "airflow_src",
+  "units": [
+    {
+      "id": "A001",
+      "kind": "dag",
+      "dag_id": "consumer_pipeline",
+      "file": "dag_with_datasets_consumer.py",
+      "line": 23,
+      "schedule": {
+        "kind": "dataset",
+        "raw": "[processed_data_dataset]"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": [
+        "example",
+        "datasets",
+        "consumer"
+      ],
+      "default_args": {},
+      "edges": [
+        [
+          "load_and_analyze",
+          "publish_results"
+        ]
+      ],
+      "signals": {
+        "dataset_or_asset": 2
+      },
+      "task_ids": [
+        "load_and_analyze",
+        "publish_results"
+      ],
+      "task_classes": {
+        "MECH": 1,
+        "JUDG": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "dataset-triggered schedule: asset dependencies and an automation condition; tasks: 1 JUDG, 1 MECH",
+      "status": "complete",
+      "evidence": "dataset trigger -> eager() on both assets; automation_check.py ticks 1-3: idle when nothing ran, idle when dataset not updated, requested when dataset updated; delta rows in MIGRATION.md",
+      "reason": "",
+      "target": {
+        "assets": [
+          "consumer_pipeline/load_and_analyze",
+          "s3/bucket/analytics"
+        ]
+      }
+    },
+    {
+      "id": "A002",
+      "kind": "task",
+      "dag_id": "consumer_pipeline",
+      "task_id": "load_and_analyze",
+      "file": "dag_with_datasets_consumer.py",
+      "line": 30,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "dataset_or_asset": 2
+      },
+      "classification": "MECH",
+      "classification_reason": "TaskFlow task: asset or op running the same function",
+      "status": "complete",
+      "evidence": "gates 1-2 passed (definitions load and match the plan)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "consumer_pipeline/load_and_analyze"
+        ],
+        "deps": {
+          "consumer_pipeline/load_and_analyze": [
+            "s3/bucket/processed_data"
+          ]
+        }
+      }
+    },
+    {
+      "id": "A003",
+      "kind": "task",
+      "dag_id": "consumer_pipeline",
+      "task_id": "publish_results",
+      "file": "dag_with_datasets_consumer.py",
+      "line": 37,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "load_and_analyze"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "dataset_or_asset": 2
+      },
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "implicit XCom decision: IO manager (not fused); parity.py: Dagster output equals the original task function's return value",
+      "reason": "",
+      "target": {
+        "assets": [
+          "s3/bucket/analytics"
+        ],
+        "deps": {
+          "s3/bucket/analytics": [
+            "consumer_pipeline/load_and_analyze"
+          ]
+        }
+      }
+    },
+    {
+      "id": "A004",
+      "kind": "dag",
+      "dag_id": "producer_pipeline",
+      "file": "dag_with_datasets_producer.py",
+      "line": 49,
+      "schedule": {
+        "kind": "cron",
+        "raw": "@daily",
+        "cron": "0 0 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": [
+        "example",
+        "datasets",
+        "producer"
+      ],
+      "default_args": {},
+      "edges": [
+        [
+          "fetch_raw_data",
+          "process_data"
+        ],
+        [
+          "process_data",
+          "save_processed_data"
+        ]
+      ],
+      "signals": {
+        "dataset_or_asset": 2
+      },
+      "task_ids": [
+        "fetch_raw_data",
+        "process_data",
+        "save_processed_data"
+      ],
+      "task_classes": {
+        "MECH": 1,
+        "JUDG": 2
+      },
+      "classification": "JUDG",
+      "classification_reason": "tasks: 2 JUDG, 1 MECH",
+      "status": "complete",
+      "evidence": "schedule @daily = 0 0 * * * UTC matches (validate_defs); child units complete; equivalence row in MIGRATION.md",
+      "reason": "",
+      "target": {
+        "jobs": [
+          "producer_pipeline"
+        ],
+        "schedules": [
+          {
+            "name": "producer_pipeline_schedule",
+            "cron": "0 0 * * *"
+          }
+        ]
+      }
+    },
+    {
+      "id": "A005",
+      "kind": "task",
+      "dag_id": "producer_pipeline",
+      "task_id": "fetch_raw_data",
+      "file": "dag_with_datasets_producer.py",
+      "line": 15,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "dataset_or_asset": 2
+      },
+      "classification": "MECH",
+      "classification_reason": "TaskFlow task: asset or op running the same function",
+      "status": "complete",
+      "evidence": "gates 1-2 passed (definitions load and match the plan)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "producer_pipeline/fetch_raw_data"
+        ],
+        "deps": {
+          "producer_pipeline/fetch_raw_data": []
+        }
+      }
+    },
+    {
+      "id": "A006",
+      "kind": "task",
+      "dag_id": "producer_pipeline",
+      "task_id": "process_data",
+      "file": "dag_with_datasets_producer.py",
+      "line": 24,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "fetch_raw_data"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "dataset_or_asset": 2
+      },
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "implicit XCom decision: IO manager (not fused); parity.py: Dagster output equals the original task function's return value",
+      "reason": "",
+      "target": {
+        "assets": [
+          "producer_pipeline/process_data"
+        ],
+        "deps": {
+          "producer_pipeline/process_data": [
+            "producer_pipeline/fetch_raw_data"
+          ]
+        }
+      }
+    },
+    {
+      "id": "A007",
+      "kind": "task",
+      "dag_id": "producer_pipeline",
+      "task_id": "save_processed_data",
+      "file": "dag_with_datasets_producer.py",
+      "line": 33,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "process_data"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "dataset_or_asset": 2
+      },
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "implicit XCom decision: IO manager (not fused); parity.py: Dagster output equals the original task function's return value",
+      "reason": "",
+      "target": {
+        "assets": [
+          "s3/bucket/processed_data"
+        ],
+        "deps": {
+          "s3/bucket/processed_data": [
+            "producer_pipeline/process_data"
+          ]
+        }
+      }
+    },
+    {
+      "id": "A008",
+      "kind": "dag",
+      "dag_id": "simple_sequential_pipeline",
+      "file": "simple_sequential.py",
+      "line": 46,
+      "schedule": {
+        "kind": "cron",
+        "raw": "0 9 * * *",
+        "cron": "0 9 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": [
+        "example",
+        "sequential"
+      ],
+      "default_args": {
+        "retries": 3,
+        "retry_delay": "timedelta(minutes=5)"
+      },
+      "edges": [
+        [
+          "fetch_data",
+          "process_data"
+        ],
+        [
+          "process_data",
+          "save_results"
+        ]
+      ],
+      "signals": {},
+      "task_ids": [
+        "fetch_data",
+        "process_data",
+        "save_results"
+      ],
+      "task_classes": {
+        "MECH": 1,
+        "JUDG": 2
+      },
+      "classification": "JUDG",
+      "classification_reason": "tasks: 2 JUDG, 1 MECH",
+      "status": "complete",
+      "evidence": "schedule 0 9 * * * UTC matches (validate_defs); retries 3 / 300s mapped to RetryPolicy; child units complete; equivalence row in MIGRATION.md",
+      "reason": "",
+      "target": {
+        "jobs": [
+          "simple_sequential_pipeline"
+        ],
+        "schedules": [
+          {
+            "name": "simple_sequential_pipeline_schedule",
+            "cron": "0 9 * * *"
+          }
+        ]
+      }
+    },
+    {
+      "id": "A009",
+      "kind": "task",
+      "dag_id": "simple_sequential_pipeline",
+      "task_id": "fetch_data",
+      "file": "simple_sequential.py",
+      "line": 10,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "MECH",
+      "classification_reason": "TaskFlow task: asset or op running the same function",
+      "status": "complete",
+      "evidence": "gates 1-2 passed (definitions load and match the plan)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "simple_sequential_pipeline/fetch_data"
+        ],
+        "deps": {
+          "simple_sequential_pipeline/fetch_data": []
+        }
+      }
+    },
+    {
+      "id": "A010",
+      "kind": "task",
+      "dag_id": "simple_sequential_pipeline",
+      "task_id": "process_data",
+      "file": "simple_sequential.py",
+      "line": 17,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "fetch_data"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "implicit XCom decision: IO manager (not fused); parity.py: Dagster output equals the original task function's return value",
+      "reason": "",
+      "target": {
+        "assets": [
+          "simple_sequential_pipeline/process_data"
+        ],
+        "deps": {
+          "simple_sequential_pipeline/process_data": [
+            "simple_sequential_pipeline/fetch_data"
+          ]
+        }
+      }
+    },
+    {
+      "id": "A011",
+      "kind": "task",
+      "dag_id": "simple_sequential_pipeline",
+      "task_id": "save_results",
+      "file": "simple_sequential.py",
+      "line": 28,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "process_data"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "implicit XCom decision: IO manager (not fused); parity.py: Dagster output equals the original task function's return value",
+      "reason": "",
+      "target": {
+        "assets": [
+          "simple_sequential_pipeline/save_results"
+        ],
+        "deps": {
+          "simple_sequential_pipeline/save_results": [
+            "simple_sequential_pipeline/process_data"
+          ]
+        }
+      }
+    }
+  ]
+}
