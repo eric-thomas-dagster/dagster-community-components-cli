@@ -1,0 +1,359 @@
+{
+ "airflow_version": "2.10.5",
+ "dags": {
+  "toy_downstream_obj_storage_dataset": {
+   "status": "deferred",
+   "reason": "callable depends on an Airflow import (airflow.io.path)"
+  },
+  "toy_auto_pause": {
+   "status": "converted",
+   "assets": 1,
+   "elided": 0,
+   "schedule": "0 * * * *",
+   "timezone": "UTC",
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [],
+   "keys": [
+    [
+     "toy_auto_pause",
+     "say_hello"
+    ]
+   ],
+   "task_keys": {
+    "say_hello": "toy_auto_pause/say_hello"
+   }
+  },
+  "complex_dag_structure_rainbow": {
+   "status": "deferred",
+   "reason": "sales_data_extract: dynamic task mapping; sales_data_extract: operator ExtractFromObjectStorageOperator; internal_api_extract: dynamic task mapping; internal_api_extract: operator ExtractFromObjectStorageOperator; sales_data_transform: operator TransformOperator; determine_load_type: operator _BranchPythonDecoratedOperator; sales_data_load: operator LoadtoDWHOperator; internal_api_load_full: operator LoadAPItoDWHOperator; internal_api_load_incremental: operator LoadAPItoDWHOperator; sales_data_reporting.prepare_report: trigger_rule all_done; sales_data_reporting.prepare_report: operator TransformReportOperator; sales_data_reporting.publish_report: operator PublishReportOperator; cre_integration.cre_extract: trigger_rule all_done; mlops.set_up_cluster: setup/teardown; mlops.set_up_cluster: trigger_rule all_done; mlops.set_up_cluster: operator SpinUpGPUOperator; mlops.train_model: operator TrainProprietaryLLMOperator; mlops.tear_down_cluster: setup/teardown; mlops.tear_down_cluster: trigger_rule all_done_setup_success; mlops.tear_down_cluster: operator TearDownGPUOperator"
+  },
+  "toy_custom_names_dynamic_tasks_taskflow": {
+   "status": "deferred",
+   "reason": "map_fruits: dynamic task mapping"
+  },
+  "toy_custom_names_dynamic_tasks_traditional_operators": {
+   "status": "deferred",
+   "reason": "map_fruits: dynamic task mapping"
+  },
+  "toy_xcom_big_vs_small": {
+   "status": "deferred",
+   "reason": "callable uses Airflow task context parameters ['context']"
+  },
+  "toy_custom_operator_push_multiple_xcom": {
+   "status": "deferred",
+   "reason": "no_multiple_outputs_task: operator MyBasicMathOperator; multiple_outputs_task: operator MyBasicMathOperator"
+  },
+  "toy_taskflow_bash": {
+   "status": "converted",
+   "assets": 2,
+   "elided": 0,
+   "schedule": null,
+   "timezone": null,
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [],
+   "keys": [
+    [
+     "toy_taskflow_bash",
+     "upstream_task"
+    ],
+    [
+     "toy_taskflow_bash",
+     "bash_task"
+    ]
+   ],
+   "task_keys": {
+    "upstream_task": "toy_taskflow_bash/upstream_task",
+    "bash_task": "toy_taskflow_bash/bash_task"
+   }
+  },
+  "toy_dynamic_task_default_index": {
+   "status": "deferred",
+   "reason": "map_fruits: dynamic task mapping"
+  },
+  "toy_upstream_obj_storage_dataset": {
+   "status": "deferred",
+   "reason": "callable depends on an Airflow import (airflow.io.path)"
+  },
+  "toy_task_duration_page": {
+   "status": "converted",
+   "assets": 5,
+   "elided": 0,
+   "schedule": "0 0 * * *",
+   "timezone": "UTC",
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [],
+   "keys": [
+    [
+     "toy_task_duration_page",
+     "two_second_plus_delay_task"
+    ],
+    [
+     "toy_task_duration_page",
+     "five_second_plus_delay_task"
+    ],
+    [
+     "toy_task_duration_page",
+     "ten_second_plus_delay_task"
+    ],
+    [
+     "toy_task_duration_page",
+     "twenty_second_plus_delay_task"
+    ],
+    [
+     "toy_task_duration_page",
+     "thirty_second_plus_delay_task"
+    ]
+   ],
+   "task_keys": {
+    "two_second_plus_delay_task": "toy_task_duration_page/two_second_plus_delay_task",
+    "five_second_plus_delay_task": "toy_task_duration_page/five_second_plus_delay_task",
+    "ten_second_plus_delay_task": "toy_task_duration_page/ten_second_plus_delay_task",
+    "twenty_second_plus_delay_task": "toy_task_duration_page/twenty_second_plus_delay_task",
+    "thirty_second_plus_delay_task": "toy_task_duration_page/thirty_second_plus_delay_task"
+   }
+  },
+  "upstream3": {
+   "status": "converted",
+   "assets": 1,
+   "elided": 0,
+   "schedule": null,
+   "timezone": null,
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [],
+   "keys": [
+    [
+     "dataset3"
+    ]
+   ],
+   "task_keys": {
+    "update_dataset_3": "dataset3"
+   }
+  },
+  "upstream2": {
+   "status": "converted",
+   "assets": 1,
+   "elided": 0,
+   "schedule": null,
+   "timezone": null,
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [],
+   "keys": [
+    [
+     "dataset2"
+    ]
+   ],
+   "task_keys": {
+    "update_dataset_2": "dataset2"
+   }
+  },
+  "downstream2_one_in_each_group": {
+   "status": "deferred",
+   "reason": "schedule mixes AND and OR over 4 assets"
+  },
+  "toy_downstream3_dataset_and_time_schedule": {
+   "status": "converted",
+   "assets": 1,
+   "elided": 0,
+   "schedule": null,
+   "timezone": null,
+   "triggers": [
+    "dataset3",
+    "dataset4"
+   ],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [
+    "dataset3",
+    "dataset4"
+   ],
+   "keys": [
+    [
+     "toy_downstream3_dataset_and_time_schedule",
+     "say_hello"
+    ]
+   ],
+   "task_keys": {
+    "say_hello": "toy_downstream3_dataset_and_time_schedule/say_hello"
+   }
+  },
+  "upstream1": {
+   "status": "converted",
+   "assets": 1,
+   "elided": 0,
+   "schedule": null,
+   "timezone": null,
+   "triggers": [
+    "dataset0"
+   ],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [
+    "dataset0"
+   ],
+   "keys": [
+    [
+     "dataset1"
+    ]
+   ],
+   "task_keys": {
+    "update_dataset_1": "dataset1"
+   }
+  },
+  "downstream1_on_any": {
+   "status": "converted",
+   "assets": 1,
+   "elided": 0,
+   "schedule": null,
+   "timezone": null,
+   "triggers": [
+    "dataset1",
+    "dataset2",
+    "dataset3",
+    "dataset4"
+   ],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [
+    "dataset1",
+    "dataset2",
+    "dataset3",
+    "dataset4"
+   ],
+   "keys": [
+    [
+     "downstream1_on_any",
+     "say_hello"
+    ]
+   ],
+   "task_keys": {
+    "say_hello": "downstream1_on_any/say_hello"
+   }
+  },
+  "upstream4": {
+   "status": "converted",
+   "assets": 1,
+   "elided": 0,
+   "schedule": null,
+   "timezone": null,
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "shims": [],
+   "notes": [],
+   "requirements": [],
+   "external": [],
+   "keys": [
+    [
+     "dataset4"
+    ]
+   ],
+   "task_keys": {
+    "update_dataset_4": "dataset4"
+   }
+  }
+ },
+ "operators": {
+  "_PythonDecoratedOperator": {
+   "tasks": 23,
+   "mapped_by_converter": true
+  },
+  "EmptyOperator": {
+   "tasks": 5,
+   "mapped_by_converter": true
+  },
+  "ExtractFromObjectStorageOperator": {
+   "tasks": 2,
+   "mapped_by_converter": false
+  },
+  "LoadAPItoDWHOperator": {
+   "tasks": 2,
+   "mapped_by_converter": false
+  },
+  "MyBasicMathOperator": {
+   "tasks": 2,
+   "mapped_by_converter": false
+  },
+  "TransformOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "_BranchPythonDecoratedOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "LoadtoDWHOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "TransformReportOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "PublishReportOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "SpinUpGPUOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "TrainProprietaryLLMOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "TearDownGPUOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "BashOperator": {
+   "tasks": 1,
+   "mapped_by_converter": true,
+   "registry": [
+    "shell_command_asset"
+   ],
+   "gap": "no retries, pool, multi-part asset key, automation condition or metadata attributes"
+  },
+  "_BashDecoratedOperator": {
+   "tasks": 1,
+   "mapped_by_converter": true,
+   "registry": [
+    "shell_command_asset"
+   ],
+   "gap": "same as BashOperator; the command comes from a function"
+  }
+ }
+}

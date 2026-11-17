@@ -99,6 +99,9 @@ Migrate two or three representative DAGs end to end through the gates before fan
 
 ### Phase 4: Migrate, domain by domain
 
+**Convert the mechanical units by code, first.** Run `airflow_ir.py` then `convert_ir.py` (see `reference/conversion.md`): every DAG built from Python, Bash, S3, Snowflake and EmptyOperator tasks, cron or asset-triggered, converts without hand work, and each unconverted DAG comes with the reason and the integration or component that fits. Run the parity harness on the converted DAGs (`examples/runtime_conversion/`): loading proves nothing about behavior. Then hand-convert what the report defers, using the other references.
+
+
 Per unit: `pending` → translate → `dg check defs` → validate → `complete`, or `deferred` with a reason. Use `dagster-expert` for project layout (`dg scaffold defs`), components and automation. Prefer registry components for provider operators.
 
 ```
@@ -129,6 +132,8 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | Parity checks that justify advancing judgment units | `reference/parity.md` |
 | DAG factories, Blueprint, dag-factory, loops that generate DAGs | `reference/factories.md` |
 | Dynamic task mapping (`.expand`): static and dynamic partitions | `reference/dynamic-mapping.md` |
+| Converting the mechanical DAGs by code generation from the runtime IR, and where existing components fit | `reference/conversion.md` |
+| A converted repo with the parity harness | `examples/runtime_conversion/` |
 | Identical DAGs differing in one argument, converted to one partitioned asset | `examples/dagfactory_family/` |
 | A worked factory conversion (six factories to one component) | `examples/s3_to_snowflake_factories/MIGRATION.md` |
 | A completed worked conversion | `examples/three_dags/MIGRATION.md` |
@@ -139,6 +144,9 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | Script | Purpose |
 |---|---|
 | `scripts/inventory.py` | Scan the Airflow repo into a manifest (read-only) |
+| `scripts/airflow_ir.py` | Extract every DAG as Airflow built it (expanded loops, factories, resolved arguments, callable source) into an IR (executes DAG code; sandbox only) |
+| `scripts/convert_ir.py` | Generate Dagster code for the mechanical constructs; defer everything else with the reason |
+| `scripts/apply_conversion.py` | Record the converter's outcome in the manifest (plans and deferrals) |
 | `scripts/airflow_truth.py` | Dump Airflow's own DAG and task lists (executes DAG code; sandbox only) |
 | `scripts/reconcile.py` | Merge that runtime view into the manifest so nothing is omitted |
 | `scripts/validate_defs.py` | Gates: definitions load and match each unit's plan |
