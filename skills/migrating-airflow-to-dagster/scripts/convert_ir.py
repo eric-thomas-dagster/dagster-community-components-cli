@@ -45,7 +45,7 @@ SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "executio
                  "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf", "outlet_events", "inlet_events",
                  "next_ds", "next_ds_nodash", "next_execution_date", "prev_ds", "prev_ds_nodash", "prev_execution_date",     # Airflow 2 macros
                  "tomorrow_ds", "tomorrow_ds_nodash", "yesterday_ds", "yesterday_ds_nodash", "ts_nodash_with_tz",
-                 "prev_data_interval_start_success", "prev_data_interval_end_success"}
+                 "prev_data_interval_start_success", "prev_data_interval_end_success", "task_instance_key_str"}
 JINJA_VARS = SUPPORTED_CTX | {"macros"}
 CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date"}, "dag": {"dag_id"}, "task": {"task_id"},
              "ti": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"},
@@ -271,11 +271,11 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     if fn is None:
         raise Defer("callable is not a plain function")
     if isinstance(fn, ast.AsyncFunctionDef):
-        raise Defer("async callable")
+        meta["async"] = True                                     # run with asyncio.run (af_sync wraps it where the task is emitted)
     named = [a.arg for a in [*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs]]
     if context_arg and named:
         named = named[1:]                                        # a callback's first parameter is the whole context dict, whatever it is called
-    unsupported = sorted(set(named) & (KNOWN_CTX - SUPPORTED_CTX))
+    unsupported = sorted(set(named) & (KNOWN_CTX - SUPPORTED_CTX) - {"templates_dict"})
     if unsupported:
         raise Defer(f"callable uses Airflow task context names the runtime does not rebuild {unsupported}")
     ctx_named = sorted(set(named) & SUPPORTED_CTX)
@@ -357,7 +357,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
             m = re.search(r"\s*:\s*$", lines[row][:node.col_offset])
             if m and node.end_lineno == node.lineno:
                 lines[row] = lines[row][:m.start()] + lines[row][node.end_col_offset:]
-    start = next(i for i, l in enumerate(lines) if re.match(r"def\s", l))
+    start = next(i for i, l in enumerate(lines) if re.match(r"(async\s+)?def\s", l))
     return "\n".join(lines[start:]), [needed[k] for k in sorted(needed)]
 
 
@@ -550,7 +550,7 @@ def task_templates(t: dict[str, Any]) -> Any:
     if ty == "FileSensor":
         return [tf.get("filepath")]
     if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
-        return [t.get("op_args"), t.get("op_kwargs"), tf.get("env") if ty in BASH_DEC else None]
+        return [t.get("op_args"), t.get("op_kwargs"), tf.get("env") if ty in BASH_DEC else None, tf.get("templates_dict")]
     if ty in BASH:
         return [(t.get("template_files") or {}).get("bash_command") or tf.get("bash_command"), tf.get("env"), tf.get("cwd")]
     if ty in SNOWFLAKE_OPS:
@@ -566,6 +566,15 @@ def and_condition(keys: list[list[str]]) -> str:
     terms = [f"dg.AutomationCondition.asset_matches(dg.AssetKey({k!r}), dg.AutomationCondition.newly_updated()).since_last_handled()" for k in keys]
     return ("(" + " & ".join(terms) + " & ~dg.AutomationCondition.any_deps_missing() & ~dg.AutomationCondition.any_deps_in_progress() "
             "& ~dg.AutomationCondition.in_progress())")
+
+
+def mapped_base(t: dict[str, Any]) -> dict[str, Any]:
+    """The arguments of a mapped operator that are not expanded (Airflow's partial_kwargs), as plain values."""
+    pk = (t.get("args") or {}).get("partial_kwargs") or {}
+    skip = {"task_id", "owner", "retries", "retry_delay", "queue", "pool", "pool_slots", "trigger_rule", "depends_on_past", "email", "email_on_failure",
+            "email_on_retry", "start_date", "end_date", "do_xcom_push", "executor_config", "weight_rule", "priority_weight", "allow_nested_operators",
+            "wait_for_downstream", "retry_exponential_backoff", "max_retry_delay", "resources", "on_failure_callback", "on_success_callback", "on_retry_callback"}
+    return {k: v for k, v in pk.items() if k not in skip and isinstance(v, (str, int, float, bool, list, dict, type(None)))}
 
 
 def tree_condition(tree: Any) -> str:
@@ -893,9 +902,6 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
             why.append(f"{tid}: a {t['type']} inside a DAG with mapped tasks (only Python and shell tasks are converted there)")
     mp: dict[str, Any] = {}
     for tid, t in mapped.items():
-        if t["type"] in S3_OPS | SNOWFLAKE_OPS:
-            why.append(f"{tid}: a mapped {t['type']} (only mapped Python and shell tasks are converted)")
-            continue
         e = t.get("expand") or {}
         if e.get("form") not in ("expand", "expand_kwargs") or not e.get("args"):
             why.append(f"{tid}: dynamic task mapping with {e.get('form')} is not converted")
@@ -919,7 +925,9 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
                 break
         else:
             mode = "kwargs" if e["form"] == "expand_kwargs" else ("args" if list(srcs) == ["op_args"] else "kw")
-            if mode != "kw":
+            if t["type"] in S3_OPS | SNOWFLAKE_OPS:
+                bad = ["op_args"] if mode == "args" else []                  # the item's values are the operator's own arguments
+            elif mode != "kw":
                 bad = [] if t["type"] in PY_TASKS | BASH_DEC or mode == "kwargs" else ["op_args"]
                 if mode == "kwargs" and t["type"] in BASH and "bash_command" not in (e.get("partial") or {}):
                     pass
@@ -1050,8 +1058,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     resolve_operator_class(t.get("operator_class"), set(), {})
                 except Defer as e:
                     return str(e)
-            if t["type"] in PY_TASKS and (t.get("template_fields") or {}).get("templates_dict"):
-                return "templates_dict (rendered templates passed to the callable) is not rebuilt"
+            if t["type"] in BASH and not t.get("is_mapped") and not isinstance(((t.get("template_files") or {}).get("bash_command") or (t.get("template_fields") or {}).get("bash_command")), str):
+                return "bash_command is not a string (a callable or another object)"
             _, jprob = jinja_vars(task_templates(t))
             return jprob
         stubbed = {t["task_id"]: soft_reason(t) for t in dag["tasks"]}
@@ -1101,7 +1109,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 reasons.append("a rollup or fan-out over several upstream assets (the sensor watches one)")
             elif outs:
                 ppart = {"role": "consumer", "info": same_partitions(outs[0][0]), "via": outs[0][0].get("via")}
-        if not leaves:
+        if not leaves and CAVEATS != "off":
+            caveats.append({"task": "", "kind": "degraded", "reason": "the DAG is scheduled on an asset alias that the extractor could not resolve to assets; it converts without a trigger (add an automation condition on the assets that feed the alias)"})
+            tt = {**tt, "kind": "manual", "cron": None}
+        elif not leaves:
             reasons.append("asset-triggered schedule with no assets in the IR")
         elif len(leaves) == 1 or logic == "any":
             triggers = list(leaves)                               # one asset, or any of several: eager() fires on any update
@@ -1111,6 +1122,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             triggers, trig_mode, trig_tree = list(leaves), "tree", tt["asset_tree"]     # nested AND/OR: written as the same combination of conditions
         else:
             reasons.append(f"schedule mixes AND and OR over {len(leaves)} assets")
+    elif tt["class"] == "ContinuousTimetable" and CAVEATS != "off":
+        tt = {**tt, "kind": "cron_trigger", "cron": "* * * * *"}
+        caveats.append({"task": "", "kind": "degraded", "reason": "ContinuousTimetable (a new run as soon as the last finishes) became a schedule every minute; limit it to one run at a time with a run-queue tag limit"})
+    elif tt["class"] == "AfterWorkdayTimetable" and CAVEATS != "off":
+        tt = {**tt, "kind": "cron_data_interval", "cron": "0 0 * * 2-6"}
+        caveats.append({"task": "", "kind": "degraded", "reason": "AfterWorkdayTimetable became the cron `0 0 * * 2-6` (each weekday's interval, run after it ends); holidays are not modeled"})
     else:
         reasons.append(f"schedule type {tt['class']} ({tt['kind']})")
     if ext_trigs and not reasons:
@@ -1158,7 +1175,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     if ds.get("render_template_as_native_obj"):
         soften("render_template_as_native_obj (templates render to strings here, not to Python objects)")
     if dag.get("catchup") and tt["kind"] in ("cron_trigger", "cron_data_interval"):
-        if CATCHUP == "ignore":
+        if CATCHUP == "ignore" or CAVEATS != "off":
+            if CATCHUP != "ignore":
+                caveats.append({"task": "", "kind": "degraded", "reason": "catchup=True: Airflow replays every interval since the start date; this schedule runs from now on (backfill history with Dagster partitions if needed)"})
             catchup_note = (f"catchup=True: Airflow runs every interval missed since the start date ({(dag.get('start_date') or 'none')[:10]}); the converted schedule "
                             "runs from now on. Replay history with a Dagster backfill if you need it")
         else:
@@ -1204,8 +1223,6 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 t["callback_fns"] = {}
         if t.get("execution_timeout_s") and ty not in BASH | BASH_DEC:
             soften(f"{tid}: execution_timeout on a non-shell task is not enforced (a Python callable cannot be interrupted safely)", tid)
-        if ty in PY_TASKS and (t.get("template_fields") or {}).get("templates_dict"):
-            reasons.append(f"{tid}: templates_dict (rendered templates passed to the callable) is not rebuilt")
         if len(t["outlets"]) > 1:
             reasons.append(f"{tid}: {len(t['outlets'])} outlets")
         if ty in TRIGGER:
@@ -1292,7 +1309,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             continue
         order = sorted(tids, key=lambda x: sum(reaches(y, x) for y in tids))        # most upstream first
         if not all(reaches(a, b) for a, b in zip(order, order[1:])):
-            raise Defer(f"tasks {sorted(tids)} update the same asset {k} but are not ordered: one producer per asset, so the owner must choose")
+            if CAVEATS == "off":
+                raise Defer(f"tasks {sorted(tids)} update the same asset {k} but are not ordered: one producer per asset, so the owner must choose")
+            for tid in order[1:]:                                   # the first keeps the asset; each other writer gets its own asset under it
+                keyparts[tid] = [*keyparts[tid], "by_" + safe(tid)]
+            caveats.append({"task": "", "kind": "degraded", "reason": f"tasks {sorted(tids)} update the same asset {k} without an order; Dagster allows one producer per asset, so only {order[0]} keeps it and the others write {k}/by_<task>"})
+            continue
         for tid in order[:-1]:
             keyparts[tid] = [safe(dag_id)] + [safe(p) for p in tid.split(".")]
         notes.append(f"{' -> '.join(order)} all update {k}; only {order[-1]} produces the asset (the earlier steps are plain assets). "
@@ -1374,7 +1396,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     for t in real:
         for kind, fns in (t.get("callback_fns") or {}).items():
             for k, info in enumerate(fns):
-                code, sup = resolve_callable(info, shims_used, {}, context_arg=True)
+                try:
+                    code, sup = resolve_callable(info, shims_used, {}, context_arg=True)
+                except Defer as e:
+                    if CAVEATS == "off":
+                        raise
+                    caveats.append({"task": t["task_id"], "kind": "degraded", "reason": f"{kind} could not be copied and was dropped: {e}"})
+                    continue
                 for sline in sup:
                     support.setdefault(sline, len(support))
                 fn_name = f"_af_cb_{safe(t['task_id'])}_{kind[3:-9]}_{k}"
@@ -1382,7 +1410,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 cb_code.setdefault(t["task_id"], []).append((kind, fn_name))
     uses_ctx = bool(ctx_tasks)
     if gplan and any(ti_inputs.values()):
-        raise Defer("a graph-form DAG where a callable pulls XComs by task id (not converted yet)")
+        if CAVEATS == "off":
+            raise Defer("a graph-form DAG where a callable pulls XComs by task id (not converted yet)")
+        for tid_, ups_ in list(ti_inputs.items()):                  # the tasks that pull by id become stubs; the rest of the DAG converts
+            if ups_:
+                reason_ = "the callable pulls XComs by task id (ti.xcom_pull), which a graph-form DAG does not rebuild yet"
+                caveats.append({"task": tid_, "kind": "stub", "reason": reason_})
+                resolved[tid_] = (f"def _stub(*args, **kwargs):\n    # AIRFLOW-CAVEAT: {reason_!r}\n    return af_caveat({reason_!r}, skip={CAVEATS == 'skip'})\n", [], {})
+                ctx_tasks.discard(tid_)
+                ti_inputs[tid_] = []
     if pplan and (uses_ctx or any(resolved[x][2].get("needs_ti") for x in pplan["args"] if x in resolved)):
         raise Defer("dynamic task mapping where a callable uses the task context or pulls XComs (not converted yet)")
     dag_params = dag.get("params") or {}
@@ -1476,7 +1512,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 for sline in sup:
                     support.setdefault(sline, len(support))
                 pyname = "_af_" + safe(tid)
-                ops.append(re.sub(r"^def\s+\w+", f"def {pyname}", code, count=1) + "\n")
+                ops.append(re.sub(r"^(async\s+)?def\s+\w+", lambda mm: f"{mm.group(1) or ''}def {pyname}", code, count=1) + "\n")
+                if meta.get("async"):
+                    ops.append(f"{pyname} = af_sync({pyname})\n")
                 if ty in ISOLATED | ISOLATED_BRANCH and not code.startswith("def _stub"):
                     ia, itf = t.get("args") or {}, t.get("template_fields") or {}
                     reqs = itf.get("requirements") if isinstance(itf, dict) else None
@@ -1497,6 +1535,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     try:
                         pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
                         kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
+                        if isinstance((t.get("template_fields") or {}).get("templates_dict"), dict) and "templates_dict" in str((t.get("callable") or {}).get("params", "")):
+                            kws["templates_dict"] = expr(t["template_fields"]["templates_dict"], params, ctxn)      # rendered templates handed to the callable
                         inner = (f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
                                  if meta.get("needs_ctx") else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
                     except Defer as e:
@@ -1516,6 +1556,19 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     body = ctx_line + f"    return ShortCircuit(bool({inner}), hard={t.get('short_circuit_hard', True)!r})"
                 else:
                     body = (combo if m else "") + ctx_line + f"    return {inner}"
+            elif ty in S3_OPS and m:                                        # a mapped provider operator: the fixed arguments merged with the item's, at run time
+                conn = (t.get("args") or {}).get("partial_kwargs", {}).get("aws_conn_id") or "aws_default"
+                resources.add(conn)
+                deco.append(f"required_resource_keys={{{conn!r}}}")
+                body = (combo + ctx_line + f"    client = getattr(context.resources, {conn!r})\n"
+                        f"    return af_s3_mapped(client, {ty!r}, {{**{mapped_base(t)!r}, **combo}})")
+            elif ty in SNOWFLAKE_OPS and m:
+                base = mapped_base(t)
+                conn = base.get("snowflake_conn_id") or base.get("conn_id") or "snowflake_default"
+                ov = {k: base.get(k) for k in ("warehouse", "database", "role", "schema") if base.get(k)}
+                sf_resources.add(conn)
+                deco.append(f"required_resource_keys={{{conn!r}}}")
+                body = combo + ctx_line + f"    af_snowflake_mapped(context, {ty!r}, {conn!r}, {ov!r}, {{**{base!r}, **combo}})\n    return None"
             elif ty in S3_OPS:
                 stmt, conn = s3_call(t, params, ctxn)
                 resources.add(conn)
@@ -1746,6 +1799,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             pre = ""
         elif ty in TRIGGER:
             conf = t["template_fields"].get("conf")
+            if isinstance(conf, dict) and "repr" in conf and CAVEATS != "off":      # a callable or object: the run is launched without it
+                caveats.append({"task": tid, "kind": "degraded", "reason": "the conf passed to the triggered DAG is not a plain value and was dropped"})
+                conf = None
             body = ctx_line + f"    trigger_dag_run(context, __name__, {t['args']['trigger_dag_id']!r}, {expr(conf, params, ctxn) if conf else 'None'}{'' if t['args'].get('wait_for_completion') else ', wait=False'})"
             deco.append("kinds={'dagster'}")
             pre = ""
@@ -1768,11 +1824,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             for sline in sup:
                 support.setdefault(sline, len(support))
             pyname = "_af_" + safe(tid)
-            code = re.sub(r"^def\s+\w+", f"def {pyname}", code, count=1)
+            code = re.sub(r"^(async\s+)?def\s+\w+", lambda mm: f"{mm.group(1) or ''}def {pyname}", code, count=1)
+            if meta.get("async"):
+                code += f"\n\n\n{pyname} = af_sync({pyname})"
             arg_caveat = ""
             try:
                 pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
                 kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
+                if isinstance((t.get("template_fields") or {}).get("templates_dict"), dict) and "templates_dict" in str((t.get("callable") or {}).get("params", "")):
+                    kws["templates_dict"] = expr(t["template_fields"]["templates_dict"], params, ctxn)      # rendered templates handed to the callable
             except Defer as e:
                 if CAVEATS == "off":
                     raise
@@ -2075,7 +2135,7 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
             "prev_execution_date": _iso(prv), "prev_ds": prv.strftime("%Y-%m-%d") if prv else None, "prev_ds_nodash": prv.strftime("%Y%m%d") if prv else None,
             "tomorrow_ds": (ld + one).strftime("%Y-%m-%d"), "tomorrow_ds_nodash": (ld + one).strftime("%Y%m%d"),
             "yesterday_ds": (ld - one).strftime("%Y-%m-%d"), "yesterday_ds_nodash": (ld - one).strftime("%Y%m%d"),
-            "ts_nodash_with_tz": ld.strftime("%Y%m%dT%H%M%S%z"), "prev_data_interval_start_success": None, "prev_data_interval_end_success": None,
+            "ts_nodash_with_tz": ld.strftime("%Y%m%dT%H%M%S%z"), "task_instance_key_str": f"{dag_id}__{task_id}__{ld.strftime('%Y%m%d')}", "prev_data_interval_start_success": None, "prev_data_interval_end_success": None,
             "dag": types.SimpleNamespace(dag_id=dag_id), "task": types.SimpleNamespace(task_id=task_id), "ti": ti, "task_instance": ti,
             "dag_run": types.SimpleNamespace(run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
             "partition_key": pkey, "outlet_events": _OutletEvents(context), "inlet_events": _InletEvents(context)}
@@ -2626,6 +2686,40 @@ def af_sla_check(context, seconds, key):
                 "sla_breach": True, "sla_expected_seconds": seconds, "sla_overrun_seconds": late}))
     except Exception as e:                                         # noqa: BLE001  a monitoring failure must not fail the task
         context.log.warning(f"could not evaluate the SLA of {key}: {e}")
+
+
+def af_s3_mapped(client, op_type, f):
+    """A mapped S3 operator: one instance's arguments (the fixed ones merged with its expanded ones)."""
+    if op_type == "S3ListOperator":
+        return s3_list_keys(client, f.get("bucket"), f.get("prefix"), f.get("delimiter"))
+    if op_type == "S3CopyObjectOperator":
+        return s3_copy_object(client, f.get("source_bucket_key"), f.get("dest_bucket_key"), f.get("source_bucket_name"), f.get("dest_bucket_name"))
+    if op_type == "S3DeleteObjectsOperator":
+        if f.get("keys") is None:
+            raise dg.Failure(description="S3DeleteObjectsOperator by prefix or date range is not supported in a mapped task")
+        return s3_delete_keys(client, f.get("bucket"), f.get("keys"))
+    return s3_upload_file(client, f.get("filename"), f.get("dest_bucket"), f.get("dest_key"), bool(f.get("replace")))
+
+
+def af_snowflake_mapped(context, op_type, conn, overrides, f):
+    """A mapped Snowflake operator: COPY INTO with this instance's arguments, or its SQL."""
+    ov = {**overrides, **{k: f[k] for k in ("warehouse", "database", "role", "schema") if f.get(k)}}
+    if op_type == "CopyFromExternalStageToSnowflakeOperator":
+        kw = {k: f.get(k) for k in ("table", "stage", "file_format", "schema", "prefix", "files", "pattern", "copy_options", "validation_mode")}
+        return snowflake_run(context, conn, ov, [copy_into_sql(**kw)])
+    sql = f.get("sql")
+    return snowflake_run(context, conn, ov, [sql] if isinstance(sql, str) else list(sql or []), split=True)
+
+
+def af_sync(fn):
+    """An async callable run to completion (Airflow's PythonOperator awaits nothing: a coroutine function is run with asyncio)."""
+    import asyncio
+    import functools
+
+    @functools.wraps(fn)
+    def run(*args, **kwargs):
+        return asyncio.run(fn(*args, **kwargs))
+    return run
 
 
 def af_xcom_key(value, key):

@@ -51,6 +51,8 @@ def _jsonable(v: Any, depth: int = 0) -> Any:
     if isinstance(v, _e.Enum):
         return str(v.name)
     name = type(v).__name__
+    if name == "LiteralValue":                               # airflow.sdk.literal(): the string is not rendered as a template
+        return "{% raw %}" + str(getattr(v, "value", "")) + "{% endraw %}"
     if name in ("XComArg", "PlainXComArg", "MappedArgument") or hasattr(v, "operator") and hasattr(v, "key"):
         op = getattr(v, "operator", None)
         return {"xcom_from": getattr(op, "task_id", None), "key": getattr(v, "key", None)}
