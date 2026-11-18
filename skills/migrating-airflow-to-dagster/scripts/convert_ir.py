@@ -40,7 +40,7 @@ KNOWN_CTX = CONTEXT_PARAMS | {"ts_nodash", "ts_nodash_with_tz", "prev_ds", "prev
                               "next_execution_date", "prev_data_interval_start_success", "prev_data_interval_end_success", "macros", "var", "conn",
                               "inlets", "outlets", "templates_dict", "test_mode", "map_index_template", "triggering_asset_events",
                               "triggering_dataset_events", "inlet_events", "outlet_events", "tomorrow_ds", "yesterday_ds", "expanded_ti_count",
-                              "prev_start_date_success", "prev_end_date_success"}
+                              "prev_start_date_success", "prev_end_date_success", "loop", "asset_state_store"}
 SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "execution_date", "data_interval_start", "data_interval_end",
                  "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf", "outlet_events", "inlet_events",
                  "next_ds", "next_ds_nodash", "next_execution_date", "prev_ds", "prev_ds_nodash", "prev_execution_date",     # Airflow 2 macros
@@ -1279,6 +1279,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         soft_known = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | SENSORS | TRIGGER | BRANCH | SHORT | CLOCK_BRANCH
 
         def soft_reason(t: dict[str, Any]) -> str | None:
+            if t["type"] in TRIGGER:
+                tgt = (t.get("args") or {}).get("trigger_dag_id")
+                if isinstance(tgt, str) and "{{" not in tgt and tgt not in ALL_DAG_IDS:
+                    return f"TriggerDagRunOperator target DAG {tgt!r} is not among the converted DAGs"
             if t["type"] not in soft_known and not is_custom(t):
                 hint = OPERATOR_COMPONENTS.get(t["type"])
                 return f"operator {t['type']} has no conversion yet" + (f" (registry: {hint})" if hint else "")
@@ -1780,8 +1784,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     try:
                         pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
                         kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
-                        if isinstance((t.get("template_fields") or {}).get("templates_dict"), dict) and "templates_dict" in str((t.get("callable") or {}).get("params", "")):
+                        if isinstance((t.get("template_fields") or {}).get("templates_dict"), dict) and ("templates_dict" in str((t.get("callable") or {}).get("params", "")) or "templates_dict" in str((t.get("callable") or {}).get("source", ""))):
                             kws["templates_dict"] = expr(t["template_fields"]["templates_dict"], params, ctxn)      # rendered templates handed to the callable
+                        if "self" in ((t.get("callable") or {}).get("params") or []) and t.get("outlet_assets"):          # an @asset function receives its own asset
+                            kws["self"] = "Asset(name=%r, uri=%r)" % (t["outlet_assets"][0].get("name"), t["outlet_assets"][0].get("uri"))
                         inner = (f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
                                  if meta.get("needs_ctx") else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
                     except Defer as e:
@@ -2076,8 +2082,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             try:
                 pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
                 kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
-                if isinstance((t.get("template_fields") or {}).get("templates_dict"), dict) and "templates_dict" in str((t.get("callable") or {}).get("params", "")):
+                if isinstance((t.get("template_fields") or {}).get("templates_dict"), dict) and ("templates_dict" in str((t.get("callable") or {}).get("params", "")) or "templates_dict" in str((t.get("callable") or {}).get("source", ""))):
                     kws["templates_dict"] = expr(t["template_fields"]["templates_dict"], params, ctxn)      # rendered templates handed to the callable
+                if "self" in ((t.get("callable") or {}).get("params") or []) and t.get("outlet_assets"):          # an @asset function receives its own asset
+                    kws["self"] = "Asset(name=%r, uri=%r)" % (t["outlet_assets"][0].get("name"), t["outlet_assets"][0].get("uri"))
             except Defer as e:
                 if CAVEATS == "off":
                     raise
@@ -3186,21 +3194,21 @@ def reconstruct_dag_job(module, job_name):
 
 
 def trigger_dag_run(context, calling_module, dag_id, conf=None, wait=True):
-    """TriggerDagRunOperator: launch the other converted DAG's job here. With wait, fail if its run fails; without, create the run and execute it in
-    the background (the registry's trigger_job_asset `wait: false` does the same: create_run_for_job, then execute_run)."""
+    """TriggerDagRunOperator: launch the other converted DAG's job here. With wait, fail if its run fails; without, start the run in a
+    background thread and move on (the registry's trigger_job_asset `wait: false` does the same)."""
     from dagster._core.definitions.reconstruct import build_reconstructable_job
     name = "".join(c if c.isalnum() or c == "_" else "_" for c in dag_id)
     name = f"_{name}" if name[:1].isdigit() else name           # the module and the job of a converted DAG are named like this
     module = calling_module.rsplit(".", 1)[0] + "." + name
     job = build_reconstructable_job(__name__, "reconstruct_dag_job", reconstructable_kwargs={"module": module, "job_name": name})
     tags = {"airflow/triggered_by": context.run.run_id, **({"airflow/conf": json.dumps(conf)} if conf else {})}
+    cfg = {"execution": {"config": {"in_process": {}}}} if context.instance.is_ephemeral else None       # an ephemeral instance cannot coordinate subprocesses
     if not wait:
         import threading
-        run = context.instance.create_run_for_job(job_def=job.get_definition(), tags=tags)
-        threading.Thread(target=dg.execute_run, args=(job, run, context.instance), daemon=False).start()
-        context.log.info(f"launched {dag_id!r} (run {run.run_id}) without waiting")
+        threading.Thread(target=lambda: dg.execute_job(job, instance=context.instance, tags=tags, run_config=cfg, raise_on_error=False), daemon=False).start()
+        context.log.info(f"launched {dag_id!r} without waiting")
         return
-    result = dg.execute_job(job, instance=context.instance, tags=tags)
+    result = dg.execute_job(job, instance=context.instance, tags=tags, run_config=cfg)
     if not result.success:
         raise dg.Failure(description=f"the triggered DAG {dag_id!r} failed (run {result.run_id})", metadata={"triggered_run_id": result.run_id})
 
@@ -3281,7 +3289,7 @@ class _OutletEvents:
         self._ctx, self._events = context, {}
 
     def __getitem__(self, asset):
-        return self._events.setdefault(tuple(asset_key_of(asset.ref)), _OutletEvent())
+        return self._events.setdefault(tuple(asset_key_of(getattr(asset, "ref", asset))), _OutletEvent())
 
     def flush(self):
         try:
@@ -3331,8 +3339,11 @@ class _InletEvents:
 
     def __getitem__(self, asset):
         records = self._ctx.instance.get_event_records(
-            dg.EventRecordsFilter(event_type=dg.DagsterEventType.ASSET_MATERIALIZATION, asset_key=dg.AssetKey(asset_key_of(asset.ref))), limit=200, ascending=False)
+            dg.EventRecordsFilter(event_type=dg.DagsterEventType.ASSET_MATERIALIZATION, asset_key=dg.AssetKey(asset_key_of(getattr(asset, "ref", asset)))), limit=200, ascending=False)
         return [_InletEvent(r) for r in reversed(list(records))]
+
+    def for_asset(self, *, name=None, uri=None, alias_name=None):
+        return self[uri or name or alias_name]
 
 
 class BaseOperator:
