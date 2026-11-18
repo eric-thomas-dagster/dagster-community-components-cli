@@ -36,10 +36,11 @@ A sensor that calls a function returning true/false (or a dict of run-request fi
 
 Converter: a wait-for-condition step. It will say that a Dagster sensor starts the run when the condition holds; it does not hold a run open waiting, so the shape of the pipeline changes.
 
-## 5. Failure and timeout behavior
+## 5. Failure and timeout behavior: covered by the existing decorators
 
-- `hooks_asset`: hooks fire on every attempt, so a task with retries fires its failure hook several times. Add a "final attempt only" option (compare `context.retry_number` with the retry policy's maximum). Blocks 10 DAGs that use failure or success callbacks (5 alone).
-- `timeout_asset`: it abandons a worker thread at the deadline and the work keeps running. Say so in the README, and offer a variant that runs the code in a subprocess it can kill (`pipes_python_asset` may already be the answer).
+`@on_hooks` and `@timeout` (both in the installed package) are applied by the converter as decorators on the assets it generates, so no component change is needed.
+- `@on_hooks(on_failure=["pkg.hooks:fn"])` takes `module:function` references. The converter writes the callback module and an adapter that has the hook's `(context, exc)` signature. Hooks fire on every attempt, so the adapter itself checks `context.retry_number` against the task's retry count and acts only on the final attempt. No change to `@on_hooks` is required.
+- `@timeout(seconds)` abandons a worker thread at the deadline and the work keeps running. For shell tasks the converter's runtime already kills the subprocess. For Python code, the converter will use `@timeout` and state in its report that the work is not stopped, only abandoned. Only a documentation change is asked of the components: say this in the README. A killable variant (run the callable in a subprocess, perhaps through `pipes_python_asset`) would remove the caveat but is optional.
 
 Converter: task-level failure and success callbacks, and execution timeouts on Python code.
 
