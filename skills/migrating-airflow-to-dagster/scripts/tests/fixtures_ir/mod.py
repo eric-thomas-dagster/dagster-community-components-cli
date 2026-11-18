@@ -24,8 +24,8 @@ def uses_context(ds):
 
 
 def uses_airflow_api():
-    from airflow.models import Variable
-    return Variable.get("x")
+    from airflow.models import DagBag
+    return DagBag()
 
 
 def returns_command(name):
@@ -143,3 +143,18 @@ def note_failure(context):
 
 def note_success(context):
     CALLBACKS.append(("success",))
+
+
+def skips_itself():
+    from airflow.exceptions import AirflowSkipException
+    raise AirflowSkipException("not today")
+
+
+def fails_hard():
+    from airflow.exceptions import AirflowFailException
+    raise AirflowFailException("do not retry")
+
+
+def poke_value():
+    from airflow.sensors.base import PokeReturnValue
+    return PokeReturnValue(is_done=True, xcom_value="done")

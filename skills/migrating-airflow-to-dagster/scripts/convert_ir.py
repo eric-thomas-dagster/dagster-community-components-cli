@@ -50,7 +50,9 @@ CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "da
 SUPPORTED_MACROS = {"ds_add", "ds_format", "datetime", "timedelta"}
 SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
                 ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
-                ("airflow.providers.amazon.aws.hooks.s3", "S3Hook")}
+                ("airflow.providers.amazon.aws.hooks.s3", "S3Hook")} | \
+    {(m, n) for m in ("airflow.exceptions", "airflow.sdk.exceptions", "airflow.sdk") for n in ("AirflowException", "AirflowSkipException", "AirflowFailException")} | \
+    {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")}
 ELIDED = {"EmptyOperator", "DummyOperator"}
 PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator"}
 BASH = {"BashOperator"}
@@ -173,7 +175,12 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     if unsupported:
         raise Defer(f"callable uses Airflow task context names the runtime does not rebuild {unsupported}")
     ctx_named = sorted(set(named) & SUPPORTED_CTX)
+    inner_shims = [n for n in ast.walk(fn) if isinstance(n, ast.ImportFrom) and n.module and all((n.module, a.name) in SHIM_IMPORTS for a in n.names)]
+    for n in inner_shims:                                        # `from airflow.exceptions import AirflowSkipException` inside the function: the runtime provides the name
+        shims.update(a.name for a in n.names)
     body_text = ast.unparse(ast.Module(body=[*fn.body], type_ignores=[]))
+    for n in inner_shims:
+        body_text = body_text.replace(ast.unparse(n), "")
     if re.search(r"\bairflow\b|\bset_xcom\b", body_text):
         raise Defer("callable uses the Airflow API (a direct airflow reference)")
     for n in (m for stmt in [*fn.body, *fn.args.defaults, *[d for d in fn.args.kw_defaults if d is not None]] for m in ast.walk(stmt)):    # the body, not the decorators (`@task.sensor` is not the `task` context object)
@@ -184,6 +191,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
             obj_name = obj.id if isinstance(obj, ast.Name) else None
         if obj_name in CTX_ATTRS and n.attr not in CTX_ATTRS[obj_name]:
             raise Defer(f"callable uses {obj_name}.{n.attr}, which the runtime's {obj_name} does not provide")
+    meta["skips"] = "AirflowSkipException" in info["source"]
     meta["var_kw"] = fn.args.kwarg.arg if fn.args.kwarg else None
     meta["ctx_named"] = ctx_named
     meta["needs_ti"] = bool({"ti", "task_instance"} & set(ctx_named)) or bool(re.search(r"\bxcom_pull\b|\bti\b|\btask_instance\b", body_text))
@@ -217,6 +225,9 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
 
     need(_free_names(fn), info["name"])
     lines = textwrap.dedent(info["source"]).splitlines()
+    for n in inner_shims:                                        # the import line goes; `pass` keeps the block valid
+        indent = re.match(r"\s*", lines[n.lineno - 1]).group(0)
+        lines[n.lineno - 1:n.end_lineno] = [indent + "pass"] + [""] * (n.end_lineno - n.lineno)
     start = next(i for i, l in enumerate(lines) if re.match(r"def\s", l))
     return "\n".join(lines[start:]), [needed[k] for k in sorted(needed)]
 
@@ -224,6 +235,16 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
 # --------------------------------------------------------------------------------------------------------------------
 # helpers shared by the per-task handlers
 # --------------------------------------------------------------------------------------------------------------------
+def local_modules(mods: set[str], files: Any) -> set[str]:
+    """The imported modules that live next to a source file or in a folder above it (a project's own `include/`, `utils/`): they are not pip packages."""
+    roots: list[Path] = []
+    for f in ([files] if isinstance(files, str) else files):
+        if f and Path(f).is_absolute():
+            here = Path(f).resolve().parent
+            roots += [here, *here.parents[:4]]
+    return {m for m in mods if any((r / f"{m}.py").exists() or (r / m).is_dir() for r in roots)}
+
+
 def third_party(support: dict[str, int]) -> set[str]:
     """Top-level third-party modules imported by the copied support code (the project must install them)."""
     import sys
@@ -439,7 +460,8 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
     and a task after it receives the collected list. Python and shell tasks only; `expand` with literal lists or other tasks' outputs."""
     mapped = {k: t for k, t in tasks.items() if t.get("is_mapped")}
     gated = any(t["type"] in BRANCH | SHORT | CLOCK_BRANCH or (t["type"] in SENSORS and (t.get("sensor") or {}).get("soft_fail"))
-                or t["trigger_rule"] in GATE_RULES - PLAIN_RULES or t.get("is_setup") or t.get("is_teardown") for t in tasks.values())
+                or t["trigger_rule"] in GATE_RULES - PLAIN_RULES or t.get("is_setup") or t.get("is_teardown")
+                or "AirflowSkipException" in (t.get("callable") or {}).get("source", "") for t in tasks.values())
     if not mapped and not gated:
         return None, []
     why: list[str] = []
@@ -492,7 +514,8 @@ def plan_mapping(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, 
     if tasks and all(t["type"] in ELIDED for t in tasks.values()):
         return {"mode": "graph", "mapped": {}}, []              # nothing to run, but the steps and their trigger rules are kept
     if MAP_MODE == "graph" or any(t["type"] in BRANCH | SHORT | CLOCK_BRANCH or (t["type"] in SENSORS and (t.get("sensor") or {}).get("soft_fail"))
-                                  or t["trigger_rule"] in GATE_RULES - PLAIN_RULES or t.get("is_setup") or t.get("is_teardown") for t in tasks.values()):
+                                  or t["trigger_rule"] in GATE_RULES - PLAIN_RULES or t.get("is_setup") or t.get("is_teardown")
+                                  or "AirflowSkipException" in (t.get("callable") or {}).get("source", "") for t in tasks.values()):
         return plan_graph(dag, tasks)
     return plan_partitions(dag, tasks)
 
@@ -921,6 +944,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 setup_arg = (f", setup={[bool(tasks[u].get('is_setup')) for u in params]!r}" if t["trigger_rule"] == "all_done_setup_success" else "")
                 prefix = (f"    skip = af_gate(context, {t['trigger_rule']!r}, [{', '.join(names)}], {tid!r}{setup_arg})\n    if skip is not None:\n        return skip\n"
                           f"    {', '.join(names)} = {', '.join(f'af_data({n})' for n in names)}\n")
+            skips = ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL and resolved.get(tid, ("", [], {}))[2].get("skips")
+            if skips and not fail_aware:
+                inner_lines = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
+                body = "    def _run():\n" + inner_lines + "\n    return af_skippable(context, _run)"
             if fail_aware:                                              # the body runs inside a guard that turns a failure into a value
                 inner_lines = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
                 body = ("    def _run():\n" + inner_lines +
@@ -1161,6 +1188,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             f"one dynamic partition per item {pplan['producer']} returns. After each run of {pplan['producer']}, a sensor registers the new items as partitions "
             "and requests one run per item. Differences from Airflow: the items run as separate runs, so one failed item does not stop the others "
             "(Airflow also lets sibling mapped instances finish), but they no longer share a single DAG run, and dynamic partitions accumulate over time."))
+    lm = local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})
+    if lm:
+        notes.append(f"the copied code imports the project's own module(s) {sorted(lm)}: copy them into the Dagster project (they are not pip packages)")
     if "S3Hook" in shims_used:
         notes.append("callables use S3Hook through a compatibility shim (default AWS credentials; the connection id is not applied)")
     if notes:
@@ -1196,7 +1226,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         produced[k] = dag_id
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
-                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "requirements": sorted(third_party(support) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
+                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
                  "uses_context": uses_ctx, "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
@@ -1646,6 +1677,28 @@ class ShortCircuit:
         self.passed, self.hard = passed, hard
 
 
+class AirflowException(Exception):
+    """Stands in for Airflow's exception so converted callables that raise it need no Airflow import."""
+
+
+class AirflowSkipException(AirflowException):
+    """Raised by a task to skip itself: in the graph form the step becomes a skipped step."""
+
+
+class AirflowFailException(AirflowException):
+    """Raised by a task to fail without retrying."""
+
+
+class PokeReturnValue:
+    """What a sensor callable may return: done or not, and a value to pass on."""
+
+    def __init__(self, is_done, xcom_value=None):
+        self.is_done, self.xcom_value = is_done, xcom_value
+
+    def __bool__(self):
+        return bool(self.is_done)
+
+
 def _skip(context, hard):
     context.add_output_metadata({"airflow/state": "skipped"})
     return Skipped(hard)
@@ -1729,11 +1782,21 @@ def af_guard(context, run, retries, delay):
         return run()
     except dg.RetryRequested:
         raise
+    except AirflowSkipException:
+        return af_skip(context, False)
     except Exception as e:                                         # noqa: BLE001
-        if context.retry_number < retries:
+        if context.retry_number < retries and not isinstance(e, AirflowFailException):
             raise dg.RetryRequested(max_retries=retries, seconds_to_wait=delay) from e
         context.add_output_metadata({"airflow/state": "failed", "error": str(e)[:1000]})
         return Failed(f"{type(e).__name__}: {str(e)[:300]}")
+
+
+def af_skippable(context, run):
+    """Run a step; a raised AirflowSkipException skips the step (and what depends on it under its trigger rule) instead of failing it."""
+    try:
+        return run()
+    except AirflowSkipException:
+        return af_skip(context, False)
 
 
 def af_finish(context, values, ignore=()):

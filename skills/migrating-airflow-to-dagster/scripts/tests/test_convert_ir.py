@@ -731,7 +731,7 @@ def _run_failing(tmp_path, tasks, pkg):
     dg = pytest.importorskip("dagster")
     rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag(tasks, kind="once")]}, pkg, "--return-all")
     assert rep["status"] == "converted", rep
-    mod.TRACE.clear()
+    getattr(mod, "TRACE", []).clear()
     return mod, dg.materialize([mod.d1_graph], raise_on_error=False)
 
 
@@ -819,3 +819,19 @@ if __name__ == "__main__":                       # the launched run is a spawned
     out = subprocess.run([sys.executable, "run.py"], cwd=tmp_path, env={**os.environ, "PYTHONPATH": str(tmp_path)}, capture_output=True, text=True)
     result = json.loads(next(l for l in out.stdout.splitlines() if l.startswith("RESULT")).split(" ", 1)[1])
     assert result["success"] and ["child", "SUCCESS", '{"k": 1}'] in result["runs"]
+
+
+def test_a_callable_that_raises_airflow_skip_exception_skips_the_step_and_what_follows(tmp_path):
+    t = [_py("s", "skips_itself"), _py("after", "step_a", up=["s"]), _py("anyway", "step_b", up=["s"], trigger_rule="none_failed")]
+    mod, res = _run_gated(tmp_path, t, "pkg_skipexc")
+    assert sorted(mod.TRACE) == ["b"]                              # `after` (all_success) is skipped, `anyway` (none_failed) runs
+
+
+def test_airflow_fail_exception_fails_the_step_and_a_sensor_can_return_a_poke_value(tmp_path):
+    dg = pytest.importorskip("dagster")
+    mod, res = _run_failing(tmp_path, [_py("f", "fails_hard", trigger_rule="all_done")], "pkg_failexc")
+    assert not res.success
+    s = _sensor("s", "PythonSensor", callable=fn("poke_value"), op_args=[], op_kwargs={})
+    rep, mod2 = _convert_and_load(tmp_path / "p", {"airflow_version": "x", "dags": [dag([s], kind="once")]}, "pkg_poke", "--return-all") if (tmp_path / "p").mkdir() is None else None
+    res2 = dg.materialize([mod2.t_s])
+    assert res2.success and res2.asset_value(dg.AssetKey(["d1", "s"])) == "done"

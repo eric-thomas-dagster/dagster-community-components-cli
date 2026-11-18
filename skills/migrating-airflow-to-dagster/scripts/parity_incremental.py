@@ -76,7 +76,7 @@ def main() -> int:
         env = {**os.environ, "PYTHONPATH": os.pathsep.join([r.get("airflow_repo_root", ""), os.environ.get("PYTHONPATH", "")])}
         subprocess.run([r["airflow_python"], str(HERE / "parity" / "parity_af.py"), r.get("airflow_repo_root", "."), os.pathsep.join(r["dag_folders"]).replace(os.pathsep, ":"),
                         str(ids_file), str(new / f"af_{r['name']}.json")], env=env, check=False, capture_output=True)
-        env = {**os.environ, "PYTHONPATH": r["converted_src"], "PARITY_PKG": pkg}
+        env = {**os.environ, "PYTHONPATH": os.pathsep.join([r["converted_src"], r.get("airflow_repo_root", "")]), "PARITY_PKG": pkg}   # the DAGs' own local modules (include/) are in the repo
         subprocess.run([cfg["dagster_python"], str(HERE / "parity" / "parity_dg.py"), r["converted_src"], str(ids_file), r["report"],
                         str(new / f"dg_{r['name']}.json")], env=env, check=False, capture_output=True)
     for side in ("af", "dg"):
