@@ -636,10 +636,10 @@ HINTS: dict[str, dict[str, Any]] = {
 
 # Operators the converter does not translate, and the registry components that cover the same work: named in the caveat so the stub can be replaced by hand.
 OPERATOR_COMPONENTS: dict[str, str] = {
-    "HITLOperator": "slack_approval_gate, teams_approval_gate, email_approval_gate or multi_approver_gate",
-    "HITLEntryOperator": "slack_approval_gate, teams_approval_gate, email_approval_gate",
-    "HITLBranchOperator": "slack_approval_gate, teams_approval_gate, email_approval_gate",
-    "ApprovalOperator": "slack_approval_gate, teams_approval_gate, email_approval_gate",
+    "HITLOperator": "no equivalent: Dagster cannot pause a run for a person's choice",
+    "HITLEntryOperator": "no equivalent: Dagster cannot pause a run for a person's choice",
+    "HITLBranchOperator": "no equivalent: Dagster cannot pause a run for a person's choice",
+    "ApprovalOperator": "no equivalent: Dagster cannot pause a run for a person's choice",
     "SageMakerTransformOperator": "aws_sagemaker",
     "SageMakerTrainingOperator": "aws_sagemaker",
     "SageMakerProcessingOperator": "aws_sagemaker",
@@ -654,7 +654,7 @@ OPERATOR_COMPONENTS: dict[str, str] = {
     "AirbyteTriggerSyncOperator": "airbyte_sync_trigger_job",
     "FivetranOperator": "fivetran_sync_trigger_job",
     "AzureDataFactoryRunPipelineOperator": "azure_data_factory",
-    "SQLColumnCheckOperator": "sql_column_check (asset checks)",
+    "SQLColumnCheckOperator": "enhanced_data_quality_checks (null_check, uniqueness_check, range_check as asset checks)",
     "SlackWebhookOperator": "slack_notification_job",
     "SlackAPIPostOperator": "slack_notification_job",
     "EmailOperator": "no email component; use a Dagster alert",

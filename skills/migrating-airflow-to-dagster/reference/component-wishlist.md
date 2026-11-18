@@ -25,9 +25,10 @@ The time-partitioned cases (hourly, daily, weekly, monthly, with rollup and fan-
 
 Seen in the example DAGs. The converter stubs them and names a registry component where one fits.
 - **S3 "create object"** (`S3CreateObjectOperator`: bucket, key, data, replace): no component.
-- **SQL column checks** (`SQLColumnCheckOperator`): should map to Dagster asset checks; a `sql_column_check` component would cover it.
+- **SQL column checks** (`SQLColumnCheckOperator`): no new component. `Enhanced Data Quality Checks` covers the common checks: `null_check`, `uniqueness_check` and `range_check` match the operator's `null_check`, `unique_check` and `min`/`max` conditions. This is converter work (writing the component's YAML from the operator's column mapping), which comes with the components output mode. If `distinct_check`, or tolerances on `equal_to`/`geq_to`/`leq_to`, have no counterpart there, that is the only request.
 - **A loop gate** (`LoopGateOperator`): a step that decides whether to run the preceding group again. A "repeat this group until a condition" asset would cover it.
-- **Human approval inside a DAG** (the HITL operators): the converter names `slack_approval_gate`, `teams_approval_gate`, `email_approval_gate` and `multi_approver_gate`, but cannot wire them, because who approves and which options exist live in the operator's arguments. A component that takes "subject, options, assigned users, defaults" and returns the chosen option as the asset's value would let the converter emit it.
+
+Human-in-the-loop operators inside a run (pause, wait for a person's choice, continue) are not something Dagster can do today, so the converter stubs them with a caveat and asks for nothing.
 
 ### 3. Reading an upstream value by name
 
