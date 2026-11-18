@@ -1029,3 +1029,49 @@ def test_datetimes_print_with_a_t_before_airflow_2_8_only():
     rt["AF_ISO_DT"] = True
     ctx = rt["af_context"](_fake_ctx({"airflow/logical_date": "2026-07-02T05:00:00+00:00"}), "d", "t", {}, {})
     assert str(ctx["execution_date"]) == "2026-07-02T05:00:00+00:00" and ctx["ds"] == "2026-07-02"
+
+
+def _ext_sensor_dags(sensor_args):
+    parent = {**dag([_py("p", "step_a")], kind="cron_trigger"), "dag_id": "parent"}
+    sensor = task("wait", "ExternalTaskSensor", args={"external_dag_id": "parent", "external_task_ids": ["p"], "execution_delta": None,
+                                                      "execution_date_fn": None, "allowed_states": ["success"], "failed_states": None,
+                                                      "check_existence": False, "external_task_group_id": None, **sensor_args})
+    child = {**dag([sensor, _py("after", "step_b", up=["wait"])], kind="cron_trigger"), "dag_id": "child"}
+    return parent, child
+
+
+def test_an_external_task_sensor_becomes_a_dependency_on_the_awaited_tasks_asset(tmp_path):
+    dg = pytest.importorskip("dagster")
+    parent, child = _ext_sensor_dags({})
+    (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": [parent, child]}))
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_ext" / "defs"),
+                    "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
+    rep = json.loads((tmp_path / "r.json").read_text())["dags"]
+    assert rep["child"]["status"] == "converted" and rep["child"]["schedule"] is None, rep["child"]
+    assert any("ExternalTaskSensor became a dependency" in n for n in rep["child"]["notes"])
+    (tmp_path / "pkg_ext" / "__init__.py").write_text("")
+    sys.path.insert(0, str(tmp_path))
+    import importlib
+    mp, mc = importlib.import_module("pkg_ext.defs.parent"), importlib.import_module("pkg_ext.defs.child")
+    defs = dg.Definitions(assets=[mp.t_p, mc.t_after])
+    inst = dg.DagsterInstance.ephemeral()
+    key = dg.AssetKey(["child", "after"])
+    cur = None
+    def tick():
+        nonlocal cur
+        r = dg.evaluate_automation_conditions(defs=defs, instance=inst, cursor=cur); cur = r.cursor
+        return r.get_num_requested(key)
+    assert tick() == 0
+    dg.materialize([mp.t_p], instance=inst)
+    assert tick() == 1                                         # the awaited task finished: the dependent step is requested
+
+
+@pytest.mark.parametrize("args,why", [({"execution_delta": {"seconds": 3600.0}}, "execution delta"), ({"allowed_states": ["success", "skipped"]}, "custom states"),
+                                      ({"external_dag_id": "nowhere"}, "not in this conversion")])
+def test_an_external_task_sensor_with_a_different_wait_is_deferred_with_the_reason(args, why):
+    parent, child = _ext_sensor_dags(args)
+    C.build_task_catalog({"dags": [parent, child]})
+    C.ALL_DAG_IDS = {"parent", "child"}
+    C.TASK_TYPES = {("parent", "p"): "PythonOperator"}
+    with pytest.raises(C.Defer, match=why):
+        convert(child)

@@ -79,7 +79,11 @@ class Defer(Exception):
 
 DATASET_KEYS = "path"     # --dataset-keys path (s3://bucket/a/b -> s3/bucket/a/b) | script-orchestrator (airflow_dataset_bucket_a_b, the script_orchestrator component's naming)
 CATCHUP = "defer"      # --catchup defer | ignore: what to do with catchup=True (Airflow runs every missed interval since start_date)
+ALL_DAG_IDS: set[str] = set()
+TASK_TYPES: dict[tuple[str, str], str] = {}
 PARTITION_START = "2025-01-01"   # --partition-start: where partitioned assets begin (Airflow's partitions have no start; Dagster needs one)
+TASK_KEYS: dict[tuple[str, str], list[str]] = {}    # (dag id, task id) -> the asset key of that task, for dependencies between DAGs (ExternalTaskSensor)
+DAG_LEAVES: dict[str, list[list[str]]] = {}          # dag id -> the asset keys of its last tasks
 PARTITIONS: dict[str, dict] = {}   # asset key -> its time partitioning, from the partition timetables in the IR (filled by build_partition_catalog)
 AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
 MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
@@ -93,7 +97,10 @@ def safe(name: str) -> str:
 
 def key_from_asset(ref: str) -> list[str]:
     """Airflow asset/dataset name or URI -> Dagster key path (s3://bucket/a/b -> [s3, bucket, a, b]).
-    With --dataset-keys script-orchestrator: one flat key named as the script_orchestrator component names it."""
+    With --dataset-keys script-orchestrator: one flat key named as the script_orchestrator component names it.
+    A reference of the form `keyparts:a|b` is an asset key given directly (a task of another DAG)."""
+    if ref.startswith("keyparts:"):
+        return ref[len("keyparts:"):].split("|")
     if DATASET_KEYS == "script-orchestrator":
         cleaned = re.sub(r"^[a-z]+://", "", ref)
         cleaned = re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9_]", "_", cleaned)).strip("_")
@@ -592,6 +599,51 @@ def rollup_or_fan_out(kind: str, args: dict[str, Any], up: dict[str, Any]) -> tu
     return info, None
 
 
+def build_task_catalog(ir: dict[str, Any]) -> None:
+    """The asset key every task will have, so that one DAG can depend on a task of another."""
+    TASK_KEYS.clear()
+    DAG_LEAVES.clear()
+    for d in ir["dags"]:
+        ups = {u for t in d["tasks"] for u in t["upstream"]}
+        leaves = []
+        for t in d["tasks"]:
+            key = key_from_asset(t["outlets"][0]) if t.get("outlets") else [safe(d["dag_id"])] + [safe(x) for x in t["task_id"].split(".")]
+            TASK_KEYS[(d["dag_id"], t["task_id"])] = key
+            if t["task_id"] not in ups and t["type"] not in ELIDED:
+                leaves.append(key)
+        DAG_LEAVES[d["dag_id"]] = leaves
+
+
+def external_sensor_targets(t: dict[str, Any], dag_ids: set[str], types: dict[tuple[str, str], str]) -> tuple[list[str], list[str]]:
+    """(references to the assets an ExternalTaskSensor waits for, reasons it cannot be converted)."""
+    a, tf = t.get("args") or {}, t.get("template_fields") or {}
+    why: list[str] = []
+    if t["upstream"]:
+        why.append(f"{t['task_id']}: an ExternalTaskSensor that is not the first step of its DAG")
+    if a.get("execution_delta") or a.get("execution_date_fn"):
+        why.append(f"{t['task_id']}: an ExternalTaskSensor with an execution delta or date function (it waits for a run at another logical date)")
+    if (a.get("allowed_states") or ["success"]) != ["success"] or a.get("failed_states") or a.get("check_existence") or a.get("external_task_group_id"):
+        why.append(f"{t['task_id']}: an ExternalTaskSensor with custom states, a task group or check_existence")
+    ext = a.get("external_dag_id") or tf.get("external_dag_id")
+    if ext not in dag_ids:
+        why.append(f"{t['task_id']}: the awaited DAG {ext!r} is not in this conversion")
+    if why:
+        return [], why
+    ids = a.get("external_task_ids") or tf.get("external_task_ids") or ([tf["external_task_id"]] if tf.get("external_task_id") else [])
+    keys = []
+    for tid in ids:
+        if (ext, tid) not in TASK_KEYS:
+            return [], [f"{t['task_id']}: the awaited task {ext}.{tid} was not found"]
+        if types.get((ext, tid)) in ELIDED:
+            return [], [f"{t['task_id']}: the awaited task {ext}.{tid} is an empty operator (it produces nothing to depend on)"]
+        keys.append(TASK_KEYS[(ext, tid)])
+    if not ids:
+        keys = list(DAG_LEAVES.get(ext, []))
+        if not keys:
+            return [], [f"{t['task_id']}: the awaited DAG {ext!r} has no tasks that produce assets"]
+    return ["keyparts:" + "|".join(k) for k in keys], []
+
+
 def build_partition_catalog(ir: dict[str, Any]) -> None:
     """Which assets are time-partitioned: the outlets of every DAG scheduled by a CronPartitionTimetable, then the assets of partition-triggered
     DAGs through their mappers (repeated until nothing new, so a chain of consumers resolves)."""
@@ -752,6 +804,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     """(module source, summary). Raises Defer if any part of the DAG cannot be converted."""
     reasons: list[str] = []
     catchup_note = ""
+    ext_trigs: list[str] = []
+    ext_ids = [t["task_id"] for t in dag["tasks"] if t["type"] == "ExternalTaskSensor"]
+    if ext_ids:                                              # waiting for another DAG's task becomes a dependency on that task's asset
+        for t in dag["tasks"]:
+            if t["task_id"] in ext_ids:
+                refs, why = external_sensor_targets(t, ALL_DAG_IDS, TASK_TYPES)
+                ext_trigs += refs
+                reasons += why
+        dag = {**dag, "tasks": [({**t, "type": "EmptyOperator"} if t["task_id"] in ext_ids else t) for t in dag["tasks"]]}
     dag_id = dag["dag_id"]
     if dag.get("is_subdag"):
         raise Defer(f"a SubDAG of {dag.get('parent_dag_id')} (it runs inside the parent's SubDagOperator; SubDAGs were removed in Airflow 3: use a task group or a separate job)")
@@ -803,6 +864,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"schedule mixes AND and OR over {len(leaves)} assets")
     else:
         reasons.append(f"schedule type {tt['class']} ({tt['kind']})")
+    if ext_trigs and not reasons:
+        if tt["kind"] in ("asset_triggered", "partitioned_asset"):
+            triggers = list(dict.fromkeys([*triggers, *ext_trigs]))
+        else:
+            triggers = ext_trigs
+        trig_mode = "and" if len(triggers) > 1 else "eager"
+        if tt["kind"] not in ("asset_triggered", "partitioned_asset"):
+            tt = {**tt, "kind": "manual", "cron": None}
+        catchup_note = (catchup_note + " " if catchup_note else "") + (
+            "the ExternalTaskSensor became a dependency on " + ", ".join("/".join(key_from_asset(x)) for x in ext_trigs) +
+            ": this DAG's assets update when those do, and the DAG's own schedule no longer starts it (Airflow also waited for the same logical date, which is not matched)")
     if dag.get("has_callbacks"):
         reasons.append("DAG-level callbacks")
     ds = dag.get("dag_settings") or {}
@@ -2252,6 +2324,10 @@ def main(argv: list[str] | None = None) -> int:
     PARTITION_START_SET = a.partition_start
     globals()["PARTITION_START"] = PARTITION_START_SET
     build_partition_catalog(ir)
+    build_task_catalog(ir)
+    global ALL_DAG_IDS, TASK_TYPES
+    ALL_DAG_IDS = {d["dag_id"] for d in ir["dags"]}
+    TASK_TYPES = {(d["dag_id"], t["task_id"]): t["type"] for d in ir["dags"] for t in d["tasks"]}
     _m = re.match(r"(\d+)", str(ir.get("airflow_version") or ""))
     AF_MAJOR = int(_m.group(1)) if _m else 2
     a.out_dir.mkdir(parents=True, exist_ok=True)
