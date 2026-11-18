@@ -633,6 +633,32 @@ def test_unknown_operator_and_unsupported_template_become_stubs_in_a_dag_that_ot
     assert "AIRFLOW-CAVEAT" in (tmp_path / "pkg_caveat2" / "defs" / "d1.py").read_text()
 
 
+def test_external_python_and_virtualenv_callables_run_in_their_own_interpreter(tmp_path):
+    dg = pytest.importorskip("dagster")
+    ext = task("e", "ExternalPythonOperator", callable=fn("three"), op_args=[], op_kwargs={},
+               template_fields={"python": sys.executable, "requirements": None}, args={"python_version": None, "inherit_env": True})
+    venv = task("v", "PythonVirtualenvOperator", up=["e"], callable=fn("double_item"), op_args=[3], op_kwargs={},
+                template_fields={"requirements": []}, args={"system_site_packages": True, "inherit_env": True})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([ext, venv], kind="once")]}, "pkg_iso", "--return-all")
+    assert not rep.get("caveats")
+    res = dg.materialize([mod.t_e, mod.t_v])
+    assert res.success and res.asset_value(dg.AssetKey(["d1", "e"])) == [1, 2, 3] and res.asset_value(dg.AssetKey(["d1", "v"])) == 6
+
+
+def test_task_sla_and_fire_and_forget_trigger_convert(tmp_path):
+    dg = pytest.importorskip("dagster")
+    a = task("a", "PythonOperator", callable=fn("three"), op_args=[], op_kwargs={}, sla_s=0.001)
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([a], kind="once")]}, "pkg_sla")
+    assert not rep.get("caveats")
+    res = dg.materialize([mod.t_a])
+    assert res.success
+    obs = [e for e in res.get_asset_observation_events()]
+    assert obs and obs[0].event_specific_data.asset_observation.metadata["sla_breach"].value is True
+    trig = task("t", "TriggerDagRunOperator", args={"trigger_dag_id": "other", "wait_for_completion": False}, template_fields={})
+    code, summary = convert(dag([trig], kind="once"))
+    assert "wait=False" in code and not summary["caveats"]
+
+
 def test_xcom_push_becomes_materialization_metadata_and_a_keyed_pull_reads_it(tmp_path):
     dg = pytest.importorskip("dagster")
     a = task("a", "PythonOperator", callable=fn("pusher"), op_args=[], op_kwargs={})

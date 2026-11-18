@@ -62,7 +62,7 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
                 tgt["schedules"] = [{"name": f"{safe(dag_id)}_schedule", "cron": rep["schedule"]}]
             dag_unit["target"] = tgt
             stats["dags_planned"] += 1
-        caveat = {c["task"]: c["reason"] for c in rep.get("caveats") or []}
+        caveat = {c["task"]: c["reason"] for c in rep.get("caveats") or [] if c.get("kind", "stub") == "stub"}
         for tid, t in tasks.items():
             u = by_task.get((dag_id, tid))
             if u is None:

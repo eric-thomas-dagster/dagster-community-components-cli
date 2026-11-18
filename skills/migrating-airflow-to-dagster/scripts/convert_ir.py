@@ -60,10 +60,12 @@ SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("a
     {(m, n) for m in ("airflow.exceptions", "airflow.sdk.exceptions", "airflow.sdk") for n in ("AirflowException", "AirflowSkipException", "AirflowFailException")} | \
     {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")}
 ELIDED = {"EmptyOperator", "DummyOperator", "LatestOnlyOperator", "ExternalTaskMarker"}      # nothing to run; LatestOnly and ExternalTaskMarker have no effect once schedules do not backfill
-PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator", "_AssetMainOperator"}      # the last: an Airflow 3 @asset function
+ISOLATED = {"PythonVirtualenvOperator", "_PythonVirtualenvDecoratedOperator", "ExternalPythonOperator", "_PythonExternalDecoratedOperator"}   # a callable run in its own interpreter
+PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator", "_AssetMainOperator"} | ISOLATED      # _AssetMainOperator: an Airflow 3 @asset function
 BASH = {"BashOperator"}
 BASH_DEC = {"_BashDecoratedOperator"}
-BRANCH = {"BranchPythonOperator", "_BranchPythonDecoratedOperator"}
+ISOLATED_BRANCH = {"BranchExternalPythonOperator", "_BranchExternalPythonDecoratedOperator", "BranchPythonVirtualenvOperator", "_BranchPythonVirtualenvDecoratedOperator"}
+BRANCH = {"BranchPythonOperator", "_BranchPythonDecoratedOperator"} | ISOLATED_BRANCH
 SHORT = {"ShortCircuitOperator", "_ShortCircuitDecoratedOperator"}
 TRIGGER = {"TriggerDagRunOperator"}          # launches another converted DAG's job and waits for it (wait_for_completion=True)
 SENSOR_CALL = {"PythonSensor", "DecoratedSensorOperator"}                                # sensors that poll a callable
@@ -324,10 +326,32 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
             need(_free_names(node) if isinstance(node, ast.FunctionDef) else _loads(node), name)
 
     need(_free_names(fn), info["name"])
+    drop: list[Any] = []                                         # annotations naming something the module does not carry (an Airflow class): removed from the copy
+    for a in [*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs, fn.args.vararg, fn.args.kwarg]:
+        if a is not None and a.annotation is not None:
+            drop.append((a, a.annotation))
+    if fn.returns is not None:
+        drop.append((None, fn.returns))
+    bad_ann = []
+    known_text = set(re.findall(r"\b\w+\b", "\n".join(needed.values())))
+    for owner, node in drop:
+        if any(isinstance(n, ast.Name) and not hasattr(builtins, n.id) and n.id not in known_text and n.id not in ("dg", "dagster")
+               and n.id not in idx.defs or isinstance(n, ast.Name) and idx.defs.get(n.id, ("", None))[0] == "import" and n.id not in known_text and n.id not in shims
+               for n in ast.walk(node)):
+            bad_ann.append((owner, node))
     lines = textwrap.dedent(info["source"]).splitlines()
     for n in inner_shims:                                        # the import line goes; `pass` keeps the block valid
         indent = re.match(r"\s*", lines[n.lineno - 1]).group(0)
         lines[n.lineno - 1:n.end_lineno] = [indent + "pass"] + [""] * (n.end_lineno - n.lineno)
+    for owner, node in sorted(bad_ann, key=lambda x: (x[1].lineno, x[1].col_offset), reverse=True):
+        row = node.lineno - 1
+        if owner is None:                                        # `-> T`
+            m = re.search(r"\s*->\s*$", lines[row][:node.col_offset])
+            lines[row] = lines[row][:m.start()] + lines[row][node.end_col_offset:] if m and node.end_lineno == node.lineno else lines[row]
+        else:                                                    # `name: T`
+            m = re.search(r"\s*:\s*$", lines[row][:node.col_offset])
+            if m and node.end_lineno == node.lineno:
+                lines[row] = lines[row][:m.start()] + lines[row][node.end_col_offset:]
     start = next(i for i, l in enumerate(lines) if re.match(r"def\s", l))
     return "\n".join(lines[start:]), [needed[k] for k in sorted(needed)]
 
@@ -584,6 +608,36 @@ HINTS: dict[str, dict[str, Any]] = {
     "TimeSensor": {"registry": [], "gap": "no time-of-day wait component; usually a schedule"},
     "PythonVirtualenvOperator": {"official": "Dagster Pipes (PipesSubprocessClient)", "registry": [], "gap": "no run-a-callable-in-a-virtualenv component"},
     "ExternalPythonOperator": {"official": "Dagster Pipes (PipesSubprocessClient)", "registry": [], "gap": "no run-a-callable-in-a-virtualenv component"},
+}
+
+
+# Operators the converter does not translate, and the registry components that cover the same work: named in the caveat so the stub can be replaced by hand.
+OPERATOR_COMPONENTS: dict[str, str] = {
+    "HITLOperator": "slack_approval_gate, teams_approval_gate, email_approval_gate or multi_approver_gate",
+    "HITLEntryOperator": "slack_approval_gate, teams_approval_gate, email_approval_gate",
+    "HITLBranchOperator": "slack_approval_gate, teams_approval_gate, email_approval_gate",
+    "ApprovalOperator": "slack_approval_gate, teams_approval_gate, email_approval_gate",
+    "SageMakerTransformOperator": "aws_sagemaker",
+    "SageMakerTrainingOperator": "aws_sagemaker",
+    "SageMakerProcessingOperator": "aws_sagemaker",
+    "S3ToRedshiftOperator": "aws_redshift",
+    "RedshiftSQLOperator": "aws_redshift",
+    "GlueJobOperator": "aws_glue",
+    "BigQueryInsertJobOperator": "google_bigquery",
+    "DataflowTemplatedJobStartOperator": "google_dataflow",
+    "DatabricksSubmitRunOperator": "databricks_asset_bundle, databricks_resource",
+    "DatabricksRunNowOperator": "databricks_asset_bundle, databricks_resource",
+    "DbtCloudRunJobOperator": "dbt_cloud_trigger_job",
+    "AirbyteTriggerSyncOperator": "airbyte_sync_trigger_job",
+    "FivetranOperator": "fivetran_sync_trigger_job",
+    "AzureDataFactoryRunPipelineOperator": "azure_data_factory",
+    "SQLColumnCheckOperator": "sql_column_check (asset checks)",
+    "SlackWebhookOperator": "slack_notification_job",
+    "SlackAPIPostOperator": "slack_notification_job",
+    "EmailOperator": "no email component; use a Dagster alert",
+    "S3CreateObjectOperator": "none yet (wishlist: s3_create_object)",
+    "S3ListPrefixesOperator": "s3_list_keys_asset (common_prefixes metadata)",
+    "KubernetesPodOperator": "k8s_job_asset",
 }
 
 
@@ -935,9 +989,18 @@ def plan_partitions(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[st
     return plan, []
 
 
+def sla_wrap(body: str, t: dict[str, Any], key: str) -> str:
+    """An Airflow `sla` is a deadline after the scheduled time; a miss is recorded and the task still runs. The step reports a breach as an observation on its asset."""
+    if not t.get("sla_s"):
+        return body
+    inner = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
+    return f"    try:\n{inner}\n    finally:\n        af_sla_check(context, {float(t['sla_s'])!r}, {key!r})"
+
+
 def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tuple[str, dict[str, Any]]:
     """(module source, summary). Raises Defer if any part of the DAG cannot be converted."""
     reasons: list[str] = []
+    caveats: list[dict[str, str]] = []                         # kind "stub": a task written as a marked stub; "degraded": translated with a known difference
     catchup_note = ""
     ext_trigs: list[str] = []
     ext_ids = [t["task_id"] for t in dag["tasks"] if t["type"] == "ExternalTaskSensor"]
@@ -945,6 +1008,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         for t in dag["tasks"]:
             if t["task_id"] in ext_ids:
                 refs, why = external_sensor_targets(t, ALL_DAG_IDS, TASK_TYPES)
+                if why and CAVEATS != "off":                  # keep the step as an empty one in its place; the wait itself is dropped
+                    caveats += [{"task": t["task_id"], "kind": "degraded", "reason": f"the wait for the other DAG was dropped (add a dependency or sensor by hand): {w.split(': ', 1)[-1]}"} for w in why]
+                    refs, why = [], []
                 ext_trigs += refs
                 reasons += why
         dag = {**dag, "tasks": [({**t, "type": "EmptyOperator"} if t["task_id"] in ext_ids else t) for t in dag["tasks"]]}
@@ -953,7 +1019,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
 
         def soft_reason(t: dict[str, Any]) -> str | None:
             if t["type"] not in soft_known and not is_custom(t):
-                return f"operator {t['type']} has no conversion yet"
+                hint = OPERATOR_COMPONENTS.get(t["type"])
+                return f"operator {t['type']} has no conversion yet" + (f" (registry: {hint})" if hint else "")
             if t["type"] in PY_TASKS and (t.get("template_fields") or {}).get("templates_dict"):
                 return "templates_dict (rendered templates passed to the callable) is not rebuilt"
             _, jprob = jinja_vars(task_templates(t))
@@ -1026,7 +1093,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             "the ExternalTaskSensor became a dependency on " + ", ".join("/".join(key_from_asset(x)) for x in ext_trigs) +
             ": this DAG's assets update when those do, and the DAG's own schedule no longer starts it (Airflow also waited for the same logical date, which is not matched)")
     if dag.get("has_callbacks"):
-        reasons.append("DAG-level callbacks")
+        if CAVEATS != "off":
+            caveats.append({"task": "", "kind": "degraded", "reason": "DAG-level callbacks (on_failure_callback, on_success_callback, sla_miss_callback) were not converted; attach them with `@on_hooks` or a run-status sensor"})
+        else:
+            reasons.append("DAG-level callbacks")
     ds = dag.get("dag_settings") or {}
     if ds.get("fail_stop"):
         reasons.append("fail_stop=True (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish)")
@@ -1078,7 +1148,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"{tid}: trigger_rule {t['trigger_rule']}")
         # every behavior-affecting task setting is mapped or defers the DAG: none is silently ignored
         for flag, why in (("depends_on_past", "depends_on_past"), ("wait_for_downstream", "wait_for_downstream"),
-                          ("retry_exponential_backoff", "retry_exponential_backoff"), ("sla_s", "an SLA")):
+                          ("retry_exponential_backoff", "retry_exponential_backoff")):
             if t.get(flag):
                 reasons.append(f"{tid}: {why}")
         if t.get("max_active_tis_per_dagrun"):
@@ -1106,8 +1176,6 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"{tid}: {len(t['outlets'])} outlets")
         if ty in TRIGGER:
             a = t.get("args") or {}
-            if not a.get("wait_for_completion"):
-                reasons.append(f"{tid}: TriggerDagRunOperator without wait_for_completion (a run launched without waiting is not available from inside a run)")
             for k in ("reset_dag_run", "trigger_run_id", "logical_date", "skip_when_already_exists", "fail_when_dag_is_paused"):
                 if a.get(k):
                     reasons.append(f"{tid}: TriggerDagRunOperator with {k}")
@@ -1213,14 +1281,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
 
     # pre-pass: which callables need the Airflow context, which tasks pull upstream values (ti.xcom_pull), which templates need dates
     resolved: dict[str, tuple[str, list[str], dict[str, Any]]] = {}
-    caveats: list[dict[str, str]] = []                                 # tasks written as marked stubs because something in them cannot be translated
     ctx_tasks: set[str] = set()
     ti_inputs: dict[str, list[str]] = {}
     for t in real:
         tid, ty = t["task_id"], t["type"]
         meta: dict[str, Any] = {}
         if t.get("_caveat"):
-            caveats.append({"task": tid, "reason": t["_caveat"]})
+            caveats.append({"task": tid, "kind": "stub", "reason": t["_caveat"]})
             resolved[tid] = (f"def _stub(*args, **kwargs):\n    # AIRFLOW-CAVEAT: {t['_caveat'][:160]!r}\n    return af_caveat({t['_caveat'][:300]!r}, skip={CAVEATS == 'skip'})\n", [], {})
             continue
         try:
@@ -1236,7 +1303,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         except Defer as e:
             if CAVEATS == "off" or ty in BASH_DEC or is_custom(t):          # a custom operator class is built and called as a whole; no stub shape yet
                 raise
-            caveats.append({"task": tid, "reason": str(e)})
+            caveats.append({"task": tid, "kind": "stub", "reason": str(e)})
             ctx_tasks.discard(tid)
             resolved[tid] = (f"def _stub(*args, **kwargs):\n    # AIRFLOW-CAVEAT: {str(e)[:160]!r}\n    return af_caveat({str(e)[:300]!r}, skip={CAVEATS == 'skip'})\n", [], {})
         names, _ = jinja_vars(task_templates(t))
@@ -1372,6 +1439,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     support.setdefault(sline, len(support))
                 pyname = "_af_" + safe(tid)
                 ops.append(re.sub(r"^def\s+\w+", f"def {pyname}", code, count=1) + "\n")
+                if ty in ISOLATED | ISOLATED_BRANCH and not code.startswith("def _stub"):
+                    ia, itf = t.get("args") or {}, t.get("template_fields") or {}
+                    reqs = itf.get("requirements") if isinstance(itf, dict) else None
+                    cfg = {"requirements": reqs if reqs else None, "python": itf.get("python") if isinstance(itf, dict) else None,
+                           "python_version": ia.get("python_version"), "system_site_packages": bool(ia.get("system_site_packages")),
+                           "pip_options": ia.get("pip_install_options"), "index_urls": ia.get("index_urls"), "env_vars": ia.get("env_vars"),
+                           "inherit_env": ia.get("inherit_env", True), "support": list(sup)}
+                    cfg = {k: v for k, v in cfg.items() if v not in (None, [], False) or k == "inherit_env"}
+                    ops.append(f"{pyname} = af_isolated({pyname}, **{cfg!r})\n")
+                    if cfg.get("python"):
+                        notes.append(f"{tid}: runs with the interpreter {cfg['python']!r} from the Airflow DAG; point `python` at one that exists where Dagster runs")
                 if m:
                     kw = f"{{**{m['fixed']!r}, **combo}}"
                     posl = "list(item)" if m["mode"] == "args" else "[]"
@@ -1386,7 +1464,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     except Defer as e:
                         if CAVEATS == "off" or ty in BASH_DEC:
                             raise
-                        caveats.append({"task": tid, "reason": str(e)})
+                        caveats.append({"task": tid, "kind": "stub", "reason": str(e)})
                         inner = f"af_caveat({str(e)[:300]!r}, skip={CAVEATS == 'skip'})"      # AIRFLOW-CAVEAT: the call's arguments could not be wired
                 if ty in BASH_DEC:
                     body = ((combo if m else "") + ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
@@ -1462,6 +1540,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 inner_lines = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
                 body = ("    def _run():\n" + inner_lines +
                         f"\n    return af_guard(context, _run, {int(t['retries'] or 0)}, {int(t['retry_delay_s'] or 300)})")
+            body = sla_wrap(body, t, "/".join(keyparts[tid]))
             ops.append("@dg.op(" + ", ".join(deco) + ")\ndef " + fname + "(" + ", ".join(sig) + "):\n" + prefix + body + "\n")
             if m:                                                       # the fan-out op, then the mapped op
                 lit_names = [n for n, v in m["srcs"].items() if v[0] == "lit"]
@@ -1486,10 +1565,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                             return pname[sp[1]]
                         if sp[0] == "map":
                             inner_expr = spec_expr(sp[1])                      # numbered in the same order the functions were collected
-                            call = "x"
-                            for _ in sp[2]:
-                                call = f"{fn_names[next(counter)]}({call})"
-                            return f"[{call} for x in {inner_expr}]"
+                            chain = [fn_names[next(counter)] for _ in sp[2]]
+                            return f"af_map_items([{', '.join(chain)}], {inner_expr})"
                         if sp[0] == "concat":
                             return "[" + ", ".join(f"*{spec_expr(q)}" for q in sp[1]) + "]"
                         parts = ", ".join(spec_expr(q) for q in sp[1])
@@ -1617,13 +1694,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             pre = ""
         elif ty in TRIGGER:
             conf = t["template_fields"].get("conf")
-            body = ctx_line + f"    trigger_dag_run(context, __name__, {t['args']['trigger_dag_id']!r}, {expr(conf, params, ctxn) if conf else 'None'})"
+            body = ctx_line + f"    trigger_dag_run(context, __name__, {t['args']['trigger_dag_id']!r}, {expr(conf, params, ctxn) if conf else 'None'}{'' if t['args'].get('wait_for_completion') else ', wait=False'})"
             deco.append("kinds={'dagster'}")
             pre = ""
             ret_none = True
-            notes.append(f"{tid} launches the job of DAG {t['args']['trigger_dag_id']!r} and waits for it (the DAG must be converted into the same package); its run fails if the launched run fails")
+            notes.append(f"{tid} launches the job of DAG {t['args']['trigger_dag_id']!r} " + ("and waits for it; its run fails if the launched run fails" if t["args"].get("wait_for_completion") else "and does not wait (the run executes in the background of this step's process)") + " (the DAG must be converted into the same package)")
         elif is_custom(t):
             body = custom_body(t, ctx_line)
+            if tid not in consumed and not RETURN_ALL:
+                body = body.replace("    return run_operator(", "    run_operator(")
             deco.append("kinds={'python'}")
             pre = ""
             ret_none = tid not in consumed and not RETURN_ALL
@@ -1710,6 +1789,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 kw.append(f"on_success=[f'{{__name__}}:{ad}_success']")
             pre = pre + adapters
             hook_deco = "@on_hooks(" + ", ".join(kw) + ")\n"
+        body = sla_wrap(body, t, "/".join(keyparts[tid]))
         blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\n" + hook_deco + "def " + fname + sig + ":\n" + body + "\n")
 
     keys = [keyparts[t["task_id"]] for t in real] + ([[safe(dag_id), "run_check"]] if graph_outs else [])
@@ -2404,6 +2484,102 @@ def af_guard(context, run, retries, delay):
         return Failed(f"{type(e).__name__}: {str(e)[:300]}")
 
 
+def af_isolated(fn, requirements=None, python=None, python_version=None, system_site_packages=False, pip_options=None, index_urls=None,
+                env_vars=None, inherit_env=True, support=()):
+    """PythonVirtualenvOperator / ExternalPythonOperator: run the callable in its own interpreter and return its pickled result.
+    With `python` that interpreter is used; otherwise a virtualenv with `requirements` is built once and reused."""
+    import hashlib
+    import inspect
+    import os
+    import pickle
+    import shutil
+    import subprocess
+    import sys
+    import tempfile
+    import textwrap
+    NL = chr(10)
+    src = textwrap.dedent(inspect.getsource(fn))
+    name = fn.__name__
+
+    def interpreter():
+        if python:
+            return python
+        reqs = [requirements] if isinstance(requirements, str) else list(requirements or [])
+        key = hashlib.sha256(repr((reqs, python_version, system_site_packages, pip_options, index_urls)).encode()).hexdigest()[:16]
+        root = os.path.join(os.environ.get("AF_VENV_CACHE", os.path.join(tempfile.gettempdir(), "af_venvs")), key)
+        py = os.path.join(root, "bin", "python")
+        if os.path.exists(py):
+            return py
+        uv = shutil.which("uv")
+        if uv:
+            cmd = [uv, "venv", root] + (["--python", str(python_version)] if python_version else []) + (["--system-site-packages"] if system_site_packages else [])
+        else:
+            cmd = [sys.executable, "-m", "venv", root] + (["--system-site-packages"] if system_site_packages else [])
+        subprocess.run(cmd, check=True, capture_output=True)
+        if reqs:
+            opts = (pip_options if isinstance(pip_options, list) else str(pip_options or "").split()) + sum([["--index-url" if i == 0 else "--extra-index-url", u] for i, u in enumerate(index_urls or [])], [])
+            cmd = [uv, "pip", "install", "--python", py] + opts + reqs if uv else [py, "-m", "pip", "install"] + opts + reqs
+            done = subprocess.run(cmd, capture_output=True, text=True)
+            if done.returncode:
+                shutil.rmtree(root, ignore_errors=True)
+                raise dg.Failure(description="could not build the virtualenv: " + done.stderr[-2000:])
+        return py
+
+    def run(*args, **kwargs):
+        py = interpreter()
+        with tempfile.TemporaryDirectory() as d:
+            with open(os.path.join(d, "in.pkl"), "wb") as f:
+                pickle.dump((list(args), dict(kwargs)), f)
+            script = NL.join([*support, src, "import pickle, sys", "args, kwargs = pickle.load(open(sys.argv[1], 'rb'))",
+                              f"result = {name}(*args, **kwargs)", "pickle.dump(result, open(sys.argv[2], 'wb'))", ""])
+            with open(os.path.join(d, "run.py"), "w") as f:
+                f.write(script)
+            env = {**(os.environ if inherit_env else {}), **(env_vars or {})}
+            done = subprocess.run([py, os.path.join(d, "run.py"), os.path.join(d, "in.pkl"), os.path.join(d, "out.pkl")], capture_output=True, text=True, env=env)
+            if done.stdout:
+                print(done.stdout)
+            if done.returncode:
+                raise dg.Failure(description=f"{name} failed in its own interpreter ({py}): " + done.stderr[-3000:])
+            with open(os.path.join(d, "out.pkl"), "rb") as f:
+                return pickle.load(f)
+    return run
+
+
+def af_sla_check(context, seconds, key):
+    """Airflow's task `sla`: the task should finish within `seconds` of the scheduled time (the schedule tick). A miss is recorded as an observation on the asset;
+    the task is not stopped. A run without a scheduler tick (a manual launch) is measured from the run's start."""
+    import datetime as _d
+    try:
+        tag = context.run.tags.get("dagster/scheduled_execution_time")
+        if tag:
+            start = _d.datetime.fromisoformat(tag)
+        else:
+            stats = context.instance.get_run_stats(context.run_id)
+            start = _d.datetime.fromtimestamp(stats.start_time, _d.timezone.utc) if stats.start_time else None
+        if start is None:
+            return
+        late = (_d.datetime.now(_d.timezone.utc) - (start if start.tzinfo else start.replace(tzinfo=_d.timezone.utc))).total_seconds() - seconds
+        if late > 0:
+            context.log.warning(f"SLA missed: {key} finished {late:.0f}s after its {seconds:.0f}s deadline")
+            context.log_event(dg.AssetObservation(asset_key=dg.AssetKey(key.split("/")), metadata={
+                "sla_breach": True, "sla_expected_seconds": seconds, "sla_overrun_seconds": late}))
+    except Exception as e:                                         # noqa: BLE001  a monitoring failure must not fail the task
+        context.log.warning(f"could not evaluate the SLA of {key}: {e}")
+
+
+def af_map_items(fns, items):
+    """`.map(f)` on an XCom: each item through the functions in turn; an item whose function raises AirflowSkipException is left out, as Airflow skips that mapped task instance."""
+    out = []
+    for x in items:
+        try:
+            for f in fns:
+                x = f(x)
+        except AirflowSkipException:
+            continue
+        out.append(x)
+    return out
+
+
 def af_caveat(reason, skip=False):
     """A task the converter could not translate. It fails with the reason, or (skip mode) returns nothing so the rest of the DAG runs."""
     if skip:
@@ -2541,14 +2717,21 @@ def reconstruct_dag_job(module, job_name):
     return dg.Definitions(assets=assets, jobs=[v for v in vars(mod).values() if getattr(v, "name", None) == job_name and hasattr(v, "selection")]).get_job_def(job_name)
 
 
-def trigger_dag_run(context, calling_module, dag_id, conf=None):
-    """TriggerDagRunOperator with wait_for_completion: launch the other converted DAG's job here and fail if its run fails."""
+def trigger_dag_run(context, calling_module, dag_id, conf=None, wait=True):
+    """TriggerDagRunOperator: launch the other converted DAG's job here. With wait, fail if its run fails; without, create the run and execute it in
+    the background (the registry's trigger_job_asset `wait: false` does the same: create_run_for_job, then execute_run)."""
     from dagster._core.definitions.reconstruct import build_reconstructable_job
     name = "".join(c if c.isalnum() or c == "_" else "_" for c in dag_id)
     name = f"_{name}" if name[:1].isdigit() else name           # the module and the job of a converted DAG are named like this
     module = calling_module.rsplit(".", 1)[0] + "." + name
     job = build_reconstructable_job(__name__, "reconstruct_dag_job", reconstructable_kwargs={"module": module, "job_name": name})
     tags = {"airflow/triggered_by": context.run.run_id, **({"airflow/conf": json.dumps(conf)} if conf else {})}
+    if not wait:
+        import threading
+        run = context.instance.create_run_for_job(job_def=job.get_definition(), tags=tags)
+        threading.Thread(target=dg.execute_run, args=(job, run, context.instance), daemon=False).start()
+        context.log.info(f"launched {dag_id!r} (run {run.run_id}) without waiting")
+        return
     result = dg.execute_job(job, instance=context.instance, tags=tags)
     if not result.success:
         raise dg.Failure(description=f"the triggered DAG {dag_id!r} failed (run {result.run_id})", metadata={"triggered_run_id": result.run_id})
@@ -2629,7 +2812,10 @@ class _OutletEvents:
         return self._events.setdefault(tuple(asset_key_of(asset.ref)), _OutletEvent())
 
     def flush(self):
-        own = getattr(self._ctx, "asset_key", None)
+        try:
+            own = self._ctx.asset_key                                  # raises in a multi-asset context
+        except Exception:                                              # noqa: BLE001
+            own = None
         for key, ev in self._events.items():
             if ev.extra:
                 meta = {k: _meta_value(v) for k, v in ev.extra.items()}

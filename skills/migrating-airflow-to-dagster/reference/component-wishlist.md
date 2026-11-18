@@ -26,6 +26,10 @@ These blockers are covered by components you have already built. The converter h
 - **`partition_window_sensor` window keys:** 12 of 12 cases match Airflow's `RollupMapper` and `FanOutMapper` as key sets (`examples/runtime_conversion/partition_window_parity/`).
 - **Built but not yet tested by me:** `wait_until_asset`, `dynamic_fanout_asset` with `items_from`, `python_callable_asset` inputs read from upstream metadata, `s3_list_keys_asset` `return_keys_as_value`, the schedule component's date tags, `snowflake_sql_asset`, `k8s_job_asset` `use_pipes`.
 
+## Released in 0.10.164: what the converter uses
+
+The converter does not depend on the new `trigger_job_asset` `wait: false` or the `sla_asset` `start_from` option yet: it implements both itself in the generated runtime (`trigger_dag_run(..., wait=False)` and `af_sla_check`, with the same mechanisms). When the published package carries them (the 0.10.164 wheel on PyPI does not contain either: no `wait` option in `trigger_job_asset`, no `start_from` in `sla_asset`), the converter can emit the components instead.
+
 ## Requests
 
 ### 1. `af_guard` should label a step that did not run the way Airflow does
