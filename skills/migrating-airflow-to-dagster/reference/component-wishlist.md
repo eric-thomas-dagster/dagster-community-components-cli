@@ -96,19 +96,23 @@ Each mirrors an Airflow operator exactly and should ship with a parity test agai
 
 The harness in `examples/runtime_conversion/parity/` and `examples/s3_to_snowflake_factories/parity/` already does it: run the real Airflow operator or hook with the external system mocked and recording, run the Dagster component with an equivalent recording fake, compare the calls, return values and errors. Two lessons from building the fakes: Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must attach the same; and a fake client has to include what Airflow's code reads (`ResponseMetadata`, `LastModified`) or the comparison fails for the wrong reason.
 
-## Review of `dagster-community-components` 0.10.159 against the converter's runtime
+## Review of `dagster-community-components` 0.10.159: what the converter should emit
 
-Read from the installed package (`python_callable_asset/component.py`); nothing was executed yet, so these are gaps found by reading, to confirm by running the parity harness. The converter keeps emitting its own runtime for callables until they close.
+The components are general Dagster components, not Airflow clones, so the goal is not 1:1 behavior. The converter rewrites each Airflow construct into the Dagster-native form, and the parity harness checks that outcomes and values still match, with each remaining difference written down. Read from the installed package; nothing was executed yet.
 
-| Area | Component today | Converter runtime today |
+`PythonCallableAssetComponent` (`callable_path`, `inputs`, `deps`, `params`, partition fields, `timeout_seconds`, `context_mode`) is the right target for a Python task: the function stays in the project, XCom becomes `inputs`, and dates come from the Dagster partition. How each Airflow idea should be rewritten:
+
+| Airflow idea | Dagster-native rewrite | Note |
 |---|---|---|
-| Logical date | Derived from the Dagster partition window (`airflow_version: 2` = window start, `3` = window end); without a partition it falls back to `now()` | Read from a run tag the schedule sets (`airflow_schedule`), exact for both Airflow versions, no partitions needed |
-| Context names | `ds`, `ds_nodash`, `ts`, `logical_date`, `data_interval_*`, `run_id`, `params`, `dag_run.conf`, `ti.xcom_pull`, `ti.try_number` | adds `ts_nodash`, `execution_date`, `conf`, `dag`, `task`, `dag_run.run_id/logical_date/dag_id`, `ti.dag_id/task_id/run_id` |
-| Jinja | Whitelist `ds`, `ds_nodash`, `logical_date`, `params`, `var`; plain `jinja2.Environment` | Sandboxed environment, strict undefined, `ds`/`ts` filters, `macros.ds_add/ds_format/datetime/timedelta`, `ti.xcom_pull`, `var.value.*` |
-| `S3Hook` | 4 methods (`check_for_key`, `get_key`, `read_key`, `load_string`) | checked against Airflow's real hook in 11 scenarios (list, copy, delete, upload, head, transfer config) |
-| Unsupported names | Fails when the template renders | The converter defers the DAG at conversion time with the reason |
+| `ds` / `logical_date` / `data_interval_*` | a time partition of the asset; the callable receives the window | The component's partition-derived dates are the idiomatic form. Non-partitioned scheduled DAGs have no window, so the converter either adds a partition or passes the schedule tick (what its own runtime does today). A fallback to `now()` is a silent behavior change and should raise or warn. |
+| `ti.xcom_pull(task_ids=...)` | `inputs: {name: asset_key}` | Native. |
+| `Variable.get` | environment variable or a Dagster resource | `AIRFLOW_VAR_*` is a migration convenience, not the target. |
+| `S3Hook` calls | the S3 mirror components or `S3Resource` | Rewrite the call site; do not carry a hook shim. |
+| Jinja in operator arguments | resolve at definition time where static; otherwise partition-derived values | Avoid a runtime template engine in the final project. |
 
-Suggested changes: accept the logical date from a run tag when present (fall back to the partition window, then to `now()`); add the missing context names and macros; render Jinja in a sandbox; extend or replace the `S3Hook` shim with the converter's (it is in `runtime.py`, with the scenario list in `examples/runtime_conversion/parity/`).
+Where the component should improve, judged as a Dagster component (not as Airflow): render any Jinja it keeps in a sandbox (it uses a plain environment today), fail at load time rather than at render time for unsupported names (it already does this for the whitelisted roots), and say what happens for a non-partitioned asset instead of falling back to `now()`.
+
+What this changes for the converter: the generated runtime module (`runtime.py`, with its Airflow-shaped context, hook shim and Jinja) is a fallback for DAGs that cannot yet be rewritten natively. The preferred output is the native form above, with parity checked on outcomes and values.
 
 ## Registry decorators that map deferred Airflow settings
 
