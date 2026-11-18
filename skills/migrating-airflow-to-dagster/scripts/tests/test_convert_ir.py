@@ -442,3 +442,77 @@ def test_generated_context_dag_loads_and_runs_in_dagster(tmp_path):
     assert res.success and res.asset_value(mod.t_c.key).endswith("x") and res.asset_value(mod.t_c.key)[:2] == "20"      # ds + "x"
     res = dg.materialize([mod.t_a, mod.t_b], raise_on_error=False)
     assert not res.success                              # numbers() returns a list, so pulls() cannot add 1 to it: the failure is loud
+
+
+def _mapped_ir(source):
+    p = task("p", "PythonOperator", callable=fn("fruit_list"), op_args=[], op_kwargs={})
+    m = task("m", "PythonOperator", up=["p"] if source["kind"] == "xcom" else [], is_mapped=True,
+             callable={**fn("show"), "params": "['item', 'greeting']"}, op_args=[], op_kwargs={},
+             expand={"form": "expand", "args": {"item": source}, "fixed": {"greeting": "hi"}, "fixed_unserializable": [], "op_args": False})
+    return dag([p, m] if source["kind"] == "xcom" else [m], kind="once")
+
+
+def test_mapping_over_a_producers_list_runs_one_partition_per_item(tmp_path):
+    dg = pytest.importorskip("dagster")
+    ir = {"airflow_version": "x", "dags": [_mapped_ir({"kind": "xcom", "wrapper": "PlainXComArg", "task_id": "p", "key": "return_value"})]}
+    (tmp_path / "ir.json").write_text(json.dumps(ir))
+    defs = tmp_path / "pkg_map" / "defs"
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(defs),
+                    "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
+    assert json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]["status"] == "converted"
+    (tmp_path / "pkg_map" / "__init__.py").write_text("")
+    sys.path.insert(0, str(tmp_path))
+    import importlib
+    mod = importlib.import_module("pkg_map.defs.d1")
+    (tmp_path / "inst").mkdir()
+    with dg.DagsterInstance.local_temp(str(tmp_path / "inst")) as instance:
+        assert dg.materialize([mod.t_p], instance=instance).success
+        repo = dg.Definitions(assets=[mod.t_p, mod.t_m], jobs=[mod.d1_job, mod.d1_items_job], sensors=[mod.d1_fanout]).get_repository_def()
+        from dagster._core.definitions.partitions.context import partition_loading_context
+        with partition_loading_context(dynamic_partitions_store=instance):
+            result = mod.d1_fanout.evaluate_tick(dg.build_sensor_context(instance=instance, repository_def=repo))
+        keys = [r.partition_key for r in result.run_requests]
+        assert len(keys) == 3 and keys[1] == "plain" and keys[0].startswith("json:") and keys[2].startswith("sha1:")
+        assert set(instance.get_dynamic_partitions("d1_items")) == set(keys)
+        for k in keys:
+            assert dg.materialize([mod.t_m, mod.t_p], selection=[mod.t_m], partition_key=k, instance=instance).success
+        assert [g for g, _ in mod.SEEN] == ["hi"] * 3 and {"name": "apple", "n": 1} in [i for _, i in mod.SEEN] and "plain" in [i for _, i in mod.SEEN]
+        # a second tick for the same materialization adds nothing new
+        with partition_loading_context(dynamic_partitions_store=instance):
+            again = mod.d1_fanout.evaluate_tick(dg.build_sensor_context(instance=instance, cursor=result.cursor, repository_def=repo))
+        assert not again.run_requests
+
+
+def test_literal_mapping_runs_each_static_partition(tmp_path):
+    dg = pytest.importorskip("dagster")
+    ir = {"airflow_version": "x", "dags": [_mapped_ir({"kind": "literal", "value": ["a", 2, {"k": 1}]})]}
+    (tmp_path / "ir.json").write_text(json.dumps(ir))
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_lit" / "defs"),
+                    "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
+    (tmp_path / "pkg_lit" / "__init__.py").write_text("")
+    sys.path.insert(0, str(tmp_path))
+    import importlib
+    mod = importlib.import_module("pkg_lit.defs.d1")
+    keys = mod.d1_items.get_partition_keys()
+    assert keys == ["a", "json:2", 'json:{"k": 1}']
+    for k in keys:
+        assert dg.materialize([mod.t_m], partition_key=k).success
+    assert [i for _, i in mod.SEEN] == ["a", 2, {"k": 1}]
+
+
+def test_mapping_over_a_literal_list_is_a_static_partition_set():
+    code, s = convert(_mapped_ir({"kind": "literal", "value": ["a", 2, {"k": 1}]}))
+    assert "StaticPartitionsDefinition(['a', 'json:2', 'json:{\"k\": 1}'])" in code and s["mapping"]["kind"] == "literal"
+    assert "decode_item(context.partition_key, d1_literal_items)" in code
+
+
+@pytest.mark.parametrize("mut,why", [
+    (lambda ir: ir["tasks"][0].update(upstream=["x"]), "root Python task"),
+    (lambda ir: ir["tasks"][-1]["expand"]["args"]["item"].update(wrapper="MapXComArg"), "plain return value"),
+    (lambda ir: ir["tasks"][-1].update(type="BashOperator"), "mapping of a BashOperator"),
+])
+def test_unsupported_mapping_shapes_defer_with_a_reason(mut, why):
+    d = _mapped_ir({"kind": "xcom", "wrapper": "PlainXComArg", "task_id": "p", "key": "return_value"})
+    mut(d)
+    with pytest.raises(C.Defer, match=why):
+        convert(d)

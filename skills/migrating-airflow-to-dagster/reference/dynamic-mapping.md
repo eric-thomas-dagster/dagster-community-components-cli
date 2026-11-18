@@ -9,6 +9,17 @@
 
 Not N assets. One asset per data product, partitioned by the varying value.
 
+## What `convert_ir.py` converts automatically
+
+One shape, taken from what the IR records about each mapped task (`expand`): leaf Python tasks that all iterate over the same source, with fixed (plain-value) arguments, no task running after them, and the mapped argument a parameter of the callable.
+
+- **A literal list:** a `StaticPartitionsDefinition` (one partition per distinct item) and a schedule that requests every partition at each tick.
+- **The plain return value of one root Python task (the producer):** a `DynamicPartitionsDefinition`. The producer stays an ordinary asset and adds the item keys to its materialization metadata. An asset sensor on the producer registers the new keys as partitions and requests one run per item (`run_key` = producer run id plus key). The mapped asset loads the producer's list and finds its item by key.
+- **Keys:** a short string is its own key; a small value is `json:<JSON>`; anything longer is `sha1:<digest>`. Identical items collapse into one partition.
+- **Everything else defers with a named reason:** mapping over a mapped output (second order), `.map` / `.zip` / concat, several `expand` arguments (a cross product), `expand_kwargs`, a mapped shell, S3 or other operator, a reduce step after the mapped task, mapped tasks that use the task context or pull XComs, and asset-triggered DAGs.
+
+Verified by test: producer, sensor, three item kinds, one run per partition finding its item, and a second sensor tick adding nothing; and the static case with each partition run. Not verified: the sensor under a running daemon, and parity against Airflow's own run of a mapped DAG.
+
 ## The per-file design (verified in the worked example)
 
 - The partition key is the item (the S3 key). Keys containing `/` and spaces work.

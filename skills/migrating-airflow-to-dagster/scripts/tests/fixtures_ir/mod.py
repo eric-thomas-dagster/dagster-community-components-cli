@@ -47,3 +47,15 @@ def pulls(ti):
 def reads_variable():
     from airflow.models import Variable
     return Variable.get("x")
+
+
+SEEN = []
+
+
+def fruit_list():
+    return [{"name": "apple", "n": 1}, "plain", {"name": "x" * 200}]
+
+
+def show(item, greeting):
+    SEEN.append((greeting, item))
+    return item

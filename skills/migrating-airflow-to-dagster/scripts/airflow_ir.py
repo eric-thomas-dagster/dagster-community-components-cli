@@ -123,6 +123,43 @@ def _overridden_hooks(task: Any) -> list[str]:
     return out
 
 
+def _expand_ir(task: Any) -> dict[str, Any] | None:
+    """What a mapped task iterates over: literal values, an upstream task's output, or something this extractor cannot name."""
+    if not (any(c.__name__ == "MappedOperator" for c in type(task).__mro__) or getattr(task, "is_mapped", False)):
+        return None
+    try:
+        ei = task._get_specified_expand_input() if hasattr(task, "_get_specified_expand_input") else task.expand_input
+    except Exception as e:  # noqa: BLE001
+        return {"form": "unknown", "error": repr(e)[:120]}
+    val = getattr(ei, "value", None)
+
+    def one(v: Any) -> dict[str, Any]:
+        if isinstance(v, (list, tuple)):
+            try:
+                return {"kind": "literal", "value": json.loads(json.dumps(list(v), default=str))}
+            except (TypeError, ValueError):
+                return {"kind": "other", "repr": repr(v)[:120]}
+        if type(v).__name__.endswith("XComArg"):
+            op = getattr(v, "operator", None)
+            return {"kind": "xcom", "wrapper": type(v).__name__, "task_id": getattr(op, "task_id", None), "key": getattr(v, "key", None)}
+        return {"kind": "other", "repr": repr(v)[:120]}
+
+    if type(ei).__name__ == "DictOfListsExpandInput" and isinstance(val, dict):
+        pk = getattr(task, "partial_kwargs", None) or {}
+        fixed: dict[str, Any] = {}
+        bad: list[str] = []
+        for k, v in (pk.get("op_kwargs") or {}).items():
+            try:
+                fixed[k] = json.loads(json.dumps(v))
+            except (TypeError, ValueError):
+                bad.append(k)
+        return {"form": "expand", "args": {k: one(v) for k, v in val.items()}, "fixed": fixed, "fixed_unserializable": bad,
+                "op_args": bool(pk.get("op_args"))}
+    if type(ei).__name__ == "ListOfDictsExpandInput":
+        return {"form": "expand_kwargs", "args": {"*": one(val)}}
+    return {"form": type(ei).__name__, "args": {}}
+
+
 def _base_params() -> set[str]:
     try:
         from airflow.sdk import BaseOperator
@@ -145,6 +182,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "owner": task.owner, "queue": task.queue if getattr(task, "queue", None) != "default" else None,
         "execution_timeout_s": task.execution_timeout.total_seconds() if getattr(task, "execution_timeout", None) else None,
         # Airflow 2 decorated mapped tasks are DecoratedMappedOperator, a SUBCLASS of MappedOperator: test the whole MRO
+        "expand": _expand_ir(task),
         "is_mapped": any(c.__name__ == "MappedOperator" for c in type(task).__mro__) or bool(getattr(task, "is_mapped", False)),
         "is_setup": bool(getattr(task, "is_setup", False)), "is_teardown": bool(getattr(task, "is_teardown", False)),
         # settings that change behavior: the converter maps them or defers the DAG, never ignores them
