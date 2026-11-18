@@ -30,3 +30,20 @@ def uses_airflow_api():
 
 def returns_command(name):
     return f"echo hello {name}"
+
+
+def uses_prev_ds(prev_ds):
+    return prev_ds
+
+
+def wants_ds(ds, suffix="x"):
+    return ds + suffix
+
+
+def pulls(ti):
+    return ti.xcom_pull(task_ids="a") + 1
+
+
+def reads_variable():
+    from airflow.models import Variable
+    return Variable.get("x")

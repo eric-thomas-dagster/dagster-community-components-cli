@@ -46,10 +46,19 @@ def test_callable_support_code_is_exact_and_free_of_airflow():
     assert not any("airflow" in s for s in sup)
 
 
-@pytest.mark.parametrize("name,why", [("uses_context", "context parameters"), ("uses_airflow_api", "Airflow API")])
-def test_context_and_airflow_api_callables_are_deferred(name, why):
+@pytest.mark.parametrize("name,why", [("uses_airflow_api", "Airflow API"), ("uses_prev_ds", "does not rebuild")])
+def test_unsupported_context_and_direct_airflow_api_callables_are_deferred(name, why):
     with pytest.raises(C.Defer, match=why):
         C.resolve_callable(fn(name))
+
+
+def test_supported_context_names_are_recognised():
+    meta = {}
+    C.resolve_callable(fn("wants_ds"), None, meta)
+    assert meta["ctx_named"] == ["ds"] and meta["needs_ctx"] and not meta["needs_ti"]
+    meta = {}
+    C.resolve_callable(fn("pulls"), None, meta)
+    assert meta["needs_ti"] and meta["needs_ctx"]
 
 
 def test_python_chain_passes_values_and_rewires_empty_operators():
@@ -93,7 +102,7 @@ def test_s3_operators_map_to_runtime_helpers():
 @pytest.mark.parametrize("mut,why", [
     (lambda d: d["tasks"][0].update(trigger_rule="all_done"), "trigger_rule all_done"),
     (lambda d: d["tasks"][0].update(is_mapped=True), "dynamic task mapping"),
-    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ ds }}"}), "Jinja"),
+    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ var.value.x }}"}), "does not provide"),
     (lambda d: d["tasks"][0].update(type="KubernetesPodOperator"), "operator KubernetesPodOperator"),
     (lambda d: d["timetable"].update(kind="asset_triggered", assets=["a", "b"], asset_logic="mixed"), "mixes AND and OR"),
     (lambda d: d["timetable"].update(kind="other"), "schedule type"),
@@ -103,10 +112,13 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d["tasks"][0].update(callbacks=["on_failure_callback"]), "task callbacks"),
     (lambda d: d["tasks"][0].update(callbacks=["pre_execute"]), "task callbacks or hooks"),
     (lambda d: d.update(dag_settings={"fail_stop": True}), "fail_stop=True"),
-    (lambda d: d.update(dag_settings={"max_active_runs": 1}), "max_active_runs=1"),
+    (lambda d: d.update(dag_settings={"max_active_runs": True}), "max_active_runs=True"),
+    (lambda d: d.update(dag_settings={"max_active_tasks": 3}), "max_active_tasks=3"),
     (lambda d: d.update(dag_settings={"dagrun_timeout": {"seconds": 60.0}}), "dagrun_timeout"),
     (lambda d: d["tasks"][0].update(retry_exponential_backoff=True), "retry_exponential_backoff"),
     (lambda d: d["tasks"][0].update(max_active_tis_per_dag=1), "max_active_tis_per_dag"),
+    (lambda d: d["tasks"][0].update(type="PythonOperator", template_fields={"templates_dict": {"a": "{{ ds }}"}}), "templates_dict"),
+    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ macros.ds_format_locale(ds, 'a', 'b', 'c') }}"}), "macros"),
     (lambda d: d["tasks"][0].update(type="PythonOperator", execution_timeout_s=30.0), "execution_timeout on a non-shell task"),
 ])
 def test_unsupported_constructs_defer_the_whole_dag_with_a_reason(mut, why):
@@ -114,6 +126,13 @@ def test_unsupported_constructs_defer_the_whole_dag_with_a_reason(mut, why):
     mut(d)
     with pytest.raises(C.Defer, match=why):
         convert(d)
+
+
+def test_max_active_runs_is_a_job_tag_and_reported_for_the_deployment_limit():
+    d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"})])
+    d["dag_settings"] = {"max_active_runs": 1}
+    code, summary = convert(d)
+    assert "tags={'airflow/dag_id': 'd1'}" in code and summary["max_active_runs"] == 1
 
 
 def test_one_producer_per_asset_across_dags():
@@ -171,12 +190,12 @@ def test_snowflake_copy_and_sql_map_to_snowflake_run():
     assert "['select 1; select 2;'], split=True)" in code and s["snowflake_resources"] == ["snowflake_default"]
 
 
-def test_sql_on_a_non_snowflake_connection_or_with_jinja_is_deferred():
+def test_sql_on_a_non_snowflake_connection_or_with_unsupported_jinja_is_deferred():
     q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select 1", "conn_id": "postgres_default"})
     with pytest.raises(C.Defer, match="only Snowflake connections"):
         convert(dag([q], kind="manual"))
-    q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select '{{ ds }}'", "conn_id": "snowflake_default"})
-    with pytest.raises(C.Defer, match="not a plain string"):
+    q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select '{{ var.value.x }}'", "conn_id": "snowflake_default"})
+    with pytest.raises(C.Defer, match="does not provide"):
         convert(dag([q], kind="manual"))
 
 
@@ -264,3 +283,153 @@ def test_default_dag_settings_do_not_defer():
     d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"})], kind="manual")
     d["dag_settings"] = {"max_active_tasks": 16, "max_active_runs": 16, "fail_stop": False}
     convert(d)       # defaults are not behaviour changes
+
+
+# ---- task context, Jinja, Variable -------------------------------------------------------------------------------------------------------
+
+def _runtime():
+    pytest.importorskip("dagster")
+    ns: dict = {}
+    exec(C.RUNTIME.replace("from __future__ import annotations", ""), ns)
+    return ns
+
+
+def _fake_ctx(tags=None, run_id="run1", retry=0):
+    import types
+    return types.SimpleNamespace(run=types.SimpleNamespace(tags=tags or {}, run_id=run_id), retry_number=retry)
+
+
+def test_context_is_rebuilt_from_run_tags_and_ds_is_the_utc_date():
+    rt = _runtime()
+    ctx = rt["af_context"](_fake_ctx({"airflow/logical_date": "2026-07-02T05:00:00+00:00", "airflow/data_interval_end": "2026-07-03T05:00:00+00:00"}),
+                           "d", "t", {"p": 1}, {})
+    assert ctx["ds"] == "2026-07-02" and ctx["ds_nodash"] == "20260702" and ctx["ts_nodash"] == "20260702T050000"
+    assert ctx["data_interval_end"].isoformat() == "2026-07-03T05:00:00+00:00" and ctx["params"] == {"p": 1}
+    assert ctx["ti"].try_number == 1 and ctx["dag_run"].dag_id == "d" and ctx["task"].task_id == "t"
+    late = rt["af_context"](_fake_ctx({"airflow/logical_date": "2026-07-01T23:00:00-05:00"}), "d", "t", {}, {})
+    assert late["ds"] == "2026-07-02"                        # 23:00 in Chicago is already the next UTC date: Airflow's ds is the UTC date
+    assert rt["af_context"](_fake_ctx(), "d", "t", {}, {})["ds"]                      # a manual run falls back to now
+
+
+def test_call_with_context_follows_pythonoperators_binding_rules():
+    rt = _runtime()
+    call = rt["call_with_context"]
+    ctx = {"ds": "D", "run_id": "R", "params": {}}
+    assert call(lambda x, ds: (x, ds), [1], {}, ctx) == (1, "D")                      # context fills parameters op_args did not
+    assert call(lambda ds, x=0: (ds, x), [], {"x": 5}, ctx) == ("D", 5)
+    assert call(lambda ds: ds, [], {"ds": "OVERRIDE"}, ctx) == "OVERRIDE"             # op_kwargs win over context
+    assert call(lambda **kw: sorted(kw), [], {"extra": 1}, ctx) == ["ds", "extra", "params", "run_id"]    # **kwargs gets everything
+    assert call(lambda x: x, [7], {}, ctx) == 7                                       # a name the context lacks is left alone
+    got = call(lambda: rt["get_current_context"]()["ds"], [], {}, ctx)
+    assert got == "D"
+    with pytest.raises(RuntimeError):
+        rt["get_current_context"]()
+
+
+def test_xcom_pull_reads_upstream_values_and_refuses_what_it_cannot_mirror():
+    import dagster as dg
+    rt = _runtime()
+    ctx = rt["af_context"](_fake_ctx(), "d", "t", {}, {"a": 41, "b": "x"})
+    assert ctx["ti"].xcom_pull(task_ids="a") == 41 and ctx["ti"].xcom_pull(task_ids=["a", "b"]) == [41, "x"]
+    with pytest.raises(dg.Failure, match="not an upstream"):
+        ctx["ti"].xcom_pull(task_ids="zzz")
+    with pytest.raises(NotImplementedError):
+        ctx["ti"].xcom_pull(task_ids="a", key="other")
+    with pytest.raises(NotImplementedError):
+        ctx["ti"].xcom_push("k", 1)
+
+
+def test_render_supports_filters_and_macros_and_is_strict(monkeypatch):
+    jinja2 = pytest.importorskip("jinja2")
+    rt = _runtime()
+    ctx = rt["af_context"](_fake_ctx({"airflow/logical_date": "2026-07-02T05:00:00+00:00"}), "d", "t", {"n": 3}, {})
+    r = rt["render"]
+    assert r(ctx, "{{ ds }}/{{ ds_nodash }}/{{ params.n }}") == "2026-07-02/20260702/3"
+    assert r(ctx, "{{ data_interval_start | ds }} {{ macros.ds_add(ds, -1) }} {{ macros.ds_format(ds, '%Y-%m-%d', '%d.%m') }}") == "2026-07-02 2026-07-01 02.07"
+    with pytest.raises(jinja2.UndefinedError):
+        r(ctx, "{{ nope }}")
+
+
+def test_variable_reads_the_environment_like_airflows_env_backend(monkeypatch):
+    rt = _runtime()
+    V = rt["Variable"]
+    monkeypatch.setenv("AIRFLOW_VAR_MY_KEY", "v1")
+    monkeypatch.setenv("AIRFLOW_VAR_CFG", '{"a": 1}')
+    assert V.get("my_key") == "v1" and V.get("cfg", deserialize_json=True) == {"a": 1}
+    assert V.get("absent", default_var="d") == "d" and V.get("absent", default="d3") == "d3"
+    with pytest.raises(KeyError, match="does not exist"):
+        V.get("absent")
+    with pytest.raises(NotImplementedError):
+        V.set("a", "b")
+
+
+def test_airflow_schedule_tags_runs_with_the_logical_date_for_both_semantics():
+    import datetime as dt
+    import zoneinfo
+    dg = pytest.importorskip("dagster")
+    pytest.importorskip("croniter")
+    rt = _runtime()
+
+    @dg.asset
+    def x():
+        return 1
+
+    job = dg.define_asset_job("j", selection=[x])
+    tick = dt.datetime(2026, 7, 2, 0, 0, tzinfo=zoneinfo.ZoneInfo("America/Chicago"))
+    for sem, logical, end in (("trigger", "2026-07-02T05:00:00+00:00", "2026-07-02T05:00:00+00:00"),
+                              ("data_interval", "2026-07-01T05:00:00+00:00", "2026-07-02T05:00:00+00:00")):
+        sched = rt["airflow_schedule"]("s", job, "0 0 * * *", "America/Chicago", sem)
+        repo = dg.Definitions(assets=[x], jobs=[job], schedules=[sched]).get_repository_def()
+        rr = sched.evaluate_tick(dg.build_schedule_context(scheduled_execution_time=tick, repository_def=repo)).run_requests[0]
+        assert rr.tags["airflow/logical_date"] == logical and rr.tags["airflow/data_interval_end"] == end, sem
+
+
+def test_dates_make_the_dag_use_a_tagged_schedule_and_render_literal_templates_only():
+    d = dag([task("b", "BashOperator", template_fields={"bash_command": "echo {{ ds }} {{ params.k }}", "env": {"D": "{{ ds_nodash }}"}})],
+            kind="cron_data_interval")
+    d["params"] = {"k": "v"}
+    code, s = convert(d)
+    compile(code, "x", "exec")
+    assert s["uses_context"] and "ctx = af_context(context, 'd1', 'b', {'k': 'v'}, {})" in code
+    assert "render(ctx, 'echo {{ ds }} {{ params.k }}')" in code and "{'D': render(ctx, '{{ ds_nodash }}')}" in code
+    assert "airflow_schedule('d1_schedule', d1_job, '0 6 * * *', 'America/Chicago', 'data_interval')" in code
+    code2, s2 = convert(dag([task("b", "BashOperator", template_fields={"bash_command": "echo {{ ds }}"})], kind="cron_trigger"))
+    assert "'trigger')" in code2
+
+
+def test_callable_that_pulls_xcom_gets_its_ancestors_as_inputs_and_they_return_values():
+    d = dag([task("a", callable=fn("numbers"), op_args=[], op_kwargs={}), task("m", "EmptyOperator", up=["a"]),
+             task("b", up=["m"], callable=fn("pulls"), op_args=[], op_kwargs={})], kind="manual")
+    code, s = convert(d)
+    compile(code, "x", "exec")
+    assert "ins={'in_0': dg.AssetIn(key=['d1', 'a'])}" in code                       # a is an ancestor of b through the elided task
+    assert "return _af_a()" in code and "call_with_context(_af_b, [], {}, ctx)" in code
+    assert "ctx = af_context(context, 'd1', 'b', {}, {'a': in_0})" in code
+
+
+def test_bash_script_files_are_read_from_the_template_path_or_defer():
+    d = dag([task("s", "BashOperator", template_fields={"bash_command": "run.sh "}, template_files={"bash_command": "echo from file"})], kind="manual")
+    assert "run_shell(context, 'echo from file'" in convert(d)[0]
+    d = dag([task("s", "BashOperator", template_fields={"bash_command": "run.sh "})], kind="manual")
+    with pytest.raises(C.Defer, match="names a script file"):
+        convert(d)
+
+
+def test_generated_context_dag_loads_and_runs_in_dagster(tmp_path):
+    pytest.importorskip("dagster")
+    d = dag([task("a", callable=fn("numbers"), op_args=[], op_kwargs={}),
+             task("b", up=["a"], callable=fn("pulls"), op_args=[], op_kwargs={}),
+             task("c", callable=fn("wants_ds"), op_args=[], op_kwargs={})], kind="manual")
+    d["dag_id"] = "dctx"
+    (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": [d]}))
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_ctx" / "defs"),
+                    "--report", str(tmp_path / "r.json"), "--return-all"], check=True, capture_output=True)
+    (tmp_path / "pkg_ctx" / "__init__.py").write_text("")
+    sys.path.insert(0, str(tmp_path))
+    import importlib
+    import dagster as dg
+    mod = importlib.import_module("pkg_ctx.defs.dctx")
+    res = dg.materialize([mod.t_c], raise_on_error=False)
+    assert res.success and res.asset_value(mod.t_c.key).endswith("x") and res.asset_value(mod.t_c.key)[:2] == "20"      # ds + "x"
+    res = dg.materialize([mod.t_a, mod.t_b], raise_on_error=False)
+    assert not res.success                              # numbers() returns a list, so pulls() cannot add 1 to it: the failure is loud

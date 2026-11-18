@@ -1,6 +1,6 @@
 # Component and integration enhancements that would convert more Airflow DAGs
 
-Measured on 265 DAGs from 13 public Airflow example repos (the corpus is heavy on teaching repos, so absolute counts overstate how rare these constructs are in production; use the ranking, not the percentages). The converter maps 55 DAGs mechanically. For each unconverted DAG it records every blocker; "alone" below counts DAGs whose only blocker is that category, so it is what one enhancement would unlock by itself.
+Measured on 292 DAGs from 14 public Airflow example repos (the corpus is heavy on teaching repos, so absolute counts overstate how rare these constructs are in production; use the ranking, not the percentages). The converter maps 80 DAGs mechanically. For each unconverted DAG it records every blocker; "alone" below counts DAGs whose only blocker is that category, so it is what one enhancement would unlock by itself.
 
 | # | Blocker | DAGs blocked | alone | What would unlock it |
 |---|---|---|---|---|
@@ -95,6 +95,17 @@ Each mirrors an Airflow operator exactly and should ship with a parity test agai
 ## How to verify a new component
 
 The harness in `examples/runtime_conversion/parity/` and `examples/s3_to_snowflake_factories/parity/` already does it: run the real Airflow operator or hook with the external system mocked and recording, run the Dagster component with an equivalent recording fake, compare the calls, return values and errors. Two lessons from building the fakes: Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must attach the same; and a fake client has to include what Airflow's code reads (`ResponseMetadata`, `LastModified`) or the comparison fails for the wrong reason.
+
+## Registry decorators that map deferred Airflow settings
+
+The registry has a `decorator` category (`dagster-component search timeout`). Candidates, each to be verified against Airflow before it is used:
+
+| Airflow setting | Decorator | Differences to handle |
+|---|---|---|
+| `on_failure_callback`, `on_success_callback` | `hooks_asset` (`@on_hooks`) | Airflow passes one context dict, the hooks take `(context, exc)` (the converter would generate an adapter). Hooks wrap each attempt and fire on every retry, while Airflow fires the failure callback only after the last attempt. A "final attempt only" mode would help. |
+| `execution_timeout` on a non-shell task | `timeout_asset` (`@timeout`) | It abandons a worker thread at the deadline and the work keeps running, whereas Airflow stops the task. Shell tasks already get a real kill from the converter's runtime. |
+| `sla` | `sla_asset` (`@sla`) | Both record the breach and do not kill the task. |
+| `pool`, `max_active_tis_per_dag` | `rpa_queue_concurrency_lock`, or Dagster pools | Native pools are preferred; check the lock component first. |
 
 ## Settings the converter defers that a feature could map
 

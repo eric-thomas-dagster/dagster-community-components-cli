@@ -35,6 +35,21 @@ from urllib.parse import urlparse
 
 CONTEXT_PARAMS = {"ds", "ds_nodash", "ts", "ti", "task_instance", "dag_run", "logical_date", "data_interval_start",
                   "data_interval_end", "context", "execution_date", "params", "prev_ds", "next_ds", "run_id", "conf", "dag", "task"}
+# Airflow's task context. SUPPORTED are rebuilt from run tags by the generated runtime; the others defer.
+KNOWN_CTX = CONTEXT_PARAMS | {"ts_nodash", "ts_nodash_with_tz", "prev_ds", "prev_ds_nodash", "next_ds", "next_ds_nodash", "prev_execution_date",
+                              "next_execution_date", "prev_data_interval_start_success", "prev_data_interval_end_success", "macros", "var", "conn",
+                              "inlets", "outlets", "templates_dict", "test_mode", "map_index_template", "triggering_asset_events",
+                              "triggering_dataset_events", "inlet_events", "outlet_events", "tomorrow_ds", "yesterday_ds", "expanded_ti_count",
+                              "prev_start_date_success", "prev_end_date_success"}
+SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "execution_date", "data_interval_start", "data_interval_end",
+                 "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf"}
+JINJA_VARS = SUPPORTED_CTX | {"macros"}
+CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id"}, "dag": {"dag_id"}, "task": {"task_id"},
+             "ti": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull"}, "task_instance": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull"}}
+SUPPORTED_MACROS = {"ds_add", "ds_format", "datetime", "timedelta"}
+SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
+                ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
+                ("airflow.providers.amazon.aws.hooks.s3", "S3Hook")}
 ELIDED = {"EmptyOperator", "DummyOperator"}
 PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator"}
 BASH = {"BashOperator"}
@@ -45,6 +60,9 @@ SNOWFLAKE_OPS = {"CopyFromExternalStageToSnowflakeOperator", "SnowflakeOperator"
 
 class Defer(Exception):
     pass
+
+
+RETURN_ALL = False        # set by --return-all: keep every Python return value so a parity run can compare them
 
 
 def safe(name: str) -> str:
@@ -115,18 +133,17 @@ def _loads(node: ast.AST) -> set[str]:
     return {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)} - set(dir(builtins))
 
 
-def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None) -> tuple[str, list[str]]:
+def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None) -> tuple[str, list[str]]:
     """(function source without decorators, support blocks in source order). Raises Defer with the reason.
 
-    `shims` collects compatibility shims the code relies on (names provided by the runtime module)."""
+    `shims` collects compatibility shims the code relies on (names provided by the runtime module); `meta` receives how the
+    callable uses the Airflow task context: needs_ctx (context names, **kwargs or get_current_context) and needs_ti (ti/xcom_pull)."""
     shims = shims if shims is not None else set()
+    meta = meta if meta is not None else {}
     if not info or "source" not in info:
         raise Defer(f"callable source unavailable ({(info or {}).get('source_error', 'no callable')})")
     if info.get("name") == "<lambda>" or info["source"].lstrip().startswith("lambda"):
         raise Defer("callable is a lambda")
-    params = set(info.get("params") or [])
-    if params & CONTEXT_PARAMS:
-        raise Defer(f"callable uses Airflow task context parameters {sorted(params & CONTEXT_PARAMS)}")
     try:
         tree = ast.parse(info["source"])
     except SyntaxError as e:
@@ -136,9 +153,26 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None)
         raise Defer("callable is not a plain function")
     if isinstance(fn, ast.AsyncFunctionDef):
         raise Defer("async callable")
+    named = [a.arg for a in [*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs]]
+    unsupported = sorted(set(named) & (KNOWN_CTX - SUPPORTED_CTX))
+    if unsupported:
+        raise Defer(f"callable uses Airflow task context names the runtime does not rebuild {unsupported}")
+    ctx_named = sorted(set(named) & SUPPORTED_CTX)
     body_text = ast.unparse(ast.Module(body=[*fn.body], type_ignores=[]))
-    if re.search(r"\bairflow\b|\bti\.|get_current_context|\bVariable\b|\bxcom_(pull|push)\b", body_text):
-        raise Defer("callable uses the Airflow API (context, Variable, xcom)")
+    if re.search(r"\bairflow\b|\bxcom_push\b|\bset_xcom\b", body_text):
+        raise Defer("callable uses the Airflow API (xcom_push or a direct airflow reference)")
+    for n in ast.walk(fn):                                       # attributes of the context objects the runtime rebuilds
+        obj = n.value if isinstance(n, ast.Attribute) else None
+        if isinstance(obj, ast.Subscript) and isinstance(obj.slice, ast.Constant):
+            obj_name = obj.slice.value
+        else:
+            obj_name = obj.id if isinstance(obj, ast.Name) else None
+        if obj_name in CTX_ATTRS and n.attr not in CTX_ATTRS[obj_name]:
+            raise Defer(f"callable uses {obj_name}.{n.attr}, which the runtime's {obj_name} does not provide")
+    meta["var_kw"] = fn.args.kwarg.arg if fn.args.kwarg else None
+    meta["ctx_named"] = ctx_named
+    meta["needs_ti"] = bool({"ti", "task_instance"} & set(ctx_named)) or bool(re.search(r"\bxcom_pull\b|\bti\b|\btask_instance\b", body_text))
+    meta["needs_ctx"] = bool(ctx_named) or bool(fn.args.kwarg) or "get_current_context" in body_text
     idx = ModuleIndex(info["file"])
     needed: dict[int, str] = {}
     seen: set[str] = set()
@@ -154,8 +188,8 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None)
             kind, node = hit
             if kind == "import":
                 mod = getattr(node, "module", None) or (node.names[0].name if isinstance(node, ast.Import) else "")
-                if isinstance(node, ast.ImportFrom) and mod == "airflow.providers.amazon.aws.hooks.s3" and all(a.name == "S3Hook" for a in node.names):
-                    shims.add("S3Hook")                     # provided by the generated runtime module (star-imported)
+                if isinstance(node, ast.ImportFrom) and all((mod, a.name) in SHIM_IMPORTS for a in node.names):
+                    shims.update(a.name for a in node.names)    # provided by the generated runtime module (star-imported)
                     continue
                 if mod.split(".")[0] == "airflow":
                     raise Defer(f"callable depends on an Airflow import ({mod})")
@@ -211,7 +245,7 @@ def xcom_refs(x: Any) -> set[str]:
     return set()
 
 
-def expr(v: Any, params: dict[str, str]) -> str:
+def expr(v: Any, params: dict[str, str], ctx: str | None = None) -> str:
     if isinstance(v, dict):
         if "xcom_from" in v:
             if v.get("key") not in (None, "return_value"):
@@ -223,10 +257,47 @@ def expr(v: Any, params: dict[str, str]) -> str:
             raise Defer(f"argument {v['repr'][:60]!r} cannot be serialised")
         if "seconds" in v:
             return repr(v["seconds"])
-        return "{" + ", ".join(f"{k!r}: {expr(x, params)}" for k, x in v.items()) + "}"
+        return "{" + ", ".join(f"{k!r}: {expr(x, params, ctx)}" for k, x in v.items()) + "}"
     if isinstance(v, list):
-        return "[" + ", ".join(expr(x, params) for x in v) + "]"
+        return "[" + ", ".join(expr(x, params, ctx) for x in v) + "]"
+    if isinstance(v, str) and ctx and ("{{" in v or "{%" in v):
+        return f"render({ctx}, {v!r})"            # only literal templates are rendered, never values passed in from upstream tasks
     return repr(v)
+
+
+def strings_of(x: Any):
+    if isinstance(x, str):
+        yield x
+    elif isinstance(x, dict):
+        for v in x.values():
+            yield from strings_of(v)
+    elif isinstance(x, list):
+        for v in x:
+            yield from strings_of(v)
+
+
+def jinja_vars(x: Any) -> tuple[set[str], str | None]:
+    """(variables the templates in x use, a problem or None). Parsed with real Jinja, with the Airflow filters registered."""
+    import jinja2
+    from jinja2 import meta
+    env = jinja2.Environment(extensions=["jinja2.ext.do"])
+    env.filters.update({k: (lambda v: v) for k in ("ds", "ds_nodash", "ts", "ts_nodash")})
+    names: set[str] = set()
+    for text in strings_of(x):
+        if "{{" not in text and "{%" not in text:
+            continue
+        try:
+            tree = env.parse(text)
+            names |= meta.find_undeclared_variables(tree)
+            used = {n.attr for n in tree.find_all(jinja2.nodes.Getattr) if isinstance(n.node, jinja2.nodes.Name) and n.node.name == "macros"}
+            if used - SUPPORTED_MACROS:
+                return names, f"template uses macros {sorted(used - SUPPORTED_MACROS)}, which the runtime does not provide"
+        except jinja2.TemplateSyntaxError as e:
+            return names, f"template does not parse ({e.message})"
+        except jinja2.TemplateAssertionError as e:
+            return names, f"template uses an unsupported filter or test ({e.message})"
+    bad = names - JINJA_VARS - set(env.globals)
+    return names, (f"template uses {sorted(bad)}, which the runtime does not provide" if bad else None)
 
 
 def has_jinja(x: Any) -> bool:
@@ -248,7 +319,7 @@ S3_FIELDS = {
 }
 
 
-def snowflake_call(t: dict[str, Any]) -> tuple[str, str]:
+def snowflake_call(t: dict[str, Any], ctx: str | None = None) -> tuple[str, str]:
     """(statement, snowflake connection id) for a supported Snowflake operator."""
     ty, tid = t["type"], t["task_id"]
     a = {**t["template_fields"], **(t.get("args") or {})}
@@ -258,17 +329,30 @@ def snowflake_call(t: dict[str, Any]) -> tuple[str, str]:
         if any(a.get(k) for k in ("columns_array", "storage_integration", "authenticator", "session_parameters")):
             raise Defer(f"{tid}: COPY operator option not mapped")
         kw = {k: a.get(k) for k in ("table", "stage", "file_format", "schema", "prefix", "files", "pattern", "copy_options", "validation_mode")}
-        if has_jinja(kw):
-            raise Defer(f"{tid}: Jinja template")
-        return f"snowflake_run(context, {conn!r}, {ov!r}, [copy_into_sql(**{kw!r})])", conn
+        return f"snowflake_run(context, {conn!r}, {ov!r}, [copy_into_sql(**{expr(kw, {}, ctx)})])", conn
     if ty == "SQLExecuteQueryOperator" and "snowflake" not in conn.lower():
         raise Defer(f"{tid}: SQLExecuteQueryOperator on connection {conn!r} (only Snowflake connections are mapped)")
     sql = (t.get("template_files") or {}).get("sql") or a.get("sql")
-    if not isinstance(sql, (str, list)) or has_jinja(sql):
-        raise Defer(f"{tid}: SQL is not a plain string (templated, parameterised or a callable)")
+    if not isinstance(sql, (str, list)):
+        raise Defer(f"{tid}: SQL is not a string or a list of strings")
     if a.get("parameters"):
         raise Defer(f"{tid}: SQL parameters")
-    return f"snowflake_run(context, {conn!r}, {ov!r}, {[sql] if isinstance(sql, str) else sql!r}, split=True)", conn
+    return f"snowflake_run(context, {conn!r}, {ov!r}, {expr([sql] if isinstance(sql, str) else sql, {}, ctx)}, split=True)", conn
+
+
+def task_templates(t: dict[str, Any]) -> Any:
+    """The fields of a task that Airflow renders as templates (the ones this converter maps)."""
+    ty, tf = t["type"], t["template_fields"]
+    if ty in PY_TASKS | BASH_DEC:
+        return [t.get("op_args"), t.get("op_kwargs"), tf.get("env") if ty in BASH_DEC else None]
+    if ty in BASH:
+        return [(t.get("template_files") or {}).get("bash_command") or tf.get("bash_command"), tf.get("env"), tf.get("cwd")]
+    if ty in SNOWFLAKE_OPS:
+        a = {**tf, **(t.get("args") or {})}
+        return [(t.get("template_files") or {}).get("sql") or a.get("sql"), {k: a.get(k) for k in ("table", "stage", "prefix", "files", "pattern", "copy_options")}]
+    if ty in S3_FIELDS:
+        return {k: tf.get(k) for k in S3_FIELDS[ty]}
+    return None
 
 
 def and_condition(keys: list[list[str]]) -> str:
@@ -278,11 +362,11 @@ def and_condition(keys: list[list[str]]) -> str:
             "& ~dg.AutomationCondition.in_progress())")
 
 
-def s3_call(t: dict[str, Any], params: dict[str, str]) -> tuple[str, str]:
+def s3_call(t: dict[str, Any], params: dict[str, str], ctx: str | None = None) -> tuple[str, str]:
     """(statement, aws connection id) for a supported S3 operator."""
     ty, f = t["type"], t["template_fields"]
     conn = f.get("aws_conn_id") or "aws_default"
-    g = lambda k: expr(f.get(k), params)
+    g = lambda k: expr(f.get(k), params, ctx)
     if ty == "S3ListOperator":
         if f.get("apply_wildcard"):
             raise Defer(f"{t['task_id']}: S3ListOperator apply_wildcard")
@@ -356,8 +440,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     ds = dag.get("dag_settings") or {}
     if ds.get("fail_stop"):
         reasons.append("fail_stop=True (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish)")
+    max_runs = ds.get("max_active_runs")
+    max_runs = max_runs if isinstance(max_runs, int) and not isinstance(max_runs, bool) and max_runs > 0 and max_runs != 16 else None
     for k, default in (("max_active_tasks", 16), ("max_active_runs", 16), ("concurrency", 16)):
         v = ds.get(k)
+        if k == "max_active_runs" and max_runs is not None:
+            continue                                          # mapped below: a run tag plus a deployment concurrency limit
         if v not in (None, default, 0) and not (isinstance(v, dict)):
             reasons.append(f"{k}={v} (a concurrency limit that is not mapped)")
     if ds.get("dagrun_timeout"):
@@ -386,18 +474,23 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 reasons.append(f"{tid}: {flag}")
         if t.get("pool_slots") not in (None, 1):
             reasons.append(f"{tid}: pool_slots={t['pool_slots']}")
-        cbs = list(t.get("callbacks") or [])                    # pre/post_execute appear only when overridden (run_if, skip_if, hooks)
+        cbs = [c for c in (t.get("callbacks") or []) if not (t["is_mapped"] and c in ("pre_execute", "post_execute"))]   # a mapped wrapper overrides them; mapping already defers
         if cbs:
             reasons.append(f"{tid}: task callbacks or hooks {cbs}")
         if t.get("execution_timeout_s") and ty not in BASH | BASH_DEC:
             reasons.append(f"{tid}: execution_timeout on a non-shell task (a Python callable cannot be interrupted safely)")
+        if ty in PY_TASKS and (t.get("template_fields") or {}).get("templates_dict"):
+            reasons.append(f"{tid}: templates_dict (rendered templates passed to the callable) is not rebuilt")
         if len(t["outlets"]) > 1:
             reasons.append(f"{tid}: {len(t['outlets'])} outlets")
         if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS:
             reasons.append(f"{tid}: operator {ty}")
-        relevant = {k: tf.get(k) for k in (S3_FIELDS.get(ty) or ("bash_command", "env", "cwd"))} if ty not in PY_TASKS | SNOWFLAKE_OPS else {}
-        if has_jinja(relevant) or has_jinja(t.get("op_args")) or has_jinja(t.get("op_kwargs")):
-            reasons.append(f"{tid}: Jinja template")
+        _, jprob = jinja_vars(task_templates(t))
+        if jprob:
+            reasons.append(f"{tid}: {jprob}")
+        if ty in BASH and isinstance(tf.get("bash_command"), str) and tf["bash_command"].rstrip().endswith((".sh", ".bash")) \
+                and "bash_command" not in (t.get("template_files") or {}):
+            reasons.append(f"{tid}: bash_command names a script file ({tf['bash_command'].strip()[:40]}) that was not found")
     if reasons:
         raise Defer("; ".join(dict.fromkeys(reasons)))
 
@@ -456,15 +549,45 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     support: dict[str, int] = {}
     blocks: list[str] = []
     roots = [t["task_id"] for t in real if not eff_up(t["task_id"])]
+
+    def ancestors(tid: str) -> list[str]:
+        out: list[str] = []
+        for u in eff_up(tid):
+            out += [*ancestors(u), u]
+        return list(dict.fromkeys(out))
+
+    # pre-pass: which callables need the Airflow context, which tasks pull upstream values (ti.xcom_pull), which templates need dates
+    resolved: dict[str, tuple[str, list[str], dict[str, Any]]] = {}
+    ctx_tasks: set[str] = set()
+    ti_inputs: dict[str, list[str]] = {}
+    for t in real:
+        tid, ty = t["task_id"], t["type"]
+        meta: dict[str, Any] = {}
+        if ty in PY_TASKS | BASH_DEC:
+            code, sup = resolve_callable(t.get("callable"), shims_used, meta)
+            resolved[tid] = (code, sup, meta)
+        names, _ = jinja_vars(task_templates(t))
+        if meta.get("needs_ctx") or names:
+            ctx_tasks.add(tid)
+        if meta.get("needs_ti") or {"ti", "task_instance"} & names:
+            ti_inputs[tid] = [u for u in ancestors(tid) if u in keyparts]      # xcom_pull may name any task that ran before
+            consumed |= set(ti_inputs[tid])
+    uses_ctx = bool(ctx_tasks)
+    dag_params = dag.get("params") or {}
     for t in real:
         tid = t["task_id"]
         ups = [u for u in eff_up(tid) if u in keyparts]
-        params = {u: f"in_{i}" for i, u in enumerate(ups)}
-        data = {u for u in ups if u in xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")) | xcom_refs(t["template_fields"])}
-        args = ["    context: dg.AssetExecutionContext"] + [f"    {params[u]}" for u in ups if u in data]
+        refs = xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")) | xcom_refs(t["template_fields"])
+        ordered = list(dict.fromkeys([*ups, *ti_inputs.get(tid, [])]))
+        params = {u: f"in_{i}" for i, u in enumerate(ordered)}
+        data = {u for u in ordered if u in refs or u in ti_inputs.get(tid, [])}
+        ctxn = "ctx" if tid in ctx_tasks else None
+        ctx_line = (f"    ctx = af_context(context, {dag_id!r}, {tid!r}, {dag_params!r}, "
+                    "{" + ", ".join(f"{u!r}: {params[u]}" for u in ordered if u in data) + "})\n") if ctxn else ""
+        args = ["    context: dg.AssetExecutionContext"] + [f"    {params[u]}" for u in ordered if u in data]
         deco = [f"key={keyparts[tid]!r}", f"group_name={safe(dag_id)!r}"]
         if data:
-            deco.append("ins={" + ", ".join(f"{params[u]!r}: dg.AssetIn(key={keyparts[u]!r})" for u in ups if u in data) + "}")
+            deco.append("ins={" + ", ".join(f"{params[u]!r}: dg.AssetIn(key={keyparts[u]!r})" for u in ordered if u in data) + "}")
         deps = [keyparts[u] for u in ups if u not in data]
         for inl in t["inlets"]:
             k = key_from_asset(inl)
@@ -493,45 +616,52 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         deco.append(f"metadata={{'airflow_dag': {dag_id!r}, 'airflow_task': {tid!r}, 'airflow_operator': {t['type']!r}}}")
         fname = safe("t_" + tid)
         ty = t["type"]
-        ret_none = tid not in consumed
+        ret_none = tid not in consumed and not (RETURN_ALL and ty in PY_TASKS)
         if ty in BASH:
-            cmd = t["template_fields"].get("bash_command")
+            cmd = (t.get("template_files") or {}).get("bash_command") or t["template_fields"].get("bash_command")
             if not isinstance(cmd, str):
                 raise Defer(f"{tid}: bash_command is not a string")
-            body = f"    run_shell(context, {cmd!r}, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})"
+            env = t["template_fields"].get("env")
+            env_expr = expr(env, params, ctxn) if env else "None"
+            body = (ctx_line + f"    run_shell(context, {expr(cmd, params, ctxn)}, env={env_expr}, "
+                    f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r})")
             deco.append("kinds={'shell'}")
             pre = ""
         elif ty in PY_TASKS | BASH_DEC:
-            code, sup = resolve_callable(t.get("callable"), shims_used)
-            for s in sup:
-                support.setdefault(s, len(support))
+            code, sup, meta = resolved[tid]
+            for sline in sup:
+                support.setdefault(sline, len(support))
             pyname = "_af_" + safe(tid)
             code = re.sub(r"^def\s+\w+", f"def {pyname}", code, count=1)
-            call = ", ".join([expr(a, params) for a in (t.get("op_args") or [])] +
-                             [f"{k}={expr(v, params)}" for k, v in (t.get("op_kwargs") or {}).items()])
+            pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
+            kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
+            if meta.get("needs_ctx"):
+                inner = f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
+            else:
+                inner = f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")"
             pre = code + "\n\n\n"
             if ty in BASH_DEC:
-                body = (f"    cmd = {pyname}({call})\n    if not isinstance(cmd, str) or not cmd.strip():\n"
+                body = (ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                         f"        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
                         f"    run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})")
                 deco.append("kinds={'shell'}")
             else:
-                body = f"    return {pyname}({call})" if not ret_none else f"    {pyname}({call})"
+                body = ctx_line + (f"    return {inner}" if not ret_none else f"    {inner}")
                 deco.append("kinds={'python'}")
         elif ty in SNOWFLAKE_OPS:
-            stmt, conn = snowflake_call(t)
+            stmt, conn = snowflake_call(t, ctxn)
             sf_resources.add(conn)
             deco.append(f"required_resource_keys={{{conn!r}}}")
             deco.append("kinds={'snowflake'}")
-            body = f"    {stmt}"
+            body = ctx_line + f"    {stmt}"
             pre = ""
             ret_none = True
         else:
-            stmt, conn = s3_call(t, params)
+            stmt, conn = s3_call(t, params, ctxn)
             resources.add(conn)
             deco.append(f"required_resource_keys={{{conn!r}}}")
             deco.append("kinds={'s3'}")
-            body = f"    client = getattr(context.resources, {conn!r})     # dagster-aws attaches the boto client\n    {stmt}"
+            body = ctx_line + f"    client = getattr(context.resources, {conn!r})     # dagster-aws attaches the boto client\n    {stmt}"
             pre = ""
             ret_none = not stmt.startswith("return")
         sig = "(\n" + ",\n".join(args) + ",\n)" + (" -> None" if ret_none else "")
@@ -547,15 +677,21 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     if notes:
         mod[1:1] = ["", *[f"NOTE: {n}" for n in notes]]
     out = "\n".join(mod) + "\n\n" + "\n\n".join(blocks) + "\n"
-    out += f"\n{safe(dag_id)}_job = dg.define_asset_job({safe(dag_id)!r}, selection=[dg.AssetKey(k) for k in {keys!r}])\n"
-    if tt["kind"] in ("cron_trigger", "cron_data_interval"):
+    out += (f"\n{safe(dag_id)}_job = dg.define_asset_job({safe(dag_id)!r}, selection=[dg.AssetKey(k) for k in {keys!r}]"
+            + (f", tags={{'airflow/dag_id': {dag_id!r}}}" if max_runs else "") + ")\n")
+    if tt["kind"] in ("cron_trigger", "cron_data_interval") and uses_ctx:
+        sem = "data_interval" if tt["kind"] == "cron_data_interval" else "trigger"
+        out += (f"\n{safe(dag_id)}_schedule = airflow_schedule({safe(dag_id) + '_schedule'!r}, {safe(dag_id)}_job, "
+                f"{tt['cron']!r}, {tz_name(tt['timezone'])!r}, {sem!r})\n")
+    elif tt["kind"] in ("cron_trigger", "cron_data_interval"):
         out += (f"\n{safe(dag_id)}_schedule = dg.ScheduleDefinition(name={safe(dag_id) + '_schedule'!r}, job={safe(dag_id)}_job, "
                 f"cron_schedule={tt['cron']!r}, execution_timezone={tz_name(tt['timezone'])!r})\n")
     for k in own_keys:
         produced[k] = dag_id
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
-                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "requirements": sorted(third_party(support)), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "requirements": sorted(third_party(support) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "uses_context": uses_ctx, "max_active_runs": max_runs,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
 
 
@@ -582,6 +718,138 @@ def run_shell(context: dg.AssetExecutionContext, command: str, env: Optional[dic
         context.log.info(proc.stdout)
     if proc.returncode != 0:
         raise dg.Failure(description=f"command exited {proc.returncode}", metadata={"stderr": proc.stderr[-4000:], "command": command})
+
+
+import contextvars
+import datetime as _dt
+import inspect
+import json
+import types
+
+_MISSING = object()
+_AF_CTX: contextvars.ContextVar = contextvars.ContextVar("airflow_context", default=None)
+
+
+class _TaskInstance:
+    """The part of Airflow's TaskInstance converted callables and templates use. Anything else raises."""
+
+    def __init__(self, dag_id, task_id, run_id, try_number, upstream):
+        self.dag_id, self.task_id, self.run_id, self.try_number, self._up = dag_id, task_id, run_id, try_number, upstream
+
+    def xcom_pull(self, task_ids=None, dag_id=None, key="return_value", include_prior_dates=False, map_indexes=None, default=None):
+        if key != "return_value" or dag_id not in (None, self.dag_id) or include_prior_dates or map_indexes is not None or task_ids is None:
+            raise NotImplementedError("xcom_pull is mirrored only for return values of named tasks in this DAG")
+        ids = [task_ids] if isinstance(task_ids, str) else list(task_ids)
+        missing = [i for i in ids if i not in self._up]
+        if missing:
+            raise dg.Failure(description=f"xcom_pull of {missing}: not an upstream asset of this task, so its value was not passed in")
+        vals = [self._up[i] for i in ids]
+        return vals[0] if isinstance(task_ids, str) else vals
+
+    def xcom_push(self, *a, **k):
+        raise NotImplementedError("xcom_push is not mirrored: return the value instead")
+
+
+def af_context(context, dag_id, task_id, params, upstream):
+    """Rebuild the Airflow task context from the Dagster run. The logical date comes from run tags that airflow_schedule sets;
+    a run without them (a manual run) uses the current time, as Airflow does for a manual trigger. ds is the UTC date of the
+    logical date."""
+    run = getattr(context, "run", None)
+    tags = dict(getattr(run, "tags", None) or {})
+    utc = _dt.timezone.utc
+    ld = _dt.datetime.fromisoformat(tags["airflow/logical_date"]) if tags.get("airflow/logical_date") else _dt.datetime.now(utc)
+    de = _dt.datetime.fromisoformat(tags["airflow/data_interval_end"]) if tags.get("airflow/data_interval_end") else ld
+    ld, de = ld.astimezone(utc), de.astimezone(utc)
+    ds = ld.strftime("%Y-%m-%d")
+    conf = json.loads(tags.get("airflow/conf", "{}"))
+    run_id = run.run_id if run is not None else context.run_id        # context.run_id is deprecated in current Dagster
+    ti = _TaskInstance(dag_id, task_id, run_id, getattr(context, "retry_number", 0) + 1, upstream)
+    return {"ds": ds, "ds_nodash": ds.replace("-", ""), "ts": ld.isoformat(), "ts_nodash": ld.strftime("%Y%m%dT%H%M%S"),
+            "logical_date": ld, "execution_date": ld, "data_interval_start": ld, "data_interval_end": de,
+            "run_id": run_id, "params": dict(params or {}), "conf": conf,
+            "dag": types.SimpleNamespace(dag_id=dag_id), "task": types.SimpleNamespace(task_id=task_id), "ti": ti, "task_instance": ti,
+            "dag_run": types.SimpleNamespace(run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id)}
+
+
+def call_with_context(fn, args, kwargs, ctx):
+    """PythonOperator's rule: context is merged under op_kwargs; a **kwargs callable gets everything, otherwise only the
+    parameters it names (and that op_args did not already fill)."""
+    sig = inspect.signature(fn)
+    merged = {**ctx, **kwargs}
+    if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
+        call_kwargs = merged
+    else:
+        bound = set(sig.bind_partial(*args).arguments)
+        call_kwargs = {k: merged[k] for k, p in sig.parameters.items()
+                       if k in merged and k not in bound and p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)}
+    token = _AF_CTX.set(ctx)
+    try:
+        return fn(*args, **call_kwargs)
+    finally:
+        _AF_CTX.reset(token)
+
+
+def get_current_context():
+    ctx = _AF_CTX.get()
+    if ctx is None:
+        raise RuntimeError("get_current_context() called outside a converted task")
+    return ctx
+
+
+class Variable:
+    """Airflow Variables from the environment (AIRFLOW_VAR_<KEY>), which is what Airflow's own environment backend reads."""
+
+    @classmethod
+    def get(cls, key, default_var=_MISSING, deserialize_json=False, default=_MISSING):
+        v = os.environ.get("AIRFLOW_VAR_" + key.upper())
+        if v is None:
+            d = default if default is not _MISSING else default_var
+            if d is _MISSING:
+                raise KeyError(f"Variable {key} does not exist")
+            return d
+        return json.loads(v) if deserialize_json else v
+
+    @classmethod
+    def set(cls, *a, **k):
+        raise NotImplementedError("Variable.set is not mirrored")
+
+
+def _ds_add(ds, days):
+    return (_dt.datetime.strptime(ds, "%Y-%m-%d") + _dt.timedelta(days=days)).strftime("%Y-%m-%d")
+
+
+def _ds_format(ds, input_format, output_format):
+    return _dt.datetime.strptime(str(ds), input_format).strftime(output_format)
+
+
+def render(ctx, text):
+    """Render an Airflow-style Jinja template: sandboxed, strict about undefined names, with the ds/ts filters and ds macros."""
+    import jinja2
+    from jinja2.sandbox import SandboxedEnvironment
+    env = SandboxedEnvironment(undefined=jinja2.StrictUndefined, extensions=["jinja2.ext.do"], cache_size=0)
+    env.filters.update({"ds": lambda v: v.strftime("%Y-%m-%d"), "ds_nodash": lambda v: v.strftime("%Y%m%d"),
+                        "ts": lambda v: v.isoformat(), "ts_nodash": lambda v: v.strftime("%Y%m%dT%H%M%S")})
+    macros = types.SimpleNamespace(ds_add=_ds_add, ds_format=_ds_format, datetime=_dt.datetime, timedelta=_dt.timedelta)
+    return env.from_string(text).render(**ctx, macros=macros)
+
+
+def airflow_schedule(name, job, cron, tz, semantics):
+    """A cron schedule whose runs carry the Airflow logical date as tags. semantics: "trigger" (Airflow 3: logical date = the tick)
+    or "data_interval" (Airflow 2: the run covers the interval that ended at the tick, so the logical date is the previous tick)."""
+    if semantics == "data_interval":
+        try:
+            from croniter import croniter       # not a Dagster dependency: the project must install it (converted_requirements.txt lists it)
+        except ImportError as e:
+            raise ImportError("Airflow 2 data-interval schedules need the `croniter` package") from e
+
+    def execution_fn(ctx):
+        tick = ctx.scheduled_execution_time
+        logical = croniter(cron, tick).get_prev(_dt.datetime) if semantics == "data_interval" else tick
+        utc = _dt.timezone.utc
+        return dg.RunRequest(tags={"airflow/logical_date": logical.astimezone(utc).isoformat(),
+                                   "airflow/data_interval_end": tick.astimezone(utc).isoformat()})
+
+    return dg.ScheduleDefinition(name=name, job=job, cron_schedule=cron, execution_timezone=tz, execution_fn=execution_fn)
 
 
 def copy_into_sql(*, table, stage, file_format, schema=None, prefix=None, files=None, pattern=None, copy_options=None, validation_mode=None):
@@ -756,7 +1024,10 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("ir", type=Path)
     ap.add_argument("--out-dir", type=Path, required=True, help="the project's defs directory (src/<pkg>/defs)")
     ap.add_argument("--report", type=Path, default=Path("conversion_report.json"))
+    ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
+    global RETURN_ALL
+    RETURN_ALL = a.return_all
     ir = json.loads(a.ir.read_text())
     a.out_dir.mkdir(parents=True, exist_ok=True)
     (a.out_dir / "__init__.py").touch()
@@ -802,6 +1073,12 @@ def main(argv: list[str] | None = None) -> int:
             '"""Assets that converted DAGs read or are triggered by but that no converted DAG produces."""\n'
             "import dagster as dg\n\n\n@dg.definitions\ndef sources() -> dg.Definitions:\n    return dg.Definitions(assets=[\n" +
             "".join(f"        dg.AssetSpec(key={e.split('/')!r}),\n" for e in ext) + "    ])\n")
+    limits = {k: v["max_active_runs"] for k, v in report["dags"].items() if v["status"] == "converted" and v.get("max_active_runs")}
+    if limits:
+        (a.out_dir.parent / "concurrency_limits.yaml").write_text(
+            "# Airflow max_active_runs, as run-queue tag limits. Merge into the deployment's run coordinator settings\n"
+            "# (dagster.yaml run_coordinator.config, or the Dagster+ deployment settings); without it the limit is NOT enforced.\n"
+            "tag_concurrency_limits:\n" + "".join(f"  - key: airflow/dag_id\n    value: {k!r}\n    limit: {n}\n" for k, n in sorted(limits.items())))
     reqs = sorted({r for v in report["dags"].values() if v["status"] == "converted" for r in v["requirements"]})
     if reqs:
         (a.out_dir.parent / "converted_requirements.txt").write_text("\n".join(reqs) + "\n")
