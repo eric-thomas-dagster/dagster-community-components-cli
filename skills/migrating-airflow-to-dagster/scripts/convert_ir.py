@@ -42,7 +42,7 @@ KNOWN_CTX = CONTEXT_PARAMS | {"ts_nodash", "ts_nodash_with_tz", "prev_ds", "prev
                               "triggering_dataset_events", "inlet_events", "outlet_events", "tomorrow_ds", "yesterday_ds", "expanded_ti_count",
                               "prev_start_date_success", "prev_end_date_success"}
 SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "execution_date", "data_interval_start", "data_interval_end",
-                 "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf",
+                 "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf", "outlet_events", "inlet_events",
                  "next_ds", "next_ds_nodash", "next_execution_date", "prev_ds", "prev_ds_nodash", "prev_execution_date",     # Airflow 2 macros
                  "tomorrow_ds", "tomorrow_ds_nodash", "yesterday_ds", "yesterday_ds_nodash", "ts_nodash_with_tz",
                  "prev_data_interval_start_success", "prev_data_interval_end_success"}
@@ -55,6 +55,7 @@ SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("a
                 ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
                 ("airflow.providers.amazon.aws.hooks.s3", "S3Hook")} | \
     {(m, "BaseOperator") for m in ("airflow.models", "airflow.models.baseoperator", "airflow.sdk", "airflow.sdk.bases.operator")} | \
+    {(m, n) for m in ("airflow.sdk", "airflow.datasets", "airflow.assets", "airflow.sdk.definitions.asset", "airflow.datasets.metadata") for n in ("Asset", "Dataset", "Metadata", "AssetAlias", "DatasetAlias")} | \
     {("airflow.utils.decorators", "apply_defaults")} | {(m, "Context") for m in ("airflow.utils.context", "airflow.sdk", "airflow.sdk.definitions.context")} | \
     {(m, n) for m in ("airflow.exceptions", "airflow.sdk.exceptions", "airflow.sdk") for n in ("AirflowException", "AirflowSkipException", "AirflowFailException")} | \
     {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")}
@@ -207,8 +208,11 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
             kind, node = hit
             if kind == "import":
                 mod = getattr(node, "module", None) or (node.names[0].name if isinstance(node, ast.Import) else "")
-                if isinstance(node, ast.ImportFrom) and all((mod, a.name) in SHIM_IMPORTS for a in node.names):
-                    shims.update(a.name for a in node.names)
+                al = next((a for a in node.names if (a.asname or a.name) == name), None) if isinstance(node, ast.ImportFrom) else None
+                if al is not None and (mod, al.name) in SHIM_IMPORTS:
+                    shims.add(al.name)
+                    if al.asname and al.asname != al.name:
+                        needed[node.lineno] = f"{al.asname} = {al.name}"
                     continue
                 if mod.split(".")[0] == "airflow":
                     raise Defer(f"operator class depends on an Airflow import ({mod})")
@@ -287,7 +291,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     meta["var_kw"] = fn.args.kwarg.arg if fn.args.kwarg else None
     meta["ctx_named"] = ctx_named
     meta["needs_ti"] = bool({"ti", "task_instance"} & set(ctx_named)) or bool(re.search(r"\bxcom_pull\b|\bti\b|\btask_instance\b", body_text))
-    meta["needs_ctx"] = bool(ctx_named) or bool(fn.args.kwarg) or "get_current_context" in body_text
+    meta["needs_ctx"] = bool(ctx_named) or bool(fn.args.kwarg) or "get_current_context" in body_text or bool(re.search(r"\bMetadata\b|\boutlet_events\b|\binlet_events\b", body_text))
     idx = ModuleIndex(info["file"])
     needed: dict[int, str] = {}
     seen: set[str] = set()
@@ -303,8 +307,11 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
             kind, node = hit
             if kind == "import":
                 mod = getattr(node, "module", None) or (node.names[0].name if isinstance(node, ast.Import) else "")
-                if isinstance(node, ast.ImportFrom) and all((mod, a.name) in SHIM_IMPORTS for a in node.names):
-                    shims.update(a.name for a in node.names)    # provided by the generated runtime module (star-imported)
+                al = next((a for a in node.names if (a.asname or a.name) == name), None) if isinstance(node, ast.ImportFrom) else None
+                if al is not None and (mod, al.name) in SHIM_IMPORTS:       # this name is provided by the generated runtime module (star-imported)
+                    shims.add(al.name)
+                    if al.asname and al.asname != al.name:
+                        needed[node.lineno] = f"{al.asname} = {al.name}"
                     continue
                 if mod.split(".")[0] == "airflow":
                     raise Defer(f"callable depends on an Airflow import ({mod})")
@@ -1790,7 +1797,7 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
             "ts_nodash_with_tz": ld.strftime("%Y%m%dT%H%M%S%z"), "prev_data_interval_start_success": None, "prev_data_interval_end_success": None,
             "dag": types.SimpleNamespace(dag_id=dag_id), "task": types.SimpleNamespace(task_id=task_id), "ti": ti, "task_instance": ti,
             "dag_run": types.SimpleNamespace(run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
-            "partition_key": pkey}
+            "partition_key": pkey, "outlet_events": _OutletEvents(context), "inlet_events": _InletEvents(context)}
 
 
 def call_with_context(fn, args, kwargs, ctx):
@@ -1806,7 +1813,20 @@ def call_with_context(fn, args, kwargs, ctx):
                        if k in merged and k not in bound and p.kind in (inspect.Parameter.POSITIONAL_OR_KEYWORD, inspect.Parameter.KEYWORD_ONLY)}
     token = _AF_CTX.set(ctx)
     try:
-        return fn(*args, **call_kwargs)
+        result = fn(*args, **call_kwargs)
+        if inspect.isgenerator(result):                      # a task that yields Metadata(asset, extra) and may return a value
+            value = None
+            try:
+                while True:
+                    item = next(result)
+                    if isinstance(item, Metadata) and "outlet_events" in ctx:
+                        ctx["outlet_events"][item.asset].extra.update(item.extra)
+            except StopIteration as stop:
+                value = stop.value
+            result = value
+        if "outlet_events" in ctx:
+            ctx["outlet_events"].flush()
+        return result
     finally:
         _AF_CTX.reset(token)
 
@@ -2387,6 +2407,112 @@ def trigger_dag_run(context, calling_module, dag_id, conf=None):
         raise dg.Failure(description=f"the triggered DAG {dag_id!r} failed (run {result.run_id})", metadata={"triggered_run_id": result.run_id})
 
 
+DATASET_KEYS_MODE = "path"
+
+
+def asset_key_of(ref):
+    """The Dagster asset key of an Airflow asset or dataset name or URI (the converter names assets the same way)."""
+    import re as _re
+    from urllib.parse import urlparse
+
+    def safe_(p):
+        s_ = _re.sub("[^0-9A-Za-z_]", "_", p)
+        return f"_{s_}" if s_[:1].isdigit() else s_
+    if DATASET_KEYS_MODE == "script-orchestrator":
+        cleaned = _re.sub(r"^[a-z]+://", "", ref)
+        return [f"airflow_dataset_{_re.sub('_+', '_', _re.sub('[^A-Za-z0-9_]', '_', cleaned)).strip('_')}"]
+    u = urlparse(ref)
+    parts = [u.scheme, u.netloc, *u.path.strip("/").split("/")] if u.scheme and u.netloc else [ref]
+    return [safe_(p) for p in parts if p]
+
+
+class Asset:
+    """An Airflow Asset or Dataset: a name or URI that maps to a Dagster asset key."""
+
+    def __init__(self, name=None, uri=None, *, group=None, extra=None, **kwargs):
+        self.name, self.uri, self.extra = name, uri, extra or {}
+        self.ref = uri or name
+
+    @property
+    def key(self):
+        return asset_key_of(self.ref)
+
+
+Dataset = Asset
+
+
+class AssetAlias:
+    def __init__(self, name):
+        self.name, self.ref = name, name
+
+
+DatasetAlias = AssetAlias
+
+
+class Metadata:
+    """`yield Metadata(asset, {"k": v})` from a task: metadata on that asset's materialization."""
+
+    def __init__(self, asset, extra, alias=None):
+        self.asset, self.extra, self.alias = asset, dict(extra or {}), alias
+
+
+class _OutletEvent:
+    def __init__(self):
+        self.extra, self.added = {}, []
+
+    def add(self, asset, extra=None):
+        self.added.append((asset, dict(extra or {})))
+
+
+def _meta_value(v):
+    try:
+        json.dumps(v)
+    except TypeError:
+        return str(v)
+    return dg.MetadataValue.json(v) if isinstance(v, (dict, list)) else v
+
+
+class _OutletEvents:
+    """outlet_events[asset].extra = {...}: becomes metadata on the materialization of that asset."""
+
+    def __init__(self, context):
+        self._ctx, self._events = context, {}
+
+    def __getitem__(self, asset):
+        return self._events.setdefault(tuple(asset_key_of(asset.ref)), _OutletEvent())
+
+    def flush(self):
+        own = getattr(self._ctx, "asset_key", None)
+        for key, ev in self._events.items():
+            if ev.extra:
+                meta = {k: _meta_value(v) for k, v in ev.extra.items()}
+                if own is not None and tuple(own.path) == key:
+                    self._ctx.add_output_metadata(meta)
+                else:
+                    self._ctx.log_event(dg.AssetMaterialization(asset_key=dg.AssetKey(list(key)), metadata=meta))
+            for added, extra in ev.added:                      # an alias resolved at run time: the asset it names is materialized
+                self._ctx.log_event(dg.AssetMaterialization(asset_key=dg.AssetKey(asset_key_of(added.ref)), metadata={k: _meta_value(v) for k, v in extra.items()}))
+
+
+class _InletEvent:
+    def __init__(self, record):
+        self.timestamp = record.timestamp
+        mat = record.asset_materialization
+        self.extra = {k: getattr(v, "value", v) for k, v in (mat.metadata if mat else {}).items()}
+
+
+class _InletEvents:
+    """inlet_events[asset]: the asset's materializations, oldest first, each with the metadata it carried as `.extra`."""
+
+    def __init__(self, context):
+        self._ctx = context
+
+    def __getitem__(self, asset):
+        records = self._ctx.instance.get_event_records(
+            dg.EventRecordsFilter(event_type=dg.DagsterEventType.ASSET_MATERIALIZATION, asset_key=dg.AssetKey(asset_key_of(asset.ref))), limit=200, ascending=False)
+        return [_InletEvent(r) for r in reversed(list(records))]
+
+
 class BaseOperator:
     """Stands in for Airflow's BaseOperator for a copied operator class: it keeps the arguments, offers `self.log`, and the converted task runs `execute`."""
     template_fields: tuple = ()
@@ -2477,7 +2603,7 @@ def main(argv: list[str] | None = None) -> int:
     (a.out_dir / "__init__.py").touch()
     _v = re.match(r"(\d+)\.(\d+)", str(ir.get("airflow_version") or ""))
     iso = bool(_v) and (int(_v.group(1)), int(_v.group(2))) < (2, 8)
-    (a.out_dir.parent / "runtime.py").write_text(RUNTIME.replace("AF_ISO_DT = False", f"AF_ISO_DT = {iso}", 1))
+    (a.out_dir.parent / "runtime.py").write_text(RUNTIME.replace("AF_ISO_DT = False", f"AF_ISO_DT = {iso}", 1).replace('DATASET_KEYS_MODE = "path"', f'DATASET_KEYS_MODE = "{DATASET_KEYS}"', 1))
     note = ("Schedule semantics: tasks converted here use no date values, so a plain cron schedule is exact for Airflow 3 "
             "(trigger timetable) and Airflow 2 (data-interval timetable).")
     report: dict[str, Any] = {"airflow_version": ir.get("airflow_version"), "dataset_keys": DATASET_KEYS, "dags": {}}

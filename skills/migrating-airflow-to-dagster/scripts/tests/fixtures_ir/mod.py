@@ -3,6 +3,7 @@ import os
 
 from airflow.decorators import task          # the DAG file's own import; must not leak into converted code
 from airflow.models import BaseOperator
+from airflow.sdk import Asset, Metadata
 from airflow.utils.decorators import apply_defaults
 
 SCALE = 3
@@ -184,3 +185,19 @@ class UsesAirflow(BaseOperator):
     def execute(self, context):
         from airflow.models import DagBag
         return DagBag()
+
+
+ASSET = Asset("s3://output/1.txt")
+
+
+def yields_meta():
+    yield Metadata(ASSET, {"hi": "bye", "n": 3})
+    return "done"
+
+
+def sets_extra(*, outlet_events=None):
+    outlet_events[ASSET].extra = {"flag": True}
+
+
+def reads_events(*, inlet_events=None):
+    return [(e.extra.get("hi"), e.extra.get("flag")) for e in inlet_events[ASSET]]

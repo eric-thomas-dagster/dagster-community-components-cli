@@ -1101,3 +1101,23 @@ def test_an_operator_class_that_uses_the_airflow_api_is_deferred():
     t = task("u", "UsesAirflow", operator_class=cls_info("UsesAirflow"), args={})
     with pytest.raises(C.Defer, match="Airflow API"):
         convert(dag([t]))
+
+
+def test_asset_metadata_from_yield_and_outlet_events_and_reading_inlet_events(tmp_path):
+    dg = pytest.importorskip("dagster")
+    uri = "s3://output/1.txt"
+    y = task("y", "PythonOperator", callable=fn("yields_meta"), op_args=[], op_kwargs={}, outlets=[uri])
+    e = task("e", "PythonOperator", up=["y"], callable=fn("sets_extra"), op_args=[], op_kwargs={})            # writes the event of ASSET, not its own
+    r = task("r", "PythonOperator", up=["e"], callable=fn("reads_events"), op_args=[], op_kwargs={}, inlets=[uri])
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([y, e, r], kind="once")]}, "pkg_events", "--return-all")
+    assert rep["status"] == "converted", rep
+    key = dg.AssetKey(["s3", "output", "_1_txt"])
+    (tmp_path / "inst").mkdir()
+    with dg.DagsterInstance.local_temp(str(tmp_path / "inst")) as inst:
+        res = dg.materialize([mod.t_y, mod.t_e, mod.t_r], instance=inst)
+        assert res.success
+        events = [m.materialization.metadata for m in res.get_asset_materialization_events() if m.asset_key == key]
+        assert events[0]["hi"].value == "bye" and events[0]["n"].value == 3                 # `yield Metadata(asset, extra)` became materialization metadata
+        assert res.asset_value(key) == "done"                                              # and the generator's return value is the asset's value
+        assert any("flag" in m and m["flag"].value is True for m in events)                # outlet_events[asset].extra = {...} on another task
+        assert res.asset_value(dg.AssetKey(["d1", "r"])) == [("bye", None), (None, True)]  # inlet_events[asset] lists the materializations, oldest first, with their metadata
