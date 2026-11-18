@@ -96,6 +96,20 @@ Each mirrors an Airflow operator exactly and should ship with a parity test agai
 
 The harness in `examples/runtime_conversion/parity/` and `examples/s3_to_snowflake_factories/parity/` already does it: run the real Airflow operator or hook with the external system mocked and recording, run the Dagster component with an equivalent recording fake, compare the calls, return values and errors. Two lessons from building the fakes: Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must attach the same; and a fake client has to include what Airflow's code reads (`ResponseMetadata`, `LastModified`) or the comparison fails for the wrong reason.
 
+## Review of `dagster-community-components` 0.10.159 against the converter's runtime
+
+Read from the installed package (`python_callable_asset/component.py`); nothing was executed yet, so these are gaps found by reading, to confirm by running the parity harness. The converter keeps emitting its own runtime for callables until they close.
+
+| Area | Component today | Converter runtime today |
+|---|---|---|
+| Logical date | Derived from the Dagster partition window (`airflow_version: 2` = window start, `3` = window end); without a partition it falls back to `now()` | Read from a run tag the schedule sets (`airflow_schedule`), exact for both Airflow versions, no partitions needed |
+| Context names | `ds`, `ds_nodash`, `ts`, `logical_date`, `data_interval_*`, `run_id`, `params`, `dag_run.conf`, `ti.xcom_pull`, `ti.try_number` | adds `ts_nodash`, `execution_date`, `conf`, `dag`, `task`, `dag_run.run_id/logical_date/dag_id`, `ti.dag_id/task_id/run_id` |
+| Jinja | Whitelist `ds`, `ds_nodash`, `logical_date`, `params`, `var`; plain `jinja2.Environment` | Sandboxed environment, strict undefined, `ds`/`ts` filters, `macros.ds_add/ds_format/datetime/timedelta`, `ti.xcom_pull`, `var.value.*` |
+| `S3Hook` | 4 methods (`check_for_key`, `get_key`, `read_key`, `load_string`) | checked against Airflow's real hook in 11 scenarios (list, copy, delete, upload, head, transfer config) |
+| Unsupported names | Fails when the template renders | The converter defers the DAG at conversion time with the reason |
+
+Suggested changes: accept the logical date from a run tag when present (fall back to the partition window, then to `now()`); add the missing context names and macros; render Jinja in a sandbox; extend or replace the `S3Hook` shim with the converter's (it is in `runtime.py`, with the scenario list in `examples/runtime_conversion/parity/`).
+
 ## Registry decorators that map deferred Airflow settings
 
 The registry has a `decorator` category (`dagster-component search timeout`). Candidates, each to be verified against Airflow before it is used:
