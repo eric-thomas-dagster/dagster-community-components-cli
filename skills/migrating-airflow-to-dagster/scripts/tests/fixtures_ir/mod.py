@@ -116,3 +116,30 @@ def step_end():
 
 def is_false():
     return False
+
+
+POLLS = []
+
+
+def ready_after_two():
+    POLLS.append(1)
+    return len(POLLS) >= 3
+
+
+def never_ready():
+    return False
+
+
+def boom():
+    raise RuntimeError("boom")
+
+
+CALLBACKS = []
+
+
+def note_failure(context):
+    CALLBACKS.append(("failure", type(context["exception"]).__name__, context["ti"].try_number))
+
+
+def note_success(context):
+    CALLBACKS.append(("success",))

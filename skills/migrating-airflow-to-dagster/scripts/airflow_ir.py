@@ -35,6 +35,14 @@ def _jsonable(v: Any, depth: int = 0) -> Any:
         return [_jsonable(x, depth + 1) for x in v]
     if isinstance(v, dict):
         return {str(k): _jsonable(x, depth + 1) for k, x in v.items()}
+    import datetime as _d
+    import enum as _e
+    if isinstance(v, _d.datetime):
+        return {"datetime": v.isoformat()}
+    if isinstance(v, _d.time):
+        return {"time": v.isoformat()}
+    if isinstance(v, _e.Enum):
+        return str(v.name)
     name = type(v).__name__
     if name in ("XComArg", "PlainXComArg", "MappedArgument") or hasattr(v, "operator") and hasattr(v, "key"):
         op = getattr(v, "operator", None)
@@ -178,6 +186,26 @@ def _base_params() -> set[str]:
 _BASE_PARAMS = _base_params()
 
 
+def _sensor_ir(task: Any) -> dict[str, Any] | None:
+    """The polling settings every sensor has (and a TimeSensor's resolved target)."""
+    try:
+        from airflow.sdk.bases.sensor import BaseSensorOperator
+    except ImportError:
+        from airflow.sensors.base import BaseSensorOperator
+    if not isinstance(task, BaseSensorOperator) and not (hasattr(task, "poke_interval") and hasattr(task, "timeout")):
+        return None
+
+    def secs(v: Any) -> Any:
+        return v.total_seconds() if hasattr(v, "total_seconds") else v
+    out = {"poke_interval": secs(getattr(task, "poke_interval", 60.0)), "timeout": secs(getattr(task, "timeout", 604800.0)), "mode": getattr(task, "mode", "poke"),
+           "soft_fail": bool(getattr(task, "soft_fail", False)), "exponential_backoff": bool(getattr(task, "exponential_backoff", False)),
+           "silent_fail": bool(getattr(task, "silent_fail", False)), "never_fail": bool(getattr(task, "never_fail", False))}
+    td = getattr(task, "target_datetime", None)
+    if td is not None:
+        out["target_datetime"] = td.isoformat()
+    return out
+
+
 def _task_ir(task: Any) -> dict[str, Any]:
     t: dict[str, Any] = {
         "task_id": task.task_id, "type": task.task_type, "module": type(task).__module__,
@@ -186,6 +214,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "retries": task.retries, "retry_delay_s": task.retry_delay.total_seconds() if task.retry_delay else None,
         "pool": task.pool if task.pool and task.pool != "default_pool" else None,
         "do_xcom_push": bool(getattr(task, "do_xcom_push", True)),
+        "sensor": _sensor_ir(task),
         "trigger_rule": str(getattr(task.trigger_rule, "value", task.trigger_rule)),
         "owner": task.owner, "queue": task.queue if getattr(task, "queue", None) != "default" else None,
         "execution_timeout_s": task.execution_timeout.total_seconds() if getattr(task, "execution_timeout", None) else None,
@@ -193,12 +222,15 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "expand": _expand_ir(task),
         "is_mapped": any(c.__name__ == "MappedOperator" for c in type(task).__mro__) or bool(getattr(task, "is_mapped", False)),
         "is_setup": bool(getattr(task, "is_setup", False)), "is_teardown": bool(getattr(task, "is_teardown", False)),
+        "on_failure_fail_dagrun": bool(getattr(task, "on_failure_fail_dagrun", False)),
         # settings that change behavior: the converter maps them or defers the DAG, never ignores them
         "depends_on_past": bool(getattr(task, "depends_on_past", False)), "wait_for_downstream": bool(getattr(task, "wait_for_downstream", False)),
         "max_active_tis_per_dag": getattr(task, "max_active_tis_per_dag", None), "max_active_tis_per_dagrun": getattr(task, "max_active_tis_per_dagrun", None),
         "pool_slots": getattr(task, "pool_slots", 1), "retry_exponential_backoff": bool(getattr(task, "retry_exponential_backoff", False)),
         "max_retry_delay_s": task.max_retry_delay.total_seconds() if getattr(task, "max_retry_delay", None) else None,
         "sla_s": task.sla.total_seconds() if getattr(task, "sla", None) else None,
+        "callback_fns": {a: [_callable_info(f) for f in (getattr(task, a, None) if isinstance(getattr(task, a, None), (list, tuple)) else [getattr(task, a, None)])
+                              if callable(f)] for a in ("on_failure_callback", "on_success_callback", "on_retry_callback") if getattr(task, a, None)},
         "callbacks": [a for a in ("on_failure_callback", "on_success_callback", "on_retry_callback", "on_skipped_callback", "on_execute_callback")
                       if getattr(task, a, None)] + _overridden_hooks(task),
         "outlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "outlets", None) or [])],

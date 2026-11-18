@@ -1,4 +1,5 @@
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -100,7 +101,7 @@ def test_s3_operators_map_to_runtime_helpers():
 
 
 @pytest.mark.parametrize("mut,why", [
-    (lambda d: d["tasks"][0].update(trigger_rule="all_done"), "trigger_rule all_done"),
+    (lambda d: d["tasks"][0].update(trigger_rule="custom_rule"), "trigger_rule custom_rule"),
     (lambda d: d["tasks"][0].update(is_mapped=True), "dynamic task mapping"),
     (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ var.value.x }}"}), "does not provide"),
     (lambda d: d["tasks"][0].update(type="KubernetesPodOperator"), "operator KubernetesPodOperator"),
@@ -242,7 +243,7 @@ def test_apply_conversion_plans_converted_dags_and_defers_the_rest():
     good = dag([task("start", "EmptyOperator"), task("a", "BashOperator", up=["start"], template_fields={"bash_command": "true"}),
                 task("b", "BashOperator", up=["a"], template_fields={"bash_command": "true"})])
     good["dag_id"] = "good"
-    bad = dag([task("x", "BashOperator", template_fields={"bash_command": "true"}, trigger_rule="all_done")])
+    bad = dag([task("x", "BashOperator", template_fields={"bash_command": "true"}, trigger_rule="custom_rule")])
     bad["dag_id"] = "bad"
     ir = {"dags": [good, bad]}
     report = {"dags": {}}
@@ -261,7 +262,7 @@ def test_apply_conversion_plans_converted_dags_and_defers_the_rest():
     assert "EmptyOperator elided" in u["A2"]["target"]["none"]
     assert u["A3"]["target"] == {"assets": ["good/a"], "deps": {"good/a": []}}          # the elided start is not a dependency
     assert u["A4"]["target"] == {"assets": ["good/b"], "deps": {"good/b": ["good/a"]}}
-    assert u["B1"]["status"] == u["B2"]["status"] == "deferred" and "trigger_rule all_done" in u["B2"]["reason"]
+    assert u["B1"]["status"] == u["B2"]["status"] == "deferred" and "trigger_rule custom_rule" in u["B2"]["reason"]
 
 
 def test_report_ranks_operators_with_integration_hints(tmp_path):
@@ -625,7 +626,7 @@ def test_a_branch_runs_the_chosen_path_and_a_join_with_min_one_success_still_run
          _py("join", "step_join", up=["path_a", "path_b"], trigger_rule="none_failed_min_one_success"),
          _py("strict", "step_end", up=["path_a", "path_b"])]
     mod, res = _run_gated(tmp_path, t, "pkg_branch")
-    assert mod.TRACE == ["a", "a", "join"]                      # start, path_a, join; path_b and the all_success join were skipped
+    assert sorted(mod.TRACE) == ["a", "a", "join"]              # start, path_a, join; path_b and the all_success join were skipped
 
 
 def test_a_branch_that_chooses_nothing_skips_everything_after_it(tmp_path):
@@ -663,3 +664,158 @@ def test_a_shell_task_with_do_xcom_push_false_passes_nothing_downstream(tmp_path
     rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([b, c], kind="once")]}, "pkg_nopush", "--return-all")
     res = dg.materialize([mod.t_b, mod.t_c])
     assert res.success and res.asset_value(dg.AssetKey(["d1", "c"])) is None
+
+
+def test_clock_branches_follow_the_chosen_task(tmp_path):
+    t = [task("w", "BranchDayOfWeekOperator", args={"follow_task_ids_if_true": "yes", "follow_task_ids_if_false": "no", "use_task_logical_date": False,
+                                                   "week_day": ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]}),
+         _py("yes", "step_a", up=["w"]), _py("no", "step_b", up=["w"]),
+         task("d", "BranchDateTimeOperator", args={"follow_task_ids_if_true": "in", "follow_task_ids_if_false": "out", "use_task_logical_date": False,
+                                                   "target_lower": {"datetime": "2000-01-01T00:00:00+00:00"}, "target_upper": {"datetime": "2999-01-01T00:00:00+00:00"}}),
+         _py("in", "step_join", up=["d"]), _py("out", "step_end", up=["d"])]
+    mod, res = _run_gated(tmp_path, t, "pkg_clock")
+    assert sorted(mod.TRACE) == ["a", "join"]                     # the weekday check is true every day; the date window is open
+
+
+def test_a_mapped_task_over_an_empty_list_is_skipped_and_so_is_what_follows(tmp_path):
+    dg = pytest.importorskip("dagster")
+    m = task("m", "PythonOperator", is_mapped=True, callable={**fn("double_item"), "params": "['x']"}, op_args=[], op_kwargs={},
+             expand={"form": "expand", "args": {"x": {"kind": "literal", "value": []}}, "fixed": {}, "fixed_unserializable": [], "op_args": False})
+    r = _py("r", "step_a", up=["m"])
+    mod, res = _run_gated(tmp_path, [m, r], "pkg_empty")
+    assert mod.TRACE == []                                        # r is skipped, as in Airflow
+
+
+def _sensor(tid, ty, up=(), poke=0.01, timeout=5.0, soft=False, **kw):
+    return task(tid, ty, up=list(up), sensor={"poke_interval": poke, "timeout": timeout, "mode": "poke", "soft_fail": soft,
+                                              "exponential_backoff": False, "silent_fail": False, "never_fail": False, **kw.pop("sn", {})}, **kw)
+
+
+def test_python_sensor_polls_until_the_callable_is_true(tmp_path):
+    dg = pytest.importorskip("dagster")
+    s = _sensor("s", "PythonSensor", callable=fn("ready_after_two"), op_args=[], op_kwargs={})
+    after = _py("after", "step_a", up=["s"])
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([s, after], kind="once")]}, "pkg_sens1", "--return-all")
+    assert rep["status"] == "converted", rep
+    res = dg.materialize([mod.t_s, mod.t_after])
+    assert res.success and len(mod.POLLS) == 3 and mod.TRACE == ["a"]
+
+
+def test_a_sensor_that_times_out_fails_the_run_or_is_skipped_with_soft_fail(tmp_path):
+    dg = pytest.importorskip("dagster")
+    s = _sensor("s", "PythonSensor", timeout=0.05, callable=fn("never_ready"), op_args=[], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path / "a", {"airflow_version": "x", "dags": [dag([s], kind="once")]}, "pkg_sens2") if (tmp_path / "a").mkdir() is None else None
+    assert not dg.materialize([mod.t_s], raise_on_error=False).success                          # times out: the task fails
+    soft = _sensor("s", "PythonSensor", timeout=0.05, soft=True, callable=fn("never_ready"), op_args=[], op_kwargs={})
+    after = _py("after", "step_b", up=["s"])
+    mod, res = _run_gated(tmp_path / "b", [soft, after], "pkg_sens3") if (tmp_path / "b").mkdir() is None else None
+    assert mod.TRACE == []                                                                       # soft_fail: skipped, so is what follows
+
+
+def test_bash_file_time_and_timedelta_sensors(tmp_path):
+    dg = pytest.importorskip("dagster")
+    f = tmp_path / "ready.txt"; f.write_text("x")
+    t = [_sensor("b", "BashSensor", template_fields={"bash_command": "exit 0", "env": None}, args={"retry_exit_code": None}),
+         _sensor("r", "BashSensor", template_fields={"bash_command": "exit 3", "env": None}, args={"retry_exit_code": 3}, timeout=0.05),
+         _sensor("f", "FileSensor", template_fields={"filepath": str(f)}, args={"recursive": False, "fs_conn_id": "fs_default"}),
+         _sensor("t", "TimeSensor", sn={"target_datetime": "2000-01-01T06:00:00+00:00"}),
+         _sensor("d", "TimeDeltaSensor", args={"delta": {"seconds": 0.0}})]
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag(t, kind="once")]}, "pkg_sens4", "--return-all")
+    assert rep["status"] == "converted", rep
+    for name in ("b", "f", "t", "d"):
+        assert dg.materialize([getattr(mod, f"t_{name}")]).success, name
+    assert not dg.materialize([mod.t_r], raise_on_error=False).success                          # exit code 3 = retry later, then the timeout
+
+
+def _run_failing(tmp_path, tasks, pkg):
+    dg = pytest.importorskip("dagster")
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag(tasks, kind="once")]}, pkg, "--return-all")
+    assert rep["status"] == "converted", rep
+    mod.TRACE.clear()
+    return mod, dg.materialize([mod.d1_graph], raise_on_error=False)
+
+
+def test_all_done_runs_after_a_failure_and_the_run_still_fails(tmp_path):
+    t = [_py("a", "boom"), _py("next", "step_a", up=["a"]), _py("cleanup", "step_join", up=["a"], trigger_rule="all_done"),
+         _py("alert", "step_b", up=["a"], trigger_rule="one_failed"), _py("fine", "step_end", up=["cleanup"], trigger_rule="none_failed")]
+    mod, res = _run_failing(tmp_path, t, "pkg_fail1")
+    assert not res.success
+    assert sorted(mod.TRACE) == ["b", "end", "join"]            # cleanup, the one_failed alert and what follows it ran; `next` (all_success) did not
+
+
+def test_one_failed_and_all_done_after_a_success_behave_as_airflow(tmp_path):
+    t = [_py("a", "step_a"), _py("alert", "step_b", up=["a"], trigger_rule="one_failed"), _py("cleanup", "step_join", up=["a"], trigger_rule="all_done")]
+    mod, res = _run_failing(tmp_path, t, "pkg_fail2")
+    assert res.success and sorted(mod.TRACE) == ["a", "join"]    # the alert is skipped when nothing failed
+
+
+def _setup_teardown(setup_fn="step_a", work_fn="step_b", teardown_fn="step_join", fail_run=False):
+    return [_py("setup", setup_fn, is_setup=True), _py("work", work_fn, up=["setup"]),
+            _py("teardown", teardown_fn, up=["work", "setup"], is_teardown=True, trigger_rule="all_done_setup_success", on_failure_fail_dagrun=fail_run)]
+
+
+def test_setup_work_teardown_all_run_in_order(tmp_path):
+    mod, res = _run_failing(tmp_path, _setup_teardown(), "pkg_st1")
+    assert res.success and mod.TRACE == ["a", "b", "join"]
+
+
+def test_a_teardown_runs_after_the_work_fails_and_the_run_fails(tmp_path):
+    mod, res = _run_failing(tmp_path, _setup_teardown(work_fn="boom"), "pkg_st2")
+    assert not res.success and mod.TRACE == ["a", "join"]         # setup ran, the work failed, the teardown still ran
+
+
+def test_a_failed_setup_skips_the_work_and_the_teardown_and_fails_the_run(tmp_path):
+    mod, res = _run_failing(tmp_path, _setup_teardown(setup_fn="boom"), "pkg_st3")
+    assert not res.success and mod.TRACE == []                    # nothing was set up, so nothing is torn down
+
+
+def test_a_failed_teardown_does_not_fail_the_run_unless_it_asks_to(tmp_path):
+    mod, res = _run_failing(tmp_path / "x", _setup_teardown(teardown_fn="boom"), "pkg_st4") if (tmp_path / "x").mkdir() is None else None
+    assert res.success
+    mod, res = _run_failing(tmp_path / "y", _setup_teardown(teardown_fn="boom", fail_run=True), "pkg_st5") if (tmp_path / "y").mkdir() is None else None
+    assert not res.success
+
+
+def test_a_dag_of_only_empty_operators_converts_to_steps_that_do_nothing(tmp_path):
+    dg = pytest.importorskip("dagster")
+    t = [task("a", "EmptyOperator"), task("b", "EmptyOperator", up=["a"])]
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag(t, kind="once")]}, "pkg_empty_only")
+    assert rep["status"] == "converted" and dg.materialize([mod.d1_graph]).success
+
+
+def test_task_callbacks_run_through_on_hooks_after_the_last_attempt(tmp_path):
+    dg = pytest.importorskip("dagster")
+    pytest.importorskip("dagster_community_components")
+    ok = _py("ok", "step_a", callbacks=["on_success_callback"], callback_fns={"on_success_callback": [fn("note_success")]})
+    bad = _py("bad", "boom", callbacks=["on_failure_callback"], callback_fns={"on_failure_callback": [fn("note_failure")]})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([ok, bad], kind="once")]}, "pkg_cb")
+    assert rep["status"] == "converted" and "dagster-community-components" in rep["requirements"], rep
+    res = dg.materialize([mod.t_ok, mod.t_bad], raise_on_error=False)
+    assert not res.success
+    assert mod.CALLBACKS == [("success",), ("failure", "RuntimeError", 1)] or sorted(mod.CALLBACKS) == [("failure", "RuntimeError", 1), ("success",)]
+
+
+def test_trigger_dag_run_launches_the_other_converted_dag_and_fails_with_it(tmp_path):
+    pytest.importorskip("dagster")
+    child = {**dag([_py("work", "step_a")], kind="once"), "dag_id": "child"}
+    parent = dag([_py("first", "step_b"), task("fire", "TriggerDagRunOperator", up=["first"], template_fields={"conf": {"k": 1}},
+                                                args={"trigger_dag_id": "child", "wait_for_completion": True})], kind="once")
+    (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": [parent, child]}))
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_trig" / "defs"),
+                    "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
+    rep = json.loads((tmp_path / "r.json").read_text())["dags"]
+    assert rep["d1"]["status"] == "converted" and rep["child"]["status"] == "converted", rep
+    (tmp_path / "pkg_trig" / "__init__.py").write_text("")
+    (tmp_path / "run.py").write_text('''
+import importlib, json, os
+import dagster as dg
+if __name__ == "__main__":                       # the launched run is a spawned process that imports this file again
+    mod = importlib.import_module("pkg_trig.defs.d1")
+    os.makedirs("inst", exist_ok=True)
+    with dg.DagsterInstance.local_temp("inst") as inst:
+        r = dg.materialize([mod.t_first, mod.t_fire], instance=inst, raise_on_error=False)
+        print("RESULT", json.dumps({"success": r.success, "runs": [[x.job_name, x.status.value, x.tags.get("airflow/conf")] for x in inst.get_runs()]}))
+''')
+    out = subprocess.run([sys.executable, "run.py"], cwd=tmp_path, env={**os.environ, "PYTHONPATH": str(tmp_path)}, capture_output=True, text=True)
+    result = json.loads(next(l for l in out.stdout.splitlines() if l.startswith("RESULT")).split(" ", 1)[1])
+    assert result["success"] and ["child", "SUCCESS", '{"k": 1}'] in result["runs"]

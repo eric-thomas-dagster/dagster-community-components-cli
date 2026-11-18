@@ -22,13 +22,16 @@ for did in ids:
         signal.alarm(300)
         r = dg.materialize(assets, raise_on_error=False)
         tasks = {}
-        keys_ok = {e.asset_key.to_user_string() for e in r.get_asset_materialization_events()}
+        events = r.get_asset_materialization_events()
+        keys_ok = {e.asset_key.to_user_string() for e in events}
+        skipped = {e.asset_key.to_user_string() for e in events
+                   if getattr(e.materialization.metadata.get("airflow/state"), "value", None) == "skipped"}      # a gated task that did not run
         for tid, key in rep["task_keys"].items():
             ak = dg.AssetKey(key.split("/"))
             val = None
             try: val = r.asset_value(ak)
             except Exception: pass
-            tasks[tid] = {"state": "success" if key in keys_ok else "not_materialized", "value": repr(val)[:300] if val is not None else "None"}
+            tasks[tid] = {"state": "skipped" if key in skipped else ("success" if key in keys_ok else "not_materialized"), "value": repr(val)[:300] if val is not None else "None"}
         res[did] = {"state": "success" if r.success else "failed", "tasks": tasks}
     except TO: res[did] = {"error": "timeout 300s"}
     except BaseException as e: res[did] = {"error": f"{type(e).__name__}: {str(e)[:200]}"}

@@ -1,59 +1,63 @@
 # What the components need to do (handoff to the components session)
 
-The converter turns existing orchestrator DAGs into Dagster definitions built from your components. It owns the translation (it reads the DAG, works out what each part is doing, and writes the component configuration). The components only need the capabilities below. None of them is specific to any orchestrator; each is a general Dagster capability that the converter happens to need.
+The converter turns existing orchestrator DAGs into Dagster definitions. It owns the translation: it reads the DAG, works out what each part does, and writes either generated code or component configuration. This file lists what the components still need, in Dagster terms. None of it is specific to any orchestrator.
 
-Measured on 292 DAGs from 14 public example repos; the converter maps 80 today. "Blocked" is the number of DAGs held back by that capability; "alone" is the number held back by it and nothing else. The corpus is heavy on teaching repos, so use the ranking, not the percentages.
+Measured on 292 DAGs from 14 public example repos; the converter maps 108 today. "Blocked" is the number of DAGs held back by a capability; "alone" the number held back by it and nothing else. The corpus is heavy on teaching repos, so use the ranking, not the percentages.
 
-Tested so far against Airflow's own operators (`examples/runtime_conversion/component_parity/`, components 0.10.160): the S3 copy, delete, list and upload components match on 9 scenarios, and the Snowflake `COPY INTO` component matches on 4 configurations apart from one quoting difference (`ON_ERROR='CONTINUE'` against Airflow's unquoted form; please confirm Snowflake accepts it). Not yet tested: the schedule, callable, sensor and conditional components and `snowflake_sql_asset`.
+## The main message: most of what is left needs the converter to use existing components, not new ones
 
-Already built, per the components session: the Python callable, conditional, trigger-job, Pipes-Python and setup/teardown components, the schedule component, six S3 and Snowflake components, static partitions, and storage discovery through the `*_monitor` components.
+These blockers are covered by components you have already built. The converter has not been wired to them yet, so they are my work, not yours:
 
-## 1. Discover items, then run once per item (blocked 31, alone 24)
+| Blocked DAGs (alone) | Capability | Existing component |
+|---|---|---|
+| setup/teardown 9 (0), `all_done_setup_success` 9 (0) | resource that wraps a scope | `scoped_setup_teardown` |
+| `TriggerDagRunOperator` 8 (6) | launch another job and wait | `trigger_job_asset` (it always waits and uses `execute_job` out of process, so it fits `wait_for_completion=True`) |
+| `ExternalTaskSensor` 5 (2) | react to another job finishing | `event_automation` run-status trigger |
+| virtualenv and external-python callables 9 (1) | run code in its own interpreter | `pipes_python_asset` |
+| task callbacks 10 (4) | failure and success hooks | `@on_hooks` (the converter writes the adapter) |
+| delta schedules 8 (2) | a schedule that is not a plain cron | the schedule component |
 
-Many pipelines process "whatever exists today": files under a prefix, rows in a table, ids from an API. The converter's default for mapped tasks is dynamic outputs inside one run; this item is for the case where each item should be its own run and partition (one file, one customer), which is what the converter's `partitions` mode emits.
-- A component that calls a user function returning a list of items, registers each new item as a dynamic partition, and requests one run per item with a key that makes the request idempotent. Same shape as `s3_monitor`, with the listing replaced by a function. Include pruning of old partitions.
-- `sql_monitor` should be able to do the same: register a dynamic partition per new row, with the partition key taken from a named column.
-- Test: run twice with an overlapping list; only the new items get partitions and runs.
+## What I verified against Airflow's own operators (`examples/runtime_conversion/component_parity/`)
 
-Converter: finds the loop or mapping over a listing, identifies the source (literal list, storage prefix, query, function), and emits the matching component. A mapping over a value with no listable source stays unconverted, with the reason.
+- **S3 copy, delete, list, upload (components 0.10.160):** 9 scenarios match, including delete's error response and 1,500 keys in chunks.
+- **Snowflake `COPY INTO`:** 4 configurations match after normalizing whitespace, with one textual difference: the component writes `ON_ERROR='CONTINUE'` (quoted) where Airflow passes `ON_ERROR = CONTINUE`. Please confirm Snowflake accepts the quoted form.
+- **Not yet tested:** the schedule, callable, sensor and conditional components, and `snowflake_sql_asset`.
 
-## 2. "Run when all of these have updated" (blocked 29, alone 2; it removes a blocker in many other DAGs)
+## Requests
 
-`automation_condition_applicator` has four presets. Add one for "every listed upstream asset has updated since this asset last ran", built as an AND of per-asset `asset_matches(...newly_updated()).since_last_handled()` terms (a single `since_last_handled` over an AND gave wrong results in my tests). Test with `dg.evaluate_automation_conditions`: it must not fire when only one of two upstreams has updated.
+### 1. Return values where downstream steps read them (small, high value)
 
-Converter: a task that waits for several upstreams, or a pipeline triggered by several assets.
+- `s3_list_keys_asset` reports the key list only as `keys` metadata. Add an option to return it as the asset's value, so a downstream asset can take it as an input the usual way.
+- `shell_command_asset` returns nothing. A shell step's last line of output is what downstream steps read in the source system. Add an option (off by default) to return the last stdout line as the asset's value, with a second option to parse it as JSON when it is valid JSON (the converter does both today in its own runtime helper, and the JSON behavior depends on the source system's version).
 
-## 3. Code that needs to know the run's date (needed by every converted pipeline that uses dates)
+### 2. Read a named value from an upstream materialization (small)
 
-Pipelines pass the run's date into queries, file names and filters. Without a time partition, Dagster has no such value, so the schedule and the code need a shared convention. Decision: a scheduled pipeline with no natural time partition keeps a regular schedule and regular assets; no partitions are added.
-- The schedule component already tags each run with its scheduled time (`add_logical_date_tag`). Keep that, and add an option to also tag the start and end of the interval the run covers, since some pipelines process the interval that just ended.
-- The callable component should read those tags first, then the partition window, and otherwise fail or warn. Today it falls back to `now()` without saying so, which silently changes behavior.
-- Render templated arguments in a sandboxed environment, and make unsupported names fail when the project loads, not when the run starts.
+A task can push several named values and a later task reads them by name. The converter implements this today as metadata on the pushing asset's materialization and a lookup in the same run. Add the same capability to the callable component: an input mapping `{argument: "upstream_asset_key.metadata_key"}` that reads the named metadata value from the upstream asset's materialization in the current run, with a default when it is missing.
 
-Converter: finds each use of a date in the code and templates, and writes the matching component attributes. The converter's own runtime module remains as a fallback until the components do this.
+### 3. A reusable step gate (the converter generates about 150 lines for this today)
 
-## 4. A sensor driven by a function (blocked 15, alone 8)
+For a pipeline expressed as one graph asset, each step needs to decide, from the states of the steps before it, whether to run. The cases: a branch names the steps to follow; a short-circuit skips everything after it, or only the next step; a join that runs when some upstreams were skipped; a cleanup step that runs after a failure; an alert that runs only when something failed. `conditional_asset` covers skipping but cannot rejoin when only one of several branches ran, and a Dagster step is skipped if any input was skipped, so a native join cannot do it. What the converter generates (`af_gate`, `af_guard` and `af_finish` in its runtime): a step returns a marker (skipped, failed, upstream-failed) instead of raising, the next step evaluates a named rule over its inputs' states, and a final step fails the run if anything failed. Offering this as a decorator pair (a gate on a step, a guard that turns a failure into a value) would let the converter emit it instead of carrying its own copy, and would make `conditional_asset` rejoin-capable.
 
-A sensor that calls a function returning true/false (or a dict of run-request fields) and requests a run when it is true, with a polling interval and a key for idempotence. Time-based waits, file arrival and "another job finished" are already covered by the schedule component, the `*_monitor` components and `event_automation`.
+### 4. A blocking wait step (the converter generates the helpers today)
 
-Converter: a wait-for-condition step. It will say that a Dagster sensor starts the run when the condition holds; it does not hold a run open waiting, so the shape of the pipeline changes.
+Many pipelines hold a step open until a condition holds, with a polling interval and a timeout, and then either fail or skip on timeout. The conditions: a callable returns true; a shell command exits 0 (with an optional "try again" exit code); a file matching a pattern exists; a time of day has passed; a delay after the run's reference time has passed. The existing `python_sensor`, `*_monitor` and `event_automation` components start runs; they do not hold a step open, and the pipeline shape differs. A component or decorator `wait_until` with those condition types, `poll_seconds`, `timeout_seconds` and `on_timeout: fail | skip` would replace the converter's helpers.
 
-## 5. Failure and timeout behavior: covered by the existing decorators
+### 5. Run a callable once per item inside one run (the converter generates a graph for this today)
 
-`@on_hooks` and `@timeout` (both in the installed package) are applied by the converter as decorators on the assets it generates, so no component change is needed.
-- `@on_hooks(on_failure=["pkg.hooks:fn"])` takes `module:function` references. The converter writes the callback module and an adapter that has the hook's `(context, exc)` signature. Hooks fire on every attempt, so the adapter itself checks `context.retry_number` against the task's retry count and acts only on the final attempt. No change to `@on_hooks` is required.
-- `@timeout(seconds)` abandons a worker thread at the deadline and the work keeps running. For shell tasks the converter's runtime already kills the subprocess. For Python code, the converter will use `@timeout` and state in its report that the work is not stopped, only abandoned. Only a documentation change is asked of the components: say this in the README. A killable variant (run the callable in a subprocess, perhaps through `pipes_python_asset`) would remove the caveat but is optional.
+For "do this for each item the previous step returned, then use all the results", the converter builds a graph asset with a fan-out step, a mapped step and a collect step. A component taking `items_from` (an upstream asset or a literal list), a `callable_path`, per-item arguments, and an option to collect the results would let the converter emit configuration. This is separate from the existing per-item partition components, which make each item its own run.
 
-Converter: task-level failure and success callbacks, and execution timeouts on Python code.
+### 6. Decisions I need from you
 
-## 6. Decision needed from you: conditional execution (blocked 27, alone 10)
+- **Branch and skip behavior of `conditional_asset`:** if request 3 is not built, say plainly in its README that it cannot rejoin, so the converter documents that.
+- **Airflow 3.2 partitioned timetables** (`CronPartitionTimetable`, `PartitionedAssetTimetable` with mappers; 10 DAGs, all from one example file): needs a mapping from key formats and mappers to Dagster partition definitions and mappings. Not started. Low priority; it only exists from Airflow 3.2.
 
-`conditional_asset` exists. Please state exactly what happens to downstream assets when a branch or check says "do not continue": skipped, not materialized, blocked by an asset check, or something else. The converter has to describe that behavior in its report, and it must hold when several branches rejoin.
+## Low priority
 
-## 7. Low priority
-
-`automation_condition` presets on `shell_command_asset` and `snowflake_stored_procedure_call_asset`; `shell_command_asset`'s description says it wraps `dagster-shell` but the code uses `subprocess`; `k8s_job_asset` has no Pipes variant for streamed logs.
+- `automation_condition` presets on `shell_command_asset` and `snowflake_stored_procedure_call_asset`.
+- `shell_command_asset`'s description says it wraps `dagster-shell`, but the code uses `subprocess`.
+- `k8s_job_asset` has no Pipes variant for streamed logs.
+- `timeout_asset` abandons its thread at the deadline and the work continues; say so in the README.
 
 ## How each component gets checked
 
-For each component the converter's harness runs the original operator or code with the external system mocked and recording, runs the Dagster component with an equivalent recording fake, and compares outcomes, calls and values. Remaining differences go in the migration report. Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must attach the same, and a fake client needs whatever fields the library code reads. The harness is in `examples/runtime_conversion/parity/` and `examples/s3_to_snowflake_factories/parity/`.
+For each component, the harness runs the original operator with the external system mocked and recording, runs the Dagster component against an equivalent recording fake, and compares outcomes, calls and values. Remaining differences go in the migration report. The scripts are in `examples/runtime_conversion/component_parity/`. Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must attach the same.

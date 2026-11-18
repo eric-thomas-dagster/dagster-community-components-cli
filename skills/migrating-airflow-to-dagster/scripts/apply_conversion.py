@@ -50,7 +50,7 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
         def eff_up(tid: str) -> list[str]:
             out: list[str] = []
             for u in tasks[tid]["upstream"]:
-                out += eff_up(u) if tasks[u]["type"] in ELIDED else [u]
+                out += eff_up(u) if tasks[u]["type"] in ELIDED and u not in keys else [u]      # in the graph form an EmptyOperator is a step
             return list(dict.fromkeys(out))
 
         dag_unit = by_dag.get(dag_id)
@@ -64,7 +64,7 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
             u = by_task.get((dag_id, tid))
             if u is None:
                 continue
-            if t["type"] in ELIDED:
+            if t["type"] in ELIDED and tid not in keys:         # in the graph form an EmptyOperator is a real step
                 u["target"] = {"none": "EmptyOperator elided; its dependencies were rewired through it"}
             else:
                 key = keys[tid]

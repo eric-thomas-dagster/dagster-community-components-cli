@@ -18,6 +18,8 @@ for af_path in sorted(glob.glob(f"{results}/af_*.json")):
     A = json.load(open(af_path)); D = json.load(open(dg_path)); rep = json.load(open(reports[repo]))["dags"]
     c = collections.Counter()
     for did in A:
+        if rep.get(did, {}).get("status") != "converted":      # a result for a DAG that is no longer converted
+            continue
         a, d = A[did], D.get(did, {"error": "missing in dagster run"})
         if "error" in a or "error" in d:
             c["no comparison (error on a side)"] += 1; problems.append((repo, did, f"airflow: {a.get('error', 'ok')} | dagster: {d.get('error', 'ok')}")); continue
@@ -31,7 +33,7 @@ for af_path in sorted(glob.glob(f"{results}/af_*.json")):
             a_s = "success" in at["state"].lower(); d_s = dt["state"] == "success"
             if a_s != d_s:
                 issues.append(f"{tid}: airflow {at['state']} vs dagster {dt['state']}")
-            elif dt["value"] != "None" and not at["value"].startswith("'xcom") and at["value"] != "'xcom-unavailable-3x'" and at["value"] != dt["value"] \
+            elif dt["value"] != "None" and not any(m in dt["value"] for m in ("Skipped", "BranchResult", "ShortCircuit", "Failed(", "UpstreamFailed")) and not at["value"].startswith("'xcom") and at["value"] != "'xcom-unavailable-3x'" and at["value"] != dt["value"] \
                     and not (dt["value"].startswith("[") and at["value"] in dt["value"]):
                 issues.append(f"{tid}: value airflow {at['value'][:60]} vs dagster {dt['value'][:60]}")
         if not issues:

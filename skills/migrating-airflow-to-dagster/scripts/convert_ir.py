@@ -57,7 +57,13 @@ BASH = {"BashOperator"}
 BASH_DEC = {"_BashDecoratedOperator"}
 BRANCH = {"BranchPythonOperator", "_BranchPythonDecoratedOperator"}
 SHORT = {"ShortCircuitOperator", "_ShortCircuitDecoratedOperator"}
-GATE_RULES = {"all_success", "none_failed", "none_failed_min_one_success", "none_skipped", "one_success", "all_skipped"}   # rules a skip-only gate can honor
+TRIGGER = {"TriggerDagRunOperator"}          # launches another converted DAG's job and waits for it (wait_for_completion=True)
+SENSOR_CALL = {"PythonSensor", "DecoratedSensorOperator"}                                # sensors that poll a callable
+SENSORS = SENSOR_CALL | {"BashSensor", "FileSensor", "TimeSensor", "TimeDeltaSensor"}   # converted as a polling step (Airflow's default `poke` behavior)
+CLOCK_BRANCH = {"BranchDateTimeOperator", "BranchDayOfWeekOperator"}      # branch on the clock or the logical date: no callable
+GATE_RULES = {"all_success", "all_failed", "all_done", "one_success", "one_failed", "one_done", "none_failed", "none_failed_min_one_success",
+              "none_skipped", "all_skipped", "all_done_min_one_success", "always", "all_done_setup_success"}
+PLAIN_RULES = {"all_success", "none_failed", "none_failed_min_one_success"}               # behave like all_success when a failure stops the run anyway
 S3_OPS = {"S3ListOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "LocalFilesystemToS3Operator"}
 SNOWFLAKE_OPS = {"CopyFromExternalStageToSnowflakeOperator", "SnowflakeOperator", "SQLExecuteQueryOperator"}
 
@@ -139,7 +145,8 @@ def _loads(node: ast.AST) -> set[str]:
     return {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)} - set(dir(builtins))
 
 
-def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None) -> tuple[str, list[str]]:
+def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None,
+                     context_arg: bool = False) -> tuple[str, list[str]]:
     """(function source without decorators, support blocks in source order). Raises Defer with the reason.
 
     `shims` collects compatibility shims the code relies on (names provided by the runtime module); `meta` receives how the
@@ -160,6 +167,8 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     if isinstance(fn, ast.AsyncFunctionDef):
         raise Defer("async callable")
     named = [a.arg for a in [*fn.args.posonlyargs, *fn.args.args, *fn.args.kwonlyargs]]
+    if context_arg and named:
+        named = named[1:]                                        # a callback's first parameter is the whole context dict, whatever it is called
     unsupported = sorted(set(named) & (KNOWN_CTX - SUPPORTED_CTX))
     if unsupported:
         raise Defer(f"callable uses Airflow task context names the runtime does not rebuild {unsupported}")
@@ -167,7 +176,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     body_text = ast.unparse(ast.Module(body=[*fn.body], type_ignores=[]))
     if re.search(r"\bairflow\b|\bset_xcom\b", body_text):
         raise Defer("callable uses the Airflow API (a direct airflow reference)")
-    for n in ast.walk(fn):                                       # attributes of the context objects the runtime rebuilds
+    for n in (m for stmt in [*fn.body, *fn.args.defaults, *[d for d in fn.args.kw_defaults if d is not None]] for m in ast.walk(stmt)):    # the body, not the decorators (`@task.sensor` is not the `task` context object)
         obj = n.value if isinstance(n, ast.Attribute) else None
         if isinstance(obj, ast.Subscript) and isinstance(obj.slice, ast.Constant):
             obj_name = obj.slice.value
@@ -349,7 +358,13 @@ def snowflake_call(t: dict[str, Any], ctx: str | None = None) -> tuple[str, str]
 def task_templates(t: dict[str, Any]) -> Any:
     """The fields of a task that Airflow renders as templates (the ones this converter maps)."""
     ty, tf = t["type"], t["template_fields"]
-    if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT:
+    if ty in TRIGGER:
+        return [tf.get("conf"), tf.get("trigger_dag_id")]
+    if ty == "BashSensor":
+        return [tf.get("bash_command"), tf.get("env")]
+    if ty == "FileSensor":
+        return [tf.get("filepath")]
+    if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
         return [t.get("op_args"), t.get("op_kwargs"), tf.get("env") if ty in BASH_DEC else None]
     if ty in BASH:
         return [(t.get("template_files") or {}).get("bash_command") or tf.get("bash_command"), tf.get("env"), tf.get("cwd")]
@@ -423,12 +438,13 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
     """Dynamic task mapping as Dagster dynamic outputs: the whole DAG becomes one graph asset in which a mapped task is a mapped op
     and a task after it receives the collected list. Python and shell tasks only; `expand` with literal lists or other tasks' outputs."""
     mapped = {k: t for k, t in tasks.items() if t.get("is_mapped")}
-    gated = any(t["type"] in BRANCH | SHORT for t in tasks.values())
+    gated = any(t["type"] in BRANCH | SHORT | CLOCK_BRANCH or (t["type"] in SENSORS and (t.get("sensor") or {}).get("soft_fail"))
+                or t["trigger_rule"] in GATE_RULES - PLAIN_RULES or t.get("is_setup") or t.get("is_teardown") for t in tasks.values())
     if not mapped and not gated:
         return None, []
     why: list[str] = []
     for tid, t in tasks.items():
-        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT:
+        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS:
             why.append(f"{tid}: a {t['type']} inside a DAG with mapped tasks (only Python and shell tasks are converted there)")
     mp: dict[str, Any] = {}
     for tid, t in mapped.items():
@@ -473,7 +489,10 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
 
 
 def plan_mapping(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
-    if MAP_MODE == "graph" or any(t["type"] in BRANCH | SHORT for t in tasks.values()):
+    if tasks and all(t["type"] in ELIDED for t in tasks.values()):
+        return {"mode": "graph", "mapped": {}}, []              # nothing to run, but the steps and their trigger rules are kept
+    if MAP_MODE == "graph" or any(t["type"] in BRANCH | SHORT | CLOCK_BRANCH or (t["type"] in SENSORS and (t.get("sensor") or {}).get("soft_fail"))
+                                  or t["trigger_rule"] in GATE_RULES - PLAIN_RULES or t.get("is_setup") or t.get("is_teardown") for t in tasks.values()):
         return plan_graph(dag, tasks)
     return plan_partitions(dag, tasks)
 
@@ -588,12 +607,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         ty, tid, tf = t["type"], t["task_id"], t["template_fields"]
         if t["is_mapped"] and not mplan and not mwhy:
             reasons.append(f"{tid}: dynamic task mapping")
-        if t["is_setup"] or t["is_teardown"]:
-            reasons.append(f"{tid}: setup/teardown")
+        if (t["is_setup"] or t["is_teardown"]) and not (mplan and mplan["mode"] == "graph"):
+            reasons.append(f"{tid}: setup/teardown (converted only in the graph form)")
         # without a branch or short-circuit nothing is ever skipped here, so these rules behave like all_success (a failure stops the
         # downstream task in Dagster, which is also what Airflow does under them)
         if t["trigger_rule"] != "all_success" and not (mplan and mplan["mode"] == "graph" and t["trigger_rule"] in GATE_RULES) \
-                and t["trigger_rule"] not in ("none_failed", "none_failed_min_one_success", "none_skipped"):
+                and t["trigger_rule"] not in PLAIN_RULES:
             reasons.append(f"{tid}: trigger_rule {t['trigger_rule']}")
         # every behavior-affecting task setting is mapped or defers the DAG: none is silently ignored
         for flag, why in (("depends_on_past", "depends_on_past"), ("wait_for_downstream", "wait_for_downstream"),
@@ -613,7 +632,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         if t.get("pool_slots") not in (None, 1):
             reasons.append(f"{tid}: pool_slots={t['pool_slots']}")
         cbs = [c for c in (t.get("callbacks") or []) if not (t["is_mapped"] and c in ("pre_execute", "post_execute"))]   # a mapped wrapper overrides them; mapping already defers
-        if cbs:
+        cb_ok = ("on_failure_callback", "on_success_callback", "on_retry_callback")       # converted with @on_hooks (asset form only)
+        unsupported = [c for c in cbs if c not in cb_ok or not (t.get("callback_fns") or {}).get(c)]
+        if unsupported or (cbs and (mplan and mplan["mode"] == "graph")):
             reasons.append(f"{tid}: task callbacks or hooks {cbs}")
         if t.get("execution_timeout_s") and ty not in BASH | BASH_DEC:
             reasons.append(f"{tid}: execution_timeout on a non-shell task (a Python callable cannot be interrupted safely)")
@@ -621,7 +642,28 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"{tid}: templates_dict (rendered templates passed to the callable) is not rebuilt")
         if len(t["outlets"]) > 1:
             reasons.append(f"{tid}: {len(t['outlets'])} outlets")
-        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT):
+        if ty in TRIGGER:
+            a = t.get("args") or {}
+            if not a.get("wait_for_completion"):
+                reasons.append(f"{tid}: TriggerDagRunOperator without wait_for_completion (a run launched without waiting is not available from inside a run)")
+            for k in ("reset_dag_run", "trigger_run_id", "logical_date", "skip_when_already_exists", "fail_when_dag_is_paused"):
+                if a.get(k):
+                    reasons.append(f"{tid}: TriggerDagRunOperator with {k}")
+            if not a.get("trigger_dag_id"):
+                reasons.append(f"{tid}: TriggerDagRunOperator target not found")
+        if ty in SENSORS:
+            sn = t.get("sensor") or {}
+            if sn.get("exponential_backoff") or sn.get("silent_fail") or sn.get("never_fail"):
+                reasons.append(f"{tid}: a sensor with exponential_backoff, silent_fail or never_fail")
+            if ty == "FileSensor" and (t.get("args") or {}).get("fs_conn_id", "fs_default") != "fs_default":
+                reasons.append(f"{tid}: FileSensor with the connection {(t.get('args') or {}).get('fs_conn_id')!r} (its base path is not available)")
+            if ty == "TimeSensor" and not sn.get("target_datetime"):
+                reasons.append(f"{tid}: TimeSensor target time not found")
+            if ty == "TimeDeltaSensor" and "delta" not in (t.get("args") or {}):
+                reasons.append(f"{tid}: TimeDeltaSensor delta not found")
+            if sn.get("soft_fail") and not (mplan and mplan["mode"] == "graph"):
+                reasons.append(f"{tid}: a sensor with soft_fail (skip handling needs the graph form)")
+        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | SENSORS | TRIGGER and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT | CLOCK_BRANCH):
             reasons.append(f"{tid}: operator {ty}")
         _, jprob = jinja_vars(task_templates(t))
         if jprob:
@@ -634,13 +676,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     pplan = mplan if mplan and mplan["mode"] == "partitions" else None
     gplan = mplan if mplan and mplan["mode"] == "graph" else None
 
+    elided = set() if gplan else ELIDED       # in the graph form an EmptyOperator stays a step: its trigger rule is what joins skipped branches
+
     def eff_up(tid: str) -> list[str]:
         out: list[str] = []
         for u in tasks[tid]["upstream"]:
-            out += eff_up(u) if tasks[u]["type"] in ELIDED else [u]
+            out += eff_up(u) if tasks[u]["type"] in elided else [u]
         return list(dict.fromkeys(out))
 
-    real = [t for t in dag["tasks"] if t["type"] not in ELIDED]
+    real = [t for t in dag["tasks"] if t["type"] not in elided]
     if not real:
         raise Defer("only EmptyOperators: nothing to run")
     notes: list[str] = []
@@ -705,15 +749,26 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     for t in real:
         tid, ty = t["task_id"], t["type"]
         meta: dict[str, Any] = {}
-        if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT:
+        if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
             code, sup = resolve_callable(t.get("callable"), shims_used, meta)
             resolved[tid] = (code, sup, meta)
         names, _ = jinja_vars(task_templates(t))
-        if meta.get("needs_ctx") or names:
+        if meta.get("needs_ctx") or names or ty == "TimeDeltaSensor" or (ty in CLOCK_BRANCH and (t.get("args") or {}).get("use_task_logical_date")):
             ctx_tasks.add(tid)
         if meta.get("needs_ti") or {"ti", "task_instance"} & names:
             ti_inputs[tid] = [u for u in ancestors(tid) if u in keyparts]      # xcom_pull may name any task that ran before
             consumed |= set(ti_inputs[tid])
+    cb_code: dict[str, list[tuple[str, str]]] = {}                 # task -> [(kind, function name)] and the generated adapters
+    cb_blocks: list[str] = []
+    for t in real:
+        for kind, fns in (t.get("callback_fns") or {}).items():
+            for k, info in enumerate(fns):
+                code, sup = resolve_callable(info, shims_used, {}, context_arg=True)
+                for sline in sup:
+                    support.setdefault(sline, len(support))
+                fn_name = f"_af_cb_{safe(t['task_id'])}_{kind[3:-9]}_{k}"
+                cb_blocks.append(re.sub(r"^def\s+\w+", f"def {fn_name}", code, count=1))
+                cb_code.setdefault(t["task_id"], []).append((kind, fn_name))
     uses_ctx = bool(ctx_tasks)
     if gplan and ti_inputs:
         raise Defer("dynamic task mapping where a callable pulls XComs by task id (not converted yet)")
@@ -721,6 +776,29 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         raise Defer("dynamic task mapping where a callable uses the task context or pulls XComs (not converted yet)")
     dag_params = dag.get("params") or {}
     graph_outs: list[str] = []
+
+    def sensor_body(t: dict[str, Any], params: dict[str, str], ctxn: str | None, call_inner: str | None = None) -> str:
+        """A sensor as a polling step: Airflow's default `poke` loop (check, give up after the timeout, sleep poke_interval)."""
+        ty, tid, tf, a, sn = t["type"], t["task_id"], t["template_fields"], t.get("args") or {}, t.get("sensor") or {}
+        tzn = tz_name(tt["timezone"]) if tt.get("timezone") else "UTC"
+        setup = ""
+        if ty in SENSOR_CALL:
+            check = call_inner
+        elif ty == "BashSensor":
+            check = f"bash_sensor({expr(tf.get('bash_command'), params, ctxn)}, {tf.get('env')!r}, {a.get('retry_exit_code')!r})"
+        elif ty == "FileSensor":
+            check = f"file_sensor({expr(tf.get('filepath'), params, ctxn)}, {bool(a.get('recursive'))!r})"
+        elif ty == "TimeSensor":
+            import datetime as _d
+            import zoneinfo
+            target = _d.datetime.fromisoformat(sn["target_datetime"]).astimezone(zoneinfo.ZoneInfo(tzn)).time().isoformat()
+            setup = f"    target = time_sensor_target({target!r}, {tzn!r})\n"
+            check = "af_utcnow() > target"
+        else:                                                          # TimeDeltaSensor
+            d = a.get("delta")
+            seconds = d["seconds"] if isinstance(d, dict) else int(d) * 60
+            check = f"af_utcnow() > ctx['data_interval_end'] + af_timedelta(seconds={seconds!r})"
+        return setup + f"    return af_poke(context, lambda: {check}, {sn.get('poke_interval', 60.0)!r}, {sn.get('timeout', 604800.0)!r}, {bool(sn.get('soft_fail'))!r})"
 
     def emit_graph() -> None:
         """One graph asset for the whole DAG: every task is an op, a mapped task a mapped op, a task after it gets the collected list."""
@@ -737,6 +815,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         for t in real:
             visit(t["task_id"])
         mp = gplan["mapped"]
+        fail_aware = any(tasks[x]["trigger_rule"] in GATE_RULES - PLAIN_RULES for x in order)     # a failure must not stop the steps that react to it
         idx = {tid: i for i, tid in enumerate(order)}
         ops: list[str] = []
         lines: list[str] = []
@@ -750,7 +829,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             i = idx[tid]
             fname = safe("op_" + tid)
             deco = [f"name={safe(dag_id) + '__' + safe(tid)!r}"]
-            if t["retries"]:
+            if t["retries"] and not fail_aware:
                 deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)})")
             if t["pool"]:
                 deco.append(f"pool={t['pool']!r}")
@@ -768,7 +847,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 single = len(m["srcs"]) == 1
                 kwexpr = ({"kw": f"{{{list(m['srcs'])[0]!r}: item}}", "args": "{}", "kwargs": "dict(item)"}[m["mode"]] if single else "dict(item)")
                 combo = f"    combo = {kwexpr}\n"
-            if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT:
+            if ty in SENSORS - SENSOR_CALL:
+                body = ctx_line + sensor_body(t, params, ctxn)
+            elif ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
                 code, sup, meta = resolved[tid]
                 for sline in sup:
                     support.setdefault(sline, len(support))
@@ -788,12 +869,35 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     body = ((combo if m else "") + ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                             "        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
                             f"    return run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
+                elif ty in SENSOR_CALL:
+                    body = ctx_line + sensor_body(t, params, ctxn, inner)
                 elif ty in BRANCH:
                     body = ctx_line + f"    return BranchResult({inner})"
                 elif ty in SHORT:
                     body = ctx_line + f"    return ShortCircuit(bool({inner}), hard={t.get('short_circuit_hard', True)!r})"
                 else:
                     body = (combo if m else "") + ctx_line + f"    return {inner}"
+            elif ty in ELIDED:
+                body = "    return None"
+            elif ty in CLOCK_BRANCH:
+                a = t.get("args") or {}
+                yes, no = a.get("follow_task_ids_if_true"), a.get("follow_task_ids_if_false")
+                logical = bool(a.get("use_task_logical_date"))
+                tzn = tz_name(tt["timezone"]) if tt.get("timezone") else "UTC"
+
+                def lit(v):
+                    if v is None:
+                        return "None"
+                    if isinstance(v, dict) and "datetime" in v:
+                        return f"af_datetime.fromisoformat({v['datetime']!r})"
+                    if isinstance(v, dict) and "time" in v:
+                        return f"af_time.fromisoformat({v['time']!r})"
+                    raise Defer(f"{tid}: a branch bound this converter cannot read ({v!r})")
+                if ty == "BranchDateTimeOperator":
+                    call = f"branch_datetime({'ctx' if logical else 'None'}, {lit(a.get('target_lower'))}, {lit(a.get('target_upper'))}, {yes!r}, {no!r}, {tzn!r})"
+                else:
+                    call = f"branch_weekday({'ctx' if logical else 'None'}, {a.get('week_day')!r}, {yes!r}, {no!r}, {tzn!r})"
+                body = ctx_line + f"    return BranchResult({call})"
             else:                                                       # BashOperator
                 if m:
                     part = m["partial"]
@@ -811,11 +915,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                             f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
             if ty in BASH | BASH_DEC and t.get("do_xcom_push") is False:      # nothing is pushed: the value downstream is None
                 body = body.replace("return run_shell(", "run_shell(") + "\n    return None"
+            prefix = ""
             if params:                                                  # skip semantics: branch choices, short-circuits and trigger rules
                 names = list(params.values())
-                body = (f"    skip = af_gate(context, {t['trigger_rule']!r}, [{', '.join(names)}], {tid!r})\n    if skip is not None:\n        return skip\n"
-                        f"    {', '.join(names)} = {', '.join(f'af_data({n})' for n in names)}\n") + body
-            ops.append("@dg.op(" + ", ".join(deco) + ")\ndef " + fname + "(" + ", ".join(sig) + "):\n" + body + "\n")
+                setup_arg = (f", setup={[bool(tasks[u].get('is_setup')) for u in params]!r}" if t["trigger_rule"] == "all_done_setup_success" else "")
+                prefix = (f"    skip = af_gate(context, {t['trigger_rule']!r}, [{', '.join(names)}], {tid!r}{setup_arg})\n    if skip is not None:\n        return skip\n"
+                          f"    {', '.join(names)} = {', '.join(f'af_data({n})' for n in names)}\n")
+            if fail_aware:                                              # the body runs inside a guard that turns a failure into a value
+                inner_lines = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
+                body = ("    def _run():\n" + inner_lines +
+                        f"\n    return af_guard(context, _run, {int(t['retries'] or 0)}, {int(t['retry_delay_s'] or 300)})")
+            ops.append("@dg.op(" + ", ".join(deco) + ")\ndef " + fname + "(" + ", ".join(sig) + "):\n" + prefix + body + "\n")
             if m:                                                       # the fan-out op, then the mapped op
                 lit_names = [n for n, v in m["srcs"].items() if v[0] == "lit"]
                 srcs = list(m["srcs"].items())
@@ -848,7 +958,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     fan_args = ", ".join(val[u] for _, u in task_srcs)
                     dyn[tid] = f"d{i}"
                     lines.append(f"    d{i} = fan_{safe(tid)}({fan_args}).map(lambda item: {fname}(item{extra_call}))")
-                ops.append(f"@dg.op(name={safe(dag_id) + '__collect_' + safe(tid)!r})\ndef collect_{safe(tid)}(items):\n    return list(items)\n")
+                ops.append(f"@dg.op(name={safe(dag_id) + '__collect_' + safe(tid)!r})\ndef collect_{safe(tid)}(context, items):\n"
+                           "    items = list(items)\n    return items if items else af_skip(context, False)      # Airflow skips a mapped task that expands to nothing\n")
                 lines.append(f"    v{i} = collect_{safe(tid)}(d{i}.collect())")
                 val[tid] = f"v{i}"
             else:
@@ -856,10 +967,19 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 lines.append(f"    v{i} = {fname}({args})")
                 val[tid] = f"v{i}"
             outs[tid] = f"o{i}"
+        if fail_aware:                                                  # the run fails at the end if any task failed
+            fin_params = [f"in_{k}" for k in range(len(order))]
+            ops.append(f"@dg.op(name={safe(dag_id) + '__finish'!r})\ndef op_finish(context, {', '.join(fin_params)}):\n"
+                       f"    af_finish(context, {{{', '.join(f'{tid!r}: in_{k}' for k, tid in enumerate(order))}}}"
+                       f"{', ignore=' + repr(sorted(x for x in order if tasks[x].get('is_teardown') and not tasks[x].get('on_failure_fail_dagrun'))) if any(tasks[x].get('is_teardown') for x in order) else ''})\n")
+            lines.append(f"    fin = op_finish({', '.join(val[x] for x in order)})")
+            graph_outs.append("run_check")
         outs_decl = ",\n        ".join(
             f"{outs[tid]!r}: dg.AssetOut(key={keyparts[tid]!r}, kinds={{{('shell' if tasks[tid]['type'] in BASH | BASH_DEC else 'python')!r}}}, "
             f"metadata={{'airflow_dag': {dag_id!r}, 'airflow_task': {tid!r}, 'airflow_operator': {tasks[tid]['type']!r}}})" for tid in order if tid in keyparts)
-        ret = "{" + ", ".join(f"{outs[tid]!r}: {val[tid]}" for tid in order if tid in keyparts) + "}"
+        ret = "{" + ", ".join(f"{outs[tid]!r}: {val[tid]}" for tid in order if tid in keyparts) + (", 'o_run_check': fin" if fail_aware else "") + "}"
+        if fail_aware:
+            outs_decl += f",\n        'o_run_check': dg.AssetOut(key={[safe(dag_id), 'run_check']!r}, kinds={{'python'}}, description='Fails the run when any task failed (the tasks that react to a failure still ran).')"
         blocks.append("\n\n".join(ops) + f"\n\n@dg.graph_multi_asset(name={safe(dag_id) + '_graph'!r}, group_name={safe(dag_id)!r}, outs={{\n        {outs_decl},\n    }})\n"
                       f"def {safe(dag_id)}_graph():\n" + "\n".join(lines) + f"\n    return {ret}\n")
         notes.append("dynamic task mapping became dynamic outputs inside one graph asset: the whole DAG runs as one Dagster run, mapped tasks are mapped ops "
@@ -930,7 +1050,19 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
             deco.append("kinds={'shell'}")
             pre = ""
-        elif ty in PY_TASKS | BASH_DEC:
+        elif ty in TRIGGER:
+            conf = t["template_fields"].get("conf")
+            body = ctx_line + f"    trigger_dag_run(context, __name__, {t['args']['trigger_dag_id']!r}, {expr(conf, params, ctxn) if conf else 'None'})"
+            deco.append("kinds={'dagster'}")
+            pre = ""
+            ret_none = True
+            notes.append(f"{tid} launches the job of DAG {t['args']['trigger_dag_id']!r} and waits for it (the DAG must be converted into the same package); its run fails if the launched run fails")
+        elif ty in SENSORS - SENSOR_CALL:
+            body = ctx_line + sensor_body(t, params, ctxn)
+            deco.append("kinds={'sensor'}")
+            pre = ""
+            ret_none = False
+        elif ty in PY_TASKS | BASH_DEC | SENSOR_CALL:
             code, sup, meta = resolved[tid]
             for sline in sup:
                 support.setdefault(sline, len(support))
@@ -947,7 +1079,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             else:
                 inner = f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")"
             pre = code + "\n\n\n"
-            if ty in BASH_DEC:
+            if ty in SENSOR_CALL:
+                body = ctx_line + sensor_body(t, params, ctxn, inner)
+                deco.append("kinds={'sensor'}")
+                ret_none = False
+            elif ty in BASH_DEC:
                 body = (ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                         f"        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
                         f"    {'' if ret_none else 'return '}run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
@@ -982,13 +1118,37 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             pre = ""
             ret_none = not stmt.startswith("return")
         sig = "(\n" + ",\n".join(args) + ",\n)" + (" -> None" if ret_none and tid not in consumed else "")
-        blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\ndef " + fname + sig + ":\n" + body + "\n")
+        hook_deco = ""
+        if tid in cb_code:                                    # task callbacks through the registry's @on_hooks decorator
+            fails = [fn for kind, fn in cb_code[tid] if kind == "on_failure_callback"]
+            retries_cb = [fn for kind, fn in cb_code[tid] if kind == "on_retry_callback"]
+            succ = [fn for kind, fn in cb_code[tid] if kind == "on_success_callback"]
+            ad = f"_cb_{safe(tid)}"
+            ctx_new = f"    ctx = af_context(context, {dag_id!r}, {tid!r}, {dag_params!r}, {{}})\n"
+            adapters = ""
+            kw = []
+            if fails or retries_cb:
+                adapters += f"def {ad}_failure(context, exc):\n{ctx_new}    ctx['exception'] = exc\n"
+                if fails:
+                    adapters += f"    if context.retry_number >= {int(t['retries'] or 0)}:          # on_failure_callback: after the last attempt only\n" + "".join(f"        {fn}(ctx)\n" for fn in fails)
+                if retries_cb:
+                    adapters += f"    if context.retry_number < {int(t['retries'] or 0)}:           # on_retry_callback: before another attempt\n" + "".join(f"        {fn}(ctx)\n" for fn in retries_cb)
+                adapters += "\n\n"
+                kw.append(f"on_failure=[f'{{__name__}}:{ad}_failure']")
+            if succ:
+                adapters += f"def {ad}_success(context, result):\n{ctx_new}" + "".join(f"    {fn}(ctx)\n" for fn in succ) + "\n\n"
+                kw.append(f"on_success=[f'{{__name__}}:{ad}_success']")
+            pre = pre + adapters
+            hook_deco = "@on_hooks(" + ", ".join(kw) + ")\n"
+        blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\n" + hook_deco + "def " + fname + sig + ":\n" + body + "\n")
 
-    keys = [keyparts[t["task_id"]] for t in real]
-    imports = (["import itertools"] if gplan else []) + ["import dagster as dg", "", "from ..runtime import *  # noqa: F401,F403"]
+    keys = [keyparts[t["task_id"]] for t in real] + ([[safe(dag_id), "run_check"]] if graph_outs else [])
+    imports = (["import itertools"] if gplan else []) + ["import dagster as dg"] + (["from dagster_community_components import on_hooks"] if cb_code else []) + ["", "from ..runtime import *  # noqa: F401,F403"]
     mod = [f'"""Converted from Airflow DAG `{dag_id}` ({dag["file"]}) by convert_ir.py.', "", note, '"""', *imports, ""]
     if support:
         mod += [s for s, _ in sorted(support.items(), key=lambda kv: kv[1])] + [""]
+    if cb_blocks:
+        mod += ["\n\n".join(cb_blocks), ""]
     if pplan:
         pdef = (f"dg.StaticPartitionsDefinition({list(dict.fromkeys(item_key(i) for i in pplan['items']))!r})" if pplan["kind"] == "literal"
                 else f"dg.DynamicPartitionsDefinition(name={safe(dag_id) + '_items'!r})")
@@ -1036,7 +1196,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         produced[k] = dag_id
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
-                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "requirements": sorted(third_party(support) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "requirements": sorted(third_party(support) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
                  "uses_context": uses_ctx, "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
@@ -1454,6 +1614,23 @@ class Skipped:
         return "Skipped"
 
 
+class Failed:
+    """A task that failed (after its retries). The run is failed at the end; steps whose trigger rule allows it still run."""
+
+    def __init__(self, error=""):
+        self.error = error
+
+    def __repr__(self):
+        return f"Failed({self.error})"
+
+
+class UpstreamFailed:
+    """A task that did not run because an upstream task failed (Airflow's `upstream_failed`)."""
+
+    def __repr__(self):
+        return "UpstreamFailed"
+
+
 class BranchResult:
     """What a branch task chose: the task ids (or task group ids) to follow."""
 
@@ -1474,8 +1651,27 @@ def _skip(context, hard):
     return Skipped(hard)
 
 
-def af_gate(context, rule, inputs, task_id):
-    """Airflow's skip logic for one task: None to run it, a Skipped marker to skip it."""
+af_skip = _skip
+
+
+def _state(x):
+    """An upstream value as an Airflow task state."""
+    if isinstance(x, Skipped):
+        return "skipped"
+    if isinstance(x, Failed) or (isinstance(x, list) and any(isinstance(i, Failed) for i in x)):
+        return "failed"
+    if isinstance(x, UpstreamFailed) or (isinstance(x, list) and any(isinstance(i, UpstreamFailed) for i in x)):
+        return "upstream_failed"
+    return "success"
+
+
+def _upstream_failed(context):
+    context.add_output_metadata({"airflow/state": "upstream_failed"})
+    return UpstreamFailed()
+
+
+def af_gate(context, rule, inputs, task_id, setup=None):
+    """Airflow's decision for one task from its upstream states (TriggerRuleDep): None to run it, or a marker (Skipped, UpstreamFailed)."""
     if any(isinstance(x, Skipped) and x.hard for x in inputs):
         return _skip(context, True)
     for x in inputs:
@@ -1483,17 +1679,200 @@ def af_gate(context, rule, inputs, task_id):
             return _skip(context, False)
         if isinstance(x, ShortCircuit) and not x.passed:
             return _skip(context, x.hard)
-    skipped = [isinstance(x, Skipped) for x in inputs]
-    if not skipped:
+    states = [_state(x) for x in inputs]
+    n = len(states)
+    if not n:
         return None
-    ok = {"all_success": not any(skipped), "none_skipped": not any(skipped), "none_failed": True,
-          "none_failed_min_one_success": not all(skipped), "one_success": not all(skipped), "all_skipped": all(skipped)}[rule]
-    return None if ok else _skip(context, False)
+    ok, sk = states.count("success"), states.count("skipped")
+    bad = states.count("failed") + states.count("upstream_failed")
+    SKIP, UPF = "skip", "upf"
+    if rule == "all_success":
+        out = UPF if bad else (SKIP if sk else None)
+    elif rule == "all_failed":
+        out = SKIP if (ok or sk) else None
+    elif rule == "one_success":
+        out = SKIP if sk == n else (UPF if ok <= 0 else None)
+    elif rule == "one_failed":
+        out = None if bad else SKIP
+    elif rule == "one_done":
+        out = None if (states.count("failed") or ok) else SKIP
+    elif rule == "none_failed":
+        out = UPF if bad else None
+    elif rule == "none_failed_min_one_success":
+        out = UPF if bad else (SKIP if sk == n else (UPF if ok == 0 else None))
+    elif rule == "none_skipped":
+        out = SKIP if sk else None
+    elif rule == "all_skipped":
+        out = SKIP if (ok or bad) else None
+    elif rule == "all_done_min_one_success":
+        out = SKIP if sk else (UPF if ok == 0 else None)
+    elif rule == "all_done_setup_success":                         # a teardown: skip if every setup was skipped, fail if no setup succeeded
+        flags = [i for i, f in enumerate(setup or []) if f]
+        if flags and sum(states[i] == "skipped" for i in flags) >= len(flags):
+            out = SKIP
+        elif flags and not any(states[i] == "success" for i in flags):
+            out = UPF
+        else:
+            out = None
+    else:                                                          # all_done, always
+        out = None
+    if out == SKIP:
+        return _skip(context, False)
+    if out == UPF:
+        return _upstream_failed(context)
+    return None
+
+
+def af_guard(context, run, retries, delay):
+    """Run a step so that a failure (after its retries) becomes a Failed value that later steps can react to."""
+    try:
+        return run()
+    except dg.RetryRequested:
+        raise
+    except Exception as e:                                         # noqa: BLE001
+        if context.retry_number < retries:
+            raise dg.RetryRequested(max_retries=retries, seconds_to_wait=delay) from e
+        context.add_output_metadata({"airflow/state": "failed", "error": str(e)[:1000]})
+        return Failed(f"{type(e).__name__}: {str(e)[:300]}")
+
+
+def af_finish(context, values, ignore=()):
+    """The last step of a failure-aware DAG: fail the run if any task failed (a failed teardown does not, unless it asks to)."""
+    failed = []
+    for name, v in values.items():
+        if name in ignore:
+            continue
+        items = v if isinstance(v, list) else [v]
+        failed += [f"{name}: {i.error}" for i in items if isinstance(i, Failed)]
+    if failed:
+        raise dg.Failure(description="tasks failed: " + "; ".join(failed))
+
+
+af_datetime, af_time = _dt.datetime, _dt.time          # public names: generated modules import the runtime with *
+
+
+def _target_times_as_dates(base, lower, upper):
+    """Airflow's combination of time-of-day bounds with the date being checked."""
+    if isinstance(lower, _dt.datetime) and isinstance(upper, _dt.datetime):
+        return lower, upper
+    if lower is not None and isinstance(lower, _dt.time):
+        lower = _dt.datetime.combine(base, lower)
+    if upper is not None and isinstance(upper, _dt.time):
+        upper = _dt.datetime.combine(base, upper)
+    if lower is None or upper is None:
+        return lower, upper
+    if upper < lower:
+        upper += _dt.timedelta(days=1)
+    return lower, upper
+
+
+def _in_tz(dt, tz):
+    return None if dt is None else (dt.replace(tzinfo=tz) if dt.tzinfo is None else dt)
+
+
+def branch_datetime(ctx, lower, upper, if_true, if_false, tzname):
+    """BranchDateTimeOperator: follow if_true when the time (the system's, or the logical date) is inside [lower, upper]."""
+    import zoneinfo
+    tz = zoneinfo.ZoneInfo(tzname)
+    now = ctx["logical_date"] if ctx is not None else _dt.datetime.now(_dt.timezone.utc)
+    lower, upper = _target_times_as_dates(now, lower, upper)
+    lower, upper = _in_tz(lower, tz), _in_tz(upper, tz)
+    if upper is not None and upper < now:
+        return if_false
+    if lower is not None and lower > now:
+        return if_false
+    return if_true
+
+
+_WEEKDAYS = {"MONDAY": 1, "TUESDAY": 2, "WEDNESDAY": 3, "THURSDAY": 4, "FRIDAY": 5, "SATURDAY": 6, "SUNDAY": 7}
+
+
+def branch_weekday(ctx, week_day, if_true, if_false, tzname):
+    """BranchDayOfWeekOperator: follow if_true when today (the system's day in the DAG timezone, or the logical date) is one of week_day."""
+    import zoneinfo
+    days = {d if isinstance(d, int) else _WEEKDAYS[d.upper()] for d in ([week_day] if isinstance(week_day, (str, int)) else week_day)}   # names, or Airflow's WeekDay numbers (Monday=1)
+    now = ctx["logical_date"] if ctx is not None else _dt.datetime.now(_dt.timezone.utc).astimezone(zoneinfo.ZoneInfo(tzname))
+    return if_true if now.isoweekday() in days else if_false
+
+
+af_utcnow = lambda: _dt.datetime.now(_dt.timezone.utc)
+af_timedelta = _dt.timedelta
+
+
+def af_poke(context, check, interval, timeout, soft_fail=False):
+    """BaseSensorOperator.execute in `poke` mode: check, give up (or skip, with soft_fail) once the timeout has passed, sleep, repeat."""
+    import time
+    start = time.monotonic()
+    while True:
+        result = check()
+        if getattr(result, "is_done", result):
+            return getattr(result, "xcom_value", None)
+        if time.monotonic() - start > timeout:
+            if soft_fail:
+                return af_skip(context, False)
+            raise dg.Failure(description=f"Sensor has timed out after {timeout} s")
+        time.sleep(interval)
+
+
+def bash_sensor(command, env, retry_exit_code):
+    """BashSensor.poke: true on exit 0; with retry_exit_code, that code means try again and any other non-zero code fails."""
+    import subprocess
+    import tempfile
+    with tempfile.TemporaryDirectory(prefix="airflowtmp") as tmp:
+        proc = subprocess.run(["bash", "-c", command], cwd=tmp, env=env, capture_output=True, text=True)
+    if proc.returncode == 0:
+        return True
+    if retry_exit_code is not None:
+        if proc.returncode == retry_exit_code:
+            return False
+        raise dg.Failure(description=f"Command exited with return code {proc.returncode}")
+    return False
+
+
+def file_sensor(filepath, recursive):
+    """FileSensor.poke with the default `fs_default` connection (base path /): a file matching the glob, or a directory that holds files."""
+    import glob
+    import os
+    for path in glob.glob(os.path.join("/", filepath), recursive=recursive):
+        if os.path.isfile(path):
+            return True
+        for _, _, files in os.walk(path):
+            if files:
+                return True
+    return False
+
+
+def time_sensor_target(time_str, tzname):
+    """TimeSensor: today's date in the DAG timezone at the given time, as a UTC moment."""
+    import zoneinfo
+    tz = zoneinfo.ZoneInfo(tzname)
+    return _dt.datetime.combine(_dt.datetime.now(tz), _dt.time.fromisoformat(time_str), tz).astimezone(_dt.timezone.utc)
+
+
+def reconstruct_dag_job(module, job_name):
+    """Rebuild a converted DAG's job in a fresh process, for execute_job (the same mechanism as the registry's trigger_job_asset)."""
+    import importlib
+    mod = importlib.import_module(module)
+    assets = [v for v in vars(mod).values() if isinstance(v, dg.AssetsDefinition)]
+    return dg.Definitions(assets=assets, jobs=[v for v in vars(mod).values() if getattr(v, "name", None) == job_name and hasattr(v, "selection")]).get_job_def(job_name)
+
+
+def trigger_dag_run(context, calling_module, dag_id, conf=None):
+    """TriggerDagRunOperator with wait_for_completion: launch the other converted DAG's job here and fail if its run fails."""
+    from dagster._core.definitions.reconstruct import build_reconstructable_job
+    name = "".join(c if c.isalnum() or c == "_" else "_" for c in dag_id)
+    name = f"_{name}" if name[:1].isdigit() else name           # the module and the job of a converted DAG are named like this
+    module = calling_module.rsplit(".", 1)[0] + "." + name
+    job = build_reconstructable_job(__name__, "reconstruct_dag_job", reconstructable_kwargs={"module": module, "job_name": name})
+    tags = {"airflow/triggered_by": context.run.run_id, **({"airflow/conf": json.dumps(conf)} if conf else {})}
+    result = dg.execute_job(job, instance=context.instance, tags=tags)
+    if not result.success:
+        raise dg.Failure(description=f"the triggered DAG {dag_id!r} failed (run {result.run_id})", metadata={"triggered_run_id": result.run_id})
 
 
 def af_data(x):
     """The value a downstream task sees: None for a skipped task, the chosen ids for a branch, the flag for a short-circuit."""
-    if isinstance(x, Skipped):
+    if isinstance(x, (Skipped, Failed, UpstreamFailed)):
         return None
     if isinstance(x, BranchResult):
         return list(x.selected)
