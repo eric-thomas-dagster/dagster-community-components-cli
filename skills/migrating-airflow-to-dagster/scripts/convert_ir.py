@@ -74,7 +74,7 @@ CLOCK_BRANCH = {"BranchDateTimeOperator", "BranchDayOfWeekOperator"}      # bran
 GATE_RULES = {"all_success", "all_failed", "all_done", "one_success", "one_failed", "one_done", "none_failed", "none_failed_min_one_success",
               "none_skipped", "all_skipped", "all_done_min_one_success", "always", "all_done_setup_success"}
 PLAIN_RULES = {"all_success", "none_failed", "none_failed_min_one_success"}               # behave like all_success when a failure stops the run anyway
-S3_OPS = {"S3ListOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "LocalFilesystemToS3Operator"}
+S3_OPS = {"S3ListOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "LocalFilesystemToS3Operator", "S3CreateObjectOperator"}
 SNOWFLAKE_OPS = {"CopyFromExternalStageToSnowflakeOperator", "SnowflakeOperator", "SQLExecuteQueryOperator"}
 
 
@@ -514,6 +514,7 @@ S3_FIELDS = {
                              "acl_policy", "meta_data_directive", "kms_key_id", "kms_encryption_type", "aws_conn_id"),
     "S3DeleteObjectsOperator": ("bucket", "keys", "prefix", "from_datetime", "to_datetime", "aws_conn_id"),
     "LocalFilesystemToS3Operator": ("filename", "dest_key", "dest_bucket", "replace", "encrypt", "gzip", "acl_policy", "aws_conn_id"),
+    "S3CreateObjectOperator": ("s3_bucket", "s3_key", "data", "replace", "encrypt", "acl_policy", "compression", "encoding", "aws_conn_id"),
 }
 
 
@@ -605,6 +606,10 @@ def s3_call(t: dict[str, Any], params: dict[str, str], ctx: str | None = None) -
         if f.get("prefix") or f.get("from_datetime") or f.get("to_datetime") or f.get("keys") is None:
             raise Defer(f"{t['task_id']}: S3DeleteObjectsOperator by prefix or date range")
         return f"s3_delete_keys(client, {g('bucket')}, {g('keys')})", conn
+    if ty == "S3CreateObjectOperator":
+        if f.get("compression") or f.get("encrypt") or f.get("acl_policy"):
+            raise Defer(f"{t['task_id']}: S3CreateObjectOperator compression/encrypt/acl")
+        return f"s3_create_object(client, {g('s3_bucket')}, {g('s3_key')}, {g('data')}, {bool(f.get('replace'))!r}, {g('encoding')})", conn
     if f.get("gzip") or f.get("encrypt") or f.get("acl_policy"):
         raise Defer(f"{t['task_id']}: LocalFilesystemToS3Operator gzip/encrypt/acl")
     return f"s3_upload_file(client, {g('filename')}, {g('dest_bucket')}, {g('dest_key')}, {bool(f.get('replace'))!r})", conn
@@ -658,7 +663,8 @@ OPERATOR_COMPONENTS: dict[str, str] = {
     "SlackWebhookOperator": "slack_notification_job",
     "SlackAPIPostOperator": "slack_notification_job",
     "EmailOperator": "no email component; use a Dagster alert",
-    "S3CreateObjectOperator": "none yet (wishlist: s3_create_object)",
+    "S3CreateObjectOperator": "s3_create_object_asset",
+    "LoopGateOperator": "loop_gate_asset (Airflow 3.4 task-group loops: body callable, until callable, max_iterations)",
     "S3ListPrefixesOperator": "s3_list_keys_asset (common_prefixes metadata)",
     "KubernetesPodOperator": "k8s_job_asset",
 }
@@ -2401,6 +2407,15 @@ def s3_delete_keys(client: Any, bucket: str, keys: Any) -> None:
             raise dg.Failure(description=f"errors deleting: {[e['Key'] for e in resp['Errors']]}")
 
 
+def s3_create_object(client: Any, bucket: Any, key: str, data: Any, replace: bool, encoding: Any = None) -> None:
+    """S3CreateObjectOperator without compression/encrypt/acl: S3Hook.load_string for text, load_bytes for bytes."""
+    b, k = s3_bucket_key(bucket, key)
+    if not replace and _s3_head(client, b, k):
+        raise ValueError(f"The key {k} already exists.")
+    body = data.encode(encoding or "utf-8") if isinstance(data, str) else data
+    client.put_object(Bucket=b, Key=k, Body=body)
+
+
 def s3_upload_file(client: Any, filename: str, bucket: str, key: str, replace: bool) -> None:
     """LocalFilesystemToS3Operator without gzip/encrypt/acl (S3Hook.load_file)."""
     b, k = s3_bucket_key(bucket, key)
@@ -2698,6 +2713,8 @@ def af_s3_mapped(client, op_type, f):
         if f.get("keys") is None:
             raise dg.Failure(description="S3DeleteObjectsOperator by prefix or date range is not supported in a mapped task")
         return s3_delete_keys(client, f.get("bucket"), f.get("keys"))
+    if op_type == "S3CreateObjectOperator":
+        return s3_create_object(client, f.get("s3_bucket"), f.get("s3_key"), f.get("data"), bool(f.get("replace")), f.get("encoding"))
     return s3_upload_file(client, f.get("filename"), f.get("dest_bucket"), f.get("dest_key"), bool(f.get("replace")))
 
 
