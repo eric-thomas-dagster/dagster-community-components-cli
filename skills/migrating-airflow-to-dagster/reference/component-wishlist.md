@@ -114,11 +114,13 @@ The components are general Dagster components, not Airflow clones, so the goal i
 
 | Airflow idea | Dagster-native rewrite | Note |
 |---|---|---|
-| `ds` / `logical_date` / `data_interval_*` | a time partition of the asset; the callable receives the window | The component's partition-derived dates are the idiomatic form. Non-partitioned scheduled DAGs have no window, so the converter either adds a partition or passes the schedule tick (what its own runtime does today). A fallback to `now()` is a silent behavior change and should raise or warn. |
+| `ds` / `logical_date` / `data_interval_*` | regular schedule and regular asset; the run carries the date as a tag | Decision: do not add partitions to a scheduled DAG that has none. `CronScheduleComponent` with `add_logical_date_tag: true` already tags each run `logical_date` (un-partitioned: the trigger time, which is Airflow 3's logical date). `PythonCallableAssetComponent` does not read that tag yet (it uses the partition window, else `now()`), so the pairing needs one change there: read the `logical_date` run tag first. Airflow 2's interval-start date for an un-partitioned schedule is not offered by either component (see below). |
 | `ti.xcom_pull(task_ids=...)` | `inputs: {name: asset_key}` | Native. |
 | `Variable.get` | environment variable or a Dagster resource | `AIRFLOW_VAR_*` is a migration convenience, not the target. |
 | `S3Hook` calls | the S3 mirror components or `S3Resource` | Rewrite the call site; do not carry a hook shim. |
 | Jinja in operator arguments | resolve at definition time where static; otherwise partition-derived values | Avoid a runtime template engine in the final project. |
+
+Gaps to close for the un-partitioned path: (1) `PythonCallableAssetComponent` reads the `logical_date` tag set by `CronScheduleComponent`; (2) an option on the schedule component for Airflow 2's date (the start of the interval that ended, which for a cron is the previous tick), such as `logical_date_offset: previous_tick`, with `data_interval_start/end` tags; (3) the tag name stays `logical_date` so the two components agree.
 
 Where the component should improve, judged as a Dagster component (not as Airflow): render any Jinja it keeps in a sandbox (it uses a plain environment today), fail at load time rather than at render time for unsupported names (it already does this for the whitelisted roots), and say what happens for a non-partitioned asset instead of falling back to `now()`.
 
