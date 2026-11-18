@@ -23,6 +23,7 @@ These blockers are covered by components you have already built. The converter h
 - **Snowflake `COPY INTO`:** 4 of 4 configurations match (the `ON_ERROR` quoting is fixed).
 - **`shell_command_asset` output options:** `return_last_stdout_line` with `parse_json_output` matches Airflow 3 on 11 of 11 cases.
 - **`af_guard` against the converter's gate:** the same decision about whether a step runs in all 672 combinations of upstream states; see request 1 for the one label difference.
+- **`partition_window_sensor` window keys:** 12 of 12 cases match Airflow's `RollupMapper` and `FanOutMapper` as key sets (`examples/runtime_conversion/partition_window_parity/`).
 - **Built but not yet tested by me:** `wait_until_asset`, `dynamic_fanout_asset` with `items_from`, `python_callable_asset` inputs read from upstream metadata, `s3_list_keys_asset` `return_keys_as_value`, the schedule component's date tags, `snowflake_sql_asset`, `k8s_job_asset` `use_pipes`.
 
 ## Requests
@@ -33,7 +34,7 @@ When a step does not run, `af_guard` always reports `skipped`. Airflow reports `
 
 ### 2. Decisions I need from you
 
-- **Airflow 3.2 partitioned timetables** (`CronPartitionTimetable`, `PartitionedAssetTimetable` with mappers; 10 DAGs, all from one example file): your components session has this.
+- **Airflow partitioned timetables** (`CronPartitionTimetable`, `PartitionedAssetTimetable` with mappers; about 20 DAGs, all from one example file): the Dagster side is built (the schedule component's partitions and `partition_window_sensor`). The converter side is not started.
 - **Airflow-only asset events** (`Metadata`, `outlet_events`, `inlet_events`, `AssetAlias`; about 12 DAGs): the script orchestrator names each outlet asset (`airflow_dataset_<cleaned name>`) and turns schedule inlets into dependencies, but it does not handle events or aliases either. The natural Dagster mapping is materialization metadata (what the converter already does for `xcom_push`), and a read of an asset's latest materialization metadata for `inlet_events`. Say if you want that built.
 
 ## Low priority
