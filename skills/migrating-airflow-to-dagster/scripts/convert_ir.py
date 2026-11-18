@@ -353,6 +353,19 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         reasons.append(f"schedule type {tt['class']} ({tt['kind']})")
     if dag.get("has_callbacks"):
         reasons.append("DAG-level callbacks")
+    ds = dag.get("dag_settings") or {}
+    if ds.get("fail_stop"):
+        reasons.append("fail_stop=True (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish)")
+    for k, default in (("max_active_tasks", 16), ("max_active_runs", 16), ("concurrency", 16)):
+        v = ds.get(k)
+        if v not in (None, default, 0) and not (isinstance(v, dict)):
+            reasons.append(f"{k}={v} (a concurrency limit that is not mapped)")
+    if ds.get("dagrun_timeout"):
+        reasons.append("dagrun_timeout (a run time limit that is not mapped)")
+    if ds.get("max_consecutive_failed_dag_runs"):
+        reasons.append("max_consecutive_failed_dag_runs (auto-pause after failures is not mapped)")
+    if ds.get("render_template_as_native_obj"):
+        reasons.append("render_template_as_native_obj")
     if dag.get("catchup") and tt["kind"] in ("cron_trigger", "cron_data_interval"):
         reasons.append("catchup=True needs partitions and a backfill")
     for t in tasks.values():
@@ -373,9 +386,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 reasons.append(f"{tid}: {flag}")
         if t.get("pool_slots") not in (None, 1):
             reasons.append(f"{tid}: pool_slots={t['pool_slots']}")
-        cbs = [c for c in (t.get("callbacks") or []) if c.startswith("on_")]     # pre/post_execute are default no-op methods, not callbacks
+        cbs = list(t.get("callbacks") or [])                    # pre/post_execute appear only when overridden (run_if, skip_if, hooks)
         if cbs:
-            reasons.append(f"{tid}: task callbacks {cbs}")
+            reasons.append(f"{tid}: task callbacks or hooks {cbs}")
         if t.get("execution_timeout_s") and ty not in BASH | BASH_DEC:
             reasons.append(f"{tid}: execution_timeout on a non-shell task (a Python callable cannot be interrupted safely)")
         if len(t["outlets"]) > 1:

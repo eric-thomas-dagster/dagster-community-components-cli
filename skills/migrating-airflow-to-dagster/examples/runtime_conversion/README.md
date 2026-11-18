@@ -1,6 +1,6 @@
 # Mechanical conversion from the runtime IR
 
-`converted_2_9/` is the output of the pipeline for the public repo `astronomer/2-9-example-dags` (9 of its 18 DAGs convert; the other 9 are deferred with a reason each in `report.json`). It loads in a Dagster project created with `create-dagster`; add `dagster-aws` and `dagster-snowflake` to the project if it uses resources.
+`converted_2_9/` is the output of the pipeline for the public repo `astronomer/2-9-example-dags` (8 of its 18 DAGs convert; the other 10 are deferred with a reason each in `report.json`). It loads in a Dagster project created with `create-dagster`; add `dagster-aws` and `dagster-snowflake` to the project if it uses resources.
 
 ```
 # in an environment with the same Airflow version and providers as the project (this EXECUTES the DAG files: sandbox only)

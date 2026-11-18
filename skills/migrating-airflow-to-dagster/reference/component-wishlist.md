@@ -95,3 +95,12 @@ Each mirrors an Airflow operator exactly and should ship with a parity test agai
 ## How to verify a new component
 
 The harness in `examples/runtime_conversion/parity/` and `examples/s3_to_snowflake_factories/parity/` already does it: run the real Airflow operator or hook with the external system mocked and recording, run the Dagster component with an equivalent recording fake, compare the calls, return values and errors. Two lessons from building the fakes: Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must attach the same; and a fake client has to include what Airflow's code reads (`ResponseMetadata`, `LastModified`) or the comparison fails for the wrong reason.
+
+## Settings the converter defers that a feature could map
+
+These are candidates, not verified mappings; verify each against Airflow's behavior before relying on it.
+
+- Task and DAG concurrency (`max_active_runs`, `max_active_tasks`, `max_active_tis_per_dag`): a run-queue tag concurrency limit is deployment configuration. A converter could tag the job and emit the limit for the deployment; a component could hold the tag.
+- Task callbacks (`on_failure_callback`, `on_success_callback`): run-status or run-failure sensors, or alert policies.
+- `dagrun_timeout`: a run time limit tag, if the deployment enforces one.
+- `fail_stop=True`: no direct equivalent; needs a design decision (terminate the run from a failure hook).

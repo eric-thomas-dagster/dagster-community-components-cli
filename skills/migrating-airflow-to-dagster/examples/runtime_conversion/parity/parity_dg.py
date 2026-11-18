@@ -17,7 +17,7 @@ for did in ids:
     try:
         mod = importlib.import_module(f"pkg.defs.{safe(did)}")
         assets = [v for v in vars(mod).values() if isinstance(v, dg.AssetsDefinition)]
-        signal.alarm(60)
+        signal.alarm(300)
         r = dg.materialize(assets, raise_on_error=False)
         tasks = {}
         keys_ok = {e.asset_key.to_user_string() for e in r.get_asset_materialization_events()}
@@ -28,7 +28,7 @@ for did in ids:
             except Exception: pass
             tasks[tid] = {"state": "success" if key in keys_ok else "not_materialized", "value": repr(val)[:300] if val is not None else "None"}
         res[did] = {"state": "success" if r.success else "failed", "tasks": tasks}
-    except TO: res[did] = {"error": "timeout 60s"}
+    except TO: res[did] = {"error": "timeout 300s"}
     except BaseException as e: res[did] = {"error": f"{type(e).__name__}: {str(e)[:200]}"}
     finally: signal.alarm(0)
 json.dump(res, open(out, "w"), indent=1)

@@ -108,6 +108,21 @@ def _timetable(dag: Any) -> dict[str, Any]:
     return out
 
 
+def _overridden_hooks(task: Any) -> list[str]:
+    """pre_execute / post_execute are no-op methods on every operator; report them only when something replaced them
+    (an instance hook such as `@task.run_if` / `skip_if` / `pre_execute=`, or a subclass override)."""
+    try:
+        from airflow.sdk import BaseOperator
+    except ImportError:
+        from airflow.models.baseoperator import BaseOperator
+    out = []
+    for h in ("pre_execute", "post_execute"):
+        # `pre_execute=` and `@task.run_if` / `skip_if` store the hook in a private attribute; a subclass may override the method
+        if getattr(task, f"_{h}_hook", None) or h in vars(task) or getattr(type(task), h, None) is not getattr(BaseOperator, h, None):
+            out.append(h)
+    return out
+
+
 def _base_params() -> set[str]:
     try:
         from airflow.sdk import BaseOperator
@@ -139,7 +154,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "max_retry_delay_s": task.max_retry_delay.total_seconds() if getattr(task, "max_retry_delay", None) else None,
         "sla_s": task.sla.total_seconds() if getattr(task, "sla", None) else None,
         "callbacks": [a for a in ("on_failure_callback", "on_success_callback", "on_retry_callback", "on_skipped_callback", "on_execute_callback")
-                      if getattr(task, a, None)],          # not pre_execute/post_execute: every operator has those as default no-op methods
+                      if getattr(task, a, None)] + _overridden_hooks(task),
         "outlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "outlets", None) or [])],
         "inlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "inlets", None) or [])],
         "template_fields": {},
@@ -182,6 +197,9 @@ def _dag_ir(dag: Any, folder: Path) -> dict[str, Any]:
         "start_date": str(getattr(dag, "start_date", None) or da.get("start_date") or "") or None,
         "timetable": _timetable(dag), "default_args": {k: _jsonable(v) for k, v in da.items() if k != "start_date"},
         "params": {k: _jsonable(getattr(v, "value", v)) for k, v in (getattr(dag, "params", None) or {}).items()} if getattr(dag, "params", None) else {},
+        "dag_settings": {k: _jsonable(getattr(dag, k, None)) for k in ("fail_stop", "max_active_tasks", "max_active_runs", "dagrun_timeout",
+                         "max_consecutive_failed_dag_runs", "render_template_as_native_obj", "is_paused_upon_creation", "concurrency")
+                         if getattr(dag, k, None) is not None},
         "has_callbacks": any(getattr(dag, a, None) for a in ("on_failure_callback", "on_success_callback", "sla_miss_callback")),
         "tasks": [_task_ir(t) for t in dag.tasks],
     }

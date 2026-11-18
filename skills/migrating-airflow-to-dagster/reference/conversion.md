@@ -63,3 +63,39 @@ The converter currently emits plain Python assets so converted code has no depen
 ## Compatibility shim: S3Hook
 
 Callables that construct `S3Hook` themselves cannot reach a Dagster resource. The generated `runtime.py` includes an `S3Hook` shim for the commonly used methods (`load_file`, `load_string`, `load_bytes`, `check_for_key`, `list_keys`, `delete_objects`, `copy_object`). It was checked against Airflow's real hook with a recording fake boto client: 11 of 11 scenarios identical (calls, return values and errors). It uses the default AWS credential chain, and `read_key` (boto's resource API), compression, encryption and ACL options raise `NotImplementedError` instead of behaving differently. A converted DAG that uses it carries a `NOTE:` in its module.
+
+## Task and DAG settings: mapped or deferred, never ignored
+
+Loading a converted project proves nothing about behavior. Running both sides (below) found settings the converter had silently dropped, so every setting that changes what happens is now handled explicitly:
+
+| Setting | Handling |
+|---|---|
+| `retries`, `retry_delay`, `pool`, task groups | mapped (`RetryPolicy`, `pool`, key prefix) |
+| `execution_timeout` on a shell task | mapped (`subprocess` timeout; the task fails, as in Airflow) |
+| `execution_timeout` on a Python task | deferred (a callable cannot be interrupted safely) |
+| `trigger_rule` other than `all_success` | deferred (see the component wishlist) |
+| `depends_on_past`, `wait_for_downstream`, `retry_exponential_backoff`, SLAs | deferred |
+| `max_active_tis_per_dag`, `max_active_tis_per_dagrun`, `pool_slots != 1` | deferred |
+| task callbacks (`on_*_callback`) and hooks (`pre_execute=`, `post_execute=`, `@task.run_if`, `skip_if`) | deferred (Airflow keeps the hook in `_pre_execute_hook`; the default no-op methods are not hooks) |
+| DAG `fail_stop=True` | deferred (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish) |
+| DAG `max_active_runs` / `max_active_tasks` / `concurrency` other than 16 | deferred (a run-queue limit is deployment configuration, not code; a converter could tag the job and emit the limit for the deployment) |
+| DAG `dagrun_timeout`, `max_consecutive_failed_dag_runs`, `render_template_as_native_obj` | deferred |
+
+Detection traps this exposed: Airflow 2's decorated mapped tasks are `DecoratedMappedOperator`, a subclass of `MappedOperator`, so test the class hierarchy, not the class name; and `pre_execute` / `post_execute` exist on every operator as no-op methods, so only an override or a stored hook counts.
+
+## Execution parity
+
+`examples/runtime_conversion/parity/` runs each eligible converted DAG twice: with Airflow's own `dag.test()` in a sandbox, and by materializing the converted assets in Dagster. It compares every task's outcome and, where Dagster stores a value, the value passed between tasks. Eligible means no external resources and no network or long sleeps in the commands. Pitfalls in the harness itself:
+
+- Resolve every output path before changing into the temp working directory the DAGs run in.
+- A per-DAG time limit that is shorter than the DAG's total sleeps interrupts both sides at different points and looks like a behavior difference; set the limit above the DAG's real duration.
+- Airflow 3's `dag.test()` needs the DAG serialized into the database first (`sync_bag_to_db`) and a migrated database; Airflow 2 needs `initdb()`.
+
+## Measured results
+
+Corpus: 265 DAGs from 13 public repos (heavy on teaching repos for exactly the constructs that need a design decision, so do not read the conversion rate as typical).
+
+- **Conversion:** 48 of 265 DAGs convert mechanically (114 assets). The other 217 are deferred, each with its reasons in `report.json`. Every converted repo loads in a real Dagster project (`load_check2.py`).
+- **Execution parity** (Airflow's own `dag.test()` against Dagster materialization, on the converted DAGs that have no external resources and no network or long sleeps): 47 eligible, 46 compared, **46 identical outcomes**. Three of those DAGs fail on purpose and fail the same way on both sides. The 47th could not be compared: Airflow itself hit a database error serializing a deadline alert (a harness limit, not a behavior difference). Covered: Airflow 2.10 repos (`2-4` to `2-10`, 19 DAGs) and Airflow 3.4 repos (`apache/airflow` examples, `matsudan/airflow-dag-examples`, `astro-ide-example-dags-airflow3`, 27 DAGs).
+- **What this does not show:** 111 task outcomes were compared but only 2 passed values, because most converted tasks do not pass data and the Airflow 3 harness cannot read XComs. Data-passing parity is therefore thin; extend the harness before trusting it for value-heavy pipelines. Nothing here ran against real S3 or Snowflake. Schedules were checked structurally (cron, timezone), not by waiting for ticks.
+- **Bugs the comparison found that loading did not** (all fixed and covered by tests): decorated mapped tasks misdetected, `execution_timeout` ignored, `fail_stop` ignored, `@task.run_if` / `skip_if` hooks ignored, and a harness timeout that looked like a behavior difference. Expect the first run on your own repo to find more; run the comparison.

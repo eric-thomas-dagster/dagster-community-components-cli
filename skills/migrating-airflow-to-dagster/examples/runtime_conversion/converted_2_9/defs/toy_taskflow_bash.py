@@ -58,7 +58,7 @@ def t_bash_task(
     cmd = _af_bash_task(dog_owner_data=in_0)
     if not isinstance(cmd, str) or not cmd.strip():
         raise dg.Failure(description='@task.bash must return a non-empty command string')
-    run_shell(context, cmd, env=None, cwd=None)
+    run_shell(context, cmd, env=None, cwd=None, timeout=None)
 
 
 toy_taskflow_bash_job = dg.define_asset_job('toy_taskflow_bash', selection=[dg.AssetKey(k) for k in [['toy_taskflow_bash', 'upstream_task'], ['toy_taskflow_bash', 'bash_task']]])

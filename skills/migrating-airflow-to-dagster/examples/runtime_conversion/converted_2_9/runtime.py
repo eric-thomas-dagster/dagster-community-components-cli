@@ -13,7 +13,10 @@ def run_shell(context: dg.AssetExecutionContext, command: str, env: Optional[dic
     """Run a BashOperator command with `bash -c`, as Airflow does."""
     full_env = {**os.environ, **{k: str(v) for k, v in (env or {}).items()}}
     context.log.info(f"$ {command}")
-    proc = subprocess.run(["bash", "-c", command], capture_output=True, text=True, env=full_env, cwd=cwd, timeout=timeout)
+    try:
+        proc = subprocess.run(["bash", "-c", command], capture_output=True, text=True, env=full_env, cwd=cwd, timeout=timeout)
+    except subprocess.TimeoutExpired as e:           # Airflow raises AirflowTaskTimeout: the task fails
+        raise dg.Failure(description=f"execution_timeout of {timeout} s exceeded", metadata={"command": command}) from e
     if proc.stdout:
         context.log.info(proc.stdout)
     if proc.returncode != 0:

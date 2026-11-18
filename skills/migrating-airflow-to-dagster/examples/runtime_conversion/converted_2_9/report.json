@@ -6,39 +6,20 @@
    "reason": "callable depends on an Airflow import (airflow.io.path)"
   },
   "toy_auto_pause": {
-   "status": "converted",
-   "assets": 1,
-   "elided": 0,
-   "schedule": "0 * * * *",
-   "timezone": "UTC",
-   "triggers": [],
-   "resources": [],
-   "snowflake_resources": [],
-   "shims": [],
-   "notes": [],
-   "requirements": [],
-   "external": [],
-   "keys": [
-    [
-     "toy_auto_pause",
-     "say_hello"
-    ]
-   ],
-   "task_keys": {
-    "say_hello": "toy_auto_pause/say_hello"
-   }
+   "status": "deferred",
+   "reason": "max_consecutive_failed_dag_runs (auto-pause after failures is not mapped)"
   },
   "complex_dag_structure_rainbow": {
    "status": "deferred",
-   "reason": "sales_data_extract: dynamic task mapping; sales_data_extract: operator ExtractFromObjectStorageOperator; internal_api_extract: dynamic task mapping; internal_api_extract: operator ExtractFromObjectStorageOperator; sales_data_transform: operator TransformOperator; determine_load_type: operator _BranchPythonDecoratedOperator; sales_data_load: operator LoadtoDWHOperator; internal_api_load_full: operator LoadAPItoDWHOperator; internal_api_load_incremental: operator LoadAPItoDWHOperator; sales_data_reporting.prepare_report: trigger_rule all_done; sales_data_reporting.prepare_report: operator TransformReportOperator; sales_data_reporting.publish_report: operator PublishReportOperator; cre_integration.cre_extract: trigger_rule all_done; mlops.set_up_cluster: setup/teardown; mlops.set_up_cluster: trigger_rule all_done; mlops.set_up_cluster: operator SpinUpGPUOperator; mlops.train_model: operator TrainProprietaryLLMOperator; mlops.tear_down_cluster: setup/teardown; mlops.tear_down_cluster: trigger_rule all_done_setup_success; mlops.tear_down_cluster: operator TearDownGPUOperator"
+   "reason": "sales_data_extract: dynamic task mapping; sales_data_extract: task callbacks or hooks ['pre_execute', 'post_execute']; sales_data_extract: operator ExtractFromObjectStorageOperator; internal_api_extract: dynamic task mapping; internal_api_extract: task callbacks or hooks ['pre_execute', 'post_execute']; internal_api_extract: operator ExtractFromObjectStorageOperator; sales_data_transform: operator TransformOperator; determine_load_type: operator _BranchPythonDecoratedOperator; sales_data_load: operator LoadtoDWHOperator; internal_api_load_full: operator LoadAPItoDWHOperator; internal_api_load_incremental: operator LoadAPItoDWHOperator; sales_data_reporting.prepare_report: trigger_rule all_done; sales_data_reporting.prepare_report: operator TransformReportOperator; sales_data_reporting.publish_report: operator PublishReportOperator; cre_integration.cre_extract: trigger_rule all_done; mlops.set_up_cluster: setup/teardown; mlops.set_up_cluster: trigger_rule all_done; mlops.set_up_cluster: operator SpinUpGPUOperator; mlops.train_model: operator TrainProprietaryLLMOperator; mlops.tear_down_cluster: setup/teardown; mlops.tear_down_cluster: trigger_rule all_done_setup_success; mlops.tear_down_cluster: operator TearDownGPUOperator"
   },
   "toy_custom_names_dynamic_tasks_taskflow": {
    "status": "deferred",
-   "reason": "map_fruits: dynamic task mapping"
+   "reason": "map_fruits: dynamic task mapping; map_fruits: task callbacks or hooks ['pre_execute', 'post_execute']"
   },
   "toy_custom_names_dynamic_tasks_traditional_operators": {
    "status": "deferred",
-   "reason": "map_fruits: dynamic task mapping"
+   "reason": "map_fruits: dynamic task mapping; map_fruits: task callbacks or hooks ['pre_execute', 'post_execute']"
   },
   "toy_xcom_big_vs_small": {
    "status": "deferred",
@@ -78,7 +59,7 @@
   },
   "toy_dynamic_task_default_index": {
    "status": "deferred",
-   "reason": "map_fruits: dynamic task mapping"
+   "reason": "map_fruits: dynamic task mapping; map_fruits: task callbacks or hooks ['pre_execute', 'post_execute']"
   },
   "toy_upstream_obj_storage_dataset": {
    "status": "deferred",

@@ -101,6 +101,10 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d["tasks"][0].update(depends_on_past=True), "depends_on_past"),
     (lambda d: d["tasks"][0].update(pool_slots=2), "pool_slots=2"),
     (lambda d: d["tasks"][0].update(callbacks=["on_failure_callback"]), "task callbacks"),
+    (lambda d: d["tasks"][0].update(callbacks=["pre_execute"]), "task callbacks or hooks"),
+    (lambda d: d.update(dag_settings={"fail_stop": True}), "fail_stop=True"),
+    (lambda d: d.update(dag_settings={"max_active_runs": 1}), "max_active_runs=1"),
+    (lambda d: d.update(dag_settings={"dagrun_timeout": {"seconds": 60.0}}), "dagrun_timeout"),
     (lambda d: d["tasks"][0].update(retry_exponential_backoff=True), "retry_exponential_backoff"),
     (lambda d: d["tasks"][0].update(max_active_tis_per_dag=1), "max_active_tis_per_dag"),
     (lambda d: d["tasks"][0].update(type="PythonOperator", execution_timeout_s=30.0), "execution_timeout on a non-shell task"),
@@ -256,6 +260,7 @@ def test_bash_execution_timeout_is_enforced_as_a_failure():
         ns["run_shell"](Ctx, "sleep 5", timeout=1.0)
 
 
-def test_default_pre_post_execute_methods_are_not_callbacks():
-    d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"}, callbacks=["pre_execute", "post_execute"])], kind="manual")
-    convert(d)       # must not defer
+def test_default_dag_settings_do_not_defer():
+    d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"})], kind="manual")
+    d["dag_settings"] = {"max_active_tasks": 16, "max_active_runs": 16, "fail_stop": False}
+    convert(d)       # defaults are not behaviour changes
