@@ -26,8 +26,13 @@ A compatibility package (suggested name `airflow_compat`) would also hold what t
 
 ## B. Partition-by-items components (dynamic task mapping)
 
-- `static_partitioned_asset`: one asset partitioned by a list. Replaces N identical DAGs or an `.expand` over a literal list. Verified pattern in `examples/dagfactory_family/`.
-- `dynamic_partition_discovery_schedule`: a schedule or sensor that lists items (an S3 prefix, a SQL query, a callable), registers new ones as dynamic partitions and requests one run each, with `run_key` idempotence and a skip when nothing is found. Pattern verified in `examples/s3_to_snowflake_factories/example_04_per_file/`. Include a pruning option (`keep_days`), because dynamic partitions accumulate.
+Status from the components session (not yet verified by the converter): most of this exists.
+
+- Static list: `partition_type: static` with `partition_values` is supported across the component set, including `python_callable_asset`. No new component needed; the converter should emit it for an `.expand` over a literal list.
+- Discovery from object storage or the filesystem: `s3_monitor`, `gcs_monitor`, `adls_monitor` and `filesystem_monitor` list items, call `add_dynamic_partitions()`, and request one run per item with a content-keyed `run_key`. Two of them have a `keep_days` pruning option. This replaces the hand-written schedule in `examples/s3_to_snowflake_factories/example_04_per_file/` and is what the converter should emit for a mapped task over an S3 listing.
+- Remaining gaps: (1) `sql_monitor` runs once per new row but does not register dynamic partitions (an enhancement, not a new component); (2) discovery from an arbitrary callable has no component.
+
+Converter work: detect the mapping source (literal list, S3 prefix listing, SQL query, callable) and emit the matching component. Mapping over a runtime value with no listable source stays deferred.
 
 ## C. Automation-condition library (trigger rules)
 
@@ -43,7 +48,12 @@ Named, tested conditions that express Airflow trigger rules at the asset level: 
 
 ## F. Sensor components
 
-`time_of_day_schedule` (replaces `TimeSensor` waits; normally a schedule, not a sensor), `file_sensor` (local and S3 key, with `poke_interval`/`timeout` semantics stated), `python_sensor` (callable returning a bool, then a run request), `external_job_state_sensor` (a sensor on another job's or asset's state, replacing `ExternalTaskSensor`).
+Status from the components session (not yet verified by the converter):
+
+- Time-of-day waits: a cron schedule (`cron_schedule`) already covers it. Nothing to build.
+- File or key sensors: `filesystem_monitor` and `s3_monitor` cover the watch-and-fire half (`minimum_interval_seconds` is the poke interval). `event_automation`'s absence trigger covers "gave up waiting". The converter should state that Dagster sensors do not block a run the way a poking sensor task does: the downstream asset runs when the file arrives, so the DAG shape changes.
+- `ExternalTaskSensor`: `event_automation` has a run-status trigger plus a launch-job action.
+- Remaining gap: a generic callable-based sensor (`python_sensor`: a callable returns a bool, then a run request).
 
 ## G. Job trigger
 
