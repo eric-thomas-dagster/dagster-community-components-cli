@@ -52,7 +52,7 @@ Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirm
 | `retries`, `retry_delay` | `RetryPolicy` | MECH | `retry_exponential_backoff` maps to a backoff setting; verify |
 | `pool` | Dagster pool (`pool=` on the asset or op) | MECH | Limits are configured in Dagster (Dagster+ or the instance), not in code; list each pool and limit in the report |
 | `execution_timeout` | Op/asset timeout or an inner timeout | JUDG | |
-| XCom (`xcom_push/pull`, `.output`, and TaskFlow return values passed to another task, which are implicit XComs) | Return values with an IO manager, explicit storage, or fusing steps | JUDG | Decide per edge; do not assume an XCom backend exists |
+| XCom (`xcom_push/pull`, `.output`, and TaskFlow return values passed to another task, which are implicit XComs) | A return value is the asset's value (IO manager). A value pushed under a key is metadata on the asset's materialization; a keyed pull reads that metadata from the upstream asset's materialization in the same run (`convert_ir.py` does this) | JUDG | Decide per edge; do not assume an XCom backend exists. A pushed value must be JSON-serializable. Metadata is kept in the event log, so it suits small values |
 | Variables | Environment variables or secrets | MECH | `dg plus create env` for Dagster+; never commit values |
 | Connections (`conn_id`) | Resources configured from env vars | JUDG | |
 | Jinja templates (`{{ ds }}`, `{{ data_interval_start }}`) | Partition key or run config | JUDG | |

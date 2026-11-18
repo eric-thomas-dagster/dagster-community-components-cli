@@ -11,14 +11,23 @@ Not N assets. One asset per data product, partitioned by the varying value.
 
 ## What `convert_ir.py` converts automatically
 
-One shape, taken from what the IR records about each mapped task (`expand`): leaf Python tasks that all iterate over the same source, with fixed (plain-value) arguments, no task running after them, and the mapped argument a parameter of the callable.
+Two modes, chosen with `--mapping`.
 
-- **A literal list:** a `StaticPartitionsDefinition` (one partition per distinct item) and a schedule that requests every partition at each tick.
-- **The plain return value of one root Python task (the producer):** a `DynamicPartitionsDefinition`. The producer stays an ordinary asset and adds the item keys to its materialization metadata. An asset sensor on the producer registers the new keys as partitions and requests one run per item (`run_key` = producer run id plus key). The mapped asset loads the producer's list and finds its item by key.
-- **Keys:** a short string is its own key; a small value is `json:<JSON>`; anything longer is `sha1:<digest>`. Identical items collapse into one partition.
-- **Everything else defers with a named reason:** mapping over a mapped output (second order), `.map` / `.zip` / concat, several `expand` arguments (a cross product), `expand_kwargs`, a mapped shell, S3 or other operator, a reduce step after the mapped task, mapped tasks that use the task context or pull XComs, and asset-triggered DAGs.
+**`graph` (default): dynamic outputs in one graph asset.** The whole DAG becomes one `@dg.graph_multi_asset` with one op per task. A mapped task is a mapped op fed by a fan-out op (`DynamicOut`); a task after it receives the collected list (a reduce step); a mapped task over another mapped task's output chains the maps. This keeps what the Airflow DAG has: one run, siblings that finish before the next step, all-or-nothing for the reduce step, and the same task order. Supported:
+- Python tasks and shell tasks (`BashOperator`, `@task.bash`); no other operator type may be in a DAG that has mapped tasks yet.
+- `expand` over literal lists or another task's plain return value, one argument or several (several is a cross product, built by the fan-out op); `expand` over `op_args`; `expand_kwargs` over a literal list or a task's output.
+- For a mapped shell task, the expanded `bash_command`, `env` and `cwd` replace the fixed ones; templates inside the expanded values are not rendered (the task fails with a message).
+- Tasks that do not pull XComs by task id and are not asset-triggered.
 
-Verified by test: producer, sensor, three item kinds, one run per partition finding its item, and a second sensor tick adding nothing; and the static case with each partition run. Not verified: the sensor under a running daemon, and parity against Airflow's own run of a mapped DAG.
+Differences to state: retries and pools apply to each op; one task cannot be re-run on its own (the asset is the unit); an empty list skips the mapped step and gives the next step an empty list.
+
+**`partitions`: leaf mapped tasks as partitions** (use when each item should be independently runnable, re-runnable and visible, for example one file or one customer). Leaf mapped Python tasks over a literal list become static partitions with a schedule that requests each one. Leaf mapped tasks over one root producer's return value become dynamic partitions: the producer adds the item keys to its materialization metadata, and an asset sensor registers the new keys and requests one run per item. Keys: a short string is its own key, a small value is `json:<JSON>`, anything longer is `sha1:<digest>`; identical items collapse. No reduce step is supported in this mode.
+
+Everything else defers with a named reason: `.map` / `.zip` / concat (see below), an S3 or Snowflake operator inside the mapped DAG, mapping over `expand` arguments of an unsupported kind, and cross products over a mapped task's output.
+
+Airflow's `.map(func)` runs a function over each item of an upstream result before expanding (a transform), `.zip(a, b)` pairs two results item by item, and concat joins several results. They are not converted yet.
+
+Verified by test: graph mode (producer, mapped Python task with a fixed argument, a reduce step over the collected list, a chained second-order map, mapped shell commands, `op_args` and `expand_kwargs`) and partitions mode (producer, sensor, three key kinds, one run per partition finding its item, and an idempotent second tick). Not verified: the partitions sensor under a running daemon.
 
 ## The per-file design (verified in the worked example)
 

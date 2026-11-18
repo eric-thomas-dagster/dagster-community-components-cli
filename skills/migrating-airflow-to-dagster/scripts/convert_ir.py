@@ -45,7 +45,8 @@ SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "executio
                  "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf"}
 JINJA_VARS = SUPPORTED_CTX | {"macros"}
 CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id"}, "dag": {"dag_id"}, "task": {"task_id"},
-             "ti": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull"}, "task_instance": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull"}}
+             "ti": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"},
+             "task_instance": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"}}
 SUPPORTED_MACROS = {"ds_add", "ds_format", "datetime", "timedelta"}
 SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
                 ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
@@ -62,6 +63,7 @@ class Defer(Exception):
     pass
 
 
+MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
 RETURN_ALL = False        # set by --return-all: keep every Python return value so a parity run can compare them
 
 
@@ -159,8 +161,8 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
         raise Defer(f"callable uses Airflow task context names the runtime does not rebuild {unsupported}")
     ctx_named = sorted(set(named) & SUPPORTED_CTX)
     body_text = ast.unparse(ast.Module(body=[*fn.body], type_ignores=[]))
-    if re.search(r"\bairflow\b|\bxcom_push\b|\bset_xcom\b", body_text):
-        raise Defer("callable uses the Airflow API (xcom_push or a direct airflow reference)")
+    if re.search(r"\bairflow\b|\bset_xcom\b", body_text):
+        raise Defer("callable uses the Airflow API (a direct airflow reference)")
     for n in ast.walk(fn):                                       # attributes of the context objects the runtime rebuilds
         obj = n.value if isinstance(n, ast.Attribute) else None
         if isinstance(obj, ast.Subscript) and isinstance(obj.slice, ast.Constant):
@@ -413,7 +415,65 @@ HINTS: dict[str, dict[str, Any]] = {
 # --------------------------------------------------------------------------------------------------------------------
 # Per-DAG conversion
 # --------------------------------------------------------------------------------------------------------------------
+def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    """Dynamic task mapping as Dagster dynamic outputs: the whole DAG becomes one graph asset in which a mapped task is a mapped op
+    and a task after it receives the collected list. Python and shell tasks only; `expand` with literal lists or other tasks' outputs."""
+    mapped = {k: t for k, t in tasks.items() if t.get("is_mapped")}
+    if not mapped:
+        return None, []
+    why: list[str] = []
+    for tid, t in tasks.items():
+        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC:
+            why.append(f"{tid}: a {t['type']} inside a DAG with mapped tasks (only Python and shell tasks are converted there)")
+    mp: dict[str, Any] = {}
+    for tid, t in mapped.items():
+        e = t.get("expand") or {}
+        if e.get("form") not in ("expand", "expand_kwargs") or not e.get("args"):
+            why.append(f"{tid}: dynamic task mapping with {e.get('form')} is not converted")
+            continue
+        if e.get("fixed_unserializable") or e.get("op_args"):
+            why.append(f"{tid}: mapped task with fixed arguments that are not plain values")
+            continue
+        srcs: dict[str, tuple[str, Any]] = {}
+        for name, a in e["args"].items():
+            if a["kind"] == "literal" and isinstance(a.get("value"), list):
+                srcs[name] = ("lit", a["value"])
+            elif a["kind"] == "xcom" and a.get("wrapper") == "PlainXComArg" and a.get("key") == "return_value" and a.get("task_id") in tasks:
+                srcs[name] = ("task", a["task_id"])
+            else:
+                why.append(f"{tid}: mapping over {a['kind']}{':' + a['wrapper'] if a.get('wrapper') else ''} for `{name}` "
+                           "(only a literal list or a task's plain return value is converted)")
+                break
+        else:
+            mode = "kwargs" if e["form"] == "expand_kwargs" else ("args" if list(srcs) == ["op_args"] else "kw")
+            if mode != "kw":
+                bad = [] if t["type"] in PY_TASKS | BASH_DEC or mode == "kwargs" else ["op_args"]
+                if mode == "kwargs" and t["type"] in BASH and "bash_command" not in (e.get("partial") or {}):
+                    pass
+            elif t["type"] in PY_TASKS | BASH_DEC:
+                bad = [n for n in srcs if n not in (t.get("callable") or {}).get("params", "")]
+            else:
+                bad = [n for n in srcs if n not in ("bash_command", "env", "cwd")]
+                if "bash_command" not in srcs and "bash_command" not in (e.get("partial") or {}):
+                    bad.append("bash_command (not found)")
+            if bad:
+                why.append(f"{tid}: mapped arguments {bad} are not supported for this task")
+            elif len(srcs) > 1 and any(v[0] == "task" and tasks[v[1]].get("is_mapped") for v in srcs.values()):
+                why.append(f"{tid}: a cross product over the output of a mapped task")
+            else:
+                mp[tid] = {"srcs": srcs, "fixed": e.get("fixed") or {}, "partial": e.get("partial") or {}, "mode": mode}
+    if why:
+        return None, why
+    return {"mode": "graph", "mapped": mp}, []
+
+
 def plan_mapping(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
+    if MAP_MODE == "graph":
+        return plan_graph(dag, tasks)
+    return plan_partitions(dag, tasks)
+
+
+def plan_partitions(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     """Dynamic task mapping in the one shape converted today: leaf mapped Python tasks that all iterate over the same literal
     list, or over the return value of one root Python task (the producer). Anything else is reported, never guessed."""
     mapped = {k: t for k, t in tasks.items() if t.get("is_mapped")}
@@ -455,7 +515,7 @@ def plan_mapping(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, 
     if why or not sources:
         return None, why
     kind, src = next(iter(sources))
-    plan: dict[str, Any] = {"kind": kind, "args": argnames, "fixed": {k: (t["expand"]["fixed"]) for k, t in mapped.items()}}
+    plan: dict[str, Any] = {"mode": "partitions", "kind": kind, "args": argnames, "fixed": {k: (t["expand"]["fixed"]) for k, t in mapped.items()}}
     if kind == "literal":
         plan["items"] = json.loads(src)
     else:
@@ -563,6 +623,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"{tid}: bash_command names a script file ({tf['bash_command'].strip()[:40]}) that was not found")
     if reasons:
         raise Defer("; ".join(dict.fromkeys(reasons)))
+    pplan = mplan if mplan and mplan["mode"] == "partitions" else None
+    gplan = mplan if mplan and mplan["mode"] == "graph" else None
 
     def eff_up(tid: str) -> list[str]:
         out: list[str] = []
@@ -611,8 +673,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     consumed: set[str] = set()
     for t in real:
         consumed |= xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")) | xcom_refs(t["template_fields"])
-    if mplan and mplan.get("producer"):
-        consumed.add(mplan["producer"])                       # the producer returns the list the fan-out reads
+    if pplan and pplan.get("producer"):
+        consumed.add(pplan["producer"])                       # the producer returns the list the fan-out reads
     own_keys = {"/".join(v) for v in keyparts.values()}
     external: set[tuple[str, ...]] = set()
     resources: set[str] = set()
@@ -645,21 +707,160 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             ti_inputs[tid] = [u for u in ancestors(tid) if u in keyparts]      # xcom_pull may name any task that ran before
             consumed |= set(ti_inputs[tid])
     uses_ctx = bool(ctx_tasks)
-    if mplan and (uses_ctx or any(resolved[x][2].get("needs_ti") for x in mplan["args"] if x in resolved)):
+    if gplan and ti_inputs:
+        raise Defer("dynamic task mapping where a callable pulls XComs by task id (not converted yet)")
+    if pplan and (uses_ctx or any(resolved[x][2].get("needs_ti") for x in pplan["args"] if x in resolved)):
         raise Defer("dynamic task mapping where a callable uses the task context or pulls XComs (not converted yet)")
     dag_params = dag.get("params") or {}
-    for t in real:
+    graph_outs: list[str] = []
+
+    def emit_graph() -> None:
+        """One graph asset for the whole DAG: every task is an op, a mapped task a mapped op, a task after it gets the collected list."""
+        order: list[str] = []
+        seen_t: set[str] = set()
+
+        def visit(x: str) -> None:
+            if x in seen_t:
+                return
+            seen_t.add(x)
+            for u in eff_up(x):
+                visit(u)
+            order.append(x)
+        for t in real:
+            visit(t["task_id"])
+        mp = gplan["mapped"]
+        idx = {tid: i for i, tid in enumerate(order)}
+        ops: list[str] = []
+        lines: list[str] = []
+        outs: dict[str, str] = {}
+        val: dict[str, str] = {}          # task -> variable holding its value (a collected list for a mapped task)
+        dyn: dict[str, str] = {}          # mapped task -> variable holding its dynamic output
+        for tid in order:
+            t = tasks[tid]
+            ty = t["type"]
+            ups = [u for u in eff_up(tid) if u in keyparts]
+            i = idx[tid]
+            fname = safe("op_" + tid)
+            deco = [f"name={safe(dag_id) + '__' + safe(tid)!r}"]
+            if t["retries"]:
+                deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)})")
+            if t["pool"]:
+                deco.append(f"pool={t['pool']!r}")
+            elif f"{safe(dag_id)}__{safe(tid)}" in pool_limits:
+                deco.append(f"pool={safe(dag_id) + '__' + safe(tid)!r}")
+            m = mp.get(tid)
+            src_tasks = {v[1] for v in m["srcs"].values() if v[0] == "task"} if m else set()
+            extras = [u for u in ups if u not in src_tasks]
+            params = {u: f"in_{k}" for k, u in enumerate(extras if m else ups)}
+            ctxn = "ctx" if tid in ctx_tasks else None
+            ctx_line = (f"    ctx = af_context(context, {dag_id!r}, {tid!r}, {dag_params!r}, "
+                        "{" + ", ".join(f"{u!r}: {params[u]}" for u in params) + "})\n") if ctxn else ""
+            sig = (["context: dg.OpExecutionContext"] + (["item"] if m else []) + list(params.values()))
+            if m:
+                single = len(m["srcs"]) == 1
+                kwexpr = ({"kw": f"{{{list(m['srcs'])[0]!r}: item}}", "args": "{}", "kwargs": "dict(item)"}[m["mode"]] if single else "dict(item)")
+                combo = f"    combo = {kwexpr}\n"
+            if ty in PY_TASKS | BASH_DEC:
+                code, sup, meta = resolved[tid]
+                for sline in sup:
+                    support.setdefault(sline, len(support))
+                pyname = "_af_" + safe(tid)
+                ops.append(re.sub(r"^def\s+\w+", f"def {pyname}", code, count=1) + "\n")
+                if m:
+                    kw = f"{{**{m['fixed']!r}, **combo}}"
+                    posl = "list(item)" if m["mode"] == "args" else "[]"
+                    inner = (f"call_with_context({pyname}, {posl}, {kw}, ctx)" if meta.get("needs_ctx")
+                             else f"{pyname}(*{posl}, **{kw})")
+                else:
+                    pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
+                    kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
+                    inner = (f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
+                             if meta.get("needs_ctx") else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
+                if ty in BASH_DEC:
+                    body = ((combo if m else "") + ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
+                            "        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
+                            f"    return run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})")
+                else:
+                    body = (combo if m else "") + ctx_line + f"    return {inner}"
+            else:                                                       # BashOperator
+                if m:
+                    part = m["partial"]
+                    body = (combo + f"    cmd = combo.get('bash_command', {part.get('bash_command')!r})\n"
+                            f"    if not isinstance(cmd, str) or '{{{{' in cmd:\n"
+                            f"        raise dg.Failure(description='a mapped command is run as written; templates inside mapped values are not rendered')\n"
+                            f"    return run_shell(context, cmd, env=combo.get('env', {part.get('env')!r}), cwd=combo.get('cwd', {part.get('cwd')!r}), "
+                            f"timeout={t.get('execution_timeout_s')!r})")
+                else:
+                    cmd = (t.get("template_files") or {}).get("bash_command") or t["template_fields"].get("bash_command")
+                    if not isinstance(cmd, str):
+                        raise Defer(f"{tid}: bash_command is not a string")
+                    env = t["template_fields"].get("env")
+                    body = (ctx_line + f"    return run_shell(context, {expr(cmd, params, ctxn)}, env={expr(env, params, ctxn) if env else 'None'}, "
+                            f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r})")
+            ops.append("@dg.op(" + ", ".join(deco) + ")\ndef " + fname + "(" + ", ".join(sig) + "):\n" + body + "\n")
+            if m:                                                       # the fan-out op, then the mapped op
+                lit_names = [n for n, v in m["srcs"].items() if v[0] == "lit"]
+                srcs = list(m["srcs"].items())
+                chain = len(srcs) == 1 and srcs[0][1][0] == "task" and tasks[srcs[0][1][1]].get("is_mapped")
+                extra_call = "".join(f", {val[u]}" for u in extras)
+                if chain:
+                    dyn[tid] = f"d{i}"
+                    lines.append(f"    d{i} = {dyn[srcs[0][1][1]]}.map(lambda item: {fname}(item{extra_call}))")
+                else:
+                    task_srcs = [(n, v[1]) for n, v in srcs if v[0] == "task"]
+                    fan_params = [f"src_{k}" for k in range(len(task_srcs))]
+                    lists, k = [], 0
+                    for n, v in srcs:
+                        if v[0] == "lit":
+                            lists.append(repr(v[1]))
+                        else:
+                            lists.append(f"src_{k}")
+                            k += 1
+                    names = [n for n, _ in srcs]
+                    item = "vals[0]" if len(srcs) == 1 else f"dict(zip({names!r}, vals))"
+                    ops.append(f"@dg.op(name={safe(dag_id) + '__fan_' + safe(tid)!r}, out=dg.DynamicOut())\n"
+                               f"def fan_{safe(tid)}({', '.join(fan_params)}):\n"
+                               f"    lists = [{', '.join(lists)}]\n"
+                               "    if not all(isinstance(x, (list, tuple)) for x in lists):\n"
+                               "        raise dg.Failure(description='expected a list of items to map over')\n"
+                               "    for n, vals in enumerate(itertools.product(*lists)):\n"
+                               f"        yield dg.DynamicOutput({item}, mapping_key=f'i{{n}}')\n")
+                    fan_args = ", ".join(val[u] for _, u in task_srcs)
+                    dyn[tid] = f"d{i}"
+                    lines.append(f"    d{i} = fan_{safe(tid)}({fan_args}).map(lambda item: {fname}(item{extra_call}))")
+                ops.append(f"@dg.op(name={safe(dag_id) + '__collect_' + safe(tid)!r})\ndef collect_{safe(tid)}(items):\n    return list(items)\n")
+                lines.append(f"    v{i} = collect_{safe(tid)}(d{i}.collect())")
+                val[tid] = f"v{i}"
+            else:
+                args = ", ".join(val[u] for u in ups)
+                lines.append(f"    v{i} = {fname}({args})")
+                val[tid] = f"v{i}"
+            outs[tid] = f"o{i}"
+        outs_decl = ",\n        ".join(
+            f"{outs[tid]!r}: dg.AssetOut(key={keyparts[tid]!r}, kinds={{{('shell' if tasks[tid]['type'] in BASH | BASH_DEC else 'python')!r}}}, "
+            f"metadata={{'airflow_dag': {dag_id!r}, 'airflow_task': {tid!r}, 'airflow_operator': {tasks[tid]['type']!r}}})" for tid in order if tid in keyparts)
+        ret = "{" + ", ".join(f"{outs[tid]!r}: {val[tid]}" for tid in order if tid in keyparts) + "}"
+        blocks.append("\n\n".join(ops) + f"\n\n@dg.graph_multi_asset(name={safe(dag_id) + '_graph'!r}, group_name={safe(dag_id)!r}, outs={{\n        {outs_decl},\n    }})\n"
+                      f"def {safe(dag_id)}_graph():\n" + "\n".join(lines) + f"\n    return {ret}\n")
+        notes.append("dynamic task mapping became dynamic outputs inside one graph asset: the whole DAG runs as one Dagster run, mapped tasks are mapped ops "
+                     "and a task after them receives the collected list. Differences from Airflow: retries and pools apply per op; individual tasks cannot be "
+                     "re-run on their own (the asset is the unit), and an empty list skips the mapped step and gives the next step an empty list.")
+
+    if gplan:
+        emit_graph()
+    for t in ([] if gplan else real):
         tid = t["task_id"]
         ups = [u for u in eff_up(tid) if u in keyparts]
         refs = xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")) | xcom_refs(t["template_fields"])
         ordered = list(dict.fromkeys([*ups, *ti_inputs.get(tid, [])]))
         params = {u: f"in_{i}" for i, u in enumerate(ordered)}
         data = {u for u in ordered if u in refs or u in ti_inputs.get(tid, [])}
-        if mplan and mplan["kind"] == "xcom" and tid in mplan["args"]:
-            data.add(mplan["producer"])                       # the mapped task finds its item in the producer's list
+        if pplan and pplan["kind"] == "xcom" and tid in pplan["args"]:
+            data.add(pplan["producer"])                       # the mapped task finds its item in the producer's list
         ctxn = "ctx" if tid in ctx_tasks else None
         ctx_line = (f"    ctx = af_context(context, {dag_id!r}, {tid!r}, {dag_params!r}, "
-                    "{" + ", ".join(f"{u!r}: {params[u]}" for u in ordered if u in data) + "})\n") if ctxn else ""
+                    "{" + ", ".join(f"{u!r}: {params[u]}" for u in ordered if u in data) + "}"
+                    + (", keys=" + repr({u: keyparts[u] for u in ti_inputs[tid]}) if ti_inputs.get(tid) else "") + ")\n") if ctxn else ""
         args = ["    context: dg.AssetExecutionContext"] + [f"    {params[u]}" for u in ordered if u in data]
         deco = [f"key={keyparts[tid]!r}", f"group_name={safe(dag_id)!r}"]
         if data:
@@ -685,7 +886,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             deco.append("automation_condition=" + and_condition([key_from_asset(a) for a in triggers]))
         elif triggers:
             deco.append("automation_condition=dg.AutomationCondition.eager()")
-        if mplan and tid in mplan["args"]:
+        if pplan and tid in pplan["args"]:
             deco.append(f"partitions_def={safe(dag_id)}_items")
         if t["retries"]:
             deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)})")
@@ -696,14 +897,14 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         deco.append(f"metadata={{'airflow_dag': {dag_id!r}, 'airflow_task': {tid!r}, 'airflow_operator': {t['type']!r}}}")
         fname = safe("t_" + tid)
         ty = t["type"]
-        ret_none = tid not in consumed and not (RETURN_ALL and ty in PY_TASKS)
+        ret_none = tid not in consumed and not (RETURN_ALL and ty in PY_TASKS | BASH | BASH_DEC)
         if ty in BASH:
             cmd = (t.get("template_files") or {}).get("bash_command") or t["template_fields"].get("bash_command")
             if not isinstance(cmd, str):
                 raise Defer(f"{tid}: bash_command is not a string")
             env = t["template_fields"].get("env")
             env_expr = expr(env, params, ctxn) if env else "None"
-            body = (ctx_line + f"    run_shell(context, {expr(cmd, params, ctxn)}, env={env_expr}, "
+            body = (ctx_line + f"    {'' if ret_none else 'return '}run_shell(context, {expr(cmd, params, ctxn)}, env={env_expr}, "
                     f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r})")
             deco.append("kinds={'shell'}")
             pre = ""
@@ -715,10 +916,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             code = re.sub(r"^def\s+\w+", f"def {pyname}", code, count=1)
             pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
             kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
-            is_mapped_task = bool(mplan and tid in mplan["args"])
+            is_mapped_task = bool(pplan and tid in pplan["args"])
             if is_mapped_task:
-                kws = {**{k: repr(v) for k, v in mplan["fixed"][tid].items()}, mplan["args"][tid]: "item"}
-            is_producer = bool(mplan and mplan.get("producer") == tid)
+                kws = {**{k: repr(v) for k, v in pplan["fixed"][tid].items()}, pplan["args"][tid]: "item"}
+            is_producer = bool(pplan and pplan.get("producer") == tid)
             if meta.get("needs_ctx"):
                 inner = f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
             else:
@@ -727,10 +928,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if ty in BASH_DEC:
                 body = (ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                         f"        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
-                        f"    run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})")
+                        f"    {'' if ret_none else 'return '}run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})")
                 deco.append("kinds={'shell'}")
             elif is_mapped_task:
-                src_items = f"{safe(dag_id)}_literal_items" if mplan["kind"] == "literal" else params[mplan["producer"]]
+                src_items = f"{safe(dag_id)}_literal_items" if pplan["kind"] == "literal" else params[pplan["producer"]]
                 body = (f"    item = decode_item(context.partition_key, {src_items})\n" + ctx_line +
                         (f"    return {inner}" if not ret_none else f"    {inner}"))
                 deco.append("kinds={'python'}")
@@ -762,20 +963,20 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\ndef " + fname + sig + ":\n" + body + "\n")
 
     keys = [keyparts[t["task_id"]] for t in real]
-    imports = ["import dagster as dg", "", "from ..runtime import *  # noqa: F401,F403"]
+    imports = (["import itertools"] if gplan else []) + ["import dagster as dg", "", "from ..runtime import *  # noqa: F401,F403"]
     mod = [f'"""Converted from Airflow DAG `{dag_id}` ({dag["file"]}) by convert_ir.py.', "", note, '"""', *imports, ""]
     if support:
         mod += [s for s, _ in sorted(support.items(), key=lambda kv: kv[1])] + [""]
-    if mplan:
-        pdef = (f"dg.StaticPartitionsDefinition({list(dict.fromkeys(item_key(i) for i in mplan['items']))!r})" if mplan["kind"] == "literal"
+    if pplan:
+        pdef = (f"dg.StaticPartitionsDefinition({list(dict.fromkeys(item_key(i) for i in pplan['items']))!r})" if pplan["kind"] == "literal"
                 else f"dg.DynamicPartitionsDefinition(name={safe(dag_id) + '_items'!r})")
         mod += [f"{safe(dag_id)}_items = {pdef}", ""]
-        if mplan["kind"] == "literal":
-            mod += [f"{safe(dag_id)}_literal_items = {mplan['items']!r}", ""]
+        if pplan["kind"] == "literal":
+            mod += [f"{safe(dag_id)}_literal_items = {pplan['items']!r}", ""]
         notes.append("dynamic task mapping became partitions: " + (
             "one static partition per list item. A run is requested for each at the schedule tick; the items are a fixed list, so a change to it is a code change."
-            if mplan["kind"] == "literal" else
-            f"one dynamic partition per item {mplan['producer']} returns. After each run of {mplan['producer']}, a sensor registers the new items as partitions "
+            if pplan["kind"] == "literal" else
+            f"one dynamic partition per item {pplan['producer']} returns. After each run of {pplan['producer']}, a sensor registers the new items as partitions "
             "and requests one run per item. Differences from Airflow: the items run as separate runs, so one failed item does not stop the others "
             "(Airflow also lets sibling mapped instances finish), but they no longer share a single DAG run, and dynamic partitions accumulate over time."))
     if "S3Hook" in shims_used:
@@ -783,20 +984,20 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     if notes:
         mod[1:1] = ["", *[f"NOTE: {n}" for n in notes]]
     out = "\n".join(mod) + "\n\n" + "\n\n".join(blocks) + "\n"
-    mapped_keys = [keyparts[x] for x in (mplan["args"] if mplan else [])]
-    job_keys = [k for k in keys if k not in mapped_keys] if mplan and mplan["kind"] == "xcom" else keys
-    pd_arg = f", partitions_def={safe(dag_id)}_items" if mplan and mplan["kind"] == "literal" else ""
+    mapped_keys = [keyparts[x] for x in (pplan["args"] if pplan else [])]
+    job_keys = [k for k in keys if k not in mapped_keys] if pplan and pplan["kind"] == "xcom" else keys
+    pd_arg = f", partitions_def={safe(dag_id)}_items" if pplan and pplan["kind"] == "literal" else ""
     out += (f"\n{safe(dag_id)}_job = dg.define_asset_job({safe(dag_id)!r}, selection=[dg.AssetKey(k) for k in {job_keys!r}]{pd_arg}"
             + (f", tags={{'airflow/dag_id': {dag_id!r}}}" if max_runs else "")
             + (f", executor_def=dg.multiprocess_executor.configured({{'max_concurrent': {max_tasks}}})" if max_tasks else "") + ")\n")
-    if mplan and mplan["kind"] == "xcom":
+    if pplan and pplan["kind"] == "xcom":
         out += (f"\n{safe(dag_id)}_items_job = dg.define_asset_job({safe(dag_id) + '_items'!r}, selection=[dg.AssetKey(k) for k in {mapped_keys!r}], "
                 f"partitions_def={safe(dag_id)}_items)\n"
-                f"\n\n@dg.asset_sensor(asset_key=dg.AssetKey({keyparts[mplan['producer']]!r}), job={safe(dag_id)}_items_job, "
+                f"\n\n@dg.asset_sensor(asset_key=dg.AssetKey({keyparts[pplan['producer']]!r}), job={safe(dag_id)}_items_job, "
                 f"name={safe(dag_id) + '_fanout'!r}, default_status=dg.DefaultSensorStatus.RUNNING)\n"
                 f"def {safe(dag_id)}_fanout(context, asset_event):\n"
                 f"    return fan_out(context, asset_event, {safe(dag_id) + '_items'!r})\n")
-    if mplan and mplan["kind"] == "literal" and tt["kind"] in ("cron_trigger", "cron_data_interval"):
+    if pplan and pplan["kind"] == "literal" and tt["kind"] in ("cron_trigger", "cron_data_interval"):
         out += (f"\n\n@dg.schedule(name={safe(dag_id) + '_schedule'!r}, job={safe(dag_id)}_job, cron_schedule={tt['cron']!r}, "
                 f"execution_timezone={tz_name(tt['timezone'])!r})\n"
                 f"def {safe(dag_id)}_schedule(context):\n"
@@ -814,7 +1015,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "requirements": sorted(third_party(support) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
-                 "uses_context": uses_ctx, "mapping": ({"kind": mplan["kind"], "mapped": sorted(mplan["args"]), "producer": mplan.get("producer")} if mplan else None), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
+                 "uses_context": uses_ctx, "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
+                             ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
 
 
@@ -829,8 +1031,9 @@ import dagster as dg
 
 
 def run_shell(context: dg.AssetExecutionContext, command: str, env: Optional[dict[str, Any]] = None,
-              cwd: Optional[str] = None, timeout: Optional[int] = None) -> None:
-    """Run a BashOperator command with `bash -c`, as Airflow does."""
+              cwd: Optional[str] = None, timeout: Optional[int] = None) -> Optional[str]:
+    """Run a BashOperator command with `bash -c`, as Airflow does. Returns the last line written to stdout, which is what
+    Airflow pushes as the task's XCom (None when the command wrote nothing)."""
     full_env = {**os.environ, **{k: str(v) for k, v in (env or {}).items()}}
     context.log.info(f"$ {command}")
     try:
@@ -841,6 +1044,8 @@ def run_shell(context: dg.AssetExecutionContext, command: str, env: Optional[dic
         context.log.info(proc.stdout)
     if proc.returncode != 0:
         raise dg.Failure(description=f"command exited {proc.returncode}", metadata={"stderr": proc.stderr[-4000:], "command": command})
+    lines = proc.stdout.splitlines() if proc.stdout else []
+    return lines[-1].rstrip() if lines else None
 
 
 import contextvars
@@ -856,24 +1061,54 @@ _AF_CTX: contextvars.ContextVar = contextvars.ContextVar("airflow_context", defa
 class _TaskInstance:
     """The part of Airflow's TaskInstance converted callables and templates use. Anything else raises."""
 
-    def __init__(self, dag_id, task_id, run_id, try_number, upstream):
+    def __init__(self, dag_id, task_id, run_id, try_number, upstream, context=None, keys=None):
         self.dag_id, self.task_id, self.run_id, self.try_number, self._up = dag_id, task_id, run_id, try_number, upstream
+        self._ctx, self._keys = context, keys or {}
 
     def xcom_pull(self, task_ids=None, dag_id=None, key="return_value", include_prior_dates=False, map_indexes=None, default=None):
-        if key != "return_value" or dag_id not in (None, self.dag_id) or include_prior_dates or map_indexes is not None or task_ids is None:
-            raise NotImplementedError("xcom_pull is mirrored only for return values of named tasks in this DAG")
+        if dag_id not in (None, self.dag_id) or include_prior_dates or map_indexes is not None or task_ids is None:
+            raise NotImplementedError("xcom_pull is mirrored only for named tasks in this DAG, in this run")
         ids = [task_ids] if isinstance(task_ids, str) else list(task_ids)
-        missing = [i for i in ids if i not in self._up]
-        if missing:
-            raise dg.Failure(description=f"xcom_pull of {missing}: not an upstream asset of this task, so its value was not passed in")
-        vals = [self._up[i] for i in ids]
+        if key != "return_value":                            # a value another task pushed under a key: read from its materialization metadata
+            vals = [self._pull_key(i, key, default) for i in ids]
+            return vals[0] if isinstance(task_ids, str) else vals
+        vals = []
+        for i in ids:
+            if i not in self._up:          # Airflow returns None for a task id it does not know (often a TaskGroup prefix left out)
+                self._warn(i)
+            vals.append(self._up.get(i, default))
         return vals[0] if isinstance(task_ids, str) else vals
 
-    def xcom_push(self, *a, **k):
-        raise NotImplementedError("xcom_push is not mirrored: return the value instead")
+    def _warn(self, task_id):
+        if getattr(self._ctx, "log", None) is not None:
+            self._ctx.log.warning(f"xcom_pull of {task_id!r}: no such upstream task in this DAG run, so None was returned (as Airflow does). "
+                                  "If the task is in a task group, its id starts with the group id.")
+
+    def _pull_key(self, task_id, key, default):
+        asset_key = self._keys.get(task_id)
+        if asset_key is None or self._ctx is None:
+            self._warn(task_id)
+            return default
+        records = self._ctx.instance.get_event_records(
+            dg.EventRecordsFilter(event_type=dg.DagsterEventType.ASSET_MATERIALIZATION, asset_key=dg.AssetKey(asset_key)), limit=50, ascending=False)
+        for r in records:
+            if r.event_log_entry.run_id == self.run_id and key in r.asset_materialization.metadata:
+                return r.asset_materialization.metadata[key].value
+        return default
+
+    def xcom_push(self, key, value=None, **_):
+        """A value pushed under a key becomes metadata on this asset's materialization (a return value is the asset's value)."""
+        if key == "return_value":
+            raise NotImplementedError("xcom_push of return_value: return the value instead")
+        try:
+            json.dumps(value)
+        except TypeError as e:
+            raise dg.Failure(description=f"xcom_push of {key!r}: the value is not JSON-serializable ({e})") from e
+        meta = dg.MetadataValue.json(value) if isinstance(value, (dict, list)) else value
+        self._ctx.add_output_metadata({key: meta})
 
 
-def af_context(context, dag_id, task_id, params, upstream):
+def af_context(context, dag_id, task_id, params, upstream, keys=None):
     """Rebuild the Airflow task context from the Dagster run. The logical date comes from run tags that airflow_schedule sets;
     a run without them (a manual run) uses the current time, as Airflow does for a manual trigger. ds is the UTC date of the
     logical date."""
@@ -886,7 +1121,7 @@ def af_context(context, dag_id, task_id, params, upstream):
     ds = ld.strftime("%Y-%m-%d")
     conf = json.loads(tags.get("airflow/conf", "{}"))
     run_id = run.run_id if run is not None else context.run_id        # context.run_id is deprecated in current Dagster
-    ti = _TaskInstance(dag_id, task_id, run_id, getattr(context, "retry_number", 0) + 1, upstream)
+    ti = _TaskInstance(dag_id, task_id, run_id, getattr(context, "retry_number", 0) + 1, upstream, context, keys)
     return {"ds": ds, "ds_nodash": ds.replace("-", ""), "ts": ld.isoformat(), "ts_nodash": ld.strftime("%Y%m%dT%H%M%S"),
             "logical_date": ld, "execution_date": ld, "data_interval_start": ld, "data_interval_end": de,
             "run_id": run_id, "params": dict(params or {}), "conf": conf,
@@ -1189,10 +1424,14 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("ir", type=Path)
     ap.add_argument("--out-dir", type=Path, required=True, help="the project's defs directory (src/<pkg>/defs)")
     ap.add_argument("--report", type=Path, default=Path("conversion_report.json"))
+    ap.add_argument("--mapping", choices=["graph", "partitions"], default="graph",
+                    help="dynamic task mapping: dynamic outputs in one graph asset (default; keeps one run, reduce steps and all-or-nothing) "
+                         "or partitions (leaf mapped tasks become independently runnable partitions)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
-    global RETURN_ALL
+    global RETURN_ALL, MAP_MODE
     RETURN_ALL = a.return_all
+    MAP_MODE = a.mapping
     ir = json.loads(a.ir.read_text())
     a.out_dir.mkdir(parents=True, exist_ok=True)
     (a.out_dir / "__init__.py").touch()

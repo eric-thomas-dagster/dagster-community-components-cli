@@ -59,3 +59,24 @@ def fruit_list():
 def show(item, greeting):
     SEEN.append((greeting, item))
     return item
+
+
+def total(rows):
+    return sum(r.get("n", 1) if isinstance(r, dict) else 1 for r in rows)
+
+
+def double_item(x):
+    return x * 2
+
+
+def pusher(ti):
+    ti.xcom_push(key="count", value=3)
+    ti.xcom_push(key="detail", value={"a": [1, 2]})
+
+
+def puller(ti):
+    return ti.xcom_pull(task_ids="a", key="count"), ti.xcom_pull(task_ids="a", key="detail"), ti.xcom_pull(task_ids="a", key="missing", default="d")
+
+
+def passthrough(x):
+    return x

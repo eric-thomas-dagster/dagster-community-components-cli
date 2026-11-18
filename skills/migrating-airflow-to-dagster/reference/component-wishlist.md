@@ -8,7 +8,7 @@ Already built, per the components session (the converter has not used these yet,
 
 ## 1. Discover items, then run once per item (blocked 31, alone 24)
 
-Many pipelines process "whatever exists today": files under a prefix, rows in a table, ids from an API. In Dagster that is dynamic partitions plus one run per item.
+Many pipelines process "whatever exists today": files under a prefix, rows in a table, ids from an API. The converter's default for mapped tasks is dynamic outputs inside one run; this item is for the case where each item should be its own run and partition (one file, one customer), which is what the converter's `partitions` mode emits.
 - A component that calls a user function returning a list of items, registers each new item as a dynamic partition, and requests one run per item with a key that makes the request idempotent. Same shape as `s3_monitor`, with the listing replaced by a function. Include pruning of old partitions.
 - `sql_monitor` should be able to do the same: register a dynamic partition per new row, with the partition key taken from a named column.
 - Test: run twice with an overlapping list; only the new items get partitions and runs.

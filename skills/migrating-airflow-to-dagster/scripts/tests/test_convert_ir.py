@@ -340,12 +340,10 @@ def test_xcom_pull_reads_upstream_values_and_refuses_what_it_cannot_mirror():
     rt = _runtime()
     ctx = rt["af_context"](_fake_ctx(), "d", "t", {}, {"a": 41, "b": "x"})
     assert ctx["ti"].xcom_pull(task_ids="a") == 41 and ctx["ti"].xcom_pull(task_ids=["a", "b"]) == [41, "x"]
-    with pytest.raises(dg.Failure, match="not an upstream"):
-        ctx["ti"].xcom_pull(task_ids="zzz")
+    assert ctx["ti"].xcom_pull(task_ids="zzz") is None and ctx["ti"].xcom_pull(task_ids="zzz", default="d") == "d"      # Airflow: an unknown id gives None
+    assert ctx["ti"].xcom_pull(task_ids="a", key="other") is None
     with pytest.raises(NotImplementedError):
-        ctx["ti"].xcom_pull(task_ids="a", key="other")
-    with pytest.raises(NotImplementedError):
-        ctx["ti"].xcom_push("k", 1)
+        ctx["ti"].xcom_push("return_value", 1)
 
 
 def test_render_supports_filters_and_macros_and_is_strict(monkeypatch):
@@ -413,7 +411,7 @@ def test_callable_that_pulls_xcom_gets_its_ancestors_as_inputs_and_they_return_v
     compile(code, "x", "exec")
     assert "ins={'in_0': dg.AssetIn(key=['d1', 'a'])}" in code                       # a is an ancestor of b through the elided task
     assert "return _af_a()" in code and "call_with_context(_af_b, [], {}, ctx)" in code
-    assert "ctx = af_context(context, 'd1', 'b', {}, {'a': in_0})" in code
+    assert "ctx = af_context(context, 'd1', 'b', {}, {'a': in_0}, keys={'a': ['d1', 'a']})" in code
 
 
 def test_bash_script_files_are_read_from_the_template_path_or_defer():
@@ -458,7 +456,7 @@ def test_mapping_over_a_producers_list_runs_one_partition_per_item(tmp_path):
     (tmp_path / "ir.json").write_text(json.dumps(ir))
     defs = tmp_path / "pkg_map" / "defs"
     subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(defs),
-                    "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
+                    "--report", str(tmp_path / "r.json"), "--mapping", "partitions"], check=True, capture_output=True)
     assert json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]["status"] == "converted"
     (tmp_path / "pkg_map" / "__init__.py").write_text("")
     sys.path.insert(0, str(tmp_path))
@@ -488,7 +486,7 @@ def test_literal_mapping_runs_each_static_partition(tmp_path):
     ir = {"airflow_version": "x", "dags": [_mapped_ir({"kind": "literal", "value": ["a", 2, {"k": 1}]})]}
     (tmp_path / "ir.json").write_text(json.dumps(ir))
     subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_lit" / "defs"),
-                    "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
+                    "--report", str(tmp_path / "r.json"), "--mapping", "partitions"], check=True, capture_output=True)
     (tmp_path / "pkg_lit" / "__init__.py").write_text("")
     sys.path.insert(0, str(tmp_path))
     import importlib
@@ -500,7 +498,12 @@ def test_literal_mapping_runs_each_static_partition(tmp_path):
     assert [i for _, i in mod.SEEN] == ["a", 2, {"k": 1}]
 
 
-def test_mapping_over_a_literal_list_is_a_static_partition_set():
+@pytest.fixture
+def partitions_mode(monkeypatch):
+    monkeypatch.setattr(C, "MAP_MODE", "partitions")
+
+
+def test_mapping_over_a_literal_list_is_a_static_partition_set(partitions_mode):
     code, s = convert(_mapped_ir({"kind": "literal", "value": ["a", 2, {"k": 1}]}))
     assert "StaticPartitionsDefinition(['a', 'json:2', 'json:{\"k\": 1}'])" in code and s["mapping"]["kind"] == "literal"
     assert "decode_item(context.partition_key, d1_literal_items)" in code
@@ -511,8 +514,91 @@ def test_mapping_over_a_literal_list_is_a_static_partition_set():
     (lambda ir: ir["tasks"][-1]["expand"]["args"]["item"].update(wrapper="MapXComArg"), "plain return value"),
     (lambda ir: ir["tasks"][-1].update(type="BashOperator"), "mapping of a BashOperator"),
 ])
-def test_unsupported_mapping_shapes_defer_with_a_reason(mut, why):
+def test_unsupported_mapping_shapes_defer_with_a_reason(mut, why, partitions_mode):
     d = _mapped_ir({"kind": "xcom", "wrapper": "PlainXComArg", "task_id": "p", "key": "return_value"})
     mut(d)
     with pytest.raises(C.Defer, match=why):
         convert(d)
+
+
+def _convert_and_load(tmp_path, ir, pkg, *extra):
+    (tmp_path / "ir.json").write_text(json.dumps(ir))
+    r = subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / pkg / "defs"),
+                        "--report", str(tmp_path / "r.json"), *extra], check=True, capture_output=True)
+    rep = json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]
+    (tmp_path / pkg / "__init__.py").write_text("")
+    sys.path.insert(0, str(tmp_path))
+    import importlib
+    return rep, importlib.import_module(f"{pkg}.defs.d1")
+
+
+def _xcom_src(tid):
+    return {"kind": "xcom", "wrapper": "PlainXComArg", "task_id": tid, "key": "return_value"}
+
+
+def test_graph_mapping_maps_chains_and_collects_for_a_reduce_step(tmp_path):
+    dg = pytest.importorskip("dagster")
+    pl = task("p", "PythonOperator", callable=fn("fruit_list"), op_args=[], op_kwargs={})
+    show = task("m", "PythonOperator", up=["p"], is_mapped=True, callable={**fn("show"), "params": "['item', 'greeting']"}, op_args=[], op_kwargs={},
+                expand={"form": "expand", "args": {"item": _xcom_src("p")}, "fixed": {"greeting": "hi"}, "fixed_unserializable": [], "op_args": False})
+    red = task("r", "PythonOperator", up=["m"], callable=fn("total"), op_args=[{"xcom_from": "m", "key": "return_value"}], op_kwargs={})
+    nums = task("n", "PythonOperator", is_mapped=True, callable={**fn("double_item"), "params": "['x']"}, op_args=[], op_kwargs={},
+                expand={"form": "expand", "args": {"x": {"kind": "literal", "value": [1, 2, 3]}}, "fixed": {}, "fixed_unserializable": [], "op_args": False})
+    nums2 = task("n2", "PythonOperator", up=["n"], is_mapped=True, callable={**fn("double_item"), "params": "['x']"}, op_args=[], op_kwargs={},
+                 expand={"form": "expand", "args": {"x": _xcom_src("n")}, "fixed": {}, "fixed_unserializable": [], "op_args": False})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([pl, show, red, nums, nums2], kind="once")]}, "pkg_graph")
+    assert rep["status"] == "converted" and rep["mapping"]["kind"] == "graph"
+    res = mod.d1_graph.node_def and dg.materialize([mod.d1_graph])
+    assert res.success
+    got = {k.to_user_string(): res.asset_value(k) for k in [dg.AssetKey(["d1", t]) for t in ("p", "m", "r", "n", "n2")]}
+    assert got["d1/r"] == 1 + 1 + 1 and got["d1/n"] == [2, 4, 6] and got["d1/n2"] == [4, 8, 12]
+    assert [g for g, _ in mod.SEEN] == ["hi"] * 3 and len(got["d1/m"]) == 3
+
+
+def test_graph_mapping_runs_a_shell_command_per_expanded_value(tmp_path):
+    dg = pytest.importorskip("dagster")
+    out = tmp_path / "out.txt"
+    cmds = [f"echo one >> {out}", f"echo two >> {out}"]
+    b = task("b", "BashOperator", is_mapped=True, expand={"form": "expand", "args": {"bash_command": {"kind": "literal", "value": cmds}},
+                                                         "fixed": {}, "fixed_unserializable": [], "partial": {}, "op_args": False})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([b], kind="once")]}, "pkg_graph_sh")
+    assert rep["status"] == "converted"
+    assert dg.materialize([mod.d1_graph]).success
+    assert sorted(out.read_text().split()) == ["one", "two"]
+
+
+def test_graph_mapping_supports_op_args_and_expand_kwargs(tmp_path):
+    dg = pytest.importorskip("dagster")
+    a = task("a", "PythonOperator", is_mapped=True, callable={**fn("double_item"), "params": "['x']"}, op_args=[], op_kwargs={},
+             expand={"form": "expand", "args": {"op_args": {"kind": "literal", "value": [[1], [2]]}}, "fixed": {}, "fixed_unserializable": [], "op_args": False})
+    k = task("k", "PythonOperator", is_mapped=True, callable={**fn("double_item"), "params": "['x']"}, op_args=[], op_kwargs={},
+             expand={"form": "expand_kwargs", "args": {"*": {"kind": "literal", "value": [{"x": 5}, {"x": 6}]}}, "fixed": {}, "fixed_unserializable": [], "op_args": False})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([a, k], kind="once")]}, "pkg_graph_args")
+    assert rep["status"] == "converted"
+    res = dg.materialize([mod.d1_graph])
+    assert res.success and res.asset_value(dg.AssetKey(["d1", "a"])) == [2, 4] and res.asset_value(dg.AssetKey(["d1", "k"])) == [10, 12]
+
+
+def test_xcom_push_becomes_materialization_metadata_and_a_keyed_pull_reads_it(tmp_path):
+    dg = pytest.importorskip("dagster")
+    a = task("a", "PythonOperator", callable=fn("pusher"), op_args=[], op_kwargs={})
+    b = task("b", "PythonOperator", up=["a"], callable=fn("puller"), op_args=[], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([a, b], kind="once")]}, "pkg_xpush", "--return-all")
+    assert rep["status"] == "converted"
+    (tmp_path / "inst").mkdir()
+    with dg.DagsterInstance.local_temp(str(tmp_path / "inst")) as instance:
+        res = dg.materialize([mod.t_a, mod.t_b], instance=instance)
+        assert res.success
+        assert res.asset_value(dg.AssetKey(["d1", "b"])) == (3, {"a": [1, 2]}, "d")
+        md = res.get_asset_materialization_events()[0].materialization.metadata
+        assert md["count"].value == 3 and md["detail"].value == {"a": [1, 2]}
+
+
+def test_a_shell_tasks_last_stdout_line_is_its_value_for_downstream_tasks(tmp_path):
+    dg = pytest.importorskip("dagster")
+    b = task("b", "BashOperator", template_fields={"bash_command": "echo first; echo last"})
+    c = task("c", "PythonOperator", up=["b"], callable=fn("passthrough"), op_args=[{"xcom_from": "b", "key": "return_value"}], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([b, c], kind="once")]}, "pkg_bashout", "--return-all")
+    assert rep["status"] == "converted"
+    res = dg.materialize([mod.t_b, mod.t_c])
+    assert res.success and res.asset_value(dg.AssetKey(["d1", "c"])) == "last"

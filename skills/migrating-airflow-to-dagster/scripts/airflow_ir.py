@@ -153,8 +153,15 @@ def _expand_ir(task: Any) -> dict[str, Any] | None:
                 fixed[k] = json.loads(json.dumps(v))
             except (TypeError, ValueError):
                 bad.append(k)
+        partial: dict[str, Any] = {}
+        for k in ("bash_command", "env", "cwd"):               # BashOperator settings that are not expanded stay fixed
+            if k in pk and k not in val:
+                try:
+                    partial[k] = json.loads(json.dumps(pk[k]))
+                except (TypeError, ValueError):
+                    bad.append(k)
         return {"form": "expand", "args": {k: one(v) for k, v in val.items()}, "fixed": fixed, "fixed_unserializable": bad,
-                "op_args": bool(pk.get("op_args"))}
+                "partial": partial, "op_args": bool(pk.get("op_args"))}
     if type(ei).__name__ == "ListOfDictsExpandInput":
         return {"form": "expand_kwargs", "args": {"*": one(val)}}
     return {"form": type(ei).__name__, "args": {}}
