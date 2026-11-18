@@ -602,3 +602,43 @@ def test_a_shell_tasks_last_stdout_line_is_its_value_for_downstream_tasks(tmp_pa
     assert rep["status"] == "converted"
     res = dg.materialize([mod.t_b, mod.t_c])
     assert res.success and res.asset_value(dg.AssetKey(["d1", "c"])) == "last"
+
+
+def _py(tid, fname, up=(), **kw):
+    return task(tid, "PythonOperator", up=list(up), callable=fn(fname), op_args=[], op_kwargs={}, **kw)
+
+
+def _run_gated(tmp_path, tasks, pkg):
+    dg = pytest.importorskip("dagster")
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag(tasks, kind="once")]}, pkg, "--return-all")
+    assert rep["status"] == "converted", rep
+    mod.TRACE.clear()
+    res = dg.materialize([mod.d1_graph])
+    assert res.success
+    return mod, res
+
+
+def test_a_branch_runs_the_chosen_path_and_a_join_with_min_one_success_still_runs(tmp_path):
+    t = [_py("start", "step_a"),
+         _py("br", "choose_a", up=["start"], **{}) | {"type": "BranchPythonOperator"},
+         _py("path_a", "step_a", up=["br"]), _py("path_b", "step_b", up=["br"]),
+         _py("join", "step_join", up=["path_a", "path_b"], trigger_rule="none_failed_min_one_success"),
+         _py("strict", "step_end", up=["path_a", "path_b"])]
+    mod, res = _run_gated(tmp_path, t, "pkg_branch")
+    assert mod.TRACE == ["a", "a", "join"]                      # start, path_a, join; path_b and the all_success join were skipped
+
+
+def test_a_branch_that_chooses_nothing_skips_everything_after_it(tmp_path):
+    t = [_py("br", "choose_none") | {"type": "BranchPythonOperator"}, _py("x", "step_a", up=["br"]),
+         _py("j", "step_join", up=["x"], trigger_rule="none_failed")]
+    mod, _ = _run_gated(tmp_path, t, "pkg_branch0")
+    assert mod.TRACE == ["join"]                                # none_failed runs after a skipped upstream, as in Airflow
+
+
+def test_short_circuit_skips_all_downstream_or_only_the_next_task(tmp_path):
+    chain = lambda hard: [_py("sc", "is_false") | {"type": "ShortCircuitOperator", "short_circuit_hard": hard}, _py("x", "step_a", up=["sc"]),
+                          _py("y", "step_b", up=["x"], trigger_rule="none_failed")]
+    mod, _ = _run_gated(tmp_path, chain(True), "pkg_sc_hard")
+    assert mod.TRACE == []                                      # ignore_downstream_trigger_rules: everything downstream skipped
+    mod, _ = _run_gated(tmp_path / "soft", chain(False), "pkg_sc_soft") if (tmp_path / "soft").mkdir() is None else None
+    assert mod.TRACE == ["b"]                                   # only the direct child skipped; y's own rule lets it run

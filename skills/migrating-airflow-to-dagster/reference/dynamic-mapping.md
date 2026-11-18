@@ -13,7 +13,7 @@ Not N assets. One asset per data product, partitioned by the varying value.
 
 Two modes, chosen with `--mapping`.
 
-**`graph` (default): dynamic outputs in one graph asset.** The whole DAG becomes one `@dg.graph_multi_asset` with one op per task. A mapped task is a mapped op fed by a fan-out op (`DynamicOut`); a task after it receives the collected list (a reduce step); a mapped task over another mapped task's output chains the maps. This keeps what the Airflow DAG has: one run, siblings that finish before the next step, all-or-nothing for the reduce step, and the same task order. Supported:
+**`graph` (default): dynamic outputs in one graph asset.** A DAG with a branch or short-circuit task is also converted this way, with or without mapped tasks (see `reference/mapping.md`). The whole DAG becomes one `@dg.graph_multi_asset` with one op per task. A mapped task is a mapped op fed by a fan-out op (`DynamicOut`); a task after it receives the collected list (a reduce step); a mapped task over another mapped task's output chains the maps. This keeps what the Airflow DAG has: one run, siblings that finish before the next step, all-or-nothing for the reduce step, and the same task order. Supported:
 - Python tasks and shell tasks (`BashOperator`, `@task.bash`); no other operator type may be in a DAG that has mapped tasks yet.
 - `expand` over literal lists or another task's plain return value, one argument or several (several is a cross product, built by the fan-out op); `expand` over `op_args`; `expand_kwargs` over a literal list or a task's output.
 - For a mapped shell task, the expanded `bash_command`, `env` and `cwd` replace the fixed ones; templates inside the expanded values are not rendered (the task fails with a message).

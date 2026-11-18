@@ -55,6 +55,9 @@ ELIDED = {"EmptyOperator", "DummyOperator"}
 PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator"}
 BASH = {"BashOperator"}
 BASH_DEC = {"_BashDecoratedOperator"}
+BRANCH = {"BranchPythonOperator", "_BranchPythonDecoratedOperator"}
+SHORT = {"ShortCircuitOperator", "_ShortCircuitDecoratedOperator"}
+GATE_RULES = {"all_success", "none_failed", "none_failed_min_one_success", "none_skipped", "one_success", "all_skipped"}   # rules a skip-only gate can honor
 S3_OPS = {"S3ListOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "LocalFilesystemToS3Operator"}
 SNOWFLAKE_OPS = {"CopyFromExternalStageToSnowflakeOperator", "SnowflakeOperator", "SQLExecuteQueryOperator"}
 
@@ -345,7 +348,7 @@ def snowflake_call(t: dict[str, Any], ctx: str | None = None) -> tuple[str, str]
 def task_templates(t: dict[str, Any]) -> Any:
     """The fields of a task that Airflow renders as templates (the ones this converter maps)."""
     ty, tf = t["type"], t["template_fields"]
-    if ty in PY_TASKS | BASH_DEC:
+    if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT:
         return [t.get("op_args"), t.get("op_kwargs"), tf.get("env") if ty in BASH_DEC else None]
     if ty in BASH:
         return [(t.get("template_files") or {}).get("bash_command") or tf.get("bash_command"), tf.get("env"), tf.get("cwd")]
@@ -419,11 +422,12 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
     """Dynamic task mapping as Dagster dynamic outputs: the whole DAG becomes one graph asset in which a mapped task is a mapped op
     and a task after it receives the collected list. Python and shell tasks only; `expand` with literal lists or other tasks' outputs."""
     mapped = {k: t for k, t in tasks.items() if t.get("is_mapped")}
-    if not mapped:
+    gated = any(t["type"] in BRANCH | SHORT for t in tasks.values())
+    if not mapped and not gated:
         return None, []
     why: list[str] = []
     for tid, t in tasks.items():
-        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC:
+        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT:
             why.append(f"{tid}: a {t['type']} inside a DAG with mapped tasks (only Python and shell tasks are converted there)")
     mp: dict[str, Any] = {}
     for tid, t in mapped.items():
@@ -468,7 +472,7 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
 
 
 def plan_mapping(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
-    if MAP_MODE == "graph":
+    if MAP_MODE == "graph" or any(t["type"] in BRANCH | SHORT for t in tasks.values()):
         return plan_graph(dag, tasks)
     return plan_partitions(dag, tasks)
 
@@ -585,7 +589,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"{tid}: dynamic task mapping")
         if t["is_setup"] or t["is_teardown"]:
             reasons.append(f"{tid}: setup/teardown")
-        if t["trigger_rule"] != "all_success":
+        # without a branch or short-circuit nothing is ever skipped here, so these rules behave like all_success (a failure stops the
+        # downstream task in Dagster, which is also what Airflow does under them)
+        if t["trigger_rule"] != "all_success" and not (mplan and mplan["mode"] == "graph" and t["trigger_rule"] in GATE_RULES) \
+                and t["trigger_rule"] not in ("none_failed", "none_failed_min_one_success", "none_skipped"):
             reasons.append(f"{tid}: trigger_rule {t['trigger_rule']}")
         # every behavior-affecting task setting is mapped or defers the DAG: none is silently ignored
         for flag, why in (("depends_on_past", "depends_on_past"), ("wait_for_downstream", "wait_for_downstream"),
@@ -613,7 +620,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"{tid}: templates_dict (rendered templates passed to the callable) is not rebuilt")
         if len(t["outlets"]) > 1:
             reasons.append(f"{tid}: {len(t['outlets'])} outlets")
-        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS:
+        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT):
             reasons.append(f"{tid}: operator {ty}")
         _, jprob = jinja_vars(task_templates(t))
         if jprob:
@@ -697,7 +704,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     for t in real:
         tid, ty = t["task_id"], t["type"]
         meta: dict[str, Any] = {}
-        if ty in PY_TASKS | BASH_DEC:
+        if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT:
             code, sup = resolve_callable(t.get("callable"), shims_used, meta)
             resolved[tid] = (code, sup, meta)
         names, _ = jinja_vars(task_templates(t))
@@ -760,7 +767,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 single = len(m["srcs"]) == 1
                 kwexpr = ({"kw": f"{{{list(m['srcs'])[0]!r}: item}}", "args": "{}", "kwargs": "dict(item)"}[m["mode"]] if single else "dict(item)")
                 combo = f"    combo = {kwexpr}\n"
-            if ty in PY_TASKS | BASH_DEC:
+            if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT:
                 code, sup, meta = resolved[tid]
                 for sline in sup:
                     support.setdefault(sline, len(support))
@@ -780,6 +787,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     body = ((combo if m else "") + ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                             "        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
                             f"    return run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})")
+                elif ty in BRANCH:
+                    body = ctx_line + f"    return BranchResult({inner})"
+                elif ty in SHORT:
+                    body = ctx_line + f"    return ShortCircuit(bool({inner}), hard={t.get('short_circuit_hard', True)!r})"
                 else:
                     body = (combo if m else "") + ctx_line + f"    return {inner}"
             else:                                                       # BashOperator
@@ -797,6 +808,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     env = t["template_fields"].get("env")
                     body = (ctx_line + f"    return run_shell(context, {expr(cmd, params, ctxn)}, env={expr(env, params, ctxn) if env else 'None'}, "
                             f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r})")
+            if params:                                                  # skip semantics: branch choices, short-circuits and trigger rules
+                names = list(params.values())
+                body = (f"    skip = af_gate(context, {t['trigger_rule']!r}, [{', '.join(names)}], {tid!r})\n    if skip is not None:\n        return skip\n"
+                        f"    {', '.join(names)} = {', '.join(f'af_data({n})' for n in names)}\n") + body
             ops.append("@dg.op(" + ", ".join(deco) + ")\ndef " + fname + "(" + ", ".join(sig) + "):\n" + body + "\n")
             if m:                                                       # the fan-out op, then the mapped op
                 lit_names = [n for n, v in m["srcs"].items() if v[0] == "lit"]
@@ -821,6 +836,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     ops.append(f"@dg.op(name={safe(dag_id) + '__fan_' + safe(tid)!r}, out=dg.DynamicOut())\n"
                                f"def fan_{safe(tid)}({', '.join(fan_params)}):\n"
                                f"    lists = [{', '.join(lists)}]\n"
+                               "    if any(isinstance(x, Skipped) for x in lists):\n"
+                               "        return\n"
                                "    if not all(isinstance(x, (list, tuple)) for x in lists):\n"
                                "        raise dg.Failure(description='expected a list of items to map over')\n"
                                "    for n, vals in enumerate(itertools.product(*lists)):\n"
@@ -1415,8 +1432,66 @@ def fan_out(context, asset_event, partitions_name):
         context.instance.add_dynamic_partitions(partitions_name, new)
     return [dg.RunRequest(run_key=f"{asset_event.run_id}:{k}", partition_key=k) for k in keys]
 '''
+GATE_SRC = '''
+class Skipped:
+    """A task Airflow would have skipped. `hard` skips everything downstream whatever its trigger rule (a short-circuit's default)."""
+
+    def __init__(self, hard=False):
+        self.hard = hard
+
+    def __repr__(self):
+        return "Skipped"
+
+
+class BranchResult:
+    """What a branch task chose: the task ids (or task group ids) to follow."""
+
+    def __init__(self, selected):
+        self.selected = [] if selected is None else ([selected] if isinstance(selected, str) else list(selected))
+
+    def selects(self, task_id):
+        return any(task_id == s or task_id.startswith(s + ".") for s in self.selected)
+
+
+class ShortCircuit:
+    def __init__(self, passed, hard=True):
+        self.passed, self.hard = passed, hard
+
+
+def _skip(context, hard):
+    context.add_output_metadata({"airflow/state": "skipped"})
+    return Skipped(hard)
+
+
+def af_gate(context, rule, inputs, task_id):
+    """Airflow's skip logic for one task: None to run it, a Skipped marker to skip it."""
+    if any(isinstance(x, Skipped) and x.hard for x in inputs):
+        return _skip(context, True)
+    for x in inputs:
+        if isinstance(x, BranchResult) and not x.selects(task_id):
+            return _skip(context, False)
+        if isinstance(x, ShortCircuit) and not x.passed:
+            return _skip(context, x.hard)
+    skipped = [isinstance(x, Skipped) for x in inputs]
+    if not skipped:
+        return None
+    ok = {"all_success": not any(skipped), "none_skipped": not any(skipped), "none_failed": True,
+          "none_failed_min_one_success": not all(skipped), "one_success": not all(skipped), "all_skipped": all(skipped)}[rule]
+    return None if ok else _skip(context, False)
+
+
+def af_data(x):
+    """The value a downstream task sees: None for a skipped task, the chosen ids for a branch, the flag for a short-circuit."""
+    if isinstance(x, Skipped):
+        return None
+    if isinstance(x, BranchResult):
+        return list(x.selected)
+    if isinstance(x, ShortCircuit):
+        return x.passed
+    return x
+'''
 exec(ITEM_SRC)           # item_key is also used at conversion time, so the converter and the generated runtime share one definition
-RUNTIME += ITEM_SRC
+RUNTIME += ITEM_SRC + GATE_SRC
 
 
 def main(argv: list[str] | None = None) -> int:

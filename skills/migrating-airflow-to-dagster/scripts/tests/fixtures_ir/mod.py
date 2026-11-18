@@ -80,3 +80,39 @@ def puller(ti):
 
 def passthrough(x):
     return x
+
+
+TRACE = []
+
+
+def choose_a():
+    return "path_a"
+
+
+def choose_none():
+    return None
+
+
+def say(name):
+    TRACE.append(name)
+    return name
+
+
+def step_a():
+    return say("a")
+
+
+def step_b():
+    return say("b")
+
+
+def step_join():
+    return say("join")
+
+
+def step_end():
+    return say("end")
+
+
+def is_false():
+    return False
