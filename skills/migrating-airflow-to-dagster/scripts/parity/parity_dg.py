@@ -24,14 +24,14 @@ for did in ids:
         tasks = {}
         events = r.get_asset_materialization_events()
         keys_ok = {e.asset_key.to_user_string() for e in events}
-        skipped = {e.asset_key.to_user_string() for e in events
-                   if getattr(e.materialization.metadata.get("airflow/state"), "value", None) == "skipped"}      # a gated task that did not run
+        marked = {e.asset_key.to_user_string(): getattr(e.materialization.metadata.get("airflow/state"), "value", None) for e in events}      # a gated task that did not run, or failed
+        skipped = {k for k, v in marked.items() if v == "skipped"}
         for tid, key in rep["task_keys"].items():
             ak = dg.AssetKey(key.split("/"))
             val = None
             try: val = r.asset_value(ak)
             except Exception: pass
-            tasks[tid] = {"state": "skipped" if key in skipped else ("success" if key in keys_ok else "not_materialized"), "value": repr(val)[:300] if val is not None else "None"}
+            tasks[tid] = {"state": "skipped" if key in skipped else (marked[key] if marked.get(key) in ("failed", "upstream_failed") else ("success" if key in keys_ok else "not_materialized")), "value": repr(val)[:300] if val is not None else "None"}
         res[did] = {"state": "success" if r.success else "failed", "tasks": tasks}
     except TO: res[did] = {"error": "timeout 300s"}
     except BaseException as e: res[did] = {"error": f"{type(e).__name__}: {str(e)[:200]}"}

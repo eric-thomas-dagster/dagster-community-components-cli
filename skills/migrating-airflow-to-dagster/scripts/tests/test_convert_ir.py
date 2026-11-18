@@ -971,3 +971,61 @@ def test_rollup_waits_for_the_whole_window_and_fan_out_requests_every_day(tmp_pa
         dg.materialize([m["pw"].t_tw], instance=inst, partition_key="2026-01-05")                  # a Monday
         keys = sorted(r.partition_key for r in evaluate(m["fan"].fan_window_sensor).run_requests)
         assert keys == [f"2026-01-{d:02d}" for d in range(5, 12)]       # the seven days of that week
+
+
+def test_airflow_2_macros_next_prev_tomorrow_yesterday_follow_the_schedule():
+    pytest.importorskip("croniter")
+    import datetime as dt
+    rt = _runtime()
+    # a daily data-interval run for 2026-07-02 (interval 07-02 to 07-03): the schedule tags carry the previous and next logical dates
+    tags = {"airflow/logical_date": "2026-07-02T00:00:00+00:00", "airflow/data_interval_end": "2026-07-03T00:00:00+00:00",
+            "airflow/prev_logical_date": "2026-07-01T00:00:00+00:00", "airflow/next_logical_date": "2026-07-03T00:00:00+00:00"}
+    ctx = rt["af_context"](_fake_ctx(tags), "d", "t", {}, {})
+    assert (ctx["ds"], ctx["next_ds"], ctx["prev_ds"]) == ("2026-07-02", "2026-07-03", "2026-07-01")
+    assert (ctx["tomorrow_ds"], ctx["yesterday_ds"], ctx["next_ds_nodash"], ctx["prev_ds_nodash"]) == ("2026-07-03", "2026-07-01", "20260703", "20260701")
+    assert ctx["ts_nodash_with_tz"] == "20260702T000000+0000" and ctx["prev_data_interval_start_success"] is None
+
+
+@pytest.mark.parametrize("seconds,start,cron", [
+    (21600, "2024-01-01T00:00:00", "0 */6 * * *"), (3600, "2024-01-01T00:00:00", "0 * * * *"), (900, "2024-01-01T00:00:00", "*/15 * * * *"),
+    (86400, "2024-01-01T09:30:00", "30 9 * * *"), (604800, "2024-01-01T00:00:00", "0 0 * * 1"),          # 2024-01-01 is a Monday
+    (7200, "2024-01-01T01:00:00", None), (5400, "2024-01-01T00:00:00", None), (172800, "2024-01-01T00:00:00", None)])
+def test_a_timedelta_schedule_becomes_a_cron_only_when_it_is_exact(seconds, start, cron):
+    assert C.delta_to_cron(seconds, start)[0] == cron
+
+
+def test_a_delta_schedule_converts_and_catchup_true_defers_unless_ignored(monkeypatch):
+    d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"})], kind="delta")
+    d["timetable"] = {"class": "DeltaDataIntervalTimetable", "kind": "delta", "timezone": "UTC", "interval_seconds": 21600.0}
+    d["start_date"] = "2024-01-01T00:00:00+00:00"
+    code, s = convert(d)
+    assert "cron_schedule='0 */6 * * *'" in code and "every 21600 s" in " ".join(s["notes"])
+    d["catchup"] = True
+    with pytest.raises(C.Defer, match="catchup=True"):
+        convert(d)
+    monkeypatch.setattr(C, "CATCHUP", "ignore")
+    _, s = convert(d)
+    assert any("catchup=True" in n and "from now on" in n for n in s["notes"])
+
+
+def test_a_subdag_is_not_converted_on_its_own():
+    d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"})])
+    d["is_subdag"], d["parent_dag_id"] = True, "parent"
+    with pytest.raises(C.Defer, match="SubDAG of parent"):
+        convert(d)
+
+
+def test_the_run_is_decided_by_its_leaf_tasks_like_airflow(tmp_path):
+    # `a` fails but both of its downstream tasks (a cleanup and an alert) succeed: they are the leaves, so the run succeeds, as in Airflow
+    t = [_py("a", "boom"), _py("cleanup", "step_join", up=["a"], trigger_rule="all_done"), _py("alert", "step_b", up=["a"], trigger_rule="one_failed")]
+    mod, res = _run_failing(tmp_path, t, "pkg_leaf")
+    assert res.success and sorted(mod.TRACE) == ["b", "join"]
+
+
+def test_datetimes_print_with_a_t_before_airflow_2_8_only():
+    rt = _runtime()
+    ctx = rt["af_context"](_fake_ctx({"airflow/logical_date": "2026-07-02T05:00:00+00:00"}), "d", "t", {}, {})
+    assert str(ctx["execution_date"]) == "2026-07-02 05:00:00+00:00"                       # 2.8 and 3.x: the datetime's own text
+    rt["AF_ISO_DT"] = True
+    ctx = rt["af_context"](_fake_ctx({"airflow/logical_date": "2026-07-02T05:00:00+00:00"}), "d", "t", {}, {})
+    assert str(ctx["execution_date"]) == "2026-07-02T05:00:00+00:00" and ctx["ds"] == "2026-07-02"

@@ -135,6 +135,7 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | Converting the mechanical DAGs by code generation from the runtime IR, and where existing components fit | `reference/conversion.md` |
 | A converted repo with the parity harness | `examples/runtime_conversion/` |
 | Which component and integration enhancements would convert more DAGs, ranked by measured impact | `reference/component-wishlist.md` |
+| Compatibility across Airflow releases (2.2 to 3.4): what was tested, results, what changes by release | `reference/compatibility.md` |
 | Partitioned timetables (`CronPartitionTimetable`, `PartitionedAssetTimetable`, partition mappers) and what converts | `reference/partitions.md` |
 | Identical DAGs differing in one argument, converted to one partitioned asset | `examples/dagfactory_family/` |
 | A worked factory conversion (six factories to one component) | `examples/s3_to_snowflake_factories/MIGRATION.md` |

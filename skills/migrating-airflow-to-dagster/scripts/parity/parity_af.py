@@ -10,7 +10,10 @@ from airflow.utils.db import initdb; initdb()          # dag.test() writes task 
 if airflow.__version__.startswith("2."):
     from airflow.models.dagbag import DagBag
 else:
-    from airflow.dag_processing.dagbag import DagBag
+    try:
+        from airflow.dag_processing.dagbag import DagBag           # Airflow 3.2 and later
+    except ImportError:
+        from airflow.models.dagbag import DagBag                   # Airflow 3.0 and 3.1
 ids = json.load(open(ids_file))
 _bags = []
 class _Merged:                                   # several DAG folders (e.g. apache/airflow's two example folders)
@@ -21,7 +24,14 @@ for folder in dags_folder.split(":"):
     _Merged.dags.update(b.dags); _bags.append(b)
 bag = _Merged
 if not airflow.__version__.startswith("2."):
-    from airflow.dag_processing.dagbag import sync_bag_to_db      # Airflow 3 serialises DAGs before dag.test() can create a run
+    try:
+        from airflow.dag_processing.dagbag import sync_bag_to_db      # Airflow 3 serialises DAGs before dag.test() can create a run
+    except ImportError:
+        try:
+            from airflow.models.dagbag import sync_bag_to_db           # Airflow 3.1
+        except ImportError:                                           # Airflow 3.0 keeps it on the DagBag
+            def sync_bag_to_db(bag, bundle, version):
+                bag.sync_to_db(bundle_name=bundle, bundle_version=version)
     from airflow.dag_processing.bundles.manager import DagBundlesManager
     DagBundlesManager().sync_bundles_to_db()                       # the bundle row must exist (foreign key on bundle_name)
     for _b in _bags:
@@ -39,6 +49,9 @@ for did in ids:
     signal.alarm(300)
     try:
         dr = dag.test()
+        if dr is None:                                                # Airflow 2.5: test() returns nothing; read the run it created
+            from airflow.models import DagRun
+            dr = sorted(DagRun.find(dag_id=did), key=lambda r: r.start_date or r.execution_date)[-1]
         tasks = {}
         for ti in dr.get_task_instances():
             val = None

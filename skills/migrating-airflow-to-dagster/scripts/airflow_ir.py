@@ -24,6 +24,11 @@ import warnings
 from pathlib import Path
 from typing import Any
 
+# A clean sandbox BEFORE anything imports Airflow: importing it reads AIRFLOW_HOME and may open a metadata database, and an existing
+# ~/airflow created by a different release makes older Airflow fail with an alembic revision error.
+os.environ["AIRFLOW_HOME"] = tempfile.mkdtemp(prefix="af_ir_")
+os.environ.setdefault("AIRFLOW__CORE__LOAD_EXAMPLES", "False")
+
 
 def _jsonable(v: Any, depth: int = 0) -> Any:
     """Best-effort JSON form of an operator argument; anything exotic becomes {"repr": ...} so nothing is silently lost."""
@@ -37,6 +42,8 @@ def _jsonable(v: Any, depth: int = 0) -> Any:
         return {str(k): _jsonable(x, depth + 1) for k, x in v.items()}
     import datetime as _d
     import enum as _e
+    if type(v).__name__ == "ArgNotSet":
+        return None
     if isinstance(v, _d.datetime):
         return {"datetime": v.isoformat()}
     if isinstance(v, _d.time):
@@ -92,13 +99,19 @@ def _timetable(dag: Any) -> dict[str, Any]:
             out["cron"] = getattr(tt, attr)
     tz = getattr(tt, "timezone", None) or getattr(tt, "_timezone", None) or getattr(dag, "timezone", None)
     out["timezone"] = str(tz) if tz is not None else None
-    interval = getattr(tt, "interval", None) or getattr(tt, "_interval", None)
+    interval = getattr(tt, "interval", None) or getattr(tt, "_interval", None) or getattr(tt, "_delta", None) or getattr(tt, "delta", None)
     if interval is not None and hasattr(interval, "total_seconds"):
         out["interval_seconds"] = interval.total_seconds()
     out["summary"] = str(getattr(tt, "summary", ""))[:200]
     cond = getattr(tt, "asset_condition", None) or getattr(tt, "dataset_condition", None)
     if cond is not None:
         out["assets"], out["asset_logic"] = _asset_leaves(cond)
+    else:                                                   # Airflow 2.4 to 2.8: a plain list of datasets, all required
+        listed = getattr(tt, "datasets", None) or getattr(dag, "dataset_triggers", None)
+        if listed is not None and hasattr(listed, "objects"):               # 2.9: a DatasetAll / DatasetAny condition
+            out["assets"], out["asset_logic"] = _asset_leaves(listed)
+        elif isinstance(listed, (list, tuple)) and listed:
+            out["assets"], out["asset_logic"] = [str(getattr(x, "uri", None) or x) for x in listed], ("all" if len(listed) > 1 else "single")
     if cls in ("NullTimetable",):
         out["kind"] = "manual"
     elif cls in ("OnceTimetable",):
@@ -144,6 +157,12 @@ def _expand_ir(task: Any) -> dict[str, Any] | None:
         return None
     try:
         ei = task._get_specified_expand_input() if hasattr(task, "_get_specified_expand_input") else task.expand_input
+    except AttributeError:
+        if not hasattr(task, "mapped_kwargs"):
+            return {"form": "unknown", "error": "no expand input found"}
+        import types as _t                                                # Airflow 2.3: the expanded arguments are `mapped_kwargs`
+        ei = type("DictOfListsExpandInput", (), {})()
+        ei.value = dict(getattr(task, "mapped_op_kwargs", None) or task.mapped_kwargs)       # a decorated task keeps its expanded arguments in mapped_op_kwargs
     except Exception as e:  # noqa: BLE001
         return {"form": "unknown", "error": repr(e)[:120]}
     val = getattr(ei, "value", None)
@@ -281,6 +300,7 @@ def _dag_ir(dag: Any, folder: Path) -> dict[str, Any]:
         "dag_id": dag.dag_id, "file": os.path.relpath(dag.fileloc, folder), "description": dag.description,
         "tags": sorted(dag.tags or []), "catchup": dag.catchup, "max_active_runs": dag.max_active_runs,
         "start_date": str(getattr(dag, "start_date", None) or da.get("start_date") or "") or None,
+        "is_subdag": bool(getattr(dag, "is_subdag", False)), "parent_dag_id": getattr(getattr(dag, "parent_dag", None), "dag_id", None),
         "timetable": _timetable(dag), "default_args": {k: _jsonable(v) for k, v in da.items() if k != "start_date"},
         "params": {k: _jsonable(getattr(v, "value", v)) for k, v in (getattr(dag, "params", None) or {}).items()} if getattr(dag, "params", None) else {},
         "dag_settings": {k: _jsonable(getattr(dag, k, None)) for k in ("fail_stop", "max_active_tasks", "max_active_runs", "dagrun_timeout",

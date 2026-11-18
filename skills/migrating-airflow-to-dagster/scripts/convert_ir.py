@@ -42,7 +42,10 @@ KNOWN_CTX = CONTEXT_PARAMS | {"ts_nodash", "ts_nodash_with_tz", "prev_ds", "prev
                               "triggering_dataset_events", "inlet_events", "outlet_events", "tomorrow_ds", "yesterday_ds", "expanded_ti_count",
                               "prev_start_date_success", "prev_end_date_success"}
 SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "execution_date", "data_interval_start", "data_interval_end",
-                 "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf"}
+                 "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf",
+                 "next_ds", "next_ds_nodash", "next_execution_date", "prev_ds", "prev_ds_nodash", "prev_execution_date",     # Airflow 2 macros
+                 "tomorrow_ds", "tomorrow_ds_nodash", "yesterday_ds", "yesterday_ds_nodash", "ts_nodash_with_tz",
+                 "prev_data_interval_start_success", "prev_data_interval_end_success"}
 JINJA_VARS = SUPPORTED_CTX | {"macros"}
 CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date"}, "dag": {"dag_id"}, "task": {"task_id"},
              "ti": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"},
@@ -75,6 +78,7 @@ class Defer(Exception):
 
 
 DATASET_KEYS = "path"     # --dataset-keys path (s3://bucket/a/b -> s3/bucket/a/b) | script-orchestrator (airflow_dataset_bucket_a_b, the script_orchestrator component's naming)
+CATCHUP = "defer"      # --catchup defer | ignore: what to do with catchup=True (Airflow runs every missed interval since start_date)
 PARTITION_START = "2025-01-01"   # --partition-start: where partitioned assets begin (Airflow's partitions have no start; Dagster needs one)
 PARTITIONS: dict[str, dict] = {}   # asset key -> its time partitioning, from the partition timetables in the IR (filled by build_partition_catalog)
 AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
@@ -268,6 +272,33 @@ def third_party(support: dict[str, int]) -> set[str]:
             elif isinstance(n, ast.ImportFrom) and n.module and n.level == 0:
                 mods.add(n.module.split(".")[0])
     return {m for m in mods if m not in sys.stdlib_module_names}
+
+
+def delta_to_cron(seconds: float | None, start_date: str | None) -> tuple[str | None, str]:
+    """A fixed interval (`timedelta`) as a cron string, when the interval divides the day and the start date is aligned to it: otherwise (None, why)."""
+    if not seconds:
+        return None, "interval not found"
+    secs = int(seconds)
+    t = (start_date or "")[11:19] or "00:00:00"
+    hh, mm = int(t[0:2] or 0), int(t[3:5] or 0)
+    if secs % 60 == 0 and secs < 3600 and 3600 % secs == 0:
+        n = secs // 60
+        return (f"*/{n} * * * *" if n > 1 else "* * * * *"), ""
+    if secs % 3600 == 0 and secs < 86400 and 86400 % secs == 0:
+        h = secs // 3600
+        if mm == 0 and hh % h == 0:
+            return (f"0 */{h} * * *" if h > 1 else "0 * * * *"), ""
+        return None, "an hourly interval whose start date is not aligned to it"
+    if secs == 86400:
+        return f"{mm} {hh} * * *", ""
+    if secs == 7 * 86400 and start_date:
+        import datetime as _d
+        try:
+            dow = (_d.date.fromisoformat(start_date[:10]).isoweekday() % 7)
+        except ValueError:
+            return None, "start date not readable"
+        return f"{mm} {hh} * * {dow}", ""
+    return None, "an interval that is not a divisor of a day, a day or a week"
 
 
 def tz_name(tz: str | None) -> str:
@@ -625,7 +656,7 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
         for name, a in e["args"].items():
             if a["kind"] == "literal" and isinstance(a.get("value"), list):
                 srcs[name] = ("lit", a["value"])
-            elif a["kind"] == "xcom" and a.get("wrapper") == "PlainXComArg" and a.get("key") == "return_value" and a.get("task_id") in tasks:
+            elif a["kind"] == "xcom" and a.get("wrapper") in ("PlainXComArg", "XComArg") and a.get("key") == "return_value" and a.get("task_id") in tasks:
                 srcs[name] = ("task", a["task_id"])
             else:
                 why.append(f"{tid}: mapping over {a['kind']}{':' + a['wrapper'] if a.get('wrapper') else ''} for `{name}` "
@@ -690,7 +721,7 @@ def plan_partitions(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[st
             continue
         if a["kind"] == "literal" and a["value"] and t["upstream"] == []:
             sources.add(("literal", json.dumps(a["value"], sort_keys=True)))
-        elif a["kind"] == "xcom" and a.get("wrapper") == "PlainXComArg" and a.get("key") == "return_value" and t["upstream"] == [a["task_id"]]:
+        elif a["kind"] == "xcom" and a.get("wrapper") in ("PlainXComArg", "XComArg") and a.get("key") == "return_value" and t["upstream"] == [a["task_id"]]:
             sources.add(("xcom", a["task_id"]))
         else:
             why.append(f"{tid}: dynamic task mapping over {a['kind']}{':' + a['wrapper'] if a.get('wrapper') else ''} "
@@ -720,9 +751,19 @@ def plan_partitions(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[st
 def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tuple[str, dict[str, Any]]:
     """(module source, summary). Raises Defer if any part of the DAG cannot be converted."""
     reasons: list[str] = []
+    catchup_note = ""
     dag_id = dag["dag_id"]
+    if dag.get("is_subdag"):
+        raise Defer(f"a SubDAG of {dag.get('parent_dag_id')} (it runs inside the parent's SubDagOperator; SubDAGs were removed in Airflow 3: use a task group or a separate job)")
     tasks = {t["task_id"]: t for t in dag["tasks"]}
     tt = dag["timetable"]
+    if tt.get("kind") == "delta":
+        cron, why = delta_to_cron(tt.get("interval_seconds"), dag.get("start_date"))
+        if cron:
+            tt = {**tt, "kind": "cron_data_interval" if tt["class"] == "DeltaDataIntervalTimetable" else "cron_trigger", "cron": cron}
+            catchup_note = (catchup_note + " " if catchup_note else "") + f"the interval schedule every {int(tt['interval_seconds'])} s is the cron `{cron}` (the interval divides the day and the start date is aligned)"
+        else:
+            reasons.append(f"schedule type {tt['class']} ({why})")
     triggers: list[str] = []
     trig_mode = "eager"
     ppart: dict[str, Any] | None = None                       # time partitions of this DAG's assets (Airflow 3.2+ partition timetables)
@@ -788,7 +829,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     if ds.get("render_template_as_native_obj"):
         reasons.append("render_template_as_native_obj")
     if dag.get("catchup") and tt["kind"] in ("cron_trigger", "cron_data_interval"):
-        reasons.append("catchup=True needs partitions and a backfill")
+        if CATCHUP == "ignore":
+            catchup_note = (f"catchup=True: Airflow runs every interval missed since the start date ({(dag.get('start_date') or 'none')[:10]}); the converted schedule "
+                            "runs from now on. Replay history with a Dagster backfill if you need it")
+        else:
+            reasons.append("catchup=True needs partitions and a backfill (convert with --catchup ignore to run from now on)")
     mplan, mwhy = plan_mapping(dag, tasks)
     reasons += mwhy
     if mplan and triggers:
@@ -880,7 +925,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     real = [t for t in dag["tasks"] if t["type"] not in elided]
     if not real:
         raise Defer("only EmptyOperators: nothing to run")
-    notes: list[str] = []
+    notes: list[str] = [catchup_note] if catchup_note else []
 
     def reaches(a: str, b: str) -> bool:
         """True if task a is upstream of task b (possibly through elided tasks)."""
@@ -1164,11 +1209,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 lines.append(f"    v{i} = {fname}({args})")
                 val[tid] = f"v{i}"
             outs[tid] = f"o{i}"
-        if fail_aware:                                                  # the run fails at the end if any task failed
+        def is_effective_leaf(x: str) -> bool:                          # Airflow's DagRun._tis_for_dagrun_state: teardowns do not decide the run unless they ask to
+            for y in order:
+                if x in tasks[y]["upstream"] and (not tasks[y].get("is_teardown") or tasks[y].get("on_failure_fail_dagrun")):
+                    return False
+            return not tasks[x].get("is_teardown") or bool(tasks[x].get("on_failure_fail_dagrun"))
+        leaf_ids = {x for x in order if is_effective_leaf(x)} or {x for x in order if not any(x in tasks[y]["upstream"] for y in order)}
+        if fail_aware:                                                  # the run fails at the end if a leaf task failed
             fin_params = [f"in_{k}" for k in range(len(order))]
             ops.append(f"@dg.op(name={safe(dag_id) + '__finish'!r})\ndef op_finish(context, {', '.join(fin_params)}):\n"
-                       f"    af_finish(context, {{{', '.join(f'{tid!r}: in_{k}' for k, tid in enumerate(order))}}}"
-                       f"{', ignore=' + repr(sorted(x for x in order if tasks[x].get('is_teardown') and not tasks[x].get('on_failure_fail_dagrun'))) if any(tasks[x].get('is_teardown') for x in order) else ''})\n")
+                       f"    af_finish(context, {{{', '.join(f'{tid!r}: in_{k}' for k, tid in enumerate(order))}}}, leaves={sorted(leaf_ids)!r})\n")
             lines.append(f"    fin = op_finish({', '.join(val[x] for x in order)})")
             graph_outs.append("run_check")
         outs_decl = ",\n        ".join(
@@ -1519,6 +1569,18 @@ class _TaskInstance:
         self._ctx.add_output_metadata({key: meta})
 
 
+AF_ISO_DT = False          # set when the runtime is written: Airflow before 2.8 prints datetimes in templates with a T (2026-07-02T05:00:00+00:00)
+
+
+class _IsoDatetime(_dt.datetime):
+    def __str__(self):
+        return self.isoformat()
+
+
+def _iso(x):
+    return _IsoDatetime(x.year, x.month, x.day, x.hour, x.minute, x.second, x.microsecond, x.tzinfo) if AF_ISO_DT and isinstance(x, _dt.datetime) else x
+
+
 def af_context(context, dag_id, task_id, params, upstream, keys=None):
     """Rebuild the Airflow task context from the Dagster run. The logical date comes from run tags that airflow_schedule sets;
     a run without them (a manual run) uses the current time, as Airflow does for a manual trigger. ds is the UTC date of the
@@ -1530,6 +1592,9 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
     de = _dt.datetime.fromisoformat(tags["airflow/data_interval_end"]) if tags.get("airflow/data_interval_end") else ld
     ld, de = ld.astimezone(utc), de.astimezone(utc)
     ds = ld.strftime("%Y-%m-%d")
+    nxt = _dt.datetime.fromisoformat(tags["airflow/next_logical_date"]).astimezone(utc) if tags.get("airflow/next_logical_date") else (de if de != ld else ld)
+    prv = _dt.datetime.fromisoformat(tags["airflow/prev_logical_date"]).astimezone(utc) if tags.get("airflow/prev_logical_date") else None
+    one = _dt.timedelta(days=1)
     conf = json.loads(tags.get("airflow/conf", "{}"))
     run_id = run.run_id if run is not None else context.run_id        # context.run_id is deprecated in current Dagster
     ti = _TaskInstance(dag_id, task_id, run_id, getattr(context, "retry_number", 0) + 1, upstream, context, keys)
@@ -1541,8 +1606,13 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
     except Exception:                                    # noqa: BLE001
         pass
     return {"ds": ds, "ds_nodash": ds.replace("-", ""), "ts": ld.isoformat(), "ts_nodash": ld.strftime("%Y%m%dT%H%M%S"),
-            "logical_date": ld, "execution_date": ld, "data_interval_start": ld, "data_interval_end": de,
+            "logical_date": _iso(ld), "execution_date": _iso(ld), "data_interval_start": _iso(ld), "data_interval_end": _iso(de),
             "run_id": run_id, "params": dict(params or {}), "conf": conf,
+            "next_execution_date": _iso(nxt), "next_ds": nxt.strftime("%Y-%m-%d"), "next_ds_nodash": nxt.strftime("%Y%m%d"),
+            "prev_execution_date": _iso(prv), "prev_ds": prv.strftime("%Y-%m-%d") if prv else None, "prev_ds_nodash": prv.strftime("%Y%m%d") if prv else None,
+            "tomorrow_ds": (ld + one).strftime("%Y-%m-%d"), "tomorrow_ds_nodash": (ld + one).strftime("%Y%m%d"),
+            "yesterday_ds": (ld - one).strftime("%Y-%m-%d"), "yesterday_ds_nodash": (ld - one).strftime("%Y%m%d"),
+            "ts_nodash_with_tz": ld.strftime("%Y%m%dT%H%M%S%z"), "prev_data_interval_start_success": None, "prev_data_interval_end_success": None,
             "dag": types.SimpleNamespace(dag_id=dag_id), "task": types.SimpleNamespace(task_id=task_id), "ti": ti, "task_instance": ti,
             "dag_run": types.SimpleNamespace(run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
             "partition_key": pkey}
@@ -1619,12 +1689,20 @@ def airflow_schedule(name, job, cron, tz, semantics):
         except ImportError as e:
             raise ImportError("Airflow 2 data-interval schedules need the `croniter` package") from e
 
+    try:
+        from croniter import croniter
+    except ImportError:
+        croniter = None                         # only the next/prev macros need it outside data-interval schedules
+
     def execution_fn(ctx):
         tick = ctx.scheduled_execution_time
         logical = croniter(cron, tick).get_prev(_dt.datetime) if semantics == "data_interval" else tick
         utc = _dt.timezone.utc
-        return dg.RunRequest(tags={"airflow/logical_date": logical.astimezone(utc).isoformat(),
-                                   "airflow/data_interval_end": tick.astimezone(utc).isoformat()})
+        tags = {"airflow/logical_date": logical.astimezone(utc).isoformat(), "airflow/data_interval_end": tick.astimezone(utc).isoformat()}
+        if croniter is not None:                # the schedule's previous and next logical dates (the prev_ds / next_ds macros)
+            tags["airflow/prev_logical_date"] = croniter(cron, logical).get_prev(_dt.datetime).astimezone(utc).isoformat()
+            tags["airflow/next_logical_date"] = (tick if semantics == "data_interval" else croniter(cron, tick).get_next(_dt.datetime)).astimezone(utc).isoformat()
+        return dg.RunRequest(tags=tags)
 
     return dg.ScheduleDefinition(name=name, job=job, cron_schedule=cron, execution_timezone=tz, execution_fn=execution_fn)
 
@@ -1999,14 +2077,15 @@ def af_skippable(context, run):
         return af_skip(context, False)
 
 
-def af_finish(context, values, ignore=()):
-    """The last step of a failure-aware DAG: fail the run if any task failed (a failed teardown does not, unless it asks to)."""
+def af_finish(context, values, ignore=(), leaves=None):
+    """The last step of a failure-aware DAG. Airflow decides a DAG run by its LEAF tasks: the run fails if a leaf failed or was upstream-failed,
+    so a failed task whose downstream (a cleanup, an alert) succeeded does not fail the run. A failed teardown does not either, unless it asks to."""
     failed = []
     for name, v in values.items():
-        if name in ignore:
+        if name in ignore or (leaves is not None and name not in leaves):
             continue
         items = v if isinstance(v, list) else [v]
-        failed += [f"{name}: {i.error}" for i in items if isinstance(i, Failed)]
+        failed += [f"{name}: {i.error if isinstance(i, Failed) else 'an upstream task failed'}" for i in items if isinstance(i, (Failed, UpstreamFailed))]
     if failed:
         raise dg.Failure(description="tasks failed: " + "; ".join(failed))
 
@@ -2158,13 +2237,17 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dataset-keys", choices=["path", "script-orchestrator"], default="path",
                     help="how Airflow Dataset/Asset names become Dagster asset keys: path parts (s3/bucket/a/b), or the flat airflow_dataset_<name> keys "
                          "the script_orchestrator component uses, so both tools produce the same lineage")
+    ap.add_argument("--catchup", choices=["defer", "ignore"], default="defer",
+                    help="catchup=True runs every interval missed since start_date (it is the default in Airflow 2 when the DAG does not say): defer the DAG (default), "
+                         "or convert it and say in the report that history is not replayed")
     ap.add_argument("--partition-start", default="2025-01-01", help="where time-partitioned assets begin (Airflow's partitions have no start date)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
-    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS
+    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP
     RETURN_ALL = a.return_all
     MAP_MODE = a.mapping
     DATASET_KEYS = a.dataset_keys
+    CATCHUP = a.catchup
     ir = json.loads(a.ir.read_text())
     PARTITION_START_SET = a.partition_start
     globals()["PARTITION_START"] = PARTITION_START_SET
@@ -2173,7 +2256,9 @@ def main(argv: list[str] | None = None) -> int:
     AF_MAJOR = int(_m.group(1)) if _m else 2
     a.out_dir.mkdir(parents=True, exist_ok=True)
     (a.out_dir / "__init__.py").touch()
-    (a.out_dir.parent / "runtime.py").write_text(RUNTIME)
+    _v = re.match(r"(\d+)\.(\d+)", str(ir.get("airflow_version") or ""))
+    iso = bool(_v) and (int(_v.group(1)), int(_v.group(2))) < (2, 8)
+    (a.out_dir.parent / "runtime.py").write_text(RUNTIME.replace("AF_ISO_DT = False", f"AF_ISO_DT = {iso}", 1))
     note = ("Schedule semantics: tasks converted here use no date values, so a plain cron schedule is exact for Airflow 3 "
             "(trigger timetable) and Airflow 2 (data-interval timetable).")
     report: dict[str, Any] = {"airflow_version": ir.get("airflow_version"), "dataset_keys": DATASET_KEYS, "dags": {}}

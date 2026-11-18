@@ -32,8 +32,8 @@ def returns_command(name):
     return f"echo hello {name}"
 
 
-def uses_prev_ds(prev_ds):
-    return prev_ds
+def uses_prev_ds(triggering_asset_events):
+    return triggering_asset_events
 
 
 def wants_ds(ds, suffix="x"):
