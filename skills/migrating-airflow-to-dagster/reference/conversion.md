@@ -53,6 +53,10 @@ Connections become resources under the same key (`resources.py`); third-party im
 - **Odd schedules**: `ContinuousTimetable` becomes a schedule every minute and `AfterWorkdayTimetable` a weekday cron, each with a degraded caveat. `catchup=True` converts to a schedule from now on, with a caveat, unless `--caveats off`.
 - **Unresolved asset aliases** convert without a trigger, with a caveat; unordered writers of one asset each keep their own asset.
 
+## Task-group loops (Airflow 3.4 `group.loop(max_iterations=, until=)`)
+
+A loop group (its Python tasks plus the gate) becomes one task. Its callable runs the group's tasks in order once per iteration, handing each task the `loop` object (`loop.index` from 1, `loop.previous` the preceding iteration's result, `loop.result` for the `until` callable), and consults `until` after each iteration: a `LoopDecision`, a bool or a `(stop, reason)` pair. With no `until` the body runs exactly `max_iterations` times; with one, running out of iterations before it says stop fails the step, as in Airflow. Tasks after the loop depend on the one asset. A loop whose body has a mapped task, a non-Python task, or a task fed from outside the group stays a stub. Checked on Airflow's own examples: Newton's square root converges in the same iterations, a fixed 3-iteration loop returns 3, and Airflow and Dagster both succeed.
+
 ## Runtime-partitioned assets (Airflow 3.3 `PartitionedAtRuntime`)
 
 A producer that records its partition keys while it runs converts to its own asset (`<dag>/<task>`) plus a dynamically partitioned catalog asset at the outlet's key: `outlet_events[asset].add_partitions(key or keys)` registers each key as a dynamic partition and reports a materialization for it (duplicates collapse), and a run launched with the tag `airflow/partition_key` records that key when the step succeeds. A consumer with the identity mapping gets the same dynamic partition set and an eager automation condition. A reference to an asset by name (`Asset.ref(name=...)`) resolves to the producer's key.

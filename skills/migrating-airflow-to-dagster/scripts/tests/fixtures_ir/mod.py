@@ -219,3 +219,11 @@ def uses_airflow_api():
 
 def pusher_dict():
     return {"n": 7, "other": 1}
+
+
+def loop_inc(*, loop):
+    return (0 if loop.index == 1 else loop.previous) + 1
+
+
+def loop_until(*, loop):
+    return loop.result >= 2

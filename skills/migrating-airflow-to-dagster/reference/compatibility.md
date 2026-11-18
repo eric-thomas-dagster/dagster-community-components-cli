@@ -28,6 +28,18 @@ The DAGs that are not converted are the same few on every 2.x release, and each 
 
 The one 2.6.3 difference is not a conversion difference: Airflow 2.6's `dag.test()` infers a different data interval for a manual run, so a `TimeDeltaSensor` waits for tomorrow in Airflow and not in Dagster. The sensor itself is unchanged since 2.3.
 
+## Airflow 3.x features that convert
+
+| Feature | Release | Converted as |
+|---|---|---|
+| Assets, `Asset.ref`, asset aliases, `outlet_events` and `inlet_events`, `Metadata` | 3.0 | Asset keys, dependencies and automation conditions; events become materialization metadata |
+| Asset schedules with nested AND/OR | 3.0 | The same combination of automation conditions |
+| Cron partition timetables, rollup and fan-out mappers | 3.2 | Dagster time partitions, with `partition_window_sensor` for rollups and fan-out |
+| `PartitionedAtRuntime` producers and identity consumers | 3.3 | Dynamic partitions registered while the step runs |
+| Task-group loops (`group.loop`) with `until` | 3.4 | One asset that runs the group's tasks per iteration |
+| Task SLAs and deadline alerts | 2.x / 3.1 | An `sla_breach` observation measured from the scheduled tick (task `sla`) |
+| Human-in-the-loop operators | 3.1 | Not convertible: Dagster cannot pause a run for a person's choice; the task is a stub |
+
 ## What changes by release, and how it is handled
 
 | Construct | In releases | Handling |

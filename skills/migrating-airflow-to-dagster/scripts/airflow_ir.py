@@ -276,6 +276,16 @@ def _sensor_ir(task: Any) -> dict[str, Any] | None:
     return out
 
 
+def _loop_ir(task: Any) -> dict[str, Any] | None:
+    """The gate of an Airflow 3.4 task-group loop (`group.loop(max_iterations=, until=)`): the group, the iteration limit and the `until` callable."""
+    if type(task).__name__ != "LoopGateOperator":
+        return None
+    grp = getattr(task, "task_group", None)
+    until = getattr(task, "until", None)
+    return {"group": getattr(grp, "group_id", None), "max_iterations": getattr(grp, "max_iterations", None) or getattr(task, "max_iterations", None),
+            "until": _callable_info(until) if callable(until) else None}
+
+
 def _task_ir(task: Any) -> dict[str, Any]:
     t: dict[str, Any] = {
         "task_id": task.task_id, "type": task.task_type, "module": type(task).__module__,
@@ -292,6 +302,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         # Airflow 2 decorated mapped tasks are DecoratedMappedOperator, a SUBCLASS of MappedOperator: test the whole MRO
         "expand": _expand_ir(task),
         "is_mapped": any(c.__name__ == "MappedOperator" for c in type(task).__mro__) or bool(getattr(task, "is_mapped", False)),
+        "loop": _loop_ir(task),
         "is_setup": bool(getattr(task, "is_setup", False)), "is_teardown": bool(getattr(task, "is_teardown", False)),
         "on_failure_fail_dagrun": bool(getattr(task, "on_failure_fail_dagrun", False)),
         "short_circuit_hard": bool(getattr(task, "ignore_downstream_trigger_rules", True)),

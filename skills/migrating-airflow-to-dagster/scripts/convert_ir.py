@@ -51,7 +51,7 @@ CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "da
              "ti": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"},
              "task_instance": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"}}
 SUPPORTED_MACROS = {"ds_add", "ds_format", "datetime", "timedelta"}
-SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
+SHIM_IMPORTS = {("airflow.sdk", "LoopDecision"), ("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
                 ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
                 ("airflow.providers.amazon.aws.hooks.s3", "S3Hook")} | \
     {(m, "BaseOperator") for m in ("airflow.models", "airflow.models.baseoperator", "airflow.sdk", "airflow.sdk.bases.operator")} | \
@@ -209,6 +209,8 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
             if name in seen or name in class_level:
                 continue
             seen.add(name)
+            if name == "af_loop":                                # provided by the generated runtime (a converted task-group loop)
+                continue
             hit = idx.defs.get(name)
             if hit is None:
                 raise Defer(f"unresolved name {name!r} in {where}")
@@ -313,6 +315,8 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
             if name in seen:
                 continue
             seen.add(name)
+            if name == "af_loop":                                # provided by the generated runtime (a converted task-group loop)
+                continue
             hit = idx.defs.get(name)
             if hit is None:
                 raise Defer(f"unresolved name {name!r} in {where}")
@@ -1179,6 +1183,72 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     return files, overrides
 
 
+def expand_loops(dag: dict[str, Any]) -> dict[str, Any]:
+    """Airflow 3.4 task-group loops. A loop group (its Python tasks plus the gate) becomes ONE task: its callable runs the group's tasks in order once per
+    iteration, handing each the `loop` object (index from 1, `previous` the preceding iteration's result), and consults the `until` callable after each.
+    A group with a mapped, non-Python or externally fed task is left as it is (its gate then becomes a stub)."""
+    gates = [t for t in dag["tasks"] if t["type"] == "LoopGateOperator" and (t.get("loop") or {}).get("group") and (t["loop"].get("max_iterations"))]
+    if not gates:
+        return dag
+    tasks = list(dag["tasks"])
+    for gate in gates:
+        grp = gate["loop"]["group"]
+        body = [t for t in tasks if t.get("group") == grp and t is not gate and t["type"] != "LoopGateOperator"]
+        ids = {t["task_id"] for t in body}
+        ok = bool(body) and all(t["type"] in PY_TASKS and not t.get("is_mapped") and isinstance(t.get("callable"), dict) and "source" in t["callable"] for t in body)
+        refs_ok = all(r in ids for t in body for r in xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")))
+        until = gate["loop"].get("until")
+        if not (ok and refs_ok) or (until is not None and "source" not in until):
+            continue
+        order = [t["task_id"] for t in body]                                  # IR order is topological within a group
+        down_in = {u for t in body for u in t["upstream"]}
+        terminal = next((x for x in reversed(order) if x in set(gate["upstream"])), order[-1])
+        names: dict[str, str] = {}
+        src: list[str] = []
+
+        def nested(info: dict[str, Any], hint: str) -> str:
+            tree = ast.parse(textwrap.dedent(info["source"]))
+            fn = next(n for n in tree.body if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef)))
+            fn.decorator_list = []
+            nm = f"{safe(hint)}_{len(names)}"
+            names[nm] = nm
+            fn.name = nm
+            src.append(textwrap.indent(ast.unparse(fn), "    "))
+            return nm
+        fns = {t["task_id"]: nested(t["callable"], t["callable"].get("name") or t["task_id"]) for t in body}
+        until_fn = nested(until, until.get("name") or "until") if until else None
+        calls = []
+        for t in body:
+            tid = t["task_id"]
+
+            def arg(v: Any) -> str:
+                if isinstance(v, dict) and "xcom_from" in v:
+                    return f"v[{v['xcom_from']!r}]"
+                return repr(v)
+            a = [arg(x) for x in (t.get("op_args") or [])] + [f"{k}={arg(x)}" for k, x in (t.get("op_kwargs") or {}).items()]
+            if "loop" in (t["callable"].get("params") or []):
+                a.append("loop=loop")
+            calls.append(f"        v[{tid!r}] = {fns[tid]}({', '.join(a)})")
+        outer = (f"def loop_{safe(grp)}():\n" + "\n".join(src) + "\n    def _body(loop):\n        v = {}\n" + "\n".join(calls) + f"\n        return v[{terminal!r}]\n"
+                 f"    return af_loop(_body, {until_fn or 'None'}, {int(gate['loop']['max_iterations'])})\n")
+        ext_up = sorted({u for t in body for u in t["upstream"] if u not in ids})
+        synth = {**gate, "task_id": grp, "type": "PythonOperator", "group": None, "loop": None, "is_mapped": False, "expand": None,
+                 "callable": {"name": f"loop_{safe(grp)}", "module": body[0]["callable"].get("module"), "file": body[0]["callable"].get("file"), "source": outer, "params": []},
+                 "op_args": [], "op_kwargs": {}, "template_fields": {}, "upstream": ext_up, "retries": gate.get("retries") or 0, "outlets": [], "inlets": []}
+        rename = {gate["task_id"]: grp, **{i: grp for i in ids}}
+        out = []
+        for t in tasks:
+            if t is gate:
+                out.append(synth)
+            elif t["task_id"] in ids:
+                continue
+            else:
+                ups = list(dict.fromkeys(rename.get(u, u) for u in t["upstream"]))
+                out.append({**t, "upstream": ups} if ups != t["upstream"] else t)
+        tasks = out
+    return {**dag, "tasks": tasks}
+
+
 def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tuple[str, dict[str, Any]]:
     """(module source, summary). Raises Defer if any part of the DAG cannot be converted."""
     reasons: list[str] = []
@@ -1204,6 +1274,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 ext_trigs += refs
                 reasons += why
         dag = {**dag, "tasks": [({**t, "type": "EmptyOperator"} if t["task_id"] in ext_ids else t) for t in dag["tasks"]]}
+    dag = expand_loops(dag)
     if CAVEATS != "off":                                     # tasks the converter cannot translate become marked stubs; the DAG keeps its shape
         soft_known = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | SENSORS | TRIGGER | BRANCH | SHORT | CLOCK_BRANCH
 
@@ -2924,6 +2995,44 @@ def af_sync(fn):
 def af_xcom_key(value, key):
     """A named XCom of a task that returns a dict with multiple_outputs: Airflow pushes each dict key as its own XCom."""
     return value.get(key) if isinstance(value, dict) else None
+
+
+class LoopDecision:
+    """What an `until` callable of a loop returns in Airflow 3.4: whether to stop, and why."""
+
+    def __init__(self, stop, reason=None):
+        self.stop, self.reason = bool(stop), reason
+
+
+class _LoopState:
+    def __init__(self, index, max_iterations, previous, result=None):
+        self.index, self.max_iterations, self.previous, self.result = index, max_iterations, previous, result
+
+
+def af_loop(body, until, max_iterations):
+    """An Airflow 3.4 task-group loop: run the body (the group's tasks, in order) up to max_iterations times. `loop.index` starts at 1 and `loop.previous` is the
+    preceding iteration's result (None on the first). After each iteration `until(loop=...)` decides: a LoopDecision, a bool, or a (stop, reason) pair. Without an
+    `until` the body runs exactly max_iterations times; with one, running out of iterations before it says stop fails the step."""
+    previous = None
+    result = None
+    for index in range(1, max_iterations + 1):
+        result = body(_LoopState(index, max_iterations, previous))
+        if until is not None:
+            decision = until(loop=_LoopState(index, max_iterations, previous, result))
+            if isinstance(decision, LoopDecision):
+                stop = decision.stop
+            elif isinstance(decision, bool):
+                stop = decision
+            elif isinstance(decision, tuple) and len(decision) == 2 and isinstance(decision[0], bool):
+                stop = decision[0]
+            else:
+                raise dg.Failure(description=f"the loop's until callable must return a LoopDecision, a bool or a (stop, reason) pair, not {decision!r}")
+            if stop:
+                return result
+        previous = result
+    if until is not None:
+        raise dg.Failure(description=f"the loop ran {max_iterations} iterations and its until callable never said stop")
+    return result
 
 
 def af_map_items(fns, items):

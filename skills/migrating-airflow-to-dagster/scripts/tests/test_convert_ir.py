@@ -719,6 +719,20 @@ def test_runtime_partitioned_producer_and_identity_consumer(tmp_path):
     C.RUNTIME_PARTS.clear()
 
 
+def test_task_group_loop_runs_the_body_until_the_condition_holds(tmp_path):
+    dg = pytest.importorskip("dagster")
+    body = task("g.inc", "PythonOperator", group="g", callable={**fn("loop_inc"), "params": ["loop"]}, op_args=[], op_kwargs={})
+    gate = task("g.gate", "LoopGateOperator", up=["g.inc"], group="g",
+                loop={"group": "g", "max_iterations": 5, "until": fn("loop_until")})
+    fixed = task("f.inc", "PythonOperator", group="f", callable={**fn("loop_inc"), "params": ["loop"]}, op_args=[], op_kwargs={})
+    fgate = task("f.gate", "LoopGateOperator", up=["f.inc"], group="f", loop={"group": "f", "max_iterations": 4, "until": None})
+    after = task("after", "PythonOperator", up=["g.gate"], callable=fn("three"), op_args=[], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([body, gate, fixed, fgate, after], kind="once")]}, "pkg_loop", "--return-all")
+    assert not rep.get("caveats") and sorted(rep["task_keys"]) == ["after", "f", "g"]
+    res = dg.materialize([mod.t_g, mod.t_f, mod.t_after])
+    assert res.success and res.asset_value(dg.AssetKey(["d1", "g"])) == 2 and res.asset_value(dg.AssetKey(["d1", "f"])) == 4
+
+
 def test_xcom_push_becomes_materialization_metadata_and_a_keyed_pull_reads_it(tmp_path):
     dg = pytest.importorskip("dagster")
     a = task("a", "PythonOperator", callable=fn("pusher"), op_args=[], op_kwargs={})
