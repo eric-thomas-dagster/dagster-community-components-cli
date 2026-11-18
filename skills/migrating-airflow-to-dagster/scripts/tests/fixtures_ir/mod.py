@@ -158,3 +158,7 @@ def fails_hard():
 def poke_value():
     from airflow.sensors.base import PokeReturnValue
     return PokeReturnValue(is_done=True, xcom_value="done")
+
+
+def uses_partition(dag_run=None):
+    return dag_run.partition_key, dag_run.partition_date.isoformat()

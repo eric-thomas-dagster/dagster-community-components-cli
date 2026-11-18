@@ -844,3 +844,130 @@ def test_dataset_keys_can_follow_the_script_orchestrator_naming(monkeypatch):
     assert C.key_from_asset("raw_data") == ["airflow_dataset_raw_data"]
     monkeypatch.setattr(C, "DATASET_KEYS", "path")
     assert C.key_from_asset("s3://my-bucket/raw/data.csv") == ["s3", "my_bucket", "raw", "data_csv"]
+
+
+def _cron_partition_dag(dag_id, task_id, cron, outlet):
+    d = dag([task(task_id, "PythonOperator", callable=fn("step_a"), op_args=[], op_kwargs={}, outlets=[outlet])], kind="cron_partition")
+    d["dag_id"] = dag_id
+    d["timetable"] = {"class": "CronPartitionTimetable", "kind": "cron_partition", "timezone": "UTC",
+                      "partition": {"__type": "airflow.timetables.trigger.CronPartitionTimetable",
+                                    "__var": {"expression": cron, "timezone": "UTC", "run_offset": None, "key_format": "%Y-%m-%dT%H:%M:%S"}}}
+    return d
+
+
+def _partitioned_consumer(dag_id, assets, mapper_type, outlet="file://out/combined.csv"):
+    d = dag([task("combine", "PythonOperator", callable=fn("step_b"), op_args=[], op_kwargs={}, outlets=[outlet])], kind="partitioned_asset")
+    d["dag_id"] = dag_id
+    d["timetable"] = {"class": "PartitionedAssetTimetable", "kind": "partitioned_asset", "timezone": "UTC", "assets": assets, "asset_logic": "all",
+                      "partition": {"__type": "airflow.timetables.simple.PartitionedAssetTimetable",
+                                    "__var": {"default_partition_mapper": {"__type": f"airflow.partition_mappers.temporal.{mapper_type}", "__var": {}},
+                                              "partition_mapper_config": []}}}
+    return d
+
+
+def test_partitioned_producers_and_a_consumer_aligned_by_start_of_hour(tmp_path):
+    dg = pytest.importorskip("dagster")
+    a, b, c = ("file://in/a.csv", "file://in/b.csv", "file://in/c.csv")
+    dags = [_cron_partition_dag("pa", "ta", "0 * * * *", a), _cron_partition_dag("pb", "tb", "15 * * * *", b), _cron_partition_dag("pc", "tc", "30 * * * *", c),
+            _partitioned_consumer("cons", [a, b, c], "StartOfHourMapper")]
+    (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": dags}))
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_part" / "defs"),
+                    "--report", str(tmp_path / "r.json"), "--partition-start", "2026-01-01"], check=True, capture_output=True)
+    rep = json.loads((tmp_path / "r.json").read_text())["dags"]
+    assert {k: v["status"] for k, v in rep.items()} == {"pa": "converted", "pb": "converted", "pc": "converted", "cons": "converted"}, rep
+    (tmp_path / "pkg_part" / "__init__.py").write_text("")
+    sys.path.insert(0, str(tmp_path))
+    import importlib
+    import datetime
+    mods = {n: importlib.import_module(f"pkg_part.defs.{n}") for n in ("pa", "pb", "pc", "cons")}
+    assets = [mods["pa"].t_ta, mods["pb"].t_tb, mods["pc"].t_tc, mods["cons"].t_combine]
+    defs = dg.Definitions(assets=assets, jobs=[m.__dict__[f"{n}_job"] for n, m in mods.items()], schedules=[mods[n].__dict__[f"{n}_schedule"] for n in ("pa", "pb", "pc")])
+    # a producer's tick runs the partition that contains the tick (hour 10 for 10:15)
+    sched = defs.get_schedule_def("pb_schedule")
+    ctx = dg.build_schedule_context(scheduled_execution_time=datetime.datetime(2026, 3, 10, 10, 15, tzinfo=datetime.timezone.utc), repository_def=defs.get_repository_def())
+    assert sched.evaluate_tick(ctx).run_requests[0].partition_key == "2026-03-10-10:00"
+    # the consumer's hour runs only after all three producers updated that hour
+    inst = dg.DagsterInstance.ephemeral()
+    key = dg.AssetKey(["file", "curated" if False else "out", "combined_csv"])
+    cons = [a for a in assets if a.key == key][0]
+    cur = None
+    def tick():
+        nonlocal cur
+        r = dg.evaluate_automation_conditions(defs=defs, instance=inst, cursor=cur); cur = r.cursor
+        return r.get_num_requested(key)
+    hour = "2026-03-10-10:00"
+    assert tick() == 0
+    dg.materialize([mods["pa"].t_ta], instance=inst, partition_key=hour); assert tick() == 0
+    dg.materialize([mods["pb"].t_tb], instance=inst, partition_key=hour); assert tick() == 0
+    dg.materialize([mods["pc"].t_tc], instance=inst, partition_key=hour); assert tick() == 1
+    res = dg.materialize([cons, mods["pa"].t_ta, mods["pb"].t_tb, mods["pc"].t_tc], instance=inst, partition_key=hour, selection=[key])
+    assert res.success
+
+
+def test_dag_run_partition_key_is_the_dagster_partition_and_a_weekly_cron_starts_on_its_weekday(tmp_path):
+    dg = pytest.importorskip("dagster")
+    d = _cron_partition_dag("d1", "t", "0 0 * * 1", "file://m/w.bin")
+    d["tasks"][0]["callable"] = fn("uses_partition")
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [d]}, "pkg_wk", "--return-all", "--partition-start", "2026-01-05")
+    assert rep["partitions"]["grain"] == "weekly" and rep["partitions"]["offset"] == 1
+    pdef = mod.d1_partitions
+    assert pdef.get_partition_keys(current_time=__import__("datetime").datetime(2026, 1, 20))[:3] == ["2026-01-05", "2026-01-12", "2026-01-19"]      # Mondays
+    res = dg.materialize([mod.t_t], partition_key="2026-01-12")
+    assert res.asset_value(dg.AssetKey(["file", "m", "w_bin"])) == ("2026-01-12", "2026-01-12T00:00:00+00:00")
+
+
+def _rollup_consumer(dag_id, asset, window, wait, **mapper_kw):
+    d = _partitioned_consumer(dag_id, [asset], "RollupMapper", f"file://out/{dag_id}.csv")
+    d["timetable"]["asset_logic"] = "single"
+    d["timetable"]["partition"]["__var"]["default_partition_mapper"] = {
+        "__type": "airflow.partition_mappers.base.RollupMapper",
+        "__var": {"upstream_mapper": {"__type": "airflow.partition_mappers.temporal.StartOfDayMapper", "__var": {}},
+                  "window": {"__type": f"airflow.partition_mappers.window.{window}", "__var": {"direction": "forward"}},
+                  "wait_policy": {"__type": f"airflow.partition_mappers.wait_policy.{wait[0]}", "__var": wait[1]}}}
+    return d
+
+
+def _fan_out_consumer(dag_id, asset, direction):
+    d = _partitioned_consumer(dag_id, [asset], "FanOutMapper", f"file://out/{dag_id}.csv")
+    d["timetable"]["asset_logic"] = "single"
+    d["timetable"]["partition"]["__var"]["default_partition_mapper"] = {
+        "__type": "airflow.partition_mappers.temporal.FanOutMapper",
+        "__var": {"upstream_mapper": {"__type": "airflow.partition_mappers.temporal.StartOfWeekMapper", "__var": {}},
+                  "window": {"__type": "airflow.partition_mappers.window.WeekWindow", "__var": {"direction": direction}}, "max_downstream_keys": 7}}
+    return d
+
+
+def test_rollup_waits_for_the_whole_window_and_fan_out_requests_every_day(tmp_path):
+    dg = pytest.importorskip("dagster")
+    pytest.importorskip("dagster_community_components")
+    hourly, weekly = "file://in/h.csv", "file://in/w.bin"
+    dags = [_cron_partition_dag("ph", "th", "0 * * * *", hourly), _cron_partition_dag("pw", "tw", "0 0 * * 1", weekly),
+            _rollup_consumer("daily_roll", hourly, "DayWindow", ("WaitForAll", {})), _fan_out_consumer("fan", weekly, "forward")]
+    (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": dags}))
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_win" / "defs"),
+                    "--report", str(tmp_path / "r.json"), "--partition-start", "2026-01-05"], check=True, capture_output=True)
+    rep = json.loads((tmp_path / "r.json").read_text())["dags"]
+    assert {k: v["status"] for k, v in rep.items()} == {"ph": "converted", "pw": "converted", "daily_roll": "converted", "fan": "converted"}, rep
+    (tmp_path / "pkg_win" / "__init__.py").write_text("")
+    sys.path.insert(0, str(tmp_path))
+    import importlib
+    m = {n: importlib.import_module(f"pkg_win.defs.{n}") for n in ("ph", "pw", "daily_roll", "fan")}
+    assets = [m["ph"].t_th, m["pw"].t_tw, m["daily_roll"].t_combine, m["fan"].t_combine]
+    defs = dg.Definitions(assets=assets, jobs=[m[n].__dict__[f"{n}_job"] for n in m], sensors=[m["daily_roll"].daily_roll_window_sensor, m["fan"].fan_window_sensor])
+    repo = defs.get_repository_def()
+    from dagster._core.definitions.partitions.context import partition_loading_context
+    (tmp_path / "inst").mkdir()
+    with dg.DagsterInstance.local_temp(str(tmp_path / "inst")) as inst:
+        def evaluate(sensor, cursor=None):
+            with partition_loading_context(dynamic_partitions_store=inst):
+                return sensor.evaluate_tick(dg.build_sensor_context(instance=inst, repository_def=repo, cursor=cursor))
+        roll = m["daily_roll"].daily_roll_window_sensor
+        for h in range(23):                                              # 23 of 24 hours: the daily run must wait
+            dg.materialize([m["ph"].t_th], instance=inst, partition_key=f"2026-01-06-{h:02d}:00")
+        assert evaluate(roll).run_requests == []
+        dg.materialize([m["ph"].t_th], instance=inst, partition_key="2026-01-06-23:00")
+        keys = [r.partition_key for r in evaluate(roll).run_requests]
+        assert keys == ["2026-01-06"]                                    # the 24th hour completes the day: one run, for the day
+        dg.materialize([m["pw"].t_tw], instance=inst, partition_key="2026-01-05")                  # a Monday
+        keys = sorted(r.partition_key for r in evaluate(m["fan"].fan_window_sensor).run_requests)
+        assert keys == [f"2026-01-{d:02d}" for d in range(5, 12)]       # the seven days of that week

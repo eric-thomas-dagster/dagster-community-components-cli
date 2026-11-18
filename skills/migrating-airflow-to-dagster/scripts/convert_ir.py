@@ -44,7 +44,7 @@ KNOWN_CTX = CONTEXT_PARAMS | {"ts_nodash", "ts_nodash_with_tz", "prev_ds", "prev
 SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "execution_date", "data_interval_start", "data_interval_end",
                  "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf"}
 JINJA_VARS = SUPPORTED_CTX | {"macros"}
-CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id"}, "dag": {"dag_id"}, "task": {"task_id"},
+CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date"}, "dag": {"dag_id"}, "task": {"task_id"},
              "ti": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"},
              "task_instance": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"}}
 SUPPORTED_MACROS = {"ds_add", "ds_format", "datetime", "timedelta"}
@@ -54,7 +54,7 @@ SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("a
     {(m, n) for m in ("airflow.exceptions", "airflow.sdk.exceptions", "airflow.sdk") for n in ("AirflowException", "AirflowSkipException", "AirflowFailException")} | \
     {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")}
 ELIDED = {"EmptyOperator", "DummyOperator"}
-PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator"}
+PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator", "_AssetMainOperator"}      # the last: an Airflow 3 @asset function
 BASH = {"BashOperator"}
 BASH_DEC = {"_BashDecoratedOperator"}
 BRANCH = {"BranchPythonOperator", "_BranchPythonDecoratedOperator"}
@@ -75,6 +75,8 @@ class Defer(Exception):
 
 
 DATASET_KEYS = "path"     # --dataset-keys path (s3://bucket/a/b -> s3/bucket/a/b) | script-orchestrator (airflow_dataset_bucket_a_b, the script_orchestrator component's naming)
+PARTITION_START = "2025-01-01"   # --partition-start: where partitioned assets begin (Airflow's partitions have no start; Dagster needs one)
+PARTITIONS: dict[str, dict] = {}   # asset key -> its time partitioning, from the partition timetables in the IR (filled by build_partition_catalog)
 AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
 MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
 RETURN_ALL = False        # set by --return-all: keep every Python return value so a parity run can compare them
@@ -461,6 +463,142 @@ HINTS: dict[str, dict[str, Any]] = {
 # --------------------------------------------------------------------------------------------------------------------
 # Per-DAG conversion
 # --------------------------------------------------------------------------------------------------------------------
+def cron_grain(expr: str) -> dict[str, Any] | None:
+    """The partition grain of a cron string (hourly, daily, weekly, monthly), or None when the cadence is not one of those."""
+    f = (expr or "").split()
+    if len(f) != 5 or f[3] != "*":
+        return None
+    minute, hour, dom, _, dow = f
+    isint = lambda x: x.isdigit()
+    if isint(minute) and hour == "*" and dom == "*" and dow == "*":
+        return {"grain": "hourly"}
+    if isint(minute) and isint(hour) and dom == "*" and dow == "*":
+        return {"grain": "daily"}
+    if isint(minute) and isint(hour) and dom == "*" and isint(dow):
+        return {"grain": "weekly", "offset": int(dow) % 7}
+    if isint(minute) and isint(hour) and isint(dom) and dow == "*":
+        return {"grain": "monthly", "offset": int(dom)}
+    return None
+
+
+GRAIN_ORDER = {"hourly": 0, "daily": 1, "weekly": 2, "monthly": 3}
+
+
+def partitions_code(info: dict[str, Any]) -> str:
+    """Dagster's own time partitions for a grain. `end_offset=1` includes the window that is running now: Airflow's run at a tick works on that tick's partition."""
+    tz, start, g = info["tz"], info["start"], info["grain"]
+    if g == "hourly" and len(start) == 10:
+        start += "-00:00"                                # Dagster's hourly partitions take a start in the hourly key format
+    cls = {"hourly": "HourlyPartitionsDefinition", "daily": "DailyPartitionsDefinition", "weekly": "WeeklyPartitionsDefinition", "monthly": "MonthlyPartitionsDefinition"}[g]
+    extra = f", day_offset={info['offset']}" if g in ("weekly", "monthly") else ""
+    return f"dg.{cls}(start_date={start!r}, timezone={tz!r}{extra}, end_offset=1)"
+
+
+def mapper_kind(m: dict[str, Any] | None) -> tuple[str, dict[str, Any]]:
+    """(class name, arguments) of a serialized Airflow partition mapper."""
+    if not m:
+        return "IdentityMapper", {}
+    return str(m.get("__type", "")).rsplit(".", 1)[-1], m.get("__var") or {}
+
+
+def same_partitions(info: dict[str, Any]) -> dict[str, Any]:
+    """The partitioning without the firing cron: producers that fire at :00, :15 and :30 of every hour have the same hourly partitions."""
+    return {k: v for k, v in info.items() if k not in ("cron", "via")}
+
+
+def mapped_partitions(up: dict[str, Any] | None, mapper: dict[str, Any] | None) -> tuple[dict[str, Any] | None, str | None]:
+    """The partitions of a downstream asset for one upstream asset and mapper: (info, None) or (None, why it is not converted)."""
+    kind, args = mapper_kind(mapper)
+    if up is None:
+        return None, "an upstream asset that is not a time-partitioned asset converted in this run"
+    up = same_partitions(up)
+    if kind == "IdentityMapper":
+        return up, None
+    if kind in ("RollupMapper", "FanOutMapper"):
+        return rollup_or_fan_out(kind, args, up)
+    coarser = {"StartOfHourMapper": "hourly", "StartOfDayMapper": "daily", "StartOfWeekMapper": "weekly", "StartOfMonthMapper": "monthly"}
+    if kind in coarser:
+        g = coarser[kind]
+        if GRAIN_ORDER[g] < GRAIN_ORDER[up["grain"]]:
+            return None, f"{kind} over {up['grain']} partitions (a finer grain than the upstream has)"
+        return ({**up, "grain": g, "offset": 1 if g in ("weekly", "monthly") else 0} if g != up["grain"] else up), None
+    return None, f"partition mapper {kind} (not converted yet)"
+
+
+KEY_FORMATS = {"hourly": "%Y-%m-%d-%H:%M", "daily": "%Y-%m-%d", "weekly": "%Y-%m-%d", "monthly": "%Y-%m-%d"}
+
+
+def rollup_or_fan_out(kind: str, args: dict[str, Any], up: dict[str, Any]) -> tuple[dict[str, Any] | None, str | None]:
+    """RollupMapper (many upstream partitions -> one run) and FanOutMapper (one upstream partition -> many runs): the downstream partitions and the
+    settings of the registry's partition_window_sensor, which does the waiting. Only time windows are converted here."""
+    wk, wa = mapper_kind(args.get("window"))
+    wt = {"DayWindow": "day", "WeekWindow": "week", "MonthWindow": "month"}.get(wk)
+    if wt is None:
+        return None, f"{kind} with {wk} (only day, week and month windows are converted)"
+    rollup = kind == "RollupMapper"
+    if rollup:
+        need, down = {"day": ("hourly", "daily"), "week": ("daily", "weekly"), "month": ("daily", "monthly")}[wt]
+    else:
+        if wt == "month":
+            return None, "FanOutMapper over a month window (the number of days varies)"
+        need, down = {"day": ("daily", "hourly"), "week": ("weekly", "daily")}[wt]
+    if up["grain"] != need:
+        return None, f"{kind} over a {wt} window needs {need} upstream partitions, not {up['grain']}"
+    via: dict[str, Any] = {"mode": "rollup" if rollup else "fan_out", "window_type": wt, "upstream_key_format": KEY_FORMATS[up["grain"]],
+                           "downstream_key_format": KEY_FORMATS[down]}
+    if rollup:
+        pk, pa = mapper_kind(args.get("wait_policy"))
+        if pk == "MinimumCount":
+            via.update(wait_policy="minimum_count", minimum_count=int(pa.get("n")))
+        elif pk in ("WaitForAll", "IdentityMapper"):
+            via.update(wait_policy="all")
+        else:
+            return None, f"RollupMapper with the wait policy {pk}"
+    else:
+        via["max_downstream_keys"] = args.get("max_downstream_keys") or {"day": 24, "week": 7}[wt]
+        via["direction"] = wa.get("direction") or "forward"
+    info = {"grain": down, "tz": up["tz"], "start": up["start"], **({"offset": 1} if down in ("weekly", "monthly") else {}), "via": via}
+    return info, None
+
+
+def build_partition_catalog(ir: dict[str, Any]) -> None:
+    """Which assets are time-partitioned: the outlets of every DAG scheduled by a CronPartitionTimetable, then the assets of partition-triggered
+    DAGs through their mappers (repeated until nothing new, so a chain of consumers resolves)."""
+    PARTITIONS.clear()
+    dags = ir["dags"]
+    for d in dags:
+        tt = d["timetable"]
+        if tt.get("kind") != "cron_partition":
+            continue
+        ser = (tt.get("partition") or {}).get("__var") or {}
+        g = cron_grain(ser.get("expression", ""))
+        if not g or ser.get("run_offset") not in (None, 0):
+            continue
+        info = {**g, "tz": ser.get("timezone") or "UTC", "start": PARTITION_START, "cron": ser.get("expression")}
+        for t in d["tasks"]:
+            for k in task_keys(d, t):
+                PARTITIONS[k] = info
+    for _ in range(4):
+        for d in dags:
+            tt = d["timetable"]
+            if tt.get("kind") != "partitioned_asset":
+                continue
+            ups = [PARTITIONS.get("/".join(key_from_asset(a))) for a in tt.get("assets") or []]
+            maps = [mapped_partitions(u, ((tt.get("partition") or {}).get("__var") or {}).get("default_partition_mapper")) for u in ups]
+            infos = [m[0] for m in maps]
+            if infos and all(i is not None for i in infos) and all(i == infos[0] for i in infos):
+                for t in d["tasks"]:
+                    for k in task_keys(d, t):
+                        PARTITIONS.setdefault(k, same_partitions(infos[0]))
+
+
+def task_keys(dag: dict[str, Any], t: dict[str, Any]) -> list[str]:
+    """The asset key(s) a task produces, as strings: its outlets, or the DAG and task name."""
+    if t.get("outlets"):
+        return ["/".join(key_from_asset(o)) for o in t["outlets"]]
+    return ["/".join([safe(dag["dag_id"])] + [safe(x) for x in t["task_id"].split(".")])]
+
+
 def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     """Dynamic task mapping as Dagster dynamic outputs: the whole DAG becomes one graph asset in which a mapped task is a mapped op
     and a task after it receives the collected list. Python and shell tasks only; `expand` with literal lists or other tasks' outputs."""
@@ -587,10 +725,33 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     tt = dag["timetable"]
     triggers: list[str] = []
     trig_mode = "eager"
+    ppart: dict[str, Any] | None = None                       # time partitions of this DAG's assets (Airflow 3.2+ partition timetables)
     if tt["kind"] in ("cron_trigger", "cron_data_interval", "manual", "once"):
         pass
-    elif tt["kind"] == "asset_triggered":
+    elif tt["kind"] == "cron_partition":
+        ser = (tt.get("partition") or {}).get("__var") or {}
+        grain = cron_grain(ser.get("expression", ""))
+        if not grain:
+            reasons.append(f"CronPartitionTimetable with the cron {ser.get('expression')!r} (only hourly, daily, weekly and monthly cadences are converted)")
+        elif ser.get("run_offset") not in (None, 0):
+            reasons.append("CronPartitionTimetable with a run_offset")
+        else:
+            ppart = {"role": "producer", "info": {**grain, "tz": ser.get("timezone") or "UTC", "start": PARTITION_START, "cron": ser["expression"]}}
+    elif tt["kind"] in ("asset_triggered", "partitioned_asset"):
         leaves, logic = tt.get("assets") or [], tt.get("asset_logic")
+        if tt["kind"] == "partitioned_asset":
+            ser = (tt.get("partition") or {}).get("__var") or {}
+            if ser.get("partition_mapper_config"):
+                reasons.append("PartitionedAssetTimetable with a mapper per asset (not converted yet)")
+            outs = [mapped_partitions(PARTITIONS.get("/".join(key_from_asset(a))), ser.get("default_partition_mapper")) for a in leaves]
+            if any(o[0] is None for o in outs):
+                reasons.extend(dict.fromkeys(o[1] for o in outs if o[0] is None))
+            elif any(same_partitions(o[0]) != same_partitions(outs[0][0]) for o in outs):
+                reasons.append("upstream assets with different partitions")
+            elif outs and outs[0][0].get("via") and len(leaves) > 1:
+                reasons.append("a rollup or fan-out over several upstream assets (the sensor watches one)")
+            elif outs:
+                ppart = {"role": "consumer", "info": same_partitions(outs[0][0]), "via": outs[0][0].get("via")}
         if not leaves:
             reasons.append("asset-triggered schedule with no assets in the IR")
         elif len(leaves) == 1 or logic == "any":
@@ -704,6 +865,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         raise Defer("; ".join(dict.fromkeys(reasons)))
     pplan = mplan if mplan and mplan["mode"] == "partitions" else None
     gplan = mplan if mplan and mplan["mode"] == "graph" else None
+    part_var = f"{safe(dag_id)}_partitions"
+    if ppart and (mplan or any(t["type"] in BRANCH | SHORT | SENSORS | TRIGGER for t in tasks.values())):
+        raise Defer("a partitioned DAG with mapped, branching, sensor or trigger steps (not converted yet)")
 
     elided = set() if gplan else ELIDED       # in the graph form an EmptyOperator stays a step: its trigger rule is what joins skipped branches
 
@@ -1055,12 +1219,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 deps.append(k)
         if deps:
             deco.append("deps=[" + ", ".join(f"dg.AssetKey({d!r})" for d in deps) + "]")
-        if triggers and trig_mode == "and" and tid in roots:
+        if ppart and ppart.get("via"):
+            pass                                              # the partition window sensor requests this asset's runs
+        elif triggers and trig_mode == "and" and tid in roots:
             deco.append("automation_condition=" + and_condition([key_from_asset(a) for a in triggers]))
         elif triggers:
             deco.append("automation_condition=dg.AutomationCondition.eager()")
         if pplan and tid in pplan["args"]:
             deco.append(f"partitions_def={safe(dag_id)}_items")
+        elif ppart:
+            deco.append(f"partitions_def={part_var}")
         if t["retries"]:
             deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)})")
         if t["pool"]:
@@ -1176,12 +1344,19 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\n" + hook_deco + "def " + fname + sig + ":\n" + body + "\n")
 
     keys = [keyparts[t["task_id"]] for t in real] + ([[safe(dag_id), "run_check"]] if graph_outs else [])
-    imports = (["import itertools"] if gplan else []) + ["import dagster as dg"] + (["from dagster_community_components import on_hooks"] if cb_code else []) + ["", "from ..runtime import *  # noqa: F401,F403"]
+    imports = (["import itertools"] if gplan else []) + ["import dagster as dg"] + (["from dagster_community_components import on_hooks"] if cb_code else []) \
+        + (["from dagster_community_components import PartitionWindowSensorComponent"] if ppart and ppart.get("via") else []) + ["", "from ..runtime import *  # noqa: F401,F403"]
     mod = [f'"""Converted from Airflow DAG `{dag_id}` ({dag["file"]}) by convert_ir.py.', "", note, '"""', *imports, ""]
     if support:
         mod += [s for s, _ in sorted(support.items(), key=lambda kv: kv[1])] + [""]
     if cb_blocks:
         mod += ["\n\n".join(cb_blocks), ""]
+    if ppart:
+        mod += [f"{part_var} = {partitions_code(ppart['info'])}", ""]
+        notes.append(f"the assets are {ppart['info']['grain']} partitions starting {ppart['info']['start']} (set with --partition-start; Airflow's partitions have no start date). "
+                     "Partition keys are Dagster's own format for the grain, not the key_format of the Airflow timetable"
+                     + ("; each tick runs the partition whose window contains the tick, as Airflow does" if ppart["role"] == "producer"
+                        else "; the assets update when an upstream partition does, for the partition the mapper names"))
     if pplan:
         pdef = (f"dg.StaticPartitionsDefinition({list(dict.fromkeys(item_key(i) for i in pplan['items']))!r})" if pplan["kind"] == "literal"
                 else f"dg.DynamicPartitionsDefinition(name={safe(dag_id) + '_items'!r})")
@@ -1204,7 +1379,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     out = "\n".join(mod) + "\n\n" + "\n\n".join(blocks) + "\n"
     mapped_keys = [keyparts[x] for x in (pplan["args"] if pplan else [])]
     job_keys = [k for k in keys if k not in mapped_keys] if pplan and pplan["kind"] == "xcom" else keys
-    pd_arg = f", partitions_def={safe(dag_id)}_items" if pplan and pplan["kind"] == "literal" else ""
+    pd_arg = (f", partitions_def={safe(dag_id)}_items" if pplan and pplan["kind"] == "literal" else (f", partitions_def={part_var}" if ppart else ""))
     out += (f"\n{safe(dag_id)}_job = dg.define_asset_job({safe(dag_id)!r}, selection=[dg.AssetKey(k) for k in {job_keys!r}]{pd_arg}"
             + (f", tags={{'airflow/dag_id': {dag_id!r}}}" if max_runs else "")
             + (f", executor_def=dg.multiprocess_executor.configured({{'max_concurrent': {max_tasks}}})" if max_tasks else "") + ")\n")
@@ -1221,6 +1396,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 f"def {safe(dag_id)}_schedule(context):\n"
                 f"    tick = context.scheduled_execution_time.isoformat()\n"
                 f"    return [dg.RunRequest(run_key=f'{{tick}}:{{k}}', partition_key=k) for k in {safe(dag_id)}_items.get_partition_keys()]\n")
+    elif ppart and ppart.get("via"):
+        v = ppart["via"]
+        up_key = "/".join(key_from_asset(triggers[0]))
+        args_s = ", ".join(f"{k}={v[k]!r}" for k in ("mode", "window_type", "upstream_key_format", "downstream_key_format", "wait_policy", "minimum_count", "max_downstream_keys", "direction") if k in v)
+        out += (f"\n{safe(dag_id)}_window_sensor = PartitionWindowSensorComponent(sensor_name={safe(dag_id) + '_window'!r}, upstream_asset_key={up_key!r}, "
+                f"job_name={safe(dag_id)!r}, {args_s}, default_status='running').build_defs(None).sensors[0]\n")
+    elif ppart and ppart["role"] == "producer":
+        out += (f"\n\n@dg.schedule(name={safe(dag_id) + '_schedule'!r}, job={safe(dag_id)}_job, cron_schedule={ppart['info']['cron']!r}, "
+                f"execution_timezone={ppart['info']['tz']!r})\n"
+                f"def {safe(dag_id)}_schedule(context):\n"
+                f"    return dg.RunRequest(partition_key={part_var}.get_partition_key_for_timestamp(context.scheduled_execution_time.timestamp()))\n")
     elif tt["kind"] in ("cron_trigger", "cron_data_interval") and uses_ctx:
         sem = "data_interval" if tt["kind"] == "cron_data_interval" else "trigger"
         out += (f"\n{safe(dag_id)}_schedule = airflow_schedule({safe(dag_id) + '_schedule'!r}, {safe(dag_id)}_job, "
@@ -1233,8 +1419,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
-                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
-                 "uses_context": uses_ctx, "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
+                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "uses_context": uses_ctx, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
 
@@ -1347,11 +1533,19 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
     conf = json.loads(tags.get("airflow/conf", "{}"))
     run_id = run.run_id if run is not None else context.run_id        # context.run_id is deprecated in current Dagster
     ti = _TaskInstance(dag_id, task_id, run_id, getattr(context, "retry_number", 0) + 1, upstream, context, keys)
+    pkey = pdate = None                                  # the Dagster partition of this run (the key is Dagster's format, the date the window start)
+    try:
+        if context.has_partition_key:
+            pkey = context.partition_key
+            pdate = context.partition_time_window.start
+    except Exception:                                    # noqa: BLE001
+        pass
     return {"ds": ds, "ds_nodash": ds.replace("-", ""), "ts": ld.isoformat(), "ts_nodash": ld.strftime("%Y%m%dT%H%M%S"),
             "logical_date": ld, "execution_date": ld, "data_interval_start": ld, "data_interval_end": de,
             "run_id": run_id, "params": dict(params or {}), "conf": conf,
             "dag": types.SimpleNamespace(dag_id=dag_id), "task": types.SimpleNamespace(task_id=task_id), "ti": ti, "task_instance": ti,
-            "dag_run": types.SimpleNamespace(run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id)}
+            "dag_run": types.SimpleNamespace(run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
+            "partition_key": pkey}
 
 
 def call_with_context(fn, args, kwargs, ctx):
@@ -1964,6 +2158,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--dataset-keys", choices=["path", "script-orchestrator"], default="path",
                     help="how Airflow Dataset/Asset names become Dagster asset keys: path parts (s3/bucket/a/b), or the flat airflow_dataset_<name> keys "
                          "the script_orchestrator component uses, so both tools produce the same lineage")
+    ap.add_argument("--partition-start", default="2025-01-01", help="where time-partitioned assets begin (Airflow's partitions have no start date)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
     global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS
@@ -1971,6 +2166,9 @@ def main(argv: list[str] | None = None) -> int:
     MAP_MODE = a.mapping
     DATASET_KEYS = a.dataset_keys
     ir = json.loads(a.ir.read_text())
+    PARTITION_START_SET = a.partition_start
+    globals()["PARTITION_START"] = PARTITION_START_SET
+    build_partition_catalog(ir)
     _m = re.match(r"(\d+)", str(ir.get("airflow_version") or ""))
     AF_MAJOR = int(_m.group(1)) if _m else 2
     a.out_dir.mkdir(parents=True, exist_ok=True)

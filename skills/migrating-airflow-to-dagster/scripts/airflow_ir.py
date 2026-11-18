@@ -113,6 +113,13 @@ def _timetable(dag: Any) -> dict[str, Any]:
         out["kind"] = "delta"
     else:
         out["kind"] = "other"
+    if cls in ("CronPartitionTimetable", "PartitionedAssetTimetable", "PartitionedAtRuntime"):       # Airflow 3.2+: partitioned runs
+        try:
+            from airflow.serialization.encoders import encode_timetable      # Airflow's own structured form of the timetable and its mappers
+            out["partition"] = json.loads(json.dumps(encode_timetable(tt), default=str))
+        except Exception as e:  # noqa: BLE001
+            out["partition_error"] = repr(e)[:200]
+        out["kind"] = {"CronPartitionTimetable": "cron_partition", "PartitionedAssetTimetable": "partitioned_asset", "PartitionedAtRuntime": "partitioned_at_runtime"}[cls]
     return out
 
 
