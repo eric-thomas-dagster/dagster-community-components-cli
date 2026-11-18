@@ -703,6 +703,22 @@ def test_components_output_writes_yaml_for_dags_whose_tasks_all_have_components(
     assert text.count("ShellCommandAssetComponent") == 2 and '"deps": ["d1__a"]' not in text and 'deps: ["d1__a"]' in text and "retry_policy_max_retries: 2" in text
 
 
+def test_runtime_partitioned_producer_and_identity_consumer(tmp_path):
+    prod = dag([task("ingest", "BashOperator", template_fields={"bash_command": "true"}, outlets=["s3://b/regional"])], kind="partitioned_at_runtime")
+    prod["dag_id"] = "p"
+    cons = dag([task("use", "BashOperator", template_fields={"bash_command": "true"})], kind="partitioned_asset", assets=["s3://b/regional"], asset_logic="single",
+               partition={"__var": {"default_partition_mapper": {"__type": "x.IdentityMapper", "__var": {}}, "partition_mapper_config": []}})
+    cons["dag_id"] = "c"
+    ir = {"airflow_version": "x", "dags": [prod, cons]}
+    C.build_partition_catalog(ir)
+    code_p, sum_p = C.convert_dag(prod, "n", {})
+    code_c, sum_c = C.convert_dag(cons, "n", {})
+    assert "dg.AssetSpec(key=['s3', 'b', 'regional'], partitions_def=dg.DynamicPartitionsDefinition(name='s3_b_regional')" in code_p
+    assert sum_p["keys"] == [["p", "ingest"]] and sum_p["catalog_keys"] == [["s3", "b", "regional"]] and "af_runtime_partition_tag" in code_p
+    assert "DynamicPartitionsDefinition(name='s3_b_regional')" in code_c and "partitions_def=c_partitions" in code_c and "eager()" in code_c
+    C.RUNTIME_PARTS.clear()
+
+
 def test_xcom_push_becomes_materialization_metadata_and_a_keyed_pull_reads_it(tmp_path):
     dg = pytest.importorskip("dagster")
     a = task("a", "PythonOperator", callable=fn("pusher"), op_args=[], op_kwargs={})

@@ -2,7 +2,7 @@
 
 The converter turns existing orchestrator DAGs into Dagster definitions. It owns the translation: it reads the DAG, works out what each part does, and writes generated code. This file lists what the components could still do for it, in Dagster terms. None of it is specific to one orchestrator.
 
-Measured on 292 DAGs from 14 public example repos: 279 convert and 13 are deferred (11 of those are the runtime-partitioned timetables above). About 220 of the 279 convert with nothing stubbed; 59 contain at least one stubbed task. The corpus is mostly teaching examples, so use the ranking, not the percentages.
+Measured on 292 DAGs from 14 public example repos: 284 convert and 8 are deferred (5 of those are runtime-partition mappings). About 225 of the 284 convert with nothing stubbed; about 60 contain at least one stubbed task. The corpus is mostly teaching examples, so use the ranking, not the percentages.
 
 ## What the converter does not need from you
 
@@ -14,8 +14,8 @@ Everything the earlier version of this file asked for now exists. What remains i
 
 | Capability | Component | Converter status |
 |---|---|---|
-| Asset whose partition key is chosen while it runs | `runtime_partition_asset` (`key_source`: `callable_return`, `run_tag`, `run_config`) | Not wired yet: 12 DAGs from one Airflow 3.3 example file. The converter will generate the same two-asset shape (an unpartitioned executing step plus a dynamically partitioned catalog asset) and map consumers with `partition_window_sensor` |
-| Repeat a step until a condition | `loop_gate_asset` | Not wired yet: needs the extractor to read task-group loops (`max_iterations`, the `until` callable); Airflow 3.4 only, 4 DAGs |
+| Asset whose partition key is chosen while it runs | `runtime_partition_asset` | The converter generates the same two-asset shape itself (the step is one asset, the dynamically partitioned catalog asset is an `AssetSpec` that receives `report_runless_asset_event` per key) and verified it with real Dagster runs: composite keys added with `add_partitions`, and a key taken from a run tag. Consumers with the identity mapping convert (eager automation on the same dynamic partition set). Rollup, fan-out, product and allowed-key mappings are not converted yet (5 DAGs) |
+| Repeat a step until a condition | `loop_gate_asset` | Not wired: the extractor would need to read task-group loops. **Check the component against Airflow 3.4 before relying on it:** its README says `loop.index` is 0-based and `loop.previous` is a list of every prior result, but Airflow's own example DAG (`example_task_loops.py`) treats `loop.index == 1` as the first iteration and `loop.previous` as the previous iteration's single result (`loop.previous["estimate"]`), and the execution API requires `index >= 1`. Also, an Airflow loop repeats a whole task group, not one callable |
 | S3 create object | `s3_create_object_asset` | The converter translates `S3CreateObjectOperator` itself (text or bytes, `replace`); compression, encryption and ACLs are stubbed |
 | Read a non-direct upstream value by name | `get_upstream_value` | Does not fit graph-form DAGs: their values are op outputs and the assets are only materialized when the graph ends. Those pulls stay stubbed |
 | Fire and forget launch, SLA from the scheduled tick | `trigger_job_asset` `wait: false`, `sla_asset` `start_from` | The converter has its own implementation in the generated runtime; it can emit the components instead |

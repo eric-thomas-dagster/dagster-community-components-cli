@@ -306,6 +306,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "callbacks": [a for a in ("on_failure_callback", "on_success_callback", "on_retry_callback", "on_skipped_callback", "on_execute_callback")
                       if getattr(task, a, None)] + _overridden_hooks(task),
         "outlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "outlets", None) or [])],
+        "outlet_assets": [{"uri": str(getattr(o, "uri", None) or ""), "name": str(getattr(o, "name", None) or "")} for o in (getattr(task, "outlets", None) or []) if getattr(o, "uri", None) and getattr(o, "name", None)],
         "inlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "inlets", None) or [])],
         "template_fields": {},
     }

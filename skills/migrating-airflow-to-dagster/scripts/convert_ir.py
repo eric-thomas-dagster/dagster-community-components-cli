@@ -91,6 +91,8 @@ TASK_TYPES: dict[tuple[str, str], str] = {}
 PARTITION_START = "2025-01-01"   # --partition-start: where partitioned assets begin (Airflow's partitions have no start; Dagster needs one)
 TASK_KEYS: dict[tuple[str, str], list[str]] = {}    # (dag id, task id) -> the asset key of that task, for dependencies between DAGs (ExternalTaskSensor)
 DAG_LEAVES: dict[str, list[list[str]]] = {}          # dag id -> the asset keys of its last tasks
+ASSET_NAMES: dict[str, str] = {}      # an Airflow asset name -> its URI, so a reference by name (Asset.ref(name=...)) gets the same key as the producer's outlet
+RUNTIME_PARTS: dict[str, str] = {}   # asset key -> dynamic partitions name, for assets whose producer chooses the partition key while it runs (PartitionedAtRuntime)
 PARTITIONS: dict[str, dict] = {}   # asset key -> its time partitioning, from the partition timetables in the IR (filled by build_partition_catalog)
 AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
 MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
@@ -108,6 +110,7 @@ def key_from_asset(ref: str) -> list[str]:
     A reference of the form `keyparts:a|b` is an asset key given directly (a task of another DAG)."""
     if ref.startswith("keyparts:"):
         return ref[len("keyparts:"):].split("|")
+    ref = ASSET_NAMES.get(ref, ref)
     if DATASET_KEYS == "script-orchestrator":
         cleaned = re.sub(r"^[a-z]+://", "", ref)
         cleaned = re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9_]", "_", cleaned)).strip("_")
@@ -697,6 +700,8 @@ GRAIN_ORDER = {"hourly": 0, "daily": 1, "weekly": 2, "monthly": 3}
 
 def partitions_code(info: dict[str, Any]) -> str:
     """Dagster's own time partitions for a grain. `end_offset=1` includes the window that is running now: Airflow's run at a tick works on that tick's partition."""
+    if info.get("dynamic"):
+        return f"dg.DynamicPartitionsDefinition(name={info['dynamic']!r})"
     tz, start, g = info["tz"], info["start"], info["grain"]
     if g == "hourly" and len(start) == 10:
         start += "-00:00"                                # Dagster's hourly partitions take a start in the hourly key format
@@ -821,7 +826,19 @@ def build_partition_catalog(ir: dict[str, Any]) -> None:
     """Which assets are time-partitioned: the outlets of every DAG scheduled by a CronPartitionTimetable, then the assets of partition-triggered
     DAGs through their mappers (repeated until nothing new, so a chain of consumers resolves)."""
     PARTITIONS.clear()
+    RUNTIME_PARTS.clear()
+    ASSET_NAMES.clear()
     dags = ir["dags"]
+    for d in dags:
+        for t in d["tasks"]:
+            for o in t.get("outlet_assets") or []:
+                if o["name"] != o["uri"]:
+                    ASSET_NAMES[o["name"]] = o["uri"]
+    for d in dags:
+        if d["timetable"].get("kind") == "partitioned_at_runtime":
+            for t in d["tasks"]:
+                for o in t.get("outlets") or []:
+                    RUNTIME_PARTS["/".join(key_from_asset(o))] = "_".join(key_from_asset(o))
     for d in dags:
         tt = d["timetable"]
         if tt.get("kind") != "cron_partition":
@@ -1223,6 +1240,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         else:
             reasons.append(f"schedule type {tt['class']} ({why})")
     triggers: list[str] = []
+    rt_producer = False                                       # a PartitionedAtRuntime DAG: its outlets are dynamically partitioned assets
     trig_mode = "eager"
     trig_tree: Any = None
     ppart: dict[str, Any] | None = None                       # time partitions of this DAG's assets (Airflow 3.2+ partition timetables)
@@ -1244,7 +1262,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if ser.get("partition_mapper_config"):
                 reasons.append("PartitionedAssetTimetable with a mapper per asset (not converted yet)")
             outs = [mapped_partitions(PARTITIONS.get("/".join(key_from_asset(a))), ser.get("default_partition_mapper")) for a in leaves]
-            if any(o[0] is None for o in outs):
+            rt_names = {RUNTIME_PARTS.get("/".join(key_from_asset(a))) for a in leaves}
+            if leaves and None not in rt_names and len(rt_names) == 1:           # the upstream's partition keys are chosen at run time
+                if mapper_kind(ser.get("default_partition_mapper"))[0] != "IdentityMapper":
+                    reasons.append(f"a runtime-partitioned upstream with the {mapper_kind(ser.get('default_partition_mapper'))[0]} (only the identity mapping is converted)")
+                else:
+                    ppart = {"role": "consumer", "info": {"dynamic": next(iter(rt_names)), "grain": "dynamic", "start": "", "tz": "UTC"}, "via": None}
+            elif any(o[0] is None for o in outs):
                 reasons.extend(dict.fromkeys(o[1] for o in outs if o[0] is None))
             elif any(same_partitions(o[0]) != same_partitions(outs[0][0]) for o in outs):
                 reasons.append("upstream assets with different partitions")
@@ -1265,6 +1289,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             triggers, trig_mode, trig_tree = list(leaves), "tree", tt["asset_tree"]     # nested AND/OR: written as the same combination of conditions
         else:
             reasons.append(f"schedule mixes AND and OR over {len(leaves)} assets")
+    elif tt["kind"] == "partitioned_at_runtime":
+        tt = {**tt, "kind": "manual", "cron": None}                  # launched on demand: the key comes from the launch or from the task
+        rt_producer = True
     elif tt["class"] == "ContinuousTimetable" and CAVEATS != "off":
         tt = {**tt, "kind": "cron_trigger", "cron": "* * * * *"}
         caveats.append({"task": "", "kind": "degraded", "reason": "ContinuousTimetable (a new run as soon as the last finishes) became a schedule every minute; limit it to one run at a time with a run-queue tag limit"})
@@ -1433,8 +1460,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         return False
 
     keyparts: dict[str, list[str]] = {}
+    rt_outlets: dict[str, list[str]] = {}                    # task -> the key of the dynamically partitioned asset it records partitions of
     for t in real:
         keyparts[t["task_id"]] = key_from_asset(t["outlets"][0]) if t["outlets"] else [safe(dag_id)] + [safe(p) for p in t["task_id"].split(".")]
+        if rt_producer and t["outlets"] and "/".join(keyparts[t["task_id"]]) in RUNTIME_PARTS:     # the step is its own asset; the partitioned asset it feeds is separate
+            rt_outlets[t["task_id"]] = keyparts[t["task_id"]]
+            keyparts[t["task_id"]] = [safe(dag_id)] + [safe(p) for p in t["task_id"].split(".")]
         k = "/".join(keyparts[t["task_id"]])
         if k in produced and produced[k] != dag_id:
             if CAVEATS == "off":
@@ -2054,6 +2085,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             pre = pre + adapters
             hook_deco = "@on_hooks(" + ", ".join(kw) + ")\n"
         body = sla_wrap(body, t, "/".join(keyparts[tid]))
+        if tid in rt_outlets:
+            inner_ = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
+            body = f"    def _run():\n{inner_}\n    _result = _run()\n    af_runtime_partition_tag(context, {rt_outlets[tid]!r})\n    return _result"
         blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\n" + hook_deco + "def " + fname + sig + ":\n" + body + "\n")
 
     keys = [keyparts[t["task_id"]] for t in real] + ([[safe(dag_id), "run_check"]] if graph_outs else [])
@@ -2068,10 +2102,19 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         mod += ["\n\n".join(cb_blocks), ""]
     if ppart:
         mod += [f"{part_var} = {partitions_code(ppart['info'])}", ""]
-        notes.append(f"the assets are {ppart['info']['grain']} partitions starting {ppart['info']['start']} (set with --partition-start; Airflow's partitions have no start date). "
+        if ppart["info"].get("dynamic"):
+            notes.append(f"the assets are partitioned by the dynamic partition set {ppart['info']['dynamic']!r}, whose keys the upstream producer registers while it runs; "
+                         "the assets update for each key the upstream records (Airflow's identity partition mapping)")
+        else:
+          notes.append(f"the assets are {ppart['info']['grain']} partitions starting {ppart['info']['start']} (set with --partition-start; Airflow's partitions have no start date). "
                      "Partition keys are Dagster's own format for the grain, not the key_format of the Airflow timetable"
                      + ("; each tick runs the partition whose window contains the tick, as Airflow does" if ppart["role"] == "producer"
                         else "; the assets update when an upstream partition does, for the partition the mapper names"))
+    for tid_, okey in rt_outlets.items():
+        mod += [f"{safe(tid_)}_runtime_asset = dg.AssetSpec(key={okey!r}, partitions_def=dg.DynamicPartitionsDefinition(name={RUNTIME_PARTS['/'.join(okey)]!r}), "
+                f"group_name={safe(dag_id)!r}, description='Partitioned by keys the step {tid_} records while it runs', metadata={{'airflow_dag': {dag_id!r}}})", ""]
+        notes.append(f"{tid_} records the partition keys of {'/'.join(okey)} while it runs (the key comes from `outlet_events[...].add_partitions` or, when the run is launched "
+                     "with the tag `airflow/partition_key`, from that tag): the step is the asset " + "/".join(keyparts[tid_]) + ", the partitioned asset is reported separately")
     if pplan:
         pdef = (f"dg.StaticPartitionsDefinition({list(dict.fromkeys(item_key(i) for i in pplan['items']))!r})" if pplan["kind"] == "literal"
                 else f"dg.DynamicPartitionsDefinition(name={safe(dag_id) + '_items'!r})")
@@ -2134,7 +2177,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         produced[k] = dag_id
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
-                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
+                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "catalog_keys": [list(v) for v in rt_outlets.values()], "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
                  "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
@@ -2271,6 +2314,8 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
             pdate = context.partition_time_window.start
     except Exception:                                    # noqa: BLE001
         pass
+    if pkey is None:
+        pkey = tags.get("airflow/partition_key")           # a run launched for a partition key the producer records itself
     return {"ds": ds, "ds_nodash": ds.replace("-", ""), "ts": ld.isoformat(), "ts_nodash": ld.strftime("%Y%m%dT%H%M%S"),
             "logical_date": _iso(ld), "execution_date": _iso(ld), "data_interval_start": _iso(ld), "data_interval_end": _iso(de),
             "run_id": run_id, "params": dict(params or {}), "conf": conf,
@@ -3102,7 +3147,11 @@ class Metadata:
 
 class _OutletEvent:
     def __init__(self):
-        self.extra, self.added = {}, []
+        self.extra, self.added, self.partitions = {}, [], []
+
+    def add_partitions(self, keys):
+        """PartitionedAtRuntime: the partition key(s) of this asset that this run produced."""
+        self.partitions += [keys] if isinstance(keys, str) else list(keys)
 
     def add(self, asset, extra=None):
         self.added.append((asset, dict(extra or {})))
@@ -3137,8 +3186,25 @@ class _OutletEvents:
                     self._ctx.add_output_metadata(meta)
                 else:
                     self._ctx.log_event(dg.AssetMaterialization(asset_key=dg.AssetKey(list(key)), metadata=meta))
+            for pk in dict.fromkeys(ev.partitions):            # duplicate keys collapse to one event, as in Airflow
+                af_report_partition(self._ctx, key, pk, {k: _meta_value(v) for k, v in ev.extra.items()})
             for added, extra in ev.added:                      # an alias resolved at run time: the asset it names is materialized
                 self._ctx.log_event(dg.AssetMaterialization(asset_key=dg.AssetKey(asset_key_of(added.ref)), metadata={k: _meta_value(v) for k, v in extra.items()}))
+
+
+def af_report_partition(context, key, partition, metadata=None):
+    """Record a partition of a dynamically partitioned asset that a run chose while it ran: register the key, then report the materialization for it."""
+    name = "_".join(key)
+    if not context.instance.has_dynamic_partition(name, partition):
+        context.instance.add_dynamic_partitions(name, [partition])
+    context.instance.report_runless_asset_event(dg.AssetMaterialization(asset_key=dg.AssetKey(list(key)), partition=partition, metadata=metadata or None))
+
+
+def af_runtime_partition_tag(context, key):
+    """A run launched for one partition key (the run tag `airflow/partition_key`): that key is recorded for the asset when the step succeeds."""
+    tag = context.run.tags.get("airflow/partition_key")
+    if tag:
+        af_report_partition(context, key, tag)
 
 
 class _InletEvent:
@@ -3295,7 +3361,7 @@ def main(argv: list[str] | None = None) -> int:
             report["dags"][dag["dag_id"]] = {"status": "deferred", "reason": f"generated code did not compile: {e.msg}"}
         except Exception as e:                       # a converter bug must show up as a named deferral, never a crash or a silent skip
             report["dags"][dag["dag_id"]] = {"status": "deferred", "reason": f"CONVERTER ERROR {type(e).__name__}: {e}"}
-    owned = {"/".join(k) for v in report["dags"].values() if v["status"] == "converted" for k in v["keys"]}
+    owned = {"/".join(k) for v in report["dags"].values() if v["status"] == "converted" for k in [*v["keys"], *v.get("catalog_keys", [])]}
     ext = sorted(e for e in external if e not in owned)
     if resources or sf_resources:
         lines = ['"""Airflow connections become resources under the same key (credentials from the environment)."""',
