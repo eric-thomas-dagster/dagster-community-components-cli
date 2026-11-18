@@ -113,10 +113,11 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d["tasks"][0].update(callbacks=["pre_execute"]), "task callbacks or hooks"),
     (lambda d: d.update(dag_settings={"fail_stop": True}), "fail_stop=True"),
     (lambda d: d.update(dag_settings={"max_active_runs": True}), "max_active_runs=True"),
-    (lambda d: d.update(dag_settings={"max_active_tasks": 3}), "max_active_tasks=3"),
+    (lambda d: d.update(dag_settings={"max_active_tasks": 0.5}), "max_active_tasks"),
     (lambda d: d.update(dag_settings={"dagrun_timeout": {"seconds": 60.0}}), "dagrun_timeout"),
     (lambda d: d["tasks"][0].update(retry_exponential_backoff=True), "retry_exponential_backoff"),
-    (lambda d: d["tasks"][0].update(max_active_tis_per_dag=1), "max_active_tis_per_dag"),
+    (lambda d: d["tasks"][0].update(max_active_tis_per_dag=1, pool="p"), "together with a named pool"),
+    (lambda d: d["tasks"][0].update(max_active_tis_per_dagrun=1), "max_active_tis_per_dagrun"),
     (lambda d: d["tasks"][0].update(type="PythonOperator", template_fields={"templates_dict": {"a": "{{ ds }}"}}), "templates_dict"),
     (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ macros.ds_format_locale(ds, 'a', 'b', 'c') }}"}), "macros"),
     (lambda d: d["tasks"][0].update(type="PythonOperator", execution_timeout_s=30.0), "execution_timeout on a non-shell task"),
@@ -133,6 +134,14 @@ def test_max_active_runs_is_a_job_tag_and_reported_for_the_deployment_limit():
     d["dag_settings"] = {"max_active_runs": 1}
     code, summary = convert(d)
     assert "tags={'airflow/dag_id': 'd1'}" in code and summary["max_active_runs"] == 1
+
+
+def test_task_and_dag_concurrency_map_to_a_pool_and_an_executor_limit():
+    d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"}, max_active_tis_per_dag=2)])
+    d["dag_settings"] = {"max_active_tasks": 3}
+    code, summary = convert(d)
+    assert "pool='d1__t'" in code and summary["pools"] == {"d1__t": 2}
+    assert "multiprocess_executor.configured({'max_concurrent': 3})" in code and summary["max_active_tasks"] == 3
 
 
 def test_one_producer_per_asset_across_dags():

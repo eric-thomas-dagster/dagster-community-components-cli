@@ -442,8 +442,14 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         reasons.append("fail_stop=True (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish)")
     max_runs = ds.get("max_active_runs")
     max_runs = max_runs if isinstance(max_runs, int) and not isinstance(max_runs, bool) and max_runs > 0 and max_runs != 16 else None
+    def _pos(v):
+        return v if isinstance(v, int) and not isinstance(v, bool) and v > 0 else None
+    max_tasks = _pos(ds.get("max_active_tasks")) if ds.get("max_active_tasks") != 16 else None
+    pool_limits: dict[str, int | None] = {}                    # pool name -> limit (None: take it from the Airflow pool's slot count)
     for k, default in (("max_active_tasks", 16), ("max_active_runs", 16), ("concurrency", 16)):
         v = ds.get(k)
+        if k == "max_active_tasks" and max_tasks is not None:
+            continue                                          # mapped below: a per-run executor limit
         if k == "max_active_runs" and max_runs is not None:
             continue                                          # mapped below: a run tag plus a deployment concurrency limit
         if v not in (None, default, 0) and not (isinstance(v, dict)):
@@ -469,9 +475,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                           ("retry_exponential_backoff", "retry_exponential_backoff"), ("sla_s", "an SLA")):
             if t.get(flag):
                 reasons.append(f"{tid}: {why}")
-        for flag in ("max_active_tis_per_dag", "max_active_tis_per_dagrun"):
-            if t.get(flag):
-                reasons.append(f"{tid}: {flag}")
+        if t.get("max_active_tis_per_dagrun"):
+            reasons.append(f"{tid}: max_active_tis_per_dagrun")
+        mtis = t.get("max_active_tis_per_dag")
+        if mtis:
+            if _pos(mtis) is None or t.get("pool"):
+                reasons.append(f"{tid}: max_active_tis_per_dag={mtis}" + (" together with a named pool" if t.get("pool") else ""))
+            else:
+                pool_limits[f"{safe(dag_id)}__{safe(tid)}"] = mtis   # a Dagster pool of that size, shared by every run
+        if t.get("pool"):
+            pool_limits.setdefault(t["pool"], None)
         if t.get("pool_slots") not in (None, 1):
             reasons.append(f"{tid}: pool_slots={t['pool_slots']}")
         cbs = [c for c in (t.get("callbacks") or []) if not (t["is_mapped"] and c in ("pre_execute", "post_execute"))]   # a mapped wrapper overrides them; mapping already defers
@@ -613,6 +626,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)})")
         if t["pool"]:
             deco.append(f"pool={t['pool']!r}")
+        elif t.get("max_active_tis_per_dag") and f"{safe(dag_id)}__{safe(tid)}" in pool_limits:
+            deco.append(f"pool={safe(dag_id) + '__' + safe(tid)!r}")
         deco.append(f"metadata={{'airflow_dag': {dag_id!r}, 'airflow_task': {tid!r}, 'airflow_operator': {t['type']!r}}}")
         fname = safe("t_" + tid)
         ty = t["type"]
@@ -678,7 +693,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         mod[1:1] = ["", *[f"NOTE: {n}" for n in notes]]
     out = "\n".join(mod) + "\n\n" + "\n\n".join(blocks) + "\n"
     out += (f"\n{safe(dag_id)}_job = dg.define_asset_job({safe(dag_id)!r}, selection=[dg.AssetKey(k) for k in {keys!r}]"
-            + (f", tags={{'airflow/dag_id': {dag_id!r}}}" if max_runs else "") + ")\n")
+            + (f", tags={{'airflow/dag_id': {dag_id!r}}}" if max_runs else "")
+            + (f", executor_def=dg.multiprocess_executor.configured({{'max_concurrent': {max_tasks}}})" if max_tasks else "") + ")\n")
     if tt["kind"] in ("cron_trigger", "cron_data_interval") and uses_ctx:
         sem = "data_interval" if tt["kind"] == "cron_data_interval" else "trigger"
         out += (f"\n{safe(dag_id)}_schedule = airflow_schedule({safe(dag_id) + '_schedule'!r}, {safe(dag_id)}_job, "
@@ -691,7 +707,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "requirements": sorted(third_party(support) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
-                 "uses_context": uses_ctx, "max_active_runs": max_runs,
+                 "uses_context": uses_ctx, "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
 
 
@@ -1073,12 +1089,20 @@ def main(argv: list[str] | None = None) -> int:
             '"""Assets that converted DAGs read or are triggered by but that no converted DAG produces."""\n'
             "import dagster as dg\n\n\n@dg.definitions\ndef sources() -> dg.Definitions:\n    return dg.Definitions(assets=[\n" +
             "".join(f"        dg.AssetSpec(key={e.split('/')!r}),\n" for e in ext) + "    ])\n")
-    limits = {k: v["max_active_runs"] for k, v in report["dags"].items() if v["status"] == "converted" and v.get("max_active_runs")}
-    if limits:
-        (a.out_dir.parent / "concurrency_limits.yaml").write_text(
-            "# Airflow max_active_runs, as run-queue tag limits. Merge into the deployment's run coordinator settings\n"
-            "# (dagster.yaml run_coordinator.config, or the Dagster+ deployment settings); without it the limit is NOT enforced.\n"
-            "tag_concurrency_limits:\n" + "".join(f"  - key: airflow/dag_id\n    value: {k!r}\n    limit: {n}\n" for k, n in sorted(limits.items())))
+    conv = {k: v for k, v in report["dags"].items() if v["status"] == "converted"}
+    limits = {k: v["max_active_runs"] for k, v in conv.items() if v.get("max_active_runs")}
+    pools: dict[str, int | None] = {}
+    for v in conv.values():
+        pools.update(v.get("pools") or {})
+    if limits or pools:
+        text = ("# Concurrency settings from the Airflow DAGs. They are enforced only when applied to the deployment.\n"
+                "# 1) max_active_runs -> run queue tag limits: merge into run_coordinator.config in dagster.yaml (or the Dagster+ deployment settings).\n"
+                "tag_concurrency_limits:\n" + "".join(f"  - key: airflow/dag_id\n    value: {k!r}\n    limit: {n}\n" for k, n in sorted(limits.items())) +
+                "# 2) pools (Airflow pools and max_active_tis_per_dag) -> Dagster pools, shared by every run. Apply each with:\n"
+                "#      dagster instance concurrency set <pool> <limit>      (or in the Dagster+ deployment settings)\n"
+                "pools:\n" + "".join(f"  {k}: {n if n is not None else 'null  # set to the slot count of this Airflow pool (it lives in the Airflow metadata database)'}\n"
+                                       for k, n in sorted(pools.items())))
+        (a.out_dir.parent / "concurrency_limits.yaml").write_text(text)
     reqs = sorted({r for v in report["dags"].values() if v["status"] == "converted" for r in v["requirements"]})
     if reqs:
         (a.out_dir.parent / "converted_requirements.txt").write_text("\n".join(reqs) + "\n")

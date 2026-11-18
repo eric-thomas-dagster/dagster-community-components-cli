@@ -1,56 +1,56 @@
-# Handoff to the components session: what the Airflow converter still needs
+# What the components need to do (handoff to the components session)
 
-The Airflow-to-Dagster converter rewrites Airflow DAGs into Dagster-native definitions. It should emit your general components, not Airflow look-alikes, so nothing here asks for Airflow clones. Where behavior differs from Airflow, the converter records the difference in its report.
+The converter turns existing orchestrator DAGs into Dagster definitions built from your components. It owns the translation (it reads the DAG, works out what each part is doing, and writes the component configuration). The components only need the capabilities below. None of them is specific to any orchestrator; each is a general Dagster capability that the converter happens to need.
 
-Measured on 292 DAGs from 14 public Airflow example repos. The converter maps 80 mechanically. "Blocked" counts DAGs with that blocker; "alone" counts DAGs whose only blocker it is (what one change unlocks by itself). The corpus is heavy on teaching repos, so use the ranking, not the percentages.
+Measured on 292 DAGs from 14 public example repos; the converter maps 80 today. "Blocked" is the number of DAGs held back by that capability; "alone" is the number held back by it and nothing else. The corpus is heavy on teaching repos, so use the ranking, not the percentages.
 
-## Already done, per the components session (the converter has not run these yet)
+Already built, per the components session (the converter has not used these yet, and I will test each before relying on it): the Python callable, conditional, trigger-job, Pipes-Python and setup/teardown components, the schedule component, six S3 and Snowflake components, static partitions, and storage discovery through the `*_monitor` components.
 
-`python_callable_asset`, `conditional_asset`, `trigger_job_asset`, `pipes_python_asset`, `scoped_setup_teardown`, the schedule component (`CronScheduleComponent`), six S3 and Snowflake mirror components, the S3 and Snowflake resource attributes, `s3_cleanup_job` key list, static partitions everywhere, and storage discovery through `s3_monitor`, `gcs_monitor`, `adls_monitor` and `filesystem_monitor`. I will run each against its Airflow counterpart and report anything that does not behave as expected.
+## 1. Discover items, then run once per item (blocked 31, alone 24)
 
-## Requests, in priority order
+Many pipelines process "whatever exists today": files under a prefix, rows in a table, ids from an API. In Dagster that is dynamic partitions plus one run per item.
+- A component that calls a user function returning a list of items, registers each new item as a dynamic partition, and requests one run per item with a key that makes the request idempotent. Same shape as `s3_monitor`, with the listing replaced by a function. Include pruning of old partitions.
+- `sql_monitor` should be able to do the same: register a dynamic partition per new row, with the partition key taken from a named column.
+- Test: run twice with an overlapping list; only the new items get partitions and runs.
 
-### 1. Dynamic partition discovery from a callable, and from SQL (unlocks up to 24 DAGs alone)
+Converter: finds the loop or mapping over a listing, identifies the source (literal list, storage prefix, query, function), and emits the matching component. A mapping over a value with no listable source stays unconverted, with the reason.
 
-Dynamic task mapping (`.expand`) is the largest blocker (31 DAGs, 24 alone).
-- **New:** a component that calls a user function returning a list of items, registers each new item as a dynamic partition (`add_dynamic_partitions`), and requests one run per item with a content-keyed `run_key`. Same shape as `s3_monitor`, with the listing replaced by a callable. Include `keep_days` pruning.
-- **Enhance `sql_monitor`:** it runs once per new row but does not register dynamic partitions. Add an option to do so, with the partition key taken from a named column.
-- Acceptance: a test that runs the component twice with an overlapping item list and shows only the new items get runs and partitions.
+## 2. "Run when all of these have updated" (blocked 29, alone 2; it removes a blocker in many other DAGs)
 
-### 2. Trigger rules (29 DAGs blocked, 2 alone, but it removes a blocker in many others)
+`automation_condition_applicator` has four presets. Add one for "every listed upstream asset has updated since this asset last ran", built as an AND of per-asset `asset_matches(...newly_updated()).since_last_handled()` terms (a single `since_last_handled` over an AND gave wrong results in my tests). Test with `dg.evaluate_automation_conditions`: it must not fire when only one of two upstreams has updated.
 
-`automation_condition_applicator` has four of five presets. Add `all_of_updated_since_last_run`: every listed upstream updated since the downstream last ran, written as the per-asset `asset_matches(...newly_updated()).since_last_handled()` AND, not a single `since_last_handled` over an AND (that form was wrong in my tests). A test with `dg.evaluate_automation_conditions` should show it does not fire when only one of two upstreams updated.
+Converter: a task that waits for several upstreams, or a pipeline triggered by several assets.
 
-### 3. Dates for scheduled, un-partitioned DAGs (needed by every converted DAG that uses `ds` or `logical_date`)
+## 3. Code that needs to know the run's date (needed by every converted pipeline that uses dates)
 
-Decision: a scheduled DAG with no natural time partition keeps a regular schedule and regular assets; no partitions are added.
-- `CronScheduleComponent` with `add_logical_date_tag: true` already tags each run `logical_date` (un-partitioned: the trigger time).
-- **`python_callable_asset` should read that run tag first**, then the partition window, then fail or warn. It currently falls back to `now()` silently, which is a behavior change that goes unnoticed.
-- **Schedule option for Airflow 2 dates:** Airflow 2's logical date is the start of the interval that ended (for a cron, the previous tick). Add an option such as `logical_date: trigger | previous_tick` and `data_interval_start` / `data_interval_end` tags. Keep the tag names `logical_date`, `data_interval_start`, `data_interval_end` so the two components agree.
-- Also expose `ts_nodash` and `execution_date` in the callable's context, since callable bodies are copied unchanged.
-- Render any Jinja in a sandboxed environment (it currently uses a plain `jinja2.Environment`).
+Pipelines pass the run's date into queries, file names and filters. Without a time partition, Dagster has no such value, so the schedule and the code need a shared convention. Decision: a scheduled pipeline with no natural time partition keeps a regular schedule and regular assets; no partitions are added.
+- The schedule component already tags each run with its scheduled time (`add_logical_date_tag`). Keep that, and add an option to also tag the start and end of the interval the run covers, since some pipelines process the interval that just ended.
+- The callable component should read those tags first, then the partition window, and otherwise fail or warn. Today it falls back to `now()` without saying so, which silently changes behavior.
+- Render templated arguments in a sandboxed environment, and make unsupported names fail when the project loads, not when the run starts.
 
-### 4. Generic callable sensor (`python_sensor`; sensors blocked 15, 8 alone)
+Converter: finds each use of a date in the code and templates, and writes the matching component attributes. The converter's own runtime module remains as a fallback until the components do this.
 
-A sensor that calls a function returning a bool (or a dict of run-request fields) and requests a run when it is true, with `minimum_interval_seconds` and a `run_key` option. Time, file and external-task waits are covered by the cron schedule, `*_monitor`, and `event_automation`, so this is the only sensor gap.
+## 4. A sensor driven by a function (blocked 15, alone 8)
 
-### 5. Low priority: smaller attribute gaps
+A sensor that calls a function returning true/false (or a dict of run-request fields) and requests a run when it is true, with a polling interval and a key for idempotence. Time-based waits, file arrival and "another job finished" are already covered by the schedule component, the `*_monitor` components and `event_automation`.
 
-Only worth doing if cheap. Pools are not on this list: only 2 of 292 corpus DAGs use a named pool, and the converter sets `pool=` directly on the assets it generates.
-- `automation_condition` (named presets, the existing pattern) on `shell_command_asset` and `snowflake_stored_procedure_call_asset`, so asset-triggered DAGs can use them as components.
-- `shell_command_asset`: its description says it wraps `dagster-shell`, but the code uses `subprocess`.
-- `k8s_job_asset`: no Pipes variant (`PipesK8sClient`) for streamed logs.
+Converter: a wait-for-condition step. It will say that a Dagster sensor starts the run when the condition holds; it does not hold a run open waiting, so the shape of the pipeline changes.
 
-### 6. Behavior that differs from Airflow, to document or fix
+## 5. Failure and timeout behavior
 
-- `hooks_asset` (`@on_hooks`): hooks fire on every attempt, so a retried task fires `on_failure` several times. Airflow fires its failure callback after the last attempt only. Add a "final attempt only" option (`context.retry_number` against the retry policy's maximum). This blocks 10 DAGs that use task callbacks (5 alone).
-- `timeout_asset` (`@timeout`): it abandons a worker thread at the deadline and the work keeps running, whereas Airflow stops the task. State this in the README, and where possible offer a variant that runs the callable in a subprocess that can be killed (`pipes_python_asset` may already do this).
+- `hooks_asset`: hooks fire on every attempt, so a task with retries fires its failure hook several times. Add a "final attempt only" option (compare `context.retry_number` with the retry policy's maximum). Blocks 10 DAGs that use failure or success callbacks (5 alone).
+- `timeout_asset`: it abandons a worker thread at the deadline and the work keeps running. Say so in the README, and offer a variant that runs the code in a subprocess it can kill (`pipes_python_asset` may already be the answer).
 
-## Decisions I need from you (not component work)
+Converter: task-level failure and success callbacks, and execution timeouts on Python code.
 
-- **Branching and short-circuit** (27 DAGs blocked, 10 alone): `conditional_asset` exists. Confirm how downstream assets are skipped, because the converter must state the behavior exactly (blocking asset check, metadata-flag automation condition, or something else).
-- **Airflow 3.2 partitioned timetables** (`CronPartitionTimetable`, `PartitionedAssetTimetable` with mappers; 10 DAGs, all from one Airflow example file): not started. It needs a mapping spec from Airflow's key formats and mappers to Dagster partition definitions and mappings. Low priority; Airflow 3.2 only.
+## 6. Decision needed from you: conditional execution (blocked 27, alone 10)
 
-## How the converter will use and check each component
+`conditional_asset` exists. Please state exactly what happens to downstream assets when a branch or check says "do not continue": skipped, not materialized, blocked by an asset check, or something else. The converter has to describe that behavior in its report, and it must hold when several branches rejoin.
 
-For each component I run the real Airflow operator with the external system mocked and recording, run the Dagster component with an equivalent recording fake, and compare outcomes, calls and values; remaining differences go in the migration report. Two lessons from building the fakes: Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must too; and a fake client needs what the library code reads (`ResponseMetadata`, `LastModified`). The harness is in `examples/runtime_conversion/parity/` and `examples/s3_to_snowflake_factories/parity/`.
+## 7. Low priority
+
+`automation_condition` presets on `shell_command_asset` and `snowflake_stored_procedure_call_asset`; `shell_command_asset`'s description says it wraps `dagster-shell` but the code uses `subprocess`; `k8s_job_asset` has no Pipes variant for streamed logs.
+
+## How each component gets checked
+
+For each component the converter's harness runs the original operator or code with the external system mocked and recording, runs the Dagster component with an equivalent recording fake, and compares outcomes, calls and values. Remaining differences go in the migration report. Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must attach the same, and a fake client needs whatever fields the library code reads. The harness is in `examples/runtime_conversion/parity/` and `examples/s3_to_snowflake_factories/parity/`.
