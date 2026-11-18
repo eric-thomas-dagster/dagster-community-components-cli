@@ -54,6 +54,8 @@ SUPPORTED_MACROS = {"ds_add", "ds_format", "datetime", "timedelta"}
 SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
                 ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
                 ("airflow.providers.amazon.aws.hooks.s3", "S3Hook")} | \
+    {(m, "BaseOperator") for m in ("airflow.models", "airflow.models.baseoperator", "airflow.sdk", "airflow.sdk.bases.operator")} | \
+    {("airflow.utils.decorators", "apply_defaults")} | {(m, "Context") for m in ("airflow.utils.context", "airflow.sdk", "airflow.sdk.definitions.context")} | \
     {(m, n) for m in ("airflow.exceptions", "airflow.sdk.exceptions", "airflow.sdk") for n in ("AirflowException", "AirflowSkipException", "AirflowFailException")} | \
     {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")}
 ELIDED = {"EmptyOperator", "DummyOperator"}
@@ -166,6 +168,77 @@ def _loads(node: ast.AST) -> set[str]:
     return {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)} - set(dir(builtins))
 
 
+def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None) -> tuple[str, list[str]]:
+    """The source of a user-defined operator class (an `execute` method on a BaseOperator subclass) and the module-level code it needs."""
+    shims = shims if shims is not None else set()
+    meta = meta if meta is not None else {}
+    if not info or "source" not in info:
+        raise Defer(f"operator class source unavailable ({(info or {}).get('source_error', 'no class')})")
+    try:
+        tree = ast.parse(info["source"])
+    except SyntaxError as e:
+        raise Defer(f"operator class source does not parse: {e.msg}") from e
+    cls = next((n for n in tree.body if isinstance(n, ast.ClassDef)), None)
+    methods = {m.name: m for m in (cls.body if cls else []) if isinstance(m, ast.FunctionDef)}
+    if cls is None or "execute" not in methods:
+        raise Defer("operator class without an execute method")
+    inner_shims = [n for n in ast.walk(cls) if isinstance(n, ast.ImportFrom) and n.module and all((n.module, a.name) in SHIM_IMPORTS for a in n.names)]
+    for n in inner_shims:
+        shims.update(a.name for a in n.names)
+    body_text = ast.unparse(ast.Module(body=[*cls.body], type_ignores=[]))
+    for n in inner_shims:
+        body_text = body_text.replace(ast.unparse(n), "")
+    if re.search(r"\bairflow\b|\bset_xcom\b|\bxcom_push\b", body_text):
+        raise Defer("operator class uses the Airflow API (a direct airflow reference)")
+    meta["skips"] = "AirflowSkipException" in info["source"]
+    idx = ModuleIndex(info["file"])
+    class_level = {t.id for st in cls.body if isinstance(st, ast.Assign) for t in st.targets if isinstance(t, ast.Name)} | set(methods)
+    needed: dict[int, str] = {}
+    seen: set[str] = set()
+
+    def need(names: set[str], where: str) -> None:
+        for name in sorted(names):
+            if name in seen or name in class_level:
+                continue
+            seen.add(name)
+            hit = idx.defs.get(name)
+            if hit is None:
+                raise Defer(f"unresolved name {name!r} in {where}")
+            kind, node = hit
+            if kind == "import":
+                mod = getattr(node, "module", None) or (node.names[0].name if isinstance(node, ast.Import) else "")
+                if isinstance(node, ast.ImportFrom) and all((mod, a.name) in SHIM_IMPORTS for a in node.names):
+                    shims.update(a.name for a in node.names)
+                    continue
+                if mod.split(".")[0] == "airflow":
+                    raise Defer(f"operator class depends on an Airflow import ({mod})")
+                needed[node.lineno] = idx.seg(node)
+                continue
+            if re.search(r"\bairflow\b", idx.seg(node)):
+                raise Defer(f"{name!r} (used by the operator class) depends on Airflow")
+            needed[node.lineno] = idx.seg(node)
+            need(_free_names(node) if isinstance(node, ast.FunctionDef) else _loads(node), name)
+
+    free = set()
+    for m in methods.values():
+        free |= _free_names(m)
+    for st in cls.body:                                          # class-level statements and the base classes run in the module's scope
+        if not isinstance(st, ast.FunctionDef):
+            free |= _loads(st)
+    for b in cls.bases:
+        free |= _loads(b)
+    need(free - {"BaseOperator", "apply_defaults", "Context", "super", "self"}, cls.name)
+    for n in cls.bases:
+        if not (isinstance(n, ast.Name) and n.id == "BaseOperator"):
+            raise Defer(f"operator class extends {ast.unparse(n)}, not BaseOperator")
+    lines = textwrap.dedent(info["source"]).splitlines()
+    for n in inner_shims:
+        indent = re.match(r"\s*", lines[n.lineno - 1]).group(0)
+        lines[n.lineno - 1:n.end_lineno] = [indent + "pass"] + [""] * (n.end_lineno - n.lineno)
+    start = next(i for i, l in enumerate(lines) if re.match(r"class\s", l))
+    return "\n".join(lines[start:]), [needed[k] for k in sorted(needed)]
+
+
 def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None,
                      context_arg: bool = False) -> tuple[str, list[str]]:
     """(function source without decorators, support blocks in source order). Raises Defer with the reason.
@@ -254,6 +327,12 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
 # --------------------------------------------------------------------------------------------------------------------
 # helpers shared by the per-task handlers
 # --------------------------------------------------------------------------------------------------------------------
+def is_custom(t: dict[str, Any]) -> bool:
+    """A user-defined operator (an `execute` method on a BaseOperator subclass in the project, not a provider's) that nothing else here maps."""
+    known = ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | TRIGGER | S3_OPS | SNOWFLAKE_OPS | {"ExternalTaskSensor"}
+    return bool(t.get("operator_class")) and t["type"] not in known and not t.get("is_mapped")
+
+
 def local_modules(mods: set[str], files: Any) -> set[str]:
     """The imported modules that live next to a source file or in a folder above it (a project's own `include/`, `utils/`): they are not pip packages."""
     roots: list[Path] = []
@@ -427,6 +506,8 @@ def task_templates(t: dict[str, Any]) -> Any:
     ty, tf = t["type"], t["template_fields"]
     if ty in TRIGGER:
         return [tf.get("conf"), tf.get("trigger_dag_id")]
+    if t.get("operator_class"):
+        return [t.get("args")]
     if ty == "BashSensor":
         return [tf.get("bash_command"), tf.get("env")]
     if ty == "FileSensor":
@@ -693,7 +774,7 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
         return None, []
     why: list[str] = []
     for tid, t in tasks.items():
-        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS:
+        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS and not is_custom(t):
             why.append(f"{tid}: a {t['type']} inside a DAG with mapped tasks (only Python and shell tasks are converted there)")
     mp: dict[str, Any] = {}
     for tid, t in mapped.items():
@@ -970,7 +1051,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 reasons.append(f"{tid}: TimeDeltaSensor delta not found")
             if sn.get("soft_fail") and not (mplan and mplan["mode"] == "graph"):
                 reasons.append(f"{tid}: a sensor with soft_fail (skip handling needs the graph form)")
-        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | SENSORS | TRIGGER and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT | CLOCK_BRANCH):
+        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | SENSORS | TRIGGER and not is_custom(t) and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT | CLOCK_BRANCH):
             reasons.append(f"{tid}: operator {ty}")
         _, jprob = jinja_vars(task_templates(t))
         if jprob:
@@ -1059,7 +1140,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     for t in real:
         tid, ty = t["task_id"], t["type"]
         meta: dict[str, Any] = {}
-        if ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
+        if is_custom(t):
+            if any(isinstance(v, dict) and "repr" in v for v in (t.get("args") or {}).values()):
+                raise Defer(f"{tid}: a constructor argument of {t['type']} that cannot be written as a plain value")
+            code, sup = resolve_operator_class(t.get("operator_class"), shims_used, meta)
+            resolved[tid] = (code, sup, meta)
+            ctx_tasks.add(tid)
+        elif ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
             code, sup = resolve_callable(t.get("callable"), shims_used, meta)
             resolved[tid] = (code, sup, meta)
         names, _ = jinja_vars(task_templates(t))
@@ -1086,6 +1173,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         raise Defer("dynamic task mapping where a callable uses the task context or pulls XComs (not converted yet)")
     dag_params = dag.get("params") or {}
     graph_outs: list[str] = []
+
+    def custom_body(t: dict[str, Any], ctx_line: str, pyname_support: bool = True) -> str:
+        """A user-defined operator: its copied class, created with the operator's own arguments, then execute(context)."""
+        code, sup, _ = resolved[t["task_id"]]
+        for sline in sup:
+            support.setdefault(sline, len(support))
+        support.setdefault(code, len(support))
+        args = {k: v for k, v in (t.get("args") or {}).items() if k not in ("task_id",)}
+        return ctx_line + f"    op = {t['operator_class']['name']}(task_id={t['task_id']!r}, **{args!r})\n    return run_operator(op, ctx)"
 
     def sensor_body(t: dict[str, Any], params: dict[str, str], ctxn: str | None, call_inner: str | None = None) -> str:
         """A sensor as a polling step: Airflow's default `poke` loop (check, give up after the timeout, sleep poke_interval)."""
@@ -1157,7 +1253,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 single = len(m["srcs"]) == 1
                 kwexpr = ({"kw": f"{{{list(m['srcs'])[0]!r}: item}}", "args": "{}", "kwargs": "dict(item)"}[m["mode"]] if single else "dict(item)")
                 combo = f"    combo = {kwexpr}\n"
-            if ty in SENSORS - SENSOR_CALL:
+            if is_custom(t):
+                body = custom_body(t, ctx_line)
+            elif ty in SENSORS - SENSOR_CALL:
                 body = ctx_line + sensor_body(t, params, ctxn)
             elif ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
                 code, sup, meta = resolved[tid]
@@ -1380,6 +1478,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             pre = ""
             ret_none = True
             notes.append(f"{tid} launches the job of DAG {t['args']['trigger_dag_id']!r} and waits for it (the DAG must be converted into the same package); its run fails if the launched run fails")
+        elif is_custom(t):
+            body = custom_body(t, ctx_line)
+            deco.append("kinds={'python'}")
+            pre = ""
+            ret_none = tid not in consumed and not RETURN_ALL
         elif ty in SENSORS - SENSOR_CALL:
             body = ctx_line + sensor_body(t, params, ctxn)
             deco.append("kinds={'sensor'}")
@@ -2282,6 +2385,46 @@ def trigger_dag_run(context, calling_module, dag_id, conf=None):
     result = dg.execute_job(job, instance=context.instance, tags=tags)
     if not result.success:
         raise dg.Failure(description=f"the triggered DAG {dag_id!r} failed (run {result.run_id})", metadata={"triggered_run_id": result.run_id})
+
+
+class BaseOperator:
+    """Stands in for Airflow's BaseOperator for a copied operator class: it keeps the arguments, offers `self.log`, and the converted task runs `execute`."""
+    template_fields: tuple = ()
+
+    def __init__(self, *args, task_id=None, **kwargs):
+        import logging
+        self.task_id = task_id
+        self.log = logging.getLogger(f"airflow.task.{task_id}")
+        for k, v in kwargs.items():                      # retries, owner and the like are stored and not used
+            setattr(self, k, v)
+
+    def execute(self, context):
+        raise NotImplementedError
+
+
+def apply_defaults(fn):
+    return fn
+
+
+Context = dict
+
+
+def _render_deep(ctx, v):
+    if isinstance(v, str):
+        return render(ctx, v) if "{{" in v or "{%" in v else v
+    if isinstance(v, (list, tuple)):
+        return type(v)(_render_deep(ctx, x) for x in v)
+    if isinstance(v, dict):
+        return {k: _render_deep(ctx, x) for k, x in v.items()}
+    return v
+
+
+def run_operator(op, ctx):
+    """Render the operator's template fields (as Airflow does before execute) and run it with the rebuilt task context."""
+    for f in getattr(op, "template_fields", ()) or ():
+        if hasattr(op, f):
+            setattr(op, f, _render_deep(ctx, getattr(op, f)))
+    return op.execute(ctx)
 
 
 def af_data(x):

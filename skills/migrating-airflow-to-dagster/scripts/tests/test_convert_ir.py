@@ -1075,3 +1075,29 @@ def test_an_external_task_sensor_with_a_different_wait_is_deferred_with_the_reas
     C.TASK_TYPES = {("parent", "p"): "PythonOperator"}
     with pytest.raises(C.Defer, match=why):
         convert(child)
+
+
+def cls_info(name):
+    import ast
+    import textwrap
+    src = Path(MOD).read_text()
+    node = next(n for n in ast.parse(src).body if isinstance(n, ast.ClassDef) and n.name == name)
+    return {"name": name, "module": "mod", "file": MOD, "source": textwrap.dedent(ast.get_source_segment(src, node, padded=False)), "template_fields": []}
+
+
+def test_a_user_defined_operator_runs_its_execute_with_its_arguments_and_templates(tmp_path):
+    dg = pytest.importorskip("dagster")
+    g = task("g", "Greeter", operator_class=cls_info("Greeter"), args={"name": "x-{{ ds }}", "times": 2})
+    after = task("after", "PythonOperator", up=["g"], callable=fn("passthrough"), op_args=[{"xcom_from": "g", "key": "return_value"}], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([g, after], kind="once")]}, "pkg_custom", "--return-all")
+    assert rep["status"] == "converted", rep
+    res = dg.materialize([mod.t_g, mod.t_after])
+    value = res.asset_value(dg.AssetKey(["d1", "g"]))
+    assert res.success and value.startswith("x-20") and value.endswith(":2:" + value.split(":")[2] + ":3") and "-" in value.split(":")[0]
+    assert "airflow" not in (tmp_path / "pkg_custom" / "defs" / "d1.py").read_text().replace("airflow_dag", "").replace("airflow_task", "").replace("airflow_operator", "")
+
+
+def test_an_operator_class_that_uses_the_airflow_api_is_deferred():
+    t = task("u", "UsesAirflow", operator_class=cls_info("UsesAirflow"), args={})
+    with pytest.raises(C.Defer, match="Airflow API"):
+        convert(dag([t]))

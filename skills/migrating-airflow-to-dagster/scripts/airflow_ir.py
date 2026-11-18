@@ -212,6 +212,15 @@ def _base_params() -> set[str]:
 _BASE_PARAMS = _base_params()
 
 
+def _class_info(cls: type) -> dict[str, Any] | None:
+    """Source of a user-defined operator class, so the converter can copy it."""
+    try:
+        return {"name": cls.__name__, "module": cls.__module__, "file": inspect.getsourcefile(cls), "source": textwrap.dedent(inspect.getsource(cls)),
+                "template_fields": list(getattr(cls, "template_fields", ()) or ())}
+    except (OSError, TypeError) as e:
+        return {"name": cls.__name__, "module": cls.__module__, "source_error": repr(e)[:120]}
+
+
 def _sensor_ir(task: Any) -> dict[str, Any] | None:
     """The polling settings every sensor has (and a TimeSensor's resolved target)."""
     try:
@@ -241,6 +250,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "pool": task.pool if task.pool and task.pool != "default_pool" else None,
         "do_xcom_push": bool(getattr(task, "do_xcom_push", True)),
         "sensor": _sensor_ir(task),
+        "operator_class": (_class_info(type(task)) if not type(task).__module__.startswith("airflow") and hasattr(type(task), "execute") else None),
         "trigger_rule": str(getattr(task.trigger_rule, "value", task.trigger_rule)),
         "owner": task.owner, "queue": task.queue if getattr(task, "queue", None) != "default" else None,
         "execution_timeout_s": task.execution_timeout.total_seconds() if getattr(task, "execution_timeout", None) else None,

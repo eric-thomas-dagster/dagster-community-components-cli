@@ -2,6 +2,8 @@ import json
 import os
 
 from airflow.decorators import task          # the DAG file's own import; must not leak into converted code
+from airflow.models import BaseOperator
+from airflow.utils.decorators import apply_defaults
 
 SCALE = 3
 
@@ -162,3 +164,23 @@ def poke_value():
 
 def uses_partition(dag_run=None):
     return dag_run.partition_key, dag_run.partition_date.isoformat()
+
+
+class Greeter(BaseOperator):
+    template_fields = ("name",)
+
+    @apply_defaults
+    def __init__(self, name, times=1, **kwargs):
+        super().__init__(**kwargs)
+        self.name = name
+        self.times = times
+
+    def execute(self, context):
+        self.log.info("hello %s", self.name)
+        return f"{self.name}:{self.times}:{context['ds']}:{SCALE}"
+
+
+class UsesAirflow(BaseOperator):
+    def execute(self, context):
+        from airflow.models import DagBag
+        return DagBag()
