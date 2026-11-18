@@ -66,6 +66,7 @@ class Defer(Exception):
     pass
 
 
+AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
 MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
 RETURN_ALL = False        # set by --return-all: keep every Python return value so a parity run can compare them
 
@@ -786,7 +787,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 if ty in BASH_DEC:
                     body = ((combo if m else "") + ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                             "        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
-                            f"    return run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})")
+                            f"    return run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
                 elif ty in BRANCH:
                     body = ctx_line + f"    return BranchResult({inner})"
                 elif ty in SHORT:
@@ -800,14 +801,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                             f"    if not isinstance(cmd, str) or '{{{{' in cmd:\n"
                             f"        raise dg.Failure(description='a mapped command is run as written; templates inside mapped values are not rendered')\n"
                             f"    return run_shell(context, cmd, env=combo.get('env', {part.get('env')!r}), cwd=combo.get('cwd', {part.get('cwd')!r}), "
-                            f"timeout={t.get('execution_timeout_s')!r})")
+                            f"timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
                 else:
                     cmd = (t.get("template_files") or {}).get("bash_command") or t["template_fields"].get("bash_command")
                     if not isinstance(cmd, str):
                         raise Defer(f"{tid}: bash_command is not a string")
                     env = t["template_fields"].get("env")
                     body = (ctx_line + f"    return run_shell(context, {expr(cmd, params, ctxn)}, env={expr(env, params, ctxn) if env else 'None'}, "
-                            f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r})")
+                            f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
+            if ty in BASH | BASH_DEC and t.get("do_xcom_push") is False:      # nothing is pushed: the value downstream is None
+                body = body.replace("return run_shell(", "run_shell(") + "\n    return None"
             if params:                                                  # skip semantics: branch choices, short-circuits and trigger rules
                 names = list(params.values())
                 body = (f"    skip = af_gate(context, {t['trigger_rule']!r}, [{', '.join(names)}], {tid!r})\n    if skip is not None:\n        return skip\n"
@@ -915,6 +918,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         fname = safe("t_" + tid)
         ty = t["type"]
         ret_none = tid not in consumed and not (RETURN_ALL and ty in PY_TASKS | BASH | BASH_DEC)
+        if ty in BASH | BASH_DEC and t.get("do_xcom_push") is False:
+            ret_none = True                                   # Airflow pushes nothing, so a downstream pull gets None
         if ty in BASH:
             cmd = (t.get("template_files") or {}).get("bash_command") or t["template_fields"].get("bash_command")
             if not isinstance(cmd, str):
@@ -922,7 +927,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             env = t["template_fields"].get("env")
             env_expr = expr(env, params, ctxn) if env else "None"
             body = (ctx_line + f"    {'' if ret_none else 'return '}run_shell(context, {expr(cmd, params, ctxn)}, env={env_expr}, "
-                    f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r})")
+                    f"cwd={expr(t['template_fields'].get('cwd'), params, ctxn)}, timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
             deco.append("kinds={'shell'}")
             pre = ""
         elif ty in PY_TASKS | BASH_DEC:
@@ -945,7 +950,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if ty in BASH_DEC:
                 body = (ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                         f"        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
-                        f"    {'' if ret_none else 'return '}run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r})")
+                        f"    {'' if ret_none else 'return '}run_shell(context, cmd, env={t['template_fields'].get('env')!r}, cwd={t['template_fields'].get('cwd')!r}, timeout={t.get('execution_timeout_s')!r}{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
                 deco.append("kinds={'shell'}")
             elif is_mapped_task:
                 src_items = f"{safe(dag_id)}_literal_items" if pplan["kind"] == "literal" else params[pplan["producer"]]
@@ -976,7 +981,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             body = ctx_line + f"    client = getattr(context.resources, {conn!r})     # dagster-aws attaches the boto client\n    {stmt}"
             pre = ""
             ret_none = not stmt.startswith("return")
-        sig = "(\n" + ",\n".join(args) + ",\n)" + (" -> None" if ret_none else "")
+        sig = "(\n" + ",\n".join(args) + ",\n)" + (" -> None" if ret_none and tid not in consumed else "")
         blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\ndef " + fname + sig + ":\n" + body + "\n")
 
     keys = [keyparts[t["task_id"]] for t in real]
@@ -1048,7 +1053,7 @@ import dagster as dg
 
 
 def run_shell(context: dg.AssetExecutionContext, command: str, env: Optional[dict[str, Any]] = None,
-              cwd: Optional[str] = None, timeout: Optional[int] = None) -> Optional[str]:
+              cwd: Optional[str] = None, timeout: Optional[int] = None, xcom_json: bool = False) -> Any:
     """Run a BashOperator command with `bash -c`, as Airflow does. Returns the last line written to stdout, which is what
     Airflow pushes as the task's XCom (None when the command wrote nothing)."""
     full_env = {**os.environ, **{k: str(v) for k, v in (env or {}).items()}}
@@ -1062,7 +1067,13 @@ def run_shell(context: dg.AssetExecutionContext, command: str, env: Optional[dic
     if proc.returncode != 0:
         raise dg.Failure(description=f"command exited {proc.returncode}", metadata={"stderr": proc.stderr[-4000:], "command": command})
     lines = proc.stdout.splitlines() if proc.stdout else []
-    return lines[-1].rstrip() if lines else None
+    last = lines[-1].rstrip() if lines else None
+    if xcom_json and last is not None:                 # Airflow 3 stores the output as JSON when it parses as JSON (1 -> 1, '{"a": 1}' -> a dict)
+        try:
+            return json.loads(last)
+        except ValueError:
+            pass
+    return last
 
 
 import contextvars
@@ -1504,10 +1515,12 @@ def main(argv: list[str] | None = None) -> int:
                          "or partitions (leaf mapped tasks become independently runnable partitions)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
-    global RETURN_ALL, MAP_MODE
+    global RETURN_ALL, MAP_MODE, AF_MAJOR
     RETURN_ALL = a.return_all
     MAP_MODE = a.mapping
     ir = json.loads(a.ir.read_text())
+    _m = re.match(r"(\d+)", str(ir.get("airflow_version") or ""))
+    AF_MAJOR = int(_m.group(1)) if _m else 2
     a.out_dir.mkdir(parents=True, exist_ok=True)
     (a.out_dir / "__init__.py").touch()
     (a.out_dir.parent / "runtime.py").write_text(RUNTIME)

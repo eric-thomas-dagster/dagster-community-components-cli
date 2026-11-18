@@ -185,6 +185,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "upstream": sorted(task.upstream_task_ids), "downstream": sorted(task.downstream_task_ids),
         "retries": task.retries, "retry_delay_s": task.retry_delay.total_seconds() if task.retry_delay else None,
         "pool": task.pool if task.pool and task.pool != "default_pool" else None,
+        "do_xcom_push": bool(getattr(task, "do_xcom_push", True)),
         "trigger_rule": str(getattr(task.trigger_rule, "value", task.trigger_rule)),
         "owner": task.owner, "queue": task.queue if getattr(task, "queue", None) != "default" else None,
         "execution_timeout_s": task.execution_timeout.total_seconds() if getattr(task, "execution_timeout", None) else None,

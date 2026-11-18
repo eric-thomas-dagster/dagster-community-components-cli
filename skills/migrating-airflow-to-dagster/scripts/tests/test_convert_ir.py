@@ -642,3 +642,24 @@ def test_short_circuit_skips_all_downstream_or_only_the_next_task(tmp_path):
     assert mod.TRACE == []                                      # ignore_downstream_trigger_rules: everything downstream skipped
     mod, _ = _run_gated(tmp_path / "soft", chain(False), "pkg_sc_soft") if (tmp_path / "soft").mkdir() is None else None
     assert mod.TRACE == ["b"]                                   # only the direct child skipped; y's own rule lets it run
+
+
+def test_shell_output_is_parsed_as_json_on_airflow_3_only(tmp_path, monkeypatch):
+    dg = pytest.importorskip("dagster")
+    b = task("b", "BashOperator", template_fields={"bash_command": "echo '{\"a\": 1}'"})
+    c = task("c", "PythonOperator", up=["b"], callable=fn("passthrough"), op_args=[{"xcom_from": "b", "key": "return_value"}], op_kwargs={})
+    out = {}
+    for ver in ("2.10.5", "3.4.0"):
+        rep, mod = _convert_and_load(tmp_path / ver, {"airflow_version": ver, "dags": [dag([b, c], kind="once")]}, f"pkg_json_{ver[0]}", "--return-all") if (tmp_path / ver).mkdir() is None else None
+        res = dg.materialize([mod.t_b, mod.t_c])
+        out[ver] = res.asset_value(dg.AssetKey(["d1", "c"]))
+    assert out["2.10.5"] == '{"a": 1}' and out["3.4.0"] == {"a": 1}
+
+
+def test_a_shell_task_with_do_xcom_push_false_passes_nothing_downstream(tmp_path):
+    dg = pytest.importorskip("dagster")
+    b = task("b", "BashOperator", template_fields={"bash_command": "echo hi"}, do_xcom_push=False)
+    c = task("c", "PythonOperator", up=["b"], callable=fn("passthrough"), op_args=[{"xcom_from": "b", "key": "return_value"}], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([b, c], kind="once")]}, "pkg_nopush", "--return-all")
+    res = dg.materialize([mod.t_b, mod.t_c])
+    assert res.success and res.asset_value(dg.AssetKey(["d1", "c"])) is None
