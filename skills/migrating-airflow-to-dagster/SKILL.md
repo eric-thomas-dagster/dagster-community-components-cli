@@ -129,7 +129,7 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | Need | Read |
 |---|---|
 | What maps to what, and how sure we are | `reference/mapping.md` |
-| Parity checks that justify advancing judgment units | `reference/parity.md` |
+| Parity checks that justify advancing judgment units, and running them incrementally (`scripts/parity_incremental.py`) | `reference/parity.md` |
 | DAG factories, Blueprint, dag-factory, loops that generate DAGs | `reference/factories.md` |
 | Dynamic task mapping (`.expand`): static and dynamic partitions | `reference/dynamic-mapping.md` |
 | Converting the mechanical DAGs by code generation from the runtime IR, and where existing components fit | `reference/conversion.md` |
