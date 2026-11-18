@@ -1,0 +1,98 @@
+{
+ "copy by url": {
+  "result": null,
+  "calls": [
+   [
+    "copy_object",
+    "{'Bucket': 'b', 'Key': 'dst.txt', 'CopySource': {'Bucket': 'b', 'Key': 'src.txt'}, 'ACL': 'private'}"
+   ]
+  ]
+ },
+ "copy by bucket+key": {
+  "result": null,
+  "calls": [
+   [
+    "copy_object",
+    "{'Bucket': 'b2', 'Key': 'dst.txt', 'CopySource': {'Bucket': 'b', 'Key': 'src.txt'}, 'ACL': 'private'}"
+   ]
+  ]
+ },
+ "delete keys": {
+  "result": null,
+  "calls": [
+   [
+    "delete_objects",
+    "{'Bucket': 'b', 'Delete': {'Objects': [{'Key': 'a'}, {'Key': 'b'}]}}"
+   ]
+  ]
+ },
+ "delete reports an error": {
+  "error": "AirflowException",
+  "calls": [
+   [
+    "delete_objects",
+    "{'Bucket': 'b', 'Delete': {'Objects': [{'Key': 'a'}, {'Key': 'bad'}]}}"
+   ]
+  ]
+ },
+ "delete 1500 keys": {
+  "result": null,
+  "calls": [
+   [
+    "delete_objects",
+    "1000"
+   ],
+   [
+    "delete_objects",
+    "500"
+   ]
+  ]
+ },
+ "list prefix": {
+  "result": [
+   "p/a",
+   "p/b"
+  ],
+  "calls": [
+   [
+    "paginate",
+    "list_objects_v2",
+    "{'Bucket': 'b', 'Prefix': 'p/'}"
+   ]
+  ]
+ },
+ "upload replace": {
+  "result": null,
+  "calls": [
+   [
+    "upload_file",
+    "['/var/folders/84/n83b05vs2b5fz8nkxcfk5dj40000gn/T/tmpvvk82oh_.txt', 'b', 'k/f.txt']",
+    "{}"
+   ]
+  ]
+ },
+ "upload no replace, key exists": {
+  "error": "ValueError",
+  "calls": [
+   [
+    "head_object",
+    "{'Bucket': 'b', 'Key': 'exists.txt'}"
+   ]
+  ]
+ },
+ "upload no replace, key absent": {
+  "result": null,
+  "calls": [
+   [
+    "head_object",
+    "{'Bucket': 'b', 'Key': 'k/new.txt'}"
+   ],
+   [
+    "upload_file",
+    "['/var/folders/84/n83b05vs2b5fz8nkxcfk5dj40000gn/T/tmpvvk82oh_.txt', 'b', 'k/new.txt']",
+    "{}"
+   ]
+  ]
+ },
+ "_local_file": "/var/folders/84/n83b05vs2b5fz8nkxcfk5dj40000gn/T/tmpvvk82oh_.txt"
+}

@@ -1,0 +1,47 @@
+{
+ "prefix + format string": {
+  "sql": "\n        COPY INTO RAW.T\n             FROM  @ST/orders/20260701/\n        \n        \n        FILE_FORMAT=(type = 'CSV' field_delimiter = ',')\n        \n        \n        ",
+  "args": {
+   "table": "T",
+   "stage": "ST",
+   "prefix": "orders/20260701/",
+   "file_format": "(type = 'CSV' field_delimiter = ',')",
+   "schema": "RAW"
+  }
+ },
+ "files list + named format": {
+  "sql": "\n        COPY INTO RAW.T\n             FROM  @ST/\n        FILES=('a.csv','b.csv')\n        \n        FILE_FORMAT=(format_name = 'MYFMT')\n        \n        \n        ",
+  "args": {
+   "table": "T",
+   "stage": "ST",
+   "files": [
+    "a.csv",
+    "b.csv"
+   ],
+   "file_format": "(format_name = 'MYFMT')",
+   "schema": "RAW"
+  }
+ },
+ "pattern + copy options": {
+  "sql": "\n        COPY INTO RAW.T\n             FROM  @ST/\n        \n        PATTERN='.*[.]csv'\n        FILE_FORMAT=(type = 'CSV')\n        ON_ERROR = CONTINUE\n        \n        ",
+  "args": {
+   "table": "T",
+   "stage": "ST",
+   "pattern": ".*[.]csv",
+   "file_format": "(type = 'CSV')",
+   "copy_options": "ON_ERROR = CONTINUE",
+   "schema": "RAW"
+  }
+ },
+ "validation mode": {
+  "sql": "\n        COPY INTO RAW.T\n             FROM  @ST/p/\n        \n        \n        FILE_FORMAT=(type = 'JSON')\n        \n        VALIDATION_MODE = RETURN_ERRORS\n        ",
+  "args": {
+   "table": "T",
+   "stage": "ST",
+   "prefix": "p/",
+   "file_format": "(type = 'JSON')",
+   "validation_mode": "VALIDATION_MODE = RETURN_ERRORS",
+   "schema": "RAW"
+  }
+ }
+}

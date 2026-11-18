@@ -1,0 +1,14 @@
+{
+ "prefix + format string": {
+  "sql": "COPY INTO DB.RAW.T\nFROM @ST/orders/20260701/\nFILE_FORMAT = (TYPE = 'CSV' FIELD_DELIMITER = ',')"
+ },
+ "files list + named format": {
+  "sql": "COPY INTO DB.RAW.T\nFROM @ST\nFILES = ('a.csv', 'b.csv')\nFILE_FORMAT = (FORMAT_NAME = 'MYFMT')"
+ },
+ "pattern + copy options": {
+  "sql": "COPY INTO DB.RAW.T\nFROM @ST\nPATTERN = '.*[.]csv'\nFILE_FORMAT = (TYPE = 'CSV')\nON_ERROR = 'CONTINUE'"
+ },
+ "validation mode": {
+  "sql": "COPY INTO DB.RAW.T\nFROM @ST/p/\nFILE_FORMAT = (TYPE = 'JSON')\nVALIDATION_MODE = RETURN_ERRORS"
+ }
+}

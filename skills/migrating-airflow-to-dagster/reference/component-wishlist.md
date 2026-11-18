@@ -4,7 +4,9 @@ The converter turns existing orchestrator DAGs into Dagster definitions built fr
 
 Measured on 292 DAGs from 14 public example repos; the converter maps 80 today. "Blocked" is the number of DAGs held back by that capability; "alone" is the number held back by it and nothing else. The corpus is heavy on teaching repos, so use the ranking, not the percentages.
 
-Already built, per the components session (the converter has not used these yet, and I will test each before relying on it): the Python callable, conditional, trigger-job, Pipes-Python and setup/teardown components, the schedule component, six S3 and Snowflake components, static partitions, and storage discovery through the `*_monitor` components.
+Tested so far against Airflow's own operators (`examples/runtime_conversion/component_parity/`, components 0.10.160): the S3 copy, delete, list and upload components match on 9 scenarios, and the Snowflake `COPY INTO` component matches on 4 configurations apart from one quoting difference (`ON_ERROR='CONTINUE'` against Airflow's unquoted form; please confirm Snowflake accepts it). Not yet tested: the schedule, callable, sensor and conditional components and `snowflake_sql_asset`.
+
+Already built, per the components session: the Python callable, conditional, trigger-job, Pipes-Python and setup/teardown components, the schedule component, six S3 and Snowflake components, static partitions, and storage discovery through the `*_monitor` components.
 
 ## 1. Discover items, then run once per item (blocked 31, alone 24)
 
