@@ -62,9 +62,15 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
                 tgt["schedules"] = [{"name": f"{safe(dag_id)}_schedule", "cron": rep["schedule"]}]
             dag_unit["target"] = tgt
             stats["dags_planned"] += 1
+        caveat = {c["task"]: c["reason"] for c in rep.get("caveats") or []}
         for tid, t in tasks.items():
             u = by_task.get((dag_id, tid))
             if u is None:
+                continue
+            if tid in caveat:                                  # the asset exists in the DAG's shape, but its body is a marked stub: the unit is not translated
+                if u["status"] == "pending":
+                    status.defer(manifest, u["id"], f"AIRFLOW-CAVEAT stub (the DAG converts around it): {caveat[tid]}"[:900])
+                    stats["tasks_deferred"] += 1
                 continue
             if t["type"] in ELIDED and tid not in keys:         # in the graph form an EmptyOperator is a real step
                 u["target"] = {"none": "EmptyOperator elided; its dependencies were rewired through it"}

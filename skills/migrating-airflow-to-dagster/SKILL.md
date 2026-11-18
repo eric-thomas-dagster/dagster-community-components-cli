@@ -53,7 +53,7 @@ The `migrating-airflow-2-to-3` skill is only needed when the source is Airflow 2
 
 ## Hard rules
 
-1. **Never stub.** A unit is either translated and passing its gate, or deferred with a written reason. A body that just returns success is a failure.
+1. **Stubs must be loud.** A unit is either translated and passing its gate, or deferred with a written reason. A body that just returns success is a failure. The one allowed stub is the converter's marked caveat: a task it cannot translate (Airflow API call, unsupported operator or template) keeps its place in the DAG as an asset whose body raises `AIRFLOW-CAVEAT: <reason>` when it runs (`--caveats skip` returns nothing instead). The unit stays `deferred` with that reason, the report lists it under `caveats`, and a DAG with caveats counts as converted only for its shape; it passes parity only if Airflow and Dagster produce the same outcomes.
 2. **No silent omissions.** Every manifest unit ends `complete` or `deferred (reason)`. `scripts/status.py summary` exits nonzero otherwise; run it before claiming done.
 3. **Equivalence rows for every trigger.** Each schedule, sensor and dataset trigger gets a report row: Airflow spelling, Dagster spelling, and the behavioral delta in one sentence (catchup, data interval versus partition, trigger rules). The sin is not the delta, it is the undocumented delta.
 4. **Fix classes, not instances.** If a translation pattern fails the gate, fix the pattern (record it in your migration notes), then re-apply; do not hand-patch one unit.

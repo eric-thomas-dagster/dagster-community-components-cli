@@ -201,3 +201,17 @@ def sets_extra(*, outlet_events=None):
 
 def reads_events(*, inlet_events=None):
     return [(e.extra.get("hi"), e.extra.get("flag")) for e in inlet_events[ASSET]]
+
+
+def three():
+    return [1, 2, 3]
+
+
+def two():
+    return [10, 20]
+
+
+def uses_airflow_api():
+    from airflow.models import Variable as V
+    from airflow.configuration import conf
+    return conf.get("core", "dags_folder")

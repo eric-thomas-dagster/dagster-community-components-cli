@@ -23,9 +23,9 @@ Differences to state: retries and pools apply to each op; one task cannot be re-
 
 **`partitions`: leaf mapped tasks as partitions** (use when each item should be independently runnable, re-runnable and visible, for example one file or one customer). Leaf mapped Python tasks over a literal list become static partitions with a schedule that requests each one. Leaf mapped tasks over one root producer's return value become dynamic partitions: the producer adds the item keys to its materialization metadata, and an asset sensor registers the new keys and requests one run per item. Keys: a short string is its own key, a small value is `json:<JSON>`, anything longer is `sha1:<digest>`; identical items collapse. No reduce step is supported in this mode.
 
-Everything else defers with a named reason: `.map` / `.zip` / concat (see below), an S3 or Snowflake operator inside the mapped DAG, mapping over `expand` arguments of an unsupported kind, and cross products over a mapped task's output.
+Everything else defers with a named reason: an S3 or Snowflake operator inside the mapped DAG, mapping over `expand` arguments of an unsupported kind, and cross products over a mapped task's output.
 
-Airflow's `.map(func)` runs a function over each item of an upstream result before expanding (a transform), `.zip(a, b)` pairs two results item by item, and concat joins several results. They are not converted yet.
+Airflow's `.map(func)` (a function over each item of an upstream result before expanding), `.zip(a, b)` (pairs items; `fillvalue` uses `zip_longest`) and concat (joins several results) are converted in graph mode: the fan-out op builds the list as `[f(x) for x in src]`, `[*a, *b]` or `list(zip(a, b))` and the map functions are copied into the module. Partitions mode does not convert them.
 
 Verified by test: graph mode (producer, mapped Python task with a fixed argument, a reduce step over the collected list, a chained second-order map, mapped shell commands, `op_args` and `expand_kwargs`) and partitions mode (producer, sensor, three key kinds, one run per partition finding its item, and an idempotent second tick). Not verified: the partitions sensor under a running daemon.
 

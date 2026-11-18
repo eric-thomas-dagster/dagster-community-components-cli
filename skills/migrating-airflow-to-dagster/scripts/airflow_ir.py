@@ -188,8 +188,16 @@ def _expand_ir(task: Any) -> dict[str, Any] | None:
             except (TypeError, ValueError):
                 return {"kind": "other", "repr": repr(v)[:120]}
         if type(v).__name__.endswith("XComArg"):
+            w = type(v).__name__
+            if w == "MapXComArg":                                  # `.map(f)`: the inner source with each item passed through f
+                return {"kind": "xcom", "wrapper": w, "inner": one(v.arg), "callables": [_callable_info(f) for f in v.callables]}
+            if w in ("ConcatXComArg", "ZipXComArg"):             # `a.concat(b)` / `a.zip(b)`
+                out = {"kind": "xcom", "wrapper": w, "parts": [one(x) for x in v.args]}
+                if w == "ZipXComArg":
+                    out["fillvalue"] = None if type(getattr(v, "fillvalue", None)).__name__ == "ArgNotSet" else getattr(v, "fillvalue", None)
+                return out
             op = getattr(v, "operator", None)
-            return {"kind": "xcom", "wrapper": type(v).__name__, "task_id": getattr(op, "task_id", None), "key": getattr(v, "key", None)}
+            return {"kind": "xcom", "wrapper": w, "task_id": getattr(op, "task_id", None), "key": getattr(v, "key", None)}
         return {"kind": "other", "repr": repr(v)[:120]}
 
     if type(ei).__name__ == "DictOfListsExpandInput" and isinstance(val, dict):

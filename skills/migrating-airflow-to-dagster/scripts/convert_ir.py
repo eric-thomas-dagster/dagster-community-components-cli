@@ -80,6 +80,7 @@ class Defer(Exception):
     pass
 
 
+CAVEATS = "raise"    # --caveats off|raise|skip: what to do with a task whose callable or arguments cannot be translated (a marked stub instead of deferring the DAG)
 DATASET_KEYS = "path"     # --dataset-keys path (s3://bucket/a/b -> s3/bucket/a/b) | script-orchestrator (airflow_dataset_bucket_a_b, the script_orchestrator component's naming)
 CATCHUP = "defer"      # --catchup defer | ignore: what to do with catchup=True (Airflow runs every missed interval since start_date)
 ALL_DAG_IDS: set[str] = set()
@@ -770,6 +771,45 @@ def task_keys(dag: dict[str, Any], t: dict[str, Any]) -> list[str]:
     return ["/".join([safe(dag["dag_id"])] + [safe(x) for x in t["task_id"].split(".")])]
 
 
+def src_leaves(v: tuple[str, Any]) -> list[str]:
+    """Task ids a mapped task's source reads (in order, once each)."""
+    def walk(sp: Any) -> list[str]:
+        k = sp[0]
+        if k == "task":
+            return [sp[1]]
+        if k == "map":
+            return walk(sp[1])
+        if k in ("concat", "zip"):
+            return [x for q in sp[1] for x in walk(q)]
+        return []
+    return list(dict.fromkeys(walk(v[1] if v[0] == "expr" else v)))
+
+
+def source_spec(a: dict[str, Any], tasks: dict[str, Any], why: list[str], tid: str) -> tuple | None:
+    """A `.map(f)`, `.concat(...)` or `.zip(...)` expand source as a tree: ('lit', list) ('task', id) ('map', spec, [callable]) ('concat', [spec]) ('zip', [spec], fill)."""
+    if a.get("kind") == "literal" and isinstance(a.get("value"), list):
+        return ("lit", a["value"])
+    if a.get("kind") != "xcom":
+        why.append(f"{tid}: mapping over a {a.get('kind')} source")
+        return None
+    w = a.get("wrapper")
+    if w in ("PlainXComArg", "XComArg") and a.get("key") == "return_value" and a.get("task_id") in tasks:
+        return ("task", a["task_id"])
+    if w == "MapXComArg":
+        inner = source_spec(a.get("inner") or {}, tasks, why, tid)
+        fns = a.get("callables") or []
+        if inner is None or not fns:
+            return None
+        return ("map", inner, fns)
+    if w in ("ConcatXComArg", "ZipXComArg"):
+        parts = [source_spec(x, tasks, why, tid) for x in a.get("parts") or []]
+        if not parts or any(x is None for x in parts):
+            return None
+        return ("concat", parts) if w == "ConcatXComArg" else ("zip", parts, a.get("fillvalue"))
+    why.append(f"{tid}: mapping over {w or a.get('kind')} (only a literal list, a task's return value, .map, .concat and .zip are converted)")
+    return None
+
+
 def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     """Dynamic task mapping as Dagster dynamic outputs: the whole DAG becomes one graph asset in which a mapped task is a mapped op
     and a task after it receives the collected list. Python and shell tasks only; `expand` with literal lists or other tasks' outputs."""
@@ -801,6 +841,10 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
                 srcs[name] = ("lit", a["value"])
             elif a["kind"] == "xcom" and a.get("wrapper") in ("PlainXComArg", "XComArg") and a.get("key") == "return_value" and a.get("task_id") in tasks:
                 srcs[name] = ("task", a["task_id"])
+            elif (spec := source_spec(a, tasks, why, tid)) is not None:
+                srcs[name] = ("expr", spec)
+            elif a.get("wrapper") in ("MapXComArg", "ConcatXComArg", "ZipXComArg"):
+                break                                                           # source_spec said why
             else:
                 why.append(f"{tid}: mapping over {a['kind']}{':' + a['wrapper'] if a.get('wrapper') else ''} for `{name}` "
                            "(only a literal list or a task's plain return value is converted)")
@@ -819,7 +863,7 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
                     bad.append("bash_command (not found)")
             if bad:
                 why.append(f"{tid}: mapped arguments {bad} are not supported for this task")
-            elif len(srcs) > 1 and any(v[0] == "task" and tasks[v[1]].get("is_mapped") for v in srcs.values()):
+            elif len(srcs) > 1 and any(x in tasks and tasks[x].get("is_mapped") for v in srcs.values() for x in src_leaves(v)):
                 why.append(f"{tid}: a cross product over the output of a mapped task")
             else:
                 mp[tid] = {"srcs": srcs, "fixed": e.get("fixed") or {}, "partial": e.get("partial") or {}, "mode": mode}
@@ -904,6 +948,21 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 ext_trigs += refs
                 reasons += why
         dag = {**dag, "tasks": [({**t, "type": "EmptyOperator"} if t["task_id"] in ext_ids else t) for t in dag["tasks"]]}
+    if CAVEATS != "off":                                     # tasks the converter cannot translate become marked stubs; the DAG keeps its shape
+        soft_known = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | SENSORS | TRIGGER | BRANCH | SHORT | CLOCK_BRANCH
+
+        def soft_reason(t: dict[str, Any]) -> str | None:
+            if t["type"] not in soft_known and not is_custom(t):
+                return f"operator {t['type']} has no conversion yet"
+            if t["type"] in PY_TASKS and (t.get("template_fields") or {}).get("templates_dict"):
+                return "templates_dict (rendered templates passed to the callable) is not rebuilt"
+            _, jprob = jinja_vars(task_templates(t))
+            return jprob
+        stubbed = {t["task_id"]: soft_reason(t) for t in dag["tasks"]}
+        dag = {**dag, "tasks": [({**t, "type": "PythonOperator", "callable": None, "_caveat": stubbed[t["task_id"]], "is_mapped": False, "expand": None,
+                                  "op_args": [], "op_kwargs": {}, "template_fields": {}, "callbacks": [], "callback_fns": {}, "execution_timeout_s": None,
+                                  "operator_class": None}
+                                 if stubbed.get(t["task_id"]) else t) for t in dag["tasks"]]}
     dag_id = dag["dag_id"]
     if dag.get("is_subdag"):
         raise Defer(f"a SubDAG of {dag.get('parent_dag_id')} (it runs inside the parent's SubDagOperator; SubDAGs were removed in Airflow 3: use a task group or a separate job)")
@@ -1154,26 +1213,57 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
 
     # pre-pass: which callables need the Airflow context, which tasks pull upstream values (ti.xcom_pull), which templates need dates
     resolved: dict[str, tuple[str, list[str], dict[str, Any]]] = {}
+    caveats: list[dict[str, str]] = []                                 # tasks written as marked stubs because something in them cannot be translated
     ctx_tasks: set[str] = set()
     ti_inputs: dict[str, list[str]] = {}
     for t in real:
         tid, ty = t["task_id"], t["type"]
         meta: dict[str, Any] = {}
-        if is_custom(t):
-            if any(isinstance(v, dict) and "repr" in v for v in (t.get("args") or {}).values()):
-                raise Defer(f"{tid}: a constructor argument of {t['type']} that cannot be written as a plain value")
-            code, sup = resolve_operator_class(t.get("operator_class"), shims_used, meta)
-            resolved[tid] = (code, sup, meta)
-            ctx_tasks.add(tid)
-        elif ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
-            code, sup = resolve_callable(t.get("callable"), shims_used, meta)
-            resolved[tid] = (code, sup, meta)
+        if t.get("_caveat"):
+            caveats.append({"task": tid, "reason": t["_caveat"]})
+            resolved[tid] = (f"def _stub(*args, **kwargs):\n    # AIRFLOW-CAVEAT: {t['_caveat'][:160]!r}\n    return af_caveat({t['_caveat'][:300]!r}, skip={CAVEATS == 'skip'})\n", [], {})
+            continue
+        try:
+            if is_custom(t):
+                if any(isinstance(v, dict) and "repr" in v for v in (t.get("args") or {}).values()):
+                    raise Defer(f"{tid}: a constructor argument of {t['type']} that cannot be written as a plain value")
+                code, sup = resolve_operator_class(t.get("operator_class"), shims_used, meta)
+                resolved[tid] = (code, sup, meta)
+                ctx_tasks.add(tid)
+            elif ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
+                code, sup = resolve_callable(t.get("callable"), shims_used, meta)
+                resolved[tid] = (code, sup, meta)
+        except Defer as e:
+            if CAVEATS == "off" or ty in BASH_DEC or is_custom(t):          # a custom operator class is built and called as a whole; no stub shape yet
+                raise
+            caveats.append({"task": tid, "reason": str(e)})
+            ctx_tasks.discard(tid)
+            resolved[tid] = (f"def _stub(*args, **kwargs):\n    # AIRFLOW-CAVEAT: {str(e)[:160]!r}\n    return af_caveat({str(e)[:300]!r}, skip={CAVEATS == 'skip'})\n", [], {})
         names, _ = jinja_vars(task_templates(t))
         if meta.get("needs_ctx") or names or ty == "TimeDeltaSensor" or (ty in CLOCK_BRANCH and (t.get("args") or {}).get("use_task_logical_date")):
             ctx_tasks.add(tid)
         if meta.get("needs_ti") or {"ti", "task_instance"} & names:
             ti_inputs[tid] = [u for u in ancestors(tid) if u in keyparts]      # xcom_pull may name any task that ran before
             consumed |= set(ti_inputs[tid])
+    map_fns: dict[str, list[str]] = {}                                # mapped task -> names of its `.map(f)` functions, in source order
+    map_blocks: list[str] = []
+    for tid, m_ in ((gplan or {}).get("mapped") or {}).items():
+        def collect(sp: Any, tid: str = tid) -> None:
+            if sp[0] == "map":
+                collect(sp[1])
+                for info in sp[2]:
+                    code, sup = resolve_callable(info, shims_used, {})
+                    for sline in sup:
+                        support.setdefault(sline, len(support))
+                    nm = f"_af_map_{safe(tid)}_{len(map_fns.setdefault(tid, []))}"
+                    map_fns[tid].append(nm)
+                    map_blocks.append(re.sub(r"^def\s+\w+", f"def {nm}", code, count=1))
+            elif sp[0] in ("concat", "zip"):
+                for q in sp[1]:
+                    collect(q)
+        for _, v in m_["srcs"].items():
+            if v[0] == "expr":
+                collect(v[1])
     cb_code: dict[str, list[tuple[str, str]]] = {}                 # task -> [(kind, function name)] and the generated adapters
     cb_blocks: list[str] = []
     for t in real:
@@ -1261,7 +1351,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             elif f"{safe(dag_id)}__{safe(tid)}" in pool_limits:
                 deco.append(f"pool={safe(dag_id) + '__' + safe(tid)!r}")
             m = mp.get(tid)
-            src_tasks = {v[1] for v in m["srcs"].values() if v[0] == "task"} if m else set()
+            src_tasks = {x for v in m["srcs"].values() for x in src_leaves(v)} if m else set()
             extras = [u for u in ups if u not in src_tasks]
             params = {u: f"in_{k}" for k, u in enumerate(extras if m else ups)}
             ctxn = "ctx" if tid in ctx_tasks else None
@@ -1288,10 +1378,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     inner = (f"call_with_context({pyname}, {posl}, {kw}, ctx)" if meta.get("needs_ctx")
                              else f"{pyname}(*{posl}, **{kw})")
                 else:
-                    pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
-                    kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
-                    inner = (f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
-                             if meta.get("needs_ctx") else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
+                    try:
+                        pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
+                        kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
+                        inner = (f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
+                                 if meta.get("needs_ctx") else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
+                    except Defer as e:
+                        if CAVEATS == "off" or ty in BASH_DEC:
+                            raise
+                        caveats.append({"task": tid, "reason": str(e)})
+                        inner = f"af_caveat({str(e)[:300]!r}, skip={CAVEATS == 'skip'})"      # AIRFLOW-CAVEAT: the call's arguments could not be wired
                 if ty in BASH_DEC:
                     body = ((combo if m else "") + ctx_line + f"    cmd = {inner}\n    if not isinstance(cmd, str) or not cmd.strip():\n"
                             "        raise dg.Failure(description='@task.bash must return a non-empty command string')\n"
@@ -1376,22 +1472,41 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     dyn[tid] = f"d{i}"
                     lines.append(f"    d{i} = {dyn[srcs[0][1][1]]}.map(lambda item: {fname}(item{extra_call}))")
                 else:
-                    task_srcs = [(n, v[1]) for n, v in srcs if v[0] == "task"]
-                    fan_params = [f"src_{k}" for k in range(len(task_srcs))]
-                    lists, k = [], 0
-                    for n, v in srcs:
-                        if v[0] == "lit":
-                            lists.append(repr(v[1]))
-                        else:
-                            lists.append(f"src_{k}")
-                            k += 1
+                    leaf_ids = list(dict.fromkeys(x for _, v in srcs for x in src_leaves(v)))
+                    task_srcs = [(None, x) for x in leaf_ids]
+                    fan_params = [f"src_{k}" for k in range(len(leaf_ids))]
+                    pname = {x: f"src_{k}" for k, x in enumerate(leaf_ids)}
+                    fn_names = map_fns.get(tid, [])
+                    counter = iter(range(10 ** 6))
+
+                    def spec_expr(sp: Any) -> str:
+                        if sp[0] == "lit":
+                            return repr(sp[1])
+                        if sp[0] == "task":
+                            return pname[sp[1]]
+                        if sp[0] == "map":
+                            inner_expr = spec_expr(sp[1])                      # numbered in the same order the functions were collected
+                            call = "x"
+                            for _ in sp[2]:
+                                call = f"{fn_names[next(counter)]}({call})"
+                            return f"[{call} for x in {inner_expr}]"
+                        if sp[0] == "concat":
+                            return "[" + ", ".join(f"*{spec_expr(q)}" for q in sp[1]) + "]"
+                        parts = ", ".join(spec_expr(q) for q in sp[1])
+                        return f"list(itertools.zip_longest({parts}, fillvalue={sp[2]!r}))" if sp[2] is not None else f"list(zip({parts}))"
+
+                    lists = [repr(v[1]) if v[0] == "lit" else pname[v[1]] if v[0] == "task" else spec_expr(v[1]) for _, v in srcs]
+                    guard = ", ".join(fan_params)
                     names = [n for n, _ in srcs]
                     item = "vals[0]" if len(srcs) == 1 else f"dict(zip({names!r}, vals))"
                     ops.append(f"@dg.op(name={safe(dag_id) + '__fan_' + safe(tid)!r}, out=dg.DynamicOut())\n"
                                f"def fan_{safe(tid)}({', '.join(fan_params)}):\n"
-                               f"    lists = [{', '.join(lists)}]\n"
-                               "    if any(isinstance(x, Skipped) for x in lists):\n"
+                               f"    srcs = [{guard}]\n"
+                               "    if any(isinstance(x, Skipped) for x in srcs):\n"
                                "        return\n"
+                               "    if not all(isinstance(x, (list, tuple)) for x in srcs):\n"
+                               "        raise dg.Failure(description='expected a list of items to map over')\n"
+                               f"    lists = [{', '.join(lists)}]\n"
                                "    if not all(isinstance(x, (list, tuple)) for x in lists):\n"
                                "        raise dg.Failure(description='expected a list of items to map over')\n"
                                "    for n, vals in enumerate(itertools.product(*lists)):\n"
@@ -1603,6 +1718,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     mod = [f'"""Converted from Airflow DAG `{dag_id}` ({dag["file"]}) by convert_ir.py.', "", note, '"""', *imports, ""]
     if support:
         mod += [s for s, _ in sorted(support.items(), key=lambda kv: kv[1])] + [""]
+    if map_blocks:
+        mod += ["\n\n".join(map_blocks), ""]
     if cb_blocks:
         mod += ["\n\n".join(cb_blocks), ""]
     if ppart:
@@ -1673,7 +1790,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         produced[k] = dag_id
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
-                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
+                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
                  "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
@@ -2287,6 +2404,13 @@ def af_guard(context, run, retries, delay):
         return Failed(f"{type(e).__name__}: {str(e)[:300]}")
 
 
+def af_caveat(reason, skip=False):
+    """A task the converter could not translate. It fails with the reason, or (skip mode) returns nothing so the rest of the DAG runs."""
+    if skip:
+        return None
+    raise dg.Failure(description=f"AIRFLOW-CAVEAT: {reason}")
+
+
 def af_skippable(context, run):
     """Run a step; a raised AirflowSkipException skips the step (and what depends on it under its trigger rule) instead of failing it."""
     try:
@@ -2604,10 +2728,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--catchup", choices=["defer", "ignore"], default="defer",
                     help="catchup=True runs every interval missed since start_date (it is the default in Airflow 2 when the DAG does not say): defer the DAG (default), "
                          "or convert it and say in the report that history is not replayed")
+    ap.add_argument("--caveats", choices=["off", "raise", "skip"], default="raise",
+                    help="a task whose callable or arguments cannot be translated (it uses the Airflow API, an unrecognised import, a template the runtime does not rebuild) "
+                         "becomes a marked stub and the DAG still converts: raise (default) makes the stub fail with an AIRFLOW-CAVEAT message when it runs, "
+                         "skip makes it return nothing, off defers the whole DAG with the reason")
     ap.add_argument("--partition-start", default="2025-01-01", help="where time-partitioned assets begin (Airflow's partitions have no start date)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
-    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP
+    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP, CAVEATS
+    CAVEATS = a.caveats
     RETURN_ALL = a.return_all
     MAP_MODE = a.mapping
     DATASET_KEYS = a.dataset_keys

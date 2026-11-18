@@ -36,6 +36,12 @@ def dag(tasks, kind="cron_trigger", **tt):
             "timetable": {"class": "X", "kind": kind, "cron": "0 6 * * *", "timezone": "America/Chicago", **tt}}
 
 
+@pytest.fixture(autouse=True)
+def strict_by_default(monkeypatch):
+    """In-process conversions defer unsupported tasks (the strict mode); the caveat tests run the CLI, whose default is a marked stub."""
+    monkeypatch.setattr(C, "CAVEATS", "off")
+
+
 def convert(d):
     return C.convert_dag(d, "note", {})
 
@@ -530,6 +536,7 @@ def _convert_and_load(tmp_path, ir, pkg, *extra):
     (tmp_path / pkg / "__init__.py").write_text("")
     sys.path.insert(0, str(tmp_path))
     import importlib
+    assert rep["status"] == "converted", rep
     return rep, importlib.import_module(f"{pkg}.defs.d1")
 
 
@@ -578,6 +585,52 @@ def test_graph_mapping_supports_op_args_and_expand_kwargs(tmp_path):
     assert rep["status"] == "converted"
     res = dg.materialize([mod.d1_graph])
     assert res.success and res.asset_value(dg.AssetKey(["d1", "a"])) == [2, 4] and res.asset_value(dg.AssetKey(["d1", "k"])) == [10, 12]
+
+
+def test_graph_mapping_over_map_concat_and_zip_sources(tmp_path):
+    dg = pytest.importorskip("dagster")
+    a = task("a", "PythonOperator", callable=fn("three"), op_args=[], op_kwargs={})
+    b = task("b", "PythonOperator", callable=fn("two"), op_args=[], op_kwargs={})
+    dbl = {**fn("double_item"), "params": ["x"]}
+    ex = lambda src: {"form": "expand", "args": {"x": src}, "fixed": {}, "fixed_unserializable": [], "op_args": False}
+    m = task("m", "PythonOperator", up=["a"], is_mapped=True, callable=dict(dbl), op_args=[], op_kwargs={},
+             expand=ex({"kind": "xcom", "wrapper": "MapXComArg", "inner": _xcom_src("a"), "callables": [dbl, dbl]}))
+    c = task("c", "PythonOperator", up=["a", "b"], is_mapped=True, callable=dict(dbl), op_args=[], op_kwargs={},
+             expand=ex({"kind": "xcom", "wrapper": "ConcatXComArg", "parts": [_xcom_src("a"), _xcom_src("b")]}))
+    z = task("z", "PythonOperator", up=["a", "b"], is_mapped=True, callable=dict(dbl), op_args=[], op_kwargs={},
+             expand=ex({"kind": "xcom", "wrapper": "ZipXComArg", "parts": [_xcom_src("a"), _xcom_src("b")], "fillvalue": None}))
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([a, b, m, c, z], kind="once")]}, "pkg_graph_shapes")
+    assert rep["status"] == "converted", rep
+    res = dg.materialize([mod.d1_graph])
+    assert res.success
+    val = lambda t: res.asset_value(dg.AssetKey(["d1", t]))
+    assert val("m") == [8, 16, 24]          # two .map doublings, then the task's own
+    assert val("c") == [2, 4, 6, 20, 40] and val("z") == [(1, 10, 1, 10), (2, 20, 2, 20)]
+
+
+def test_untranslatable_task_becomes_a_marked_stub_and_the_rest_of_the_dag_converts(tmp_path):
+    dg = pytest.importorskip("dagster")
+    a = task("a", "PythonOperator", callable=fn("three"), op_args=[], op_kwargs={})
+    b = task("b", "PythonOperator", up=["a"], callable=fn("uses_airflow_api"), op_args=[], op_kwargs={})
+    c = task("c", "PythonOperator", up=["a"], callable=fn("three"), op_args=[], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([a, b, c], kind="once")]}, "pkg_caveat")
+    assert rep["status"] == "converted" and [x["task"] for x in rep["caveats"]] == ["b"] and "Airflow API" in rep["caveats"][0]["reason"]
+    res = dg.materialize([mod.t_a, mod.t_b, mod.t_c], raise_on_error=False)
+    assert not res.success
+    failed = [e for e in res.get_step_failure_events()]
+    assert len(failed) == 1 and "AIRFLOW-CAVEAT" in failed[0].event_specific_data.error.message
+    ok = dg.materialize([mod.t_a, mod.t_c])                   # the rest of the DAG is intact
+    assert ok.success
+
+
+def test_unknown_operator_and_unsupported_template_become_stubs_in_a_dag_that_otherwise_converts(tmp_path):
+    dg = pytest.importorskip("dagster")
+    a = task("a", "PythonOperator", callable=fn("three"), op_args=[], op_kwargs={})
+    k = task("k", "SageMakerTransformOperator", up=["a"])
+    c = task("c", "PythonOperator", up=["k"], trigger_rule="all_done", callable=fn("three"), op_args=[], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([a, k, c], kind="once")]}, "pkg_caveat2")
+    assert [x["task"] for x in rep["caveats"]] == ["k"] and "SageMakerTransformOperator" in rep["caveats"][0]["reason"]
+    assert "AIRFLOW-CAVEAT" in (tmp_path / "pkg_caveat2" / "defs" / "d1.py").read_text()
 
 
 def test_xcom_push_becomes_materialization_metadata_and_a_keyed_pull_reads_it(tmp_path):
