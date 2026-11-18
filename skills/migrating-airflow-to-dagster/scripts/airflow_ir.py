@@ -223,6 +223,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "is_mapped": any(c.__name__ == "MappedOperator" for c in type(task).__mro__) or bool(getattr(task, "is_mapped", False)),
         "is_setup": bool(getattr(task, "is_setup", False)), "is_teardown": bool(getattr(task, "is_teardown", False)),
         "on_failure_fail_dagrun": bool(getattr(task, "on_failure_fail_dagrun", False)),
+        "short_circuit_hard": bool(getattr(task, "ignore_downstream_trigger_rules", True)),
         # settings that change behavior: the converter maps them or defers the DAG, never ignores them
         "depends_on_past": bool(getattr(task, "depends_on_past", False)), "wait_for_downstream": bool(getattr(task, "wait_for_downstream", False)),
         "max_active_tis_per_dag": getattr(task, "max_active_tis_per_dag", None), "max_active_tis_per_dagrun": getattr(task, "max_active_tis_per_dagrun", None),
