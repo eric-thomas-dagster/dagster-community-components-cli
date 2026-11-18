@@ -57,7 +57,7 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
 
         dag_unit = by_dag.get(dag_id)
         if dag_unit is not None:
-            tgt: dict = {"jobs": [safe(dag_id)]}
+            tgt: dict = {"jobs": [safe(dag_id)]} if not (rep.get("output") == "components" and not rep.get("schedule")) else {"none": "the DAG has no schedule, so the components define no job"}
             if rep.get("schedule"):
                 tgt["schedules"] = [{"name": f"{safe(dag_id)}_schedule", "cron": rep["schedule"]}]
             dag_unit["target"] = tgt

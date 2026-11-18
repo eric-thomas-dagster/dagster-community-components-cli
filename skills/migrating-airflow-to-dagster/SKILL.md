@@ -149,6 +149,7 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | `scripts/inventory.py` | Scan the Airflow repo into a manifest (read-only) |
 | `scripts/airflow_ir.py` | Extract every DAG as Airflow built it (expanded loops, factories, resolved arguments, callable source) into an IR (executes DAG code; sandbox only) |
 | `scripts/convert_ir.py` | Generate Dagster code for the mechanical constructs; defer everything else with the reason |
+| `scripts/convert_ir.py --output components` | The same conversion, writing registry components (YAML) for DAGs whose tasks all have one (see `reference/conversion.md`) |
 | `scripts/apply_conversion.py` | Record the converter's outcome in the manifest (plans and deferrals) |
 | `scripts/airflow_truth.py` | Dump Airflow's own DAG and task lists (executes DAG code; sandbox only) |
 | `scripts/reconcile.py` | Merge that runtime view into the manifest so nothing is omitted |

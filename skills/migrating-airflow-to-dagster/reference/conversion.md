@@ -57,6 +57,19 @@ Connections become resources under the same key (`resources.py`); third-party im
 
 Runtime-partitioned timetables and the consumers of their assets (11 DAGs, Airflow 3.3 only; see the wishlist), a mapped task that combines several argument shapes (1), and a mapped task whose fixed arguments are not plain values (1).
 
+## `--output components`: registry components instead of generated Python
+
+`convert_ir.py --output components` writes `defs/<dag>/defs.yaml` for each DAG whose every task has a component form, and keeps generated Python for the rest (the report's `output` field says which). The YAML holds one component per task (documents separated by `---`) and a `CronScheduleComponent` for the schedule:
+
+| Airflow | Component |
+|---|---|
+| `BashOperator` | `ShellCommandAssetComponent` (retries, timeout, env, cwd, `skip_on_exit_code: 99`) |
+| `PythonOperator`, `@task` | `PythonCallableAssetComponent` (the callable is copied to `callables/<dag>.py`) |
+| S3 copy, delete (key list), list, upload, create object | the matching `S3...AssetComponent` with `resource_key` set to the connection id |
+| `EmptyOperator` | none: dependencies are rewired through it |
+
+A DAG stays Python when any task is templated (the component YAML has its own Jinja), consumes another task's value, is mapped, gated, or a branch, has outlets or inlets, a pool, an SLA, callbacks or a caveat, or when its schedule is anything but a cron or none. Asset keys in this form are single-part, `<dag>__<task>`, because the components name their asset with one string. A DAG without a schedule gets no job. On the example corpus 18 DAGs convert this way and load and run in a Dagster project; the rest stay Python. Snowflake, triggers, and anything that needs `post_processing` are the next candidates.
+
 ## Caveats: convert the shape, mark what is not translated
 
 A DAG with one untranslatable task used to be deferred whole. By default (`--caveats raise`) the converter now keeps the DAG's shape and writes the task as a stub: an asset in its place whose body calls `af_caveat(reason)`, with an `# AIRFLOW-CAVEAT:` comment. It applies to a callable that uses the Airflow API, an unresolved import or an async function, an operator with no conversion yet (provider operators, `PythonVirtualenvOperator`, human-in-the-loop operators), `templates_dict`, and templates that use names the runtime does not rebuild. The report lists each one under the DAG's `caveats`, and `apply_conversion.py` leaves that task's unit `deferred` with the reason.

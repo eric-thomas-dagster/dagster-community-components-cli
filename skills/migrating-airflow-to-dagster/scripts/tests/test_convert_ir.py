@@ -685,6 +685,24 @@ def test_named_xcom_of_a_multiple_outputs_task_reads_the_dict_key(tmp_path):
     assert res.success and res.asset_value(dg.AssetKey(["d1", "b"])) == 14
 
 
+def test_components_output_writes_yaml_for_dags_whose_tasks_all_have_components(tmp_path):
+    ir = {"airflow_version": "x", "dags": [dag([task("a", "BashOperator", template_fields={"bash_command": "echo hi"}, retries=2),
+                                                  task("b", "BashOperator", up=["a"], template_fields={"bash_command": "echo {{ ds }}"})], kind="once")]}
+    (tmp_path / "ir.json").write_text(json.dumps(ir))
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
+                    "--report", str(tmp_path / "r.json"), "--output", "components"], check=True, capture_output=True)
+    rep = json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]
+    assert rep["output"] == "python"                                 # b is templated: no component form, the whole DAG stays Python
+    ir["dags"][0]["tasks"][1]["template_fields"]["bash_command"] = "echo bye"
+    (tmp_path / "ir.json").write_text(json.dumps(ir))
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
+                    "--report", str(tmp_path / "r.json"), "--output", "components"], check=True, capture_output=True)
+    rep = json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]
+    text = (tmp_path / "pkg" / "defs" / "d1" / "defs.yaml").read_text()
+    assert rep["output"] == "components" and rep["task_keys"] == {"a": "d1__a", "b": "d1__b"}
+    assert text.count("ShellCommandAssetComponent") == 2 and '"deps": ["d1__a"]' not in text and 'deps: ["d1__a"]' in text and "retry_policy_max_retries: 2" in text
+
+
 def test_xcom_push_becomes_materialization_metadata_and_a_keyed_pull_reads_it(tmp_path):
     dg = pytest.importorskip("dagster")
     a = task("a", "PythonOperator", callable=fn("pusher"), op_args=[], op_kwargs={})

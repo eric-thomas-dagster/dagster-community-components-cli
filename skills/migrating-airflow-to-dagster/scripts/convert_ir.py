@@ -82,6 +82,7 @@ class Defer(Exception):
     pass
 
 
+OUTPUT = "python"     # --output python|components: generated Python, or component YAML (registry components) for the DAGs whose every task has a component
 CAVEATS = "raise"    # --caveats off|raise|skip: what to do with a task whose callable or arguments cannot be translated (a marked stub instead of deferring the DAG)
 DATASET_KEYS = "path"     # --dataset-keys path (s3://bucket/a/b -> s3/bucket/a/b) | script-orchestrator (airflow_dataset_bucket_a_b, the script_orchestrator component's naming)
 CATCHUP = "defer"      # --catchup defer | ignore: what to do with catchup=True (Airflow runs every missed interval since start_date)
@@ -1023,6 +1024,142 @@ def sla_wrap(body: str, t: dict[str, Any], key: str) -> str:
         return body
     inner = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
     return f"    try:\n{inner}\n    finally:\n        af_sla_check(context, {float(t['sla_s'])!r}, {key!r})"
+
+
+COMPONENT_TASKS = {"BashOperator", "EmptyOperator", "DummyOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "S3ListOperator",
+                   "LocalFilesystemToS3Operator", "S3CreateObjectOperator"} | {"PythonOperator", "_PythonDecoratedOperator"}
+
+
+def _plain(v: Any) -> bool:
+    """A value that can sit in component YAML as is: no template markers, nothing that refers to another task."""
+    if isinstance(v, str):
+        return "{{" not in v and "{%" not in v and "{#" not in v
+    if isinstance(v, dict):
+        return all(_plain(x) for x in v.values()) and not ({"xcom_from", "repr", "seconds", "datetime"} & set(v))
+    if isinstance(v, (list, tuple)):
+        return all(_plain(x) for x in v)
+    return True
+
+
+def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> tuple[dict[str, str], dict[str, Any]] | None:
+    """The DAG as registry components, or None when some part of it has no component form (the caller then keeps the generated Python).
+
+    Returns ({relative path: content}, summary overrides). One component per task in a `defs.yaml` (documents separated by `---`), a schedule
+    component for the cron, and a module with the copied callables for Python tasks."""
+    if summary.get("mapping") or summary.get("partitions") or summary.get("triggers") or summary.get("pools") or summary.get("max_active_runs") \
+            or summary.get("run_timeout_s") or summary.get("caveats") or summary.get("uses_context") or summary.get("snowflake_resources"):
+        return None
+    tasks = {t["task_id"]: t for t in dag["tasks"]}
+    dag_id, name = dag["dag_id"], safe(dag["dag_id"])
+    if any(t["type"] not in COMPONENT_TASKS or t.get("is_mapped") or t["trigger_rule"] != "all_success" or t["outlets"] or t["inlets"] or t.get("sla_s")
+           or t.get("is_setup") or t.get("is_teardown") or t.get("callback_fns") or t.get("callbacks") or t.get("pool")
+           for t in tasks.values()):
+        return None
+    real = [t for t in tasks.values() if t["type"] not in ELIDED]
+    if not real:
+        return None
+    consumed = {x for t in real for x in xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")) | xcom_refs(t["template_fields"])}
+    if consumed:
+        return None
+    aname = {t["task_id"]: safe(f"{dag_id}__{t['task_id']}") for t in real}
+
+    def eff_up(tid: str) -> list[str]:
+        out: list[str] = []
+        for u in tasks[tid]["upstream"]:
+            out += eff_up(u) if tasks[u]["type"] in ELIDED else [u]
+        return list(dict.fromkeys(out))
+
+    docs: list[str] = []
+    callables: list[str] = ["from ..runtime import *  # noqa: F401,F403", ""]
+    support: dict[str, int] = {}
+
+    def doc(typ: str, attrs: dict[str, Any]) -> None:
+        docs.append(f"type: dagster_community_components.{typ}\nattributes:\n" + "\n".join(f"  {k}: {json.dumps(v)}" for k, v in attrs.items() if v is not None))
+
+    for t in real:
+        tid, ty, tf = t["task_id"], t["type"], t["template_fields"]
+        a = t.get("args") or {}
+        attrs: dict[str, Any] = {"asset_name": aname[tid], "group_name": name}
+        ups = [aname[u] for u in eff_up(tid)]
+        if ups:
+            attrs["deps"] = ups
+        if t["retries"]:
+            attrs["retry_policy_max_retries"] = int(t["retries"])
+            attrs["retry_policy_delay_seconds"] = int(t["retry_delay_s"] or 300)
+            attrs["retry_policy_backoff"] = "exponential" if t.get("retry_exponential_backoff") else "linear"
+        if ty == "BashOperator":
+            cmd = (t.get("template_files") or {}).get("bash_command") or tf.get("bash_command")
+            env, cwd = tf.get("env"), tf.get("cwd")
+            if not isinstance(cmd, str) or not _plain([cmd, env, cwd]) or (env is not None and not isinstance(env, dict)):
+                return None
+            attrs.update(command=cmd, env_vars=env or None, cwd=cwd, skip_on_exit_code=99, timeout_seconds=int(t["execution_timeout_s"]) if t.get("execution_timeout_s") else None)
+            doc("ShellCommandAssetComponent", attrs)
+        elif ty in PY_TASKS:
+            meta: dict[str, Any] = {}
+            try:
+                code, sup = resolve_callable(t.get("callable"), set(), meta)
+            except Defer:
+                return None
+            if meta.get("needs_ctx") or meta.get("needs_ti") or meta.get("async") or not _plain([t.get("op_args"), t.get("op_kwargs")]):
+                return None
+            fn = f"task_{safe(tid)}"
+            for line in sup:
+                support.setdefault(line, len(support))
+            callables.append(re.sub(r"^def\s+\w+", f"def {fn}", code, count=1) + "\n")
+            attrs.pop("asset_name")
+            attrs.update(asset_key=aname[tid], callable_path=f"{pkg}.callables.{name}:{fn}", args=t.get("op_args") or None, kwargs=t.get("op_kwargs") or None,
+                         timeout_seconds=None)
+            doc("PythonCallableAssetComponent", attrs)
+        elif ty in S3_FIELDS:
+            if not _plain(list(tf.values())):
+                return None
+            conn = tf.get("aws_conn_id") or "aws_default"
+            attrs["resource_key"] = conn
+            if ty == "S3ListOperator":
+                if tf.get("apply_wildcard"):
+                    return None
+                attrs.update(bucket=tf.get("bucket"), prefix=tf.get("prefix") or None, delimiter=tf.get("delimiter") or None)
+                doc("S3ListKeysAssetComponent", attrs)
+            elif ty == "S3CopyObjectOperator":
+                if any(tf.get(k) for k in ("acl_policy", "meta_data_directive", "kms_key_id", "kms_encryption_type", "source_version_id")):
+                    return None
+                if tf.get("source_bucket_name") or tf.get("dest_bucket_name"):
+                    attrs.update(source_bucket=tf.get("source_bucket_name"), source_key=tf.get("source_bucket_key"), dest_bucket=tf.get("dest_bucket_name"), dest_key=tf.get("dest_bucket_key"))
+                else:
+                    attrs.update(source_s3_url=tf.get("source_bucket_key"), dest_s3_url=tf.get("dest_bucket_key"))
+                doc("S3CopyObjectAssetComponent", attrs)
+            elif ty == "S3DeleteObjectsOperator":
+                if tf.get("prefix") or tf.get("from_datetime") or tf.get("to_datetime") or not isinstance(tf.get("keys"), (list, str)):
+                    return None
+                attrs.update(bucket=tf.get("bucket"), keys=[tf["keys"]] if isinstance(tf["keys"], str) else tf["keys"])
+                doc("S3DeleteObjectsAssetComponent", attrs)
+            elif ty == "S3CreateObjectOperator":
+                if tf.get("compression") or tf.get("encrypt") or tf.get("acl_policy") or not isinstance(tf.get("data"), str) or tf.get("encoding"):
+                    return None
+                key = tf.get("s3_key")
+                if tf.get("s3_bucket"):
+                    attrs.update(bucket=tf["s3_bucket"], key=key)
+                else:
+                    attrs.update(dest_s3_url=key)
+                attrs.update(data=tf["data"], replace=bool(tf.get("replace")))
+                doc("S3CreateObjectAssetComponent", attrs)
+            else:
+                if tf.get("gzip") or tf.get("encrypt") or tf.get("acl_policy"):
+                    return None
+                attrs.update(local_path=tf.get("filename"), bucket=tf.get("dest_bucket"), key=tf.get("dest_key"), replace=bool(tf.get("replace")))
+                doc("S3UploadFileAssetComponent", attrs)
+        else:
+            return None
+    if summary.get("schedule"):
+        doc("CronScheduleComponent", {"schedule_name": f"{name}_schedule", "job_name": name, "cron_expression": summary["schedule"],
+                                      "asset_keys": [aname[t["task_id"]] for t in real], "execution_timezone": summary.get("timezone") or "UTC"})
+    files = {f"defs/{name}/defs.yaml": "\n---\n".join(docs) + "\n"}
+    if len(callables) > 2:
+        files[f"callables/{name}.py"] = "\n".join([callables[0], "", *[s_ for s_, _ in sorted(support.items(), key=lambda kv: kv[1])], "", *callables[1:]])
+    overrides = {"keys": [[aname[t["task_id"]]] for t in real], "task_keys": {t["task_id"]: aname[t["task_id"]] for t in real}, "output": "components",
+                 "external": [], "notes": [*summary.get("notes", []), "registry components: one per task (asset keys are `<dag>__<task>`, single-part); "
+                 "retries and timeouts are component settings" + ("; the DAG has no schedule so no job is defined" if not summary.get("schedule") else "")]}
+    return files, overrides
 
 
 def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tuple[str, dict[str, Any]]:
@@ -3095,10 +3232,14 @@ def main(argv: list[str] | None = None) -> int:
                     help="a task whose callable or arguments cannot be translated (it uses the Airflow API, an unrecognised import, a template the runtime does not rebuild) "
                          "becomes a marked stub and the DAG still converts: raise (default) makes the stub fail with an AIRFLOW-CAVEAT message when it runs, "
                          "skip makes it return nothing, off defers the whole DAG with the reason")
+    ap.add_argument("--output", choices=["python", "components"], default="python",
+                    help="python (default): generated Python for every DAG. components: registry components (a defs.yaml per DAG with one component per task, "
+                         "a schedule component, post-processing where needed) for each DAG whose every task has a component form; the others stay Python")
     ap.add_argument("--partition-start", default="2025-01-01", help="where time-partitioned assets begin (Airflow's partitions have no start date)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
-    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP, CAVEATS
+    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP, CAVEATS, OUTPUT
+    OUTPUT = a.output
     CAVEATS = a.caveats
     RETURN_ALL = a.return_all
     MAP_MODE = a.mapping
@@ -3131,7 +3272,19 @@ def main(argv: list[str] | None = None) -> int:
         try:
             code, summary = convert_dag(dag, note, produced)
             compile(code, name, "exec")
-            (a.out_dir / f"{name}.py").write_text(code)
+            comp = component_files(dag, summary, a.out_dir.parent.name) if OUTPUT == "components" else None
+            if comp:
+                files, over = comp
+                for rel, text in files.items():
+                    dest = a.out_dir.parent / rel
+                    dest.parent.mkdir(parents=True, exist_ok=True)
+                    dest.write_text(text)
+                    if rel.startswith("callables/"):
+                        (dest.parent / "__init__.py").touch()
+                summary = {**summary, **over}
+            else:
+                (a.out_dir / f"{name}.py").write_text(code)
+                summary = {**summary, "output": "python"}
             report["dags"][dag["dag_id"]] = {"status": "converted", **summary}
             resources |= set(summary["resources"])
             sf_resources |= set(summary["snowflake_resources"])
