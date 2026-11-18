@@ -122,7 +122,6 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d.update(dag_settings={"max_active_runs": True}), "max_active_runs=True"),
     (lambda d: d.update(dag_settings={"max_active_tasks": 0.5}), "max_active_tasks"),
     (lambda d: d.update(dag_settings={"dagrun_timeout": {"repr": "weird"}}), "dagrun_timeout"),
-    (lambda d: d["tasks"][0].update(retry_exponential_backoff=True), "retry_exponential_backoff"),
     (lambda d: d["tasks"][0].update(max_active_tis_per_dag=1, pool="p"), "together with a named pool"),
     (lambda d: d["tasks"][0].update(max_active_tis_per_dagrun=1), "max_active_tis_per_dagrun"),
     (lambda d: d["tasks"][0].update(type="PythonOperator", template_fields={"templates_dict": {"a": "{{ ds }}"}}), "templates_dict"),
@@ -657,6 +656,34 @@ def test_task_sla_and_fire_and_forget_trigger_convert(tmp_path):
     trig = task("t", "TriggerDagRunOperator", args={"trigger_dag_id": "other", "wait_for_completion": False}, template_fields={})
     code, summary = convert(dag([trig], kind="once"))
     assert "wait=False" in code and not summary["caveats"]
+
+
+def test_unmappable_settings_become_degraded_caveats_unless_strict(monkeypatch):
+    d = dag([task("a", "BashOperator", template_fields={"bash_command": "true"}, depends_on_past=True, retry_exponential_backoff=True, retries=2)])
+    with pytest.raises(C.Defer, match="depends_on_past"):
+        convert(d)                                                   # strict (the fixture's default)
+    monkeypatch.setattr(C, "CAVEATS", "raise")
+    code, summary = convert(d)
+    assert [(c["kind"], c["task"]) for c in summary["caveats"]] == [("degraded", "a")] and "depends_on_past" in summary["caveats"][0]["reason"]
+    assert "Backoff.EXPONENTIAL" in code
+
+
+def test_nested_and_or_asset_schedule_becomes_the_same_automation_condition():
+    tree = {"op": "or", "items": [{"op": "and", "items": ["s3://b/a", "s3://b/c"]}, "s3://b/d"]}
+    d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"})], kind="asset_triggered", assets=["s3://b/a", "s3://b/c", "s3://b/d"],
+            asset_logic="mixed", asset_tree=tree)
+    code, summary = convert(d)
+    assert summary["triggers"] and code.count(" | ") == 1 and code.count("newly_updated()") == 3
+    assert "(dg.AutomationCondition.asset_matches(dg.AssetKey(['s3', 'b', 'a'])" in code.replace("((", "(")
+
+
+def test_named_xcom_of_a_multiple_outputs_task_reads_the_dict_key(tmp_path):
+    dg = pytest.importorskip("dagster")
+    a = task("a", "PythonOperator", callable=fn("pusher_dict"), op_args=[], op_kwargs={})
+    b = task("b", "PythonOperator", up=["a"], callable=fn("double_item"), op_args=[{"xcom_from": "a", "key": "n"}], op_kwargs={})
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([a, b], kind="once")]}, "pkg_xkey", "--return-all")
+    res = dg.materialize([mod.t_a, mod.t_b])
+    assert res.success and res.asset_value(dg.AssetKey(["d1", "b"])) == 14
 
 
 def test_xcom_push_becomes_materialization_metadata_and_a_keyed_pull_reads_it(tmp_path):

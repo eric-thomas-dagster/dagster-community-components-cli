@@ -28,7 +28,7 @@ These blockers are covered by components you have already built. The converter h
 
 ## Released in 0.10.164: what the converter uses
 
-The converter does not depend on the new `trigger_job_asset` `wait: false` or the `sla_asset` `start_from` option yet: it implements both itself in the generated runtime (`trigger_dag_run(..., wait=False)` and `af_sla_check`, with the same mechanisms). When the published package carries them (the 0.10.164 wheel on PyPI does not contain either: no `wait` option in `trigger_job_asset`, no `start_from` in `sla_asset`), the converter can emit the components instead.
+`trigger_job_asset` has `wait: false` (fire and forget) and `sla_asset` has `start_from` (`compute_start`, `partition_start`, `partition_end`, `scheduled_execution_time`). The converter does not depend on them: its generated runtime implements both with the same mechanisms (`trigger_dag_run(..., wait=False)` creates the run and executes it in the background; `af_sla_check` measures from the `dagster/scheduled_execution_time` tag), so a converted project needs no component package for them. An earlier version of this note said the published wheel lacked both; that was wrong (the check ran against a stale install in the wrong virtualenv).
 
 ## Requests
 

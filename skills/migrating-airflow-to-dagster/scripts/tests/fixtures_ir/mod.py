@@ -215,3 +215,7 @@ def uses_airflow_api():
     from airflow.models import Variable as V
     from airflow.configuration import conf
     return conf.get("core", "dags_folder")
+
+
+def pusher_dict():
+    return {"n": 7, "other": 1}

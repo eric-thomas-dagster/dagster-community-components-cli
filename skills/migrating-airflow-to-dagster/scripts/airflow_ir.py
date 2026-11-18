@@ -104,6 +104,15 @@ def _asset_leaves(cond: Any) -> tuple[list[str], str]:
     return leaves, logic
 
 
+def _asset_tree(cond: Any) -> Any:
+    """The asset condition as a tree: a name for a leaf, {"op": "and" | "or", "items": [...]} for a combination."""
+    objs = getattr(cond, "objects", None)
+    if objs is None:
+        return str(getattr(cond, "uri", None) or getattr(cond, "name", None) or cond)
+    name = type(cond).__name__
+    return {"op": "and" if ("All" in name or "And" in name) else "or", "items": [_asset_tree(o) for o in objs]}
+
+
 def _timetable(dag: Any) -> dict[str, Any]:
     tt = getattr(dag, "timetable", None)
     cls = type(tt).__name__ if tt is not None else "None"
@@ -120,10 +129,12 @@ def _timetable(dag: Any) -> dict[str, Any]:
     cond = getattr(tt, "asset_condition", None) or getattr(tt, "dataset_condition", None)
     if cond is not None:
         out["assets"], out["asset_logic"] = _asset_leaves(cond)
+        out["asset_tree"] = _asset_tree(cond)
     else:                                                   # Airflow 2.4 to 2.8: a plain list of datasets, all required
         listed = getattr(tt, "datasets", None) or getattr(dag, "dataset_triggers", None)
         if listed is not None and hasattr(listed, "objects"):               # 2.9: a DatasetAll / DatasetAny condition
             out["assets"], out["asset_logic"] = _asset_leaves(listed)
+            out["asset_tree"] = _asset_tree(listed)
         elif isinstance(listed, (list, tuple)) and listed:
             out["assets"], out["asset_logic"] = [str(getattr(x, "uri", None) or x) for x in listed], ("all" if len(listed) > 1 else "single")
     if cls in ("NullTimetable",):

@@ -243,7 +243,12 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
         indent = re.match(r"\s*", lines[n.lineno - 1]).group(0)
         lines[n.lineno - 1:n.end_lineno] = [indent + "pass"] + [""] * (n.end_lineno - n.lineno)
     start = next(i for i, l in enumerate(lines) if re.match(r"class\s", l))
-    return "\n".join(lines[start:]), [needed[k] for k in sorted(needed)]
+    body_src = "\n".join(lines[start:])
+    typing_used = sorted(n for n in ("Any", "Callable", "Dict", "Iterable", "List", "Mapping", "Optional", "Sequence", "Set", "Tuple", "Union")
+                         if re.search(rf"\b{n}\b", body_src) and not any(re.search(rf"\b{n}\b", v) for v in needed.values()))
+    if typing_used:                                              # annotations in the class body name typing classes the original module imported
+        needed[-1] = "from typing import " + ", ".join(typing_used)
+    return body_src, [needed[k] for k in sorted(needed)]
 
 
 def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None,
@@ -441,10 +446,10 @@ def xcom_refs(x: Any) -> set[str]:
 def expr(v: Any, params: dict[str, str], ctx: str | None = None) -> str:
     if isinstance(v, dict):
         if "xcom_from" in v:
-            if v.get("key") not in (None, "return_value"):
-                raise Defer(f"XCom key {v['key']!r} (only return values are mapped)")
             if v["xcom_from"] not in params:
                 raise Defer(f"XCom reference to {v['xcom_from']!r}, which is not an upstream task the converter can wire")
+            if v.get("key") not in (None, "return_value"):         # a key of a task that returns a dict with multiple_outputs
+                return f"af_xcom_key({params[v['xcom_from']]}, {v['key']!r})"
             return params[v["xcom_from"]]
         if "repr" in v:
             raise Defer(f"argument {v['repr'][:60]!r} cannot be serialised")
@@ -561,6 +566,15 @@ def and_condition(keys: list[list[str]]) -> str:
     terms = [f"dg.AutomationCondition.asset_matches(dg.AssetKey({k!r}), dg.AutomationCondition.newly_updated()).since_last_handled()" for k in keys]
     return ("(" + " & ".join(terms) + " & ~dg.AutomationCondition.any_deps_missing() & ~dg.AutomationCondition.any_deps_in_progress() "
             "& ~dg.AutomationCondition.in_progress())")
+
+
+def tree_condition(tree: Any) -> str:
+    """An Airflow asset condition with nested AND/OR as a Dagster automation condition over the same assets."""
+    def term(n: Any) -> str:
+        if isinstance(n, str):
+            return f"dg.AutomationCondition.asset_matches(dg.AssetKey({key_from_asset(n)!r}), dg.AutomationCondition.newly_updated()).since_last_handled()"
+        return "(" + (" & " if n["op"] == "and" else " | ").join(term(x) for x in n["items"]) + ")"
+    return f"({term(tree)} & ~dg.AutomationCondition.any_deps_in_progress() & ~dg.AutomationCondition.in_progress())"
 
 
 def s3_call(t: dict[str, Any], params: dict[str, str], ctx: str | None = None) -> tuple[str, str]:
@@ -1003,6 +1017,14 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     caveats: list[dict[str, str]] = []                         # kind "stub": a task written as a marked stub; "degraded": translated with a known difference
     catchup_note = ""
     ext_trigs: list[str] = []
+
+    def soften(msg: str, tid: str = "") -> None:
+        """A setting that cannot be mapped: a degraded caveat (the DAG converts without it) unless --caveats off, which defers the DAG."""
+        if CAVEATS != "off":
+            caveats.append({"task": tid, "kind": "degraded", "reason": msg.split(": ", 1)[-1] if tid else msg})
+        else:
+            reasons.append(msg)
+
     ext_ids = [t["task_id"] for t in dag["tasks"] if t["type"] == "ExternalTaskSensor"]
     if ext_ids:                                              # waiting for another DAG's task becomes a dependency on that task's asset
         for t in dag["tasks"]:
@@ -1021,6 +1043,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if t["type"] not in soft_known and not is_custom(t):
                 hint = OPERATOR_COMPONENTS.get(t["type"])
                 return f"operator {t['type']} has no conversion yet" + (f" (registry: {hint})" if hint else "")
+            if is_custom(t):                                   # a user-defined operator that cannot be copied or built from plain arguments
+                if any(isinstance(v, dict) and "repr" in v for v in (t.get("args") or {}).values()):
+                    return f"a constructor argument of {t['type']} that cannot be written as a plain value"
+                try:
+                    resolve_operator_class(t.get("operator_class"), set(), {})
+                except Defer as e:
+                    return str(e)
             if t["type"] in PY_TASKS and (t.get("template_fields") or {}).get("templates_dict"):
                 return "templates_dict (rendered templates passed to the callable) is not rebuilt"
             _, jprob = jinja_vars(task_templates(t))
@@ -1044,6 +1073,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append(f"schedule type {tt['class']} ({why})")
     triggers: list[str] = []
     trig_mode = "eager"
+    trig_tree: Any = None
     ppart: dict[str, Any] | None = None                       # time partitions of this DAG's assets (Airflow 3.2+ partition timetables)
     if tt["kind"] in ("cron_trigger", "cron_data_interval", "manual", "once"):
         pass
@@ -1077,6 +1107,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             triggers = list(leaves)                               # one asset, or any of several: eager() fires on any update
         elif logic == "all":
             triggers, trig_mode = list(leaves), "and"             # Airflow waits for all; verified against Dagster's evaluator
+        elif tt.get("asset_tree"):
+            triggers, trig_mode, trig_tree = list(leaves), "tree", tt["asset_tree"]     # nested AND/OR: written as the same combination of conditions
         else:
             reasons.append(f"schedule mixes AND and OR over {len(leaves)} assets")
     else:
@@ -1086,7 +1118,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             triggers = list(dict.fromkeys([*triggers, *ext_trigs]))
         else:
             triggers = ext_trigs
-        trig_mode = "and" if len(triggers) > 1 else "eager"
+        trig_mode = trig_mode if trig_mode == "tree" else ("and" if len(triggers) > 1 else "eager")
         if tt["kind"] not in ("asset_triggered", "partitioned_asset"):
             tt = {**tt, "kind": "manual", "cron": None}
         catchup_note = (catchup_note + " " if catchup_note else "") + (
@@ -1099,7 +1131,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append("DAG-level callbacks")
     ds = dag.get("dag_settings") or {}
     if ds.get("fail_stop"):
-        reasons.append("fail_stop=True (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish)")
+        soften("fail_stop=True (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish)")
     max_runs = ds.get("max_active_runs")
     max_runs = max_runs if isinstance(max_runs, int) and not isinstance(max_runs, bool) and max_runs > 0 and max_runs != 16 else None
     def _pos(v):
@@ -1122,9 +1154,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         else:
             reasons.append("dagrun_timeout (not readable as a number of seconds)")
     if ds.get("max_consecutive_failed_dag_runs"):
-        reasons.append("max_consecutive_failed_dag_runs (auto-pause after failures is not mapped)")
+        soften("max_consecutive_failed_dag_runs (auto-pause after failures is not mapped)")
     if ds.get("render_template_as_native_obj"):
-        reasons.append("render_template_as_native_obj")
+        soften("render_template_as_native_obj (templates render to strings here, not to Python objects)")
     if dag.get("catchup") and tt["kind"] in ("cron_trigger", "cron_data_interval"):
         if CATCHUP == "ignore":
             catchup_note = (f"catchup=True: Airflow runs every interval missed since the start date ({(dag.get('start_date') or 'none')[:10]}); the converted schedule "
@@ -1133,7 +1165,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             reasons.append("catchup=True needs partitions and a backfill (convert with --catchup ignore to run from now on)")
     mplan, mwhy = plan_mapping(dag, tasks)
     reasons += mwhy
-    if mplan and triggers:
+    if mplan and triggers and mplan["mode"] != "graph":
         reasons.append("dynamic task mapping in an asset-triggered DAG")
     for t in tasks.values():
         ty, tid, tf = t["type"], t["task_id"], t["template_fields"]
@@ -1147,12 +1179,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 and t["trigger_rule"] not in PLAIN_RULES:
             reasons.append(f"{tid}: trigger_rule {t['trigger_rule']}")
         # every behavior-affecting task setting is mapped or defers the DAG: none is silently ignored
-        for flag, why in (("depends_on_past", "depends_on_past"), ("wait_for_downstream", "wait_for_downstream"),
-                          ("retry_exponential_backoff", "retry_exponential_backoff")):
+        for flag, why in (("depends_on_past", "depends_on_past (a run waiting for the previous run's task) is not enforced"),
+                          ("wait_for_downstream", "wait_for_downstream is not enforced")):
             if t.get(flag):
-                reasons.append(f"{tid}: {why}")
+                soften(f"{tid}: {why}", tid)
         if t.get("max_active_tis_per_dagrun"):
-            reasons.append(f"{tid}: max_active_tis_per_dagrun")
+            soften(f"{tid}: max_active_tis_per_dagrun is not enforced", tid)
         mtis = t.get("max_active_tis_per_dag")
         if mtis:
             if _pos(mtis) is None or t.get("pool"):
@@ -1162,14 +1194,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         if t.get("pool"):
             pool_limits.setdefault(t["pool"], None)
         if t.get("pool_slots") not in (None, 1):
-            reasons.append(f"{tid}: pool_slots={t['pool_slots']}")
+            soften(f"{tid}: pool_slots={t['pool_slots']} is not enforced (one slot is used)", tid)
         cbs = [c for c in (t.get("callbacks") or []) if not (t["is_mapped"] and c in ("pre_execute", "post_execute"))]   # a mapped wrapper overrides them; mapping already defers
         cb_ok = ("on_failure_callback", "on_success_callback", "on_retry_callback")       # converted with @on_hooks (asset form only)
         unsupported = [c for c in cbs if c not in cb_ok or not (t.get("callback_fns") or {}).get(c)]
         if unsupported or (cbs and (mplan and mplan["mode"] == "graph")):
-            reasons.append(f"{tid}: task callbacks or hooks {cbs}")
+            soften(f"{tid}: task callbacks or hooks {cbs} were not converted (attach them with `@on_hooks`)", tid)
+            if CAVEATS != "off":
+                t["callback_fns"] = {}
         if t.get("execution_timeout_s") and ty not in BASH | BASH_DEC:
-            reasons.append(f"{tid}: execution_timeout on a non-shell task (a Python callable cannot be interrupted safely)")
+            soften(f"{tid}: execution_timeout on a non-shell task is not enforced (a Python callable cannot be interrupted safely)", tid)
         if ty in PY_TASKS and (t.get("template_fields") or {}).get("templates_dict"):
             reasons.append(f"{tid}: templates_dict (rendered templates passed to the callable) is not rebuilt")
         if len(t["outlets"]) > 1:
@@ -1178,7 +1212,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             a = t.get("args") or {}
             for k in ("reset_dag_run", "trigger_run_id", "logical_date", "skip_when_already_exists", "fail_when_dag_is_paused"):
                 if a.get(k):
-                    reasons.append(f"{tid}: TriggerDagRunOperator with {k}")
+                    soften(f"{tid}: TriggerDagRunOperator {k} is not applied", tid)
             if not a.get("trigger_dag_id"):
                 reasons.append(f"{tid}: TriggerDagRunOperator target not found")
         if ty in SENSORS:
@@ -1243,7 +1277,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         keyparts[t["task_id"]] = key_from_asset(t["outlets"][0]) if t["outlets"] else [safe(dag_id)] + [safe(p) for p in t["task_id"].split(".")]
         k = "/".join(keyparts[t["task_id"]])
         if k in produced and produced[k] != dag_id:
-            raise Defer(f"{t['task_id']}: asset key {k} is already produced by DAG {produced[k]} (one producer per asset)")
+            if CAVEATS == "off":
+                raise Defer(f"{t['task_id']}: asset key {k} is already produced by DAG {produced[k]} (one producer per asset)")
+            keyparts[t["task_id"]] = [*keyparts[t["task_id"]], "by_" + safe(dag_id)]      # a second producer gets its own asset under the first one's key
+            caveats.append({"task": t["task_id"], "kind": "degraded", "reason": f"the asset {k} is also produced by DAG {produced[k]}; Dagster allows one producer per asset, so this DAG's output is {k}/by_{safe(dag_id)}"})
+            k = "/".join(keyparts[t["task_id"]])
     # Several tasks naming the same outlet: if they form a strict chain, the LAST one produces the asset and the earlier ones
     # become ordinary step assets. Unordered writers need an owner decision (Dagster allows one producer per asset).
     by_key: dict[str, list[str]] = {}
@@ -1301,7 +1339,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 code, sup = resolve_callable(t.get("callable"), shims_used, meta)
                 resolved[tid] = (code, sup, meta)
         except Defer as e:
-            if CAVEATS == "off" or ty in BASH_DEC or is_custom(t):          # a custom operator class is built and called as a whole; no stub shape yet
+            if CAVEATS == "off" or is_custom(t):          # a custom operator class is built and called as a whole; no stub shape yet
                 raise
             caveats.append({"task": tid, "kind": "stub", "reason": str(e)})
             ctx_tasks.discard(tid)
@@ -1412,7 +1450,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             fname = safe("op_" + tid)
             deco = [f"name={safe(dag_id) + '__' + safe(tid)!r}"]
             if t["retries"] and not fail_aware:
-                deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)})")
+                deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)}{', backoff=dg.Backoff.EXPONENTIAL' if t.get('retry_exponential_backoff') else ''})")
             if t["pool"]:
                 deco.append(f"pool={t['pool']!r}")
             elif f"{safe(dag_id)}__{safe(tid)}" in pool_limits:
@@ -1462,7 +1500,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                         inner = (f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
                                  if meta.get("needs_ctx") else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
                     except Defer as e:
-                        if CAVEATS == "off" or ty in BASH_DEC:
+                        if CAVEATS == "off":
                             raise
                         caveats.append({"task": tid, "kind": "stub", "reason": str(e)})
                         inner = f"af_caveat({str(e)[:300]!r}, skip={CAVEATS == 'skip'})"      # AIRFLOW-CAVEAT: the call's arguments could not be wired
@@ -1612,8 +1650,20 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                        f"    af_finish(context, {{{', '.join(f'{tid!r}: in_{k}' for k, tid in enumerate(order))}}}, leaves={sorted(leaf_ids)!r})\n")
             lines.append(f"    fin = op_finish({', '.join(val[x] for x in order)})")
             graph_outs.append("run_check")
+        trig_cond = ""
+        if triggers:                                                    # the whole graph runs when the triggering assets update (no per-task dependencies in a graph asset)
+            keys_ = [key_from_asset(a) for a in triggers]
+            for k_ in keys_:
+                if "/".join(k_) not in own_keys:
+                    external.add(tuple(k_))
+            terms_ = [f"dg.AutomationCondition.asset_matches(dg.AssetKey({k_!r}), dg.AutomationCondition.newly_updated()).since_last_handled()" for k_ in keys_]
+            trig_cond = (tree_condition(trig_tree) if trig_mode == "tree" else
+                         "(" + (" & " if trig_mode == "and" else " | ").join(terms_) + " & ~dg.AutomationCondition.any_deps_in_progress() & ~dg.AutomationCondition.in_progress())")
+            notes.append("the graph asset is triggered by an automation condition on " + ", ".join("/".join(k_) for k_ in keys_)
+                         + " (a graph asset cannot declare dependencies, so the lineage edge from those assets is not drawn)")
         outs_decl = ",\n        ".join(
             f"{outs[tid]!r}: dg.AssetOut(key={keyparts[tid]!r}, kinds={{{('shell' if tasks[tid]['type'] in BASH | BASH_DEC else 'python')!r}}}, "
+            + (f"automation_condition={trig_cond}, " if trig_cond else "") +
             f"metadata={{'airflow_dag': {dag_id!r}, 'airflow_task': {tid!r}, 'airflow_operator': {tasks[tid]['type']!r}}})" for tid in order if tid in keyparts)
         ret = "{" + ", ".join(f"{outs[tid]!r}: {val[tid]}" for tid in order if tid in keyparts) + (", 'o_run_check': fin" if fail_aware else "") + "}"
         if fail_aware:
@@ -1662,6 +1712,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             deco.append("deps=[" + ", ".join(f"dg.AssetKey({d!r})" for d in deps) + "]")
         if ppart and ppart.get("via"):
             pass                                              # the partition window sensor requests this asset's runs
+        elif triggers and trig_mode == "tree" and tid in roots:
+            deco.append("automation_condition=" + tree_condition(trig_tree))
         elif triggers and trig_mode == "and" and tid in roots:
             deco.append("automation_condition=" + and_condition([key_from_asset(a) for a in triggers]))
         elif triggers:
@@ -1671,7 +1723,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         elif ppart:
             deco.append(f"partitions_def={part_var}")
         if t["retries"]:
-            deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)})")
+            deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)}{', backoff=dg.Backoff.EXPONENTIAL' if t.get('retry_exponential_backoff') else ''})")
         if t["pool"]:
             deco.append(f"pool={t['pool']!r}")
         elif t.get("max_active_tis_per_dag") and f"{safe(dag_id)}__{safe(tid)}" in pool_limits:
@@ -1717,8 +1769,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 support.setdefault(sline, len(support))
             pyname = "_af_" + safe(tid)
             code = re.sub(r"^def\s+\w+", f"def {pyname}", code, count=1)
-            pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
-            kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
+            arg_caveat = ""
+            try:
+                pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
+                kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
+            except Defer as e:
+                if CAVEATS == "off":
+                    raise
+                arg_caveat, pos, kws = str(e), [], {}
+                caveats.append({"task": tid, "kind": "stub", "reason": arg_caveat})      # AIRFLOW-CAVEAT: the call's arguments could not be wired
             is_mapped_task = bool(pplan and tid in pplan["args"])
             if is_mapped_task:
                 kws = {**{k: repr(v) for k, v in pplan["fixed"][tid].items()}, pplan["args"][tid]: "item"}
@@ -1727,6 +1786,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 inner = f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
             else:
                 inner = f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")"
+            if arg_caveat:
+                inner = f"af_caveat({arg_caveat[:300]!r}, skip={CAVEATS == 'skip'})"
             pre = code + "\n\n\n"
             if ty in SENSOR_CALL:
                 body = ctx_line + sensor_body(t, params, ctxn, inner)
@@ -2565,6 +2626,11 @@ def af_sla_check(context, seconds, key):
                 "sla_breach": True, "sla_expected_seconds": seconds, "sla_overrun_seconds": late}))
     except Exception as e:                                         # noqa: BLE001  a monitoring failure must not fail the task
         context.log.warning(f"could not evaluate the SLA of {key}: {e}")
+
+
+def af_xcom_key(value, key):
+    """A named XCom of a task that returns a dict with multiple_outputs: Airflow pushes each dict key as its own XCom."""
+    return value.get(key) if isinstance(value, dict) else None
 
 
 def af_map_items(fns, items):
