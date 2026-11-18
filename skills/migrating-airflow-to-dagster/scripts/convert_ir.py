@@ -74,6 +74,7 @@ class Defer(Exception):
     pass
 
 
+DATASET_KEYS = "path"     # --dataset-keys path (s3://bucket/a/b -> s3/bucket/a/b) | script-orchestrator (airflow_dataset_bucket_a_b, the script_orchestrator component's naming)
 AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
 MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
 RETURN_ALL = False        # set by --return-all: keep every Python return value so a parity run can compare them
@@ -85,7 +86,12 @@ def safe(name: str) -> str:
 
 
 def key_from_asset(ref: str) -> list[str]:
-    """Airflow asset/dataset name or URI -> Dagster key path (s3://bucket/a/b -> [s3, bucket, a, b])."""
+    """Airflow asset/dataset name or URI -> Dagster key path (s3://bucket/a/b -> [s3, bucket, a, b]).
+    With --dataset-keys script-orchestrator: one flat key named as the script_orchestrator component names it."""
+    if DATASET_KEYS == "script-orchestrator":
+        cleaned = re.sub(r"^[a-z]+://", "", ref)
+        cleaned = re.sub(r"_+", "_", re.sub(r"[^A-Za-z0-9_]", "_", cleaned)).strip("_")
+        return [f"airflow_dataset_{cleaned}"]
     u = urlparse(ref)
     parts = [u.scheme, u.netloc, *u.path.strip("/").split("/")] if u.scheme and u.netloc else [ref]
     return [safe(p) for p in parts if p]
@@ -1955,11 +1961,15 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--mapping", choices=["graph", "partitions"], default="graph",
                     help="dynamic task mapping: dynamic outputs in one graph asset (default; keeps one run, reduce steps and all-or-nothing) "
                          "or partitions (leaf mapped tasks become independently runnable partitions)")
+    ap.add_argument("--dataset-keys", choices=["path", "script-orchestrator"], default="path",
+                    help="how Airflow Dataset/Asset names become Dagster asset keys: path parts (s3/bucket/a/b), or the flat airflow_dataset_<name> keys "
+                         "the script_orchestrator component uses, so both tools produce the same lineage")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
-    global RETURN_ALL, MAP_MODE, AF_MAJOR
+    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS
     RETURN_ALL = a.return_all
     MAP_MODE = a.mapping
+    DATASET_KEYS = a.dataset_keys
     ir = json.loads(a.ir.read_text())
     _m = re.match(r"(\d+)", str(ir.get("airflow_version") or ""))
     AF_MAJOR = int(_m.group(1)) if _m else 2
@@ -1968,7 +1978,7 @@ def main(argv: list[str] | None = None) -> int:
     (a.out_dir.parent / "runtime.py").write_text(RUNTIME)
     note = ("Schedule semantics: tasks converted here use no date values, so a plain cron schedule is exact for Airflow 3 "
             "(trigger timetable) and Airflow 2 (data-interval timetable).")
-    report: dict[str, Any] = {"airflow_version": ir.get("airflow_version"), "dags": {}}
+    report: dict[str, Any] = {"airflow_version": ir.get("airflow_version"), "dataset_keys": DATASET_KEYS, "dags": {}}
     produced: dict[str, str] = {}
     resources: set[str] = set()
     sf_resources: set[str] = set()

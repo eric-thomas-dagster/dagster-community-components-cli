@@ -17,6 +17,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent))
+import convert_ir  # noqa: E402
 import status  # noqa: E402
 
 ELIDED = {"EmptyOperator", "DummyOperator"}
@@ -28,6 +29,7 @@ def safe(name: str) -> str:
 
 
 def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
+    convert_ir.DATASET_KEYS = report.get("dataset_keys", "path")
     dags = {d["dag_id"]: d for d in ir["dags"]}
     units = manifest["units"]
     by_dag = {u["dag_id"]: u for u in units if u["kind"] in ("dag", "cosmos", "dag_factory", "blueprint_dag") and not u.get("factory")}
@@ -79,10 +81,7 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
 
 
 def i_key(ref: str) -> str:
-    from urllib.parse import urlparse
-    u = urlparse(ref)
-    parts = [u.scheme, u.netloc, *u.path.strip("/").split("/")] if u.scheme and u.netloc else [ref]
-    return "/".join(safe(p) for p in parts if p)
+    return "/".join(convert_ir.key_from_asset(ref))             # the converter's own function, in the mode the report was written with
 
 
 def main(argv: list[str] | None = None) -> int:

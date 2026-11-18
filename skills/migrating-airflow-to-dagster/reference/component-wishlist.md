@@ -17,39 +17,24 @@ These blockers are covered by components you have already built. The converter h
 | task callbacks 10 (4) | failure and success hooks | `@on_hooks` (the converter writes the adapter) |
 | delta schedules 8 (2) | a schedule that is not a plain cron | the schedule component |
 
-## What I verified against Airflow's own operators (`examples/runtime_conversion/component_parity/`)
+## What I verified against Airflow's own operators (`examples/runtime_conversion/component_parity/`, components 0.10.161)
 
-- **S3 copy, delete, list, upload (components 0.10.160):** 9 scenarios match, including delete's error response and 1,500 keys in chunks.
-- **Snowflake `COPY INTO`:** 4 configurations match after normalizing whitespace, with one textual difference: the component writes `ON_ERROR='CONTINUE'` (quoted) where Airflow passes `ON_ERROR = CONTINUE`. Please confirm Snowflake accepts the quoted form.
-- **Not yet tested:** the schedule, callable, sensor and conditional components, and `snowflake_sql_asset`.
+- **S3 copy, delete, list, upload:** 9 scenarios match, including delete's error response and 1,500 keys in chunks.
+- **Snowflake `COPY INTO`:** 4 of 4 configurations match (the `ON_ERROR` quoting is fixed).
+- **`shell_command_asset` output options:** `return_last_stdout_line` with `parse_json_output` matches Airflow 3 on 11 of 11 cases.
+- **`af_guard` against the converter's gate:** the same decision about whether a step runs in all 672 combinations of upstream states; see request 1 for the one label difference.
+- **Built but not yet tested by me:** `wait_until_asset`, `dynamic_fanout_asset` with `items_from`, `python_callable_asset` inputs read from upstream metadata, `s3_list_keys_asset` `return_keys_as_value`, the schedule component's date tags, `snowflake_sql_asset`, `k8s_job_asset` `use_pipes`.
 
 ## Requests
 
-### 1. Return values where downstream steps read them (small, high value)
+### 1. `af_guard` should label a step that did not run the way Airflow does
 
-- `s3_list_keys_asset` reports the key list only as `keys` metadata. Add an option to return it as the asset's value, so a downstream asset can take it as an input the usual way.
-- `shell_command_asset` returns nothing. A shell step's last line of output is what downstream steps read in the source system. Add an option (off by default) to return the last stdout line as the asset's value, with a second option to parse it as JSON when it is valid JSON (the converter does both today in its own runtime helper, and the JSON behavior depends on the source system's version).
+When a step does not run, `af_guard` always reports `skipped`. Airflow reports `upstream_failed` when a failure caused it (for example `all_success` or `none_failed` with a failed upstream) and `skipped` otherwise, and the label changes what later steps do: after a skipped step a `none_failed` step runs, after an upstream-failed step it does not. The converter's gate uses Airflow's own table (`TriggerRuleDep`); `examples/runtime_conversion/component_parity/gate_cross.py` lists every combination that differs, and `gate_cross_run.py` shows the run decisions already agree (0 of 672 differ). Offer an `upstream_failed` state in `StepOutcome` and set it per rule.
 
-### 2. Read a named value from an upstream materialization (small)
+### 2. Decisions I need from you
 
-A task can push several named values and a later task reads them by name. The converter implements this today as metadata on the pushing asset's materialization and a lookup in the same run. Add the same capability to the callable component: an input mapping `{argument: "upstream_asset_key.metadata_key"}` that reads the named metadata value from the upstream asset's materialization in the current run, with a default when it is missing.
-
-### 3. A reusable step gate (the converter generates about 150 lines for this today)
-
-For a pipeline expressed as one graph asset, each step needs to decide, from the states of the steps before it, whether to run. The cases: a branch names the steps to follow; a short-circuit skips everything after it, or only the next step; a join that runs when some upstreams were skipped; a cleanup step that runs after a failure; an alert that runs only when something failed. `conditional_asset` covers skipping but cannot rejoin when only one of several branches ran, and a Dagster step is skipped if any input was skipped, so a native join cannot do it. What the converter generates (`af_gate`, `af_guard` and `af_finish` in its runtime): a step returns a marker (skipped, failed, upstream-failed) instead of raising, the next step evaluates a named rule over its inputs' states, and a final step fails the run if anything failed. Offering this as a decorator pair (a gate on a step, a guard that turns a failure into a value) would let the converter emit it instead of carrying its own copy, and would make `conditional_asset` rejoin-capable.
-
-### 4. A blocking wait step (the converter generates the helpers today)
-
-Many pipelines hold a step open until a condition holds, with a polling interval and a timeout, and then either fail or skip on timeout. The conditions: a callable returns true; a shell command exits 0 (with an optional "try again" exit code); a file matching a pattern exists; a time of day has passed; a delay after the run's reference time has passed. The existing `python_sensor`, `*_monitor` and `event_automation` components start runs; they do not hold a step open, and the pipeline shape differs. A component or decorator `wait_until` with those condition types, `poll_seconds`, `timeout_seconds` and `on_timeout: fail | skip` would replace the converter's helpers.
-
-### 5. Run a callable once per item inside one run (the converter generates a graph for this today)
-
-For "do this for each item the previous step returned, then use all the results", the converter builds a graph asset with a fan-out step, a mapped step and a collect step. A component taking `items_from` (an upstream asset or a literal list), a `callable_path`, per-item arguments, and an option to collect the results would let the converter emit configuration. This is separate from the existing per-item partition components, which make each item its own run.
-
-### 6. Decisions I need from you
-
-- **Branch and skip behavior of `conditional_asset`:** if request 3 is not built, say plainly in its README that it cannot rejoin, so the converter documents that.
-- **Airflow 3.2 partitioned timetables** (`CronPartitionTimetable`, `PartitionedAssetTimetable` with mappers; 10 DAGs, all from one example file): needs a mapping from key formats and mappers to Dagster partition definitions and mappings. Not started. Low priority; it only exists from Airflow 3.2.
+- **Airflow 3.2 partitioned timetables** (`CronPartitionTimetable`, `PartitionedAssetTimetable` with mappers; 10 DAGs, all from one example file): your components session has this.
+- **Airflow-only asset events** (`Metadata`, `outlet_events`, `inlet_events`, `AssetAlias`; about 12 DAGs): the script orchestrator names each outlet asset (`airflow_dataset_<cleaned name>`) and turns schedule inlets into dependencies, but it does not handle events or aliases either. The natural Dagster mapping is materialization metadata (what the converter already does for `xcom_push`), and a read of an asset's latest materialization metadata for `inlet_events`. Say if you want that built.
 
 ## Low priority
 

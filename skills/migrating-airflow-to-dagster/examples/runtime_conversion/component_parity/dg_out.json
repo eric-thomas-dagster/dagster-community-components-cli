@@ -73,7 +73,7 @@
   "calls": [
    [
     "upload_file",
-    "['/var/folders/84/n83b05vs2b5fz8nkxcfk5dj40000gn/T/tmpvvk82oh_.txt', 'b', 'k/f.txt']",
+    "['/var/folders/84/n83b05vs2b5fz8nkxcfk5dj40000gn/T/tmpuawq2gy8.txt', 'b', 'k/f.txt']",
     "{}"
    ]
   ]
@@ -98,7 +98,7 @@
    ],
    [
     "upload_file",
-    "['/var/folders/84/n83b05vs2b5fz8nkxcfk5dj40000gn/T/tmpvvk82oh_.txt', 'b', 'k/new.txt']",
+    "['/var/folders/84/n83b05vs2b5fz8nkxcfk5dj40000gn/T/tmpuawq2gy8.txt', 'b', 'k/new.txt']",
     "{}"
    ]
   ]

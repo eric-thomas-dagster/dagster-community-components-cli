@@ -835,3 +835,12 @@ def test_airflow_fail_exception_fails_the_step_and_a_sensor_can_return_a_poke_va
     rep, mod2 = _convert_and_load(tmp_path / "p", {"airflow_version": "x", "dags": [dag([s], kind="once")]}, "pkg_poke", "--return-all") if (tmp_path / "p").mkdir() is None else None
     res2 = dg.materialize([mod2.t_s])
     assert res2.success and res2.asset_value(dg.AssetKey(["d1", "s"])) == "done"
+
+
+def test_dataset_keys_can_follow_the_script_orchestrator_naming(monkeypatch):
+    monkeypatch.setattr(C, "DATASET_KEYS", "script-orchestrator")
+    assert C.key_from_asset("file://incoming/player-stats/team_a.csv") == ["airflow_dataset_incoming_player_stats_team_a_csv"]
+    assert C.key_from_asset("s3://my-bucket/raw/data.csv") == ["airflow_dataset_s3_my_bucket_raw_data_csv"]      # the component's scheme strip is [a-z]+, so `s3` stays
+    assert C.key_from_asset("raw_data") == ["airflow_dataset_raw_data"]
+    monkeypatch.setattr(C, "DATASET_KEYS", "path")
+    assert C.key_from_asset("s3://my-bucket/raw/data.csv") == ["s3", "my_bucket", "raw", "data_csv"]
