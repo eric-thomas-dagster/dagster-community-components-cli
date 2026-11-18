@@ -34,15 +34,17 @@ Decision: a scheduled DAG with no natural time partition keeps a regular schedul
 
 A sensor that calls a function returning a bool (or a dict of run-request fields) and requests a run when it is true, with `minimum_interval_seconds` and a `run_key` option. Time, file and external-task waits are covered by the cron schedule, `*_monitor`, and `event_automation`, so this is the only sensor gap.
 
-### 5. Common attributes on components that lack them
+### 5. Low priority: smaller attribute gaps
 
-`shell_command_asset` (the converter's most used operator), `snowflake_stored_procedure_call_asset` and `k8s_job_asset`: add `pool` and `automation_condition` (named presets, the existing pattern on other components). `shell_command_asset` also needs its description fixed (it says it wraps `dagster-shell`; the code uses `subprocess`). `k8s_job_asset` still has no Pipes variant (`PipesK8sClient`) for streamed logs.
+Only worth doing if cheap. Pools are not on this list: only 2 of 292 corpus DAGs use a named pool, and the converter sets `pool=` directly on the assets it generates.
+- `automation_condition` (named presets, the existing pattern) on `shell_command_asset` and `snowflake_stored_procedure_call_asset`, so asset-triggered DAGs can use them as components.
+- `shell_command_asset`: its description says it wraps `dagster-shell`, but the code uses `subprocess`.
+- `k8s_job_asset`: no Pipes variant (`PipesK8sClient`) for streamed logs.
 
 ### 6. Behavior that differs from Airflow, to document or fix
 
 - `hooks_asset` (`@on_hooks`): hooks fire on every attempt, so a retried task fires `on_failure` several times. Airflow fires its failure callback after the last attempt only. Add a "final attempt only" option (`context.retry_number` against the retry policy's maximum). This blocks 10 DAGs that use task callbacks (5 alone).
 - `timeout_asset` (`@timeout`): it abandons a worker thread at the deadline and the work keeps running, whereas Airflow stops the task. State this in the README, and where possible offer a variant that runs the callable in a subprocess that can be killed (`pipes_python_asset` may already do this).
-- `rpa_queue_concurrency_lock` versus Dagster's native pools: say which one the converter should emit for Airflow pools and `max_active_tis_per_dag`.
 
 ## Decisions I need from you (not component work)
 
