@@ -63,6 +63,20 @@ def _callable_info(fn: Any) -> dict[str, Any] | None:
     if fn is None or not callable(fn):
         return None
     info: dict[str, Any] = {"name": getattr(fn, "__name__", "?"), "module": getattr(fn, "__module__", None)}
+    if info["name"] == "<lambda>":                           # rewrite the lambda as a function: `lambda x: x + 1` -> `def _lambda(x): return x + 1`
+        try:
+            import ast
+            path = inspect.getsourcefile(fn)
+            line = fn.__code__.co_firstlineno
+            found = [n for n in ast.walk(ast.parse(Path(path).read_text())) if isinstance(n, ast.Lambda) and n.lineno == line
+                     and len(n.args.args) == fn.__code__.co_argcount]
+            if len(found) == 1:
+                lam = found[0]
+                info.update(name="_lambda", source=f"def _lambda({ast.unparse(lam.args)}):\n    return {ast.unparse(lam.body)}\n", file=path,
+                            params=list(inspect.signature(fn).parameters))
+                return info
+        except Exception:                                    # noqa: BLE001
+            pass
     try:
         info["source"] = textwrap.dedent(inspect.getsource(fn))
         info["file"] = inspect.getsourcefile(fn)

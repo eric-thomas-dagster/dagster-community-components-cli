@@ -59,7 +59,7 @@ SHIM_IMPORTS = {("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("a
     {("airflow.utils.decorators", "apply_defaults")} | {(m, "Context") for m in ("airflow.utils.context", "airflow.sdk", "airflow.sdk.definitions.context")} | \
     {(m, n) for m in ("airflow.exceptions", "airflow.sdk.exceptions", "airflow.sdk") for n in ("AirflowException", "AirflowSkipException", "AirflowFailException")} | \
     {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")}
-ELIDED = {"EmptyOperator", "DummyOperator"}
+ELIDED = {"EmptyOperator", "DummyOperator", "LatestOnlyOperator", "ExternalTaskMarker"}      # nothing to run; LatestOnly and ExternalTaskMarker have no effect once schedules do not backfill
 PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator", "_AssetMainOperator"}      # the last: an Airflow 3 @asset function
 BASH = {"BashOperator"}
 BASH_DEC = {"_BashDecoratedOperator"}
@@ -781,10 +781,13 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
         return None, []
     why: list[str] = []
     for tid, t in tasks.items():
-        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS and not is_custom(t):
+        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | S3_OPS | SNOWFLAKE_OPS and not is_custom(t):
             why.append(f"{tid}: a {t['type']} inside a DAG with mapped tasks (only Python and shell tasks are converted there)")
     mp: dict[str, Any] = {}
     for tid, t in mapped.items():
+        if t["type"] in S3_OPS | SNOWFLAKE_OPS:
+            why.append(f"{tid}: a mapped {t['type']} (only mapped Python and shell tasks are converted)")
+            continue
         e = t.get("expand") or {}
         if e.get("form") not in ("expand", "expand_kwargs") or not e.get("args"):
             why.append(f"{tid}: dynamic task mapping with {e.get('form')} is not converted")
@@ -982,8 +985,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             continue                                          # mapped below: a run tag plus a deployment concurrency limit
         if v not in (None, default, 0) and not (isinstance(v, dict)):
             reasons.append(f"{k}={v} (a concurrency limit that is not mapped)")
-    if ds.get("dagrun_timeout"):
-        reasons.append("dagrun_timeout (a run time limit that is not mapped)")
+    run_timeout = None
+    dt_ = ds.get("dagrun_timeout")
+    if dt_:
+        if isinstance(dt_, dict) and dt_.get("seconds"):
+            run_timeout = int(dt_["seconds"])                  # a tag Dagster's run monitoring reads: the deployment must enable run monitoring
+        else:
+            reasons.append("dagrun_timeout (not readable as a number of seconds)")
     if ds.get("max_consecutive_failed_dag_runs"):
         reasons.append("max_consecutive_failed_dag_runs (auto-pause after failures is not mapped)")
     if ds.get("render_template_as_native_obj"):
@@ -1086,6 +1094,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     if not real:
         raise Defer("only EmptyOperators: nothing to run")
     notes: list[str] = [catchup_note] if catchup_note else []
+    if any(t["type"] == "LatestOnlyOperator" for t in tasks.values()):
+        notes.append("LatestOnlyOperator is dropped: it skips runs that are not the latest, and a Dagster schedule does not catch up on missed ticks (a backfill you launch will run everything)")
+    if any(t["type"] == "ExternalTaskMarker" for t in tasks.values()):
+        notes.append("ExternalTaskMarker is dropped: it only declares which tasks to clear in another DAG")
 
     def reaches(a: str, b: str) -> bool:
         """True if task a is upstream of task b (possibly through elided tasks)."""
@@ -1174,8 +1186,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 cb_blocks.append(re.sub(r"^def\s+\w+", f"def {fn_name}", code, count=1))
                 cb_code.setdefault(t["task_id"], []).append((kind, fn_name))
     uses_ctx = bool(ctx_tasks)
-    if gplan and ti_inputs:
-        raise Defer("dynamic task mapping where a callable pulls XComs by task id (not converted yet)")
+    if gplan and any(ti_inputs.values()):
+        raise Defer("a graph-form DAG where a callable pulls XComs by task id (not converted yet)")
     if pplan and (uses_ctx or any(resolved[x][2].get("needs_ti") for x in pplan["args"] if x in resolved)):
         raise Defer("dynamic task mapping where a callable uses the task context or pulls XComs (not converted yet)")
     dag_params = dag.get("params") or {}
@@ -1292,6 +1304,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     body = ctx_line + f"    return ShortCircuit(bool({inner}), hard={t.get('short_circuit_hard', True)!r})"
                 else:
                     body = (combo if m else "") + ctx_line + f"    return {inner}"
+            elif ty in S3_OPS:
+                stmt, conn = s3_call(t, params, ctxn)
+                resources.add(conn)
+                deco.append(f"required_resource_keys={{{conn!r}}}")
+                body = ctx_line + f"    client = getattr(context.resources, {conn!r})     # dagster-aws attaches the boto client\n    " + (stmt if stmt.startswith("return") else f"{stmt}\n    return None")
+            elif ty in SNOWFLAKE_OPS:
+                stmt, conn = snowflake_call(t, ctxn)
+                sf_resources.add(conn)
+                deco.append(f"required_resource_keys={{{conn!r}}}")
+                body = ctx_line + f"    {stmt}\n    return None"
             elif ty in ELIDED:
                 body = "    return None"
             elif ty in CLOCK_BRANCH:
@@ -1612,8 +1634,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     mapped_keys = [keyparts[x] for x in (pplan["args"] if pplan else [])]
     job_keys = [k for k in keys if k not in mapped_keys] if pplan and pplan["kind"] == "xcom" else keys
     pd_arg = (f", partitions_def={safe(dag_id)}_items" if pplan and pplan["kind"] == "literal" else (f", partitions_def={part_var}" if ppart else ""))
+    job_tags = {**({"airflow/dag_id": dag_id} if max_runs else {}), **({"dagster/max_runtime": str(run_timeout)} if run_timeout else {})}
     out += (f"\n{safe(dag_id)}_job = dg.define_asset_job({safe(dag_id)!r}, selection=[dg.AssetKey(k) for k in {job_keys!r}]{pd_arg}"
-            + (f", tags={{'airflow/dag_id': {dag_id!r}}}" if max_runs else "")
+            + (f", tags={job_tags!r}" if job_tags else "")
             + (f", executor_def=dg.multiprocess_executor.configured({{'max_concurrent': {max_tasks}}})" if max_tasks else "") + ")\n")
     if pplan and pplan["kind"] == "xcom":
         out += (f"\n{safe(dag_id)}_items_job = dg.define_asset_job({safe(dag_id) + '_items'!r}, selection=[dg.AssetKey(k) for k in {mapped_keys!r}], "
@@ -1652,7 +1675,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
                  "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
-                 "uses_context": uses_ctx, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
+                 "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
 

@@ -115,7 +115,7 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d.update(dag_settings={"fail_stop": True}), "fail_stop=True"),
     (lambda d: d.update(dag_settings={"max_active_runs": True}), "max_active_runs=True"),
     (lambda d: d.update(dag_settings={"max_active_tasks": 0.5}), "max_active_tasks"),
-    (lambda d: d.update(dag_settings={"dagrun_timeout": {"seconds": 60.0}}), "dagrun_timeout"),
+    (lambda d: d.update(dag_settings={"dagrun_timeout": {"repr": "weird"}}), "dagrun_timeout"),
     (lambda d: d["tasks"][0].update(retry_exponential_backoff=True), "retry_exponential_backoff"),
     (lambda d: d["tasks"][0].update(max_active_tis_per_dag=1, pool="p"), "together with a named pool"),
     (lambda d: d["tasks"][0].update(max_active_tis_per_dagrun=1), "max_active_tis_per_dagrun"),
@@ -1121,3 +1121,26 @@ def test_asset_metadata_from_yield_and_outlet_events_and_reading_inlet_events(tm
         assert res.asset_value(key) == "done"                                              # and the generator's return value is the asset's value
         assert any("flag" in m and m["flag"].value is True for m in events)                # outlet_events[asset].extra = {...} on another task
         assert res.asset_value(dg.AssetKey(["d1", "r"])) == [("bye", None), (None, True)]  # inlet_events[asset] lists the materializations, oldest first, with their metadata
+
+
+def test_s3_operators_run_inside_a_graph_dag(tmp_path):
+    dg = pytest.importorskip("dagster")
+    f = lambda **k: {"aws_conn_id": "aws_default", **k}
+    ls = task("ls", "S3ListOperator", template_fields=f(bucket="b", prefix="p/", delimiter=None))
+    use = task("use", "PythonOperator", up=["ls"], callable=fn("passthrough"), op_args=[{"xcom_from": "ls", "key": "return_value"}], op_kwargs={}, trigger_rule="all_done")
+    rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([ls, use], kind="once")]}, "pkg_s3graph", "--return-all")
+    assert rep["status"] == "converted" and rep["resources"] == ["aws_default"], rep
+
+    class Client:                                                        # what dagster-aws attaches: the boto client's methods
+        def get_paginator(self, name):
+            return type("P", (), {"paginate": lambda self, **kw: [{"Contents": [{"Key": "p/a"}, {"Key": "p/b"}]}]})()
+    res = dg.materialize([mod.d1_graph], resources={"aws_default": dg.ResourceDefinition.hardcoded_resource(Client())})
+    assert res.success and res.asset_value(dg.AssetKey(["d1", "use"])) == ["p/a", "p/b"]
+
+
+def test_dagrun_timeout_becomes_the_run_time_limit_tag_and_latest_only_is_dropped():
+    d = dag([task("lo", "LatestOnlyOperator"), task("t", "BashOperator", up=["lo"], template_fields={"bash_command": "true"})])
+    d["dag_settings"] = {"dagrun_timeout": {"seconds": 3600.0}}
+    code, s = convert(d)
+    assert "'dagster/max_runtime': '3600'" in code and s["run_timeout_s"] == 3600
+    assert any("LatestOnlyOperator is dropped" in n for n in s["notes"]) and "t_lo" not in code
