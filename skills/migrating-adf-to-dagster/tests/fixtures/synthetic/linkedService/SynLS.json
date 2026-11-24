@@ -1,0 +1,10 @@
+{
+  "name": "SynLS",
+  "properties": {
+    "type": "AzureSynapseArtifacts",
+    "typeProperties": {
+      "endpoint": "https://myws.dev.azuresynapse.net",
+      "authentication": "MSI"
+    }
+  }
+}

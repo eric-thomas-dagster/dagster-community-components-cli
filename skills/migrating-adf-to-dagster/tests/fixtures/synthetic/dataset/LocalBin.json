@@ -1,0 +1,24 @@
+{
+  "name": "LocalBin",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "LocalFiles",
+      "type": "LinkedServiceReference"
+    },
+    "type": "Binary",
+    "parameters": {
+      "Folder": {
+        "type": "String"
+      }
+    },
+    "typeProperties": {
+      "location": {
+        "type": "FileServerLocation",
+        "folderPath": {
+          "value": "@dataset().Folder",
+          "type": "Expression"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+{
+  "name": "PeopleCopy",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "SqlLS2",
+      "type": "LinkedServiceReference"
+    },
+    "type": "AzureSqlTable",
+    "typeProperties": {
+      "tableName": "dbo.people_copy"
+    }
+  }
+}

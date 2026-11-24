@@ -1,0 +1,29 @@
+{
+  "name": "Child",
+  "properties": {
+    "parameters": {
+      "msg": {
+        "type": "String",
+        "defaultValue": "hi"
+      }
+    },
+    "variables": {
+      "out": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "SetOut",
+        "type": "SetVariable",
+        "typeProperties": {
+          "variableName": "out",
+          "value": {
+            "value": "@concat('child:', pipeline().parameters.msg)",
+            "type": "Expression"
+          }
+        }
+      }
+    ]
+  }
+}

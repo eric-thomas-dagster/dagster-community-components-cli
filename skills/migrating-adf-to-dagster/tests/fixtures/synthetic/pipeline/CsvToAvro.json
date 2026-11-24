@@ -1,0 +1,58 @@
+{
+  "name": "CsvToAvro",
+  "properties": {
+    "parameters": {
+      "src": {
+        "type": "String"
+      },
+      "dst": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Conv",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "LocalCsv",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.src",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalAvro",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dst",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": true
+            }
+          },
+          "sink": {
+            "type": "AvroSink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

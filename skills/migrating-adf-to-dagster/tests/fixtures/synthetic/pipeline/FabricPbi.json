@@ -1,0 +1,16 @@
+{
+  "name": "FabricPbi",
+  "properties": {
+    "activities": [
+      {
+        "name": "Refresh",
+        "type": "PBISemanticModelRefresh",
+        "typeProperties": {
+          "method": "post",
+          "waitOnCompletion": true,
+          "operationType": "SemanticModelRefresh"
+        }
+      }
+    ]
+  }
+}

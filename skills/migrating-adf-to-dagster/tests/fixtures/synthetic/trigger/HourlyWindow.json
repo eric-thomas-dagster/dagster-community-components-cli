@@ -1,0 +1,25 @@
+{
+  "name": "HourlyWindow",
+  "properties": {
+    "type": "TumblingWindowTrigger",
+    "runtimeState": "Stopped",
+    "typeProperties": {
+      "frequency": "Hour",
+      "interval": 1,
+      "startTime": "2025-06-01T00:00:00Z",
+      "maxConcurrency": 2
+    },
+    "pipeline": {
+      "pipelineReference": {
+        "referenceName": "Child",
+        "type": "PipelineReference"
+      },
+      "parameters": {
+        "msg": {
+          "value": "@trigger().outputs.windowStartTime",
+          "type": "Expression"
+        }
+      }
+    }
+  }
+}

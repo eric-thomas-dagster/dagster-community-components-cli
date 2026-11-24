@@ -1,0 +1,21 @@
+{
+  "name": "Msi",
+  "properties": {
+    "activities": [
+      {
+        "name": "CallAzure",
+        "type": "WebActivity",
+        "typeProperties": {
+          "url": "https://example.invalid/api/jobs",
+          "method": "POST",
+          "headers": {},
+          "body": "{}",
+          "authentication": {
+            "type": "MSI",
+            "resource": "https://dev.azuresynapse.net/"
+          }
+        }
+      }
+    ]
+  }
+}

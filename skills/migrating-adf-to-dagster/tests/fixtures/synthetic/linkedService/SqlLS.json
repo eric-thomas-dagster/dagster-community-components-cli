@@ -1,0 +1,12 @@
+{
+  "name": "SqlLS",
+  "properties": {
+    "type": "AzureSqlDatabase",
+    "typeProperties": {
+      "connectionString": {
+        "type": "SecureString",
+        "value": "Server=tcp:x;Password=hunter2"
+      }
+    }
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "name": "PeopleJson",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "LocalFiles",
+      "type": "LinkedServiceReference"
+    },
+    "type": "Json",
+    "parameters": {
+      "Folder": {
+        "type": "String"
+      }
+    },
+    "typeProperties": {
+      "location": {
+        "type": "FileServerLocation",
+        "folderPath": {
+          "value": "@dataset().Folder",
+          "type": "Expression"
+        }
+      }
+    }
+  }
+}

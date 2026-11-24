@@ -1,0 +1,57 @@
+{
+  "name": "CsvToParquet",
+  "properties": {
+    "parameters": {
+      "src": {
+        "type": "String"
+      },
+      "dst": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Convert",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "LocalCsv",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.src",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalParquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dst",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings"
+            }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

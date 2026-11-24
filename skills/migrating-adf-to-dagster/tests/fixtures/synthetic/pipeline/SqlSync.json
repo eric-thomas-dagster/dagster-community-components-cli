@@ -1,0 +1,47 @@
+{
+  "name": "SqlSync",
+  "properties": {
+    "activities": [
+      {
+        "name": "Loop",
+        "type": "ForEach",
+        "typeProperties": {
+          "items": {
+            "value": "@createArray('x')",
+            "type": "Expression"
+          },
+          "isSequential": true,
+          "activities": [
+            {
+              "name": "Move",
+              "type": "Copy",
+              "inputs": [
+                {
+                  "referenceName": "PeopleTable",
+                  "type": "DatasetReference"
+                }
+              ],
+              "outputs": [
+                {
+                  "referenceName": "PeopleCopyPlain",
+                  "type": "DatasetReference"
+                }
+              ],
+              "typeProperties": {
+                "source": {
+                  "type": "AzureSqlSource",
+                  "sqlReaderQuery": "select id, name from people"
+                },
+                "sink": {
+                  "type": "AzureSqlSink",
+                  "preCopyScript": "delete from people_copy",
+                  "writeBehavior": "insert"
+                }
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

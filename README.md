@@ -135,6 +135,14 @@ Source repo for the components themselves:
 
 <https://github.com/eric-thomas-dagster/dagster-component-templates>
 
+## Migration skills
+
+`skills/` holds agent skills that convert other orchestrators into Dagster projects, each with its converter, tests and references:
+
+- [`migrating-airflow-to-dagster`](skills/migrating-airflow-to-dagster/SKILL.md): Airflow DAGs, with parity checks against a running Airflow.
+- [`migrating-adf-to-dagster`](skills/migrating-adf-to-dagster/SKILL.md): Azure Data Factory pipelines, triggers and Mapping Data Flows.
+- [`migrating-runmyjobs-to-dagster`](skills/migrating-runmyjobs-to-dagster/SKILL.md): Redwood RunMyJobs process definitions and chains.
+
 ## Status
 
 This is a community / prototype project — not officially supported by Dagster Labs. Components are best-effort and provided as templates to copy and adapt into your project. Issues and PRs welcome.

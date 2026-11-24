@@ -1,0 +1,20 @@
+{
+  "name": "OnBlob",
+  "properties": {
+    "type": "BlobEventsTrigger",
+    "runtimeState": "Started",
+    "typeProperties": {
+      "events": [
+        "Microsoft.Storage.BlobCreated"
+      ]
+    },
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "Unhandled",
+          "type": "PipelineReference"
+        }
+      }
+    ]
+  }
+}

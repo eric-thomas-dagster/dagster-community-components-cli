@@ -1,0 +1,61 @@
+{
+  "name": "Consumer",
+  "properties": {
+    "variables": {
+      "got": {
+        "type": "String"
+      },
+      "raw": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Call",
+        "type": "ExecutePipeline",
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Producer",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true
+        }
+      },
+      {
+        "name": "Use",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Call",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "got",
+          "value": {
+            "value": "@activity('Call').output.pipelineReturnValue.answer",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Raw",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Use",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "raw",
+          "value": "@concat('r', 'aw')"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,163 @@
+{
+  "name": "Reformat",
+  "properties": {
+    "parameters": {
+      "src": {
+        "type": "String"
+      },
+      "dst": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CsvToPq",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "LocalCsv",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.src",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalParquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@concat(pipeline().parameters.dst, '/pq')",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": true,
+              "wildcardFileName": "*.csv"
+            }
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings"
+            }
+          }
+        }
+      },
+      {
+        "name": "PqToPipe",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "CsvToPq",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "inputs": [
+          {
+            "referenceName": "LocalParquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@concat(pipeline().parameters.dst, '/pq')",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalPipe",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@concat(pipeline().parameters.dst, '/pipe')",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": true,
+              "wildcardFileName": "*.parquet"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings"
+            }
+          }
+        }
+      },
+      {
+        "name": "JsonToCsv",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "PqToPipe",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "inputs": [
+          {
+            "referenceName": "LocalJson",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.src",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalCsv",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@concat(pipeline().parameters.dst, '/fromjson')",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "JsonSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": true,
+              "wildcardFileName": "*.json"
+            }
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

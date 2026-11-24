@@ -1,0 +1,141 @@
+{
+  "name": "Etl",
+  "properties": {
+    "variables": {
+      "stamp": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Stage",
+        "type": "SetVariable",
+        "typeProperties": {
+          "variableName": "stamp",
+          "value": "before"
+        }
+      },
+      {
+        "name": "RunPackage",
+        "type": "ExecuteSSISPackage",
+        "dependsOn": [
+          {
+            "activity": "Stage",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "packageLocation": {
+            "type": "SSISDB",
+            "packagePath": "Sales/Loads/LoadSales.dtsx"
+          },
+          "runtime": "x64",
+          "packageParameters": {
+            "Region": {
+              "value": "us"
+            }
+          }
+        }
+      },
+      {
+        "name": "Score",
+        "type": "SynapseNotebook",
+        "dependsOn": [
+          {
+            "activity": "RunPackage",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "SynLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebook": {
+            "referenceName": "score_sales",
+            "type": "NotebookReference"
+          },
+          "sparkPool": {
+            "referenceName": "pool1",
+            "type": "BigDataPoolReference"
+          }
+        }
+      },
+      {
+        "name": "Sync",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Score",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "inputs": [
+          {
+            "referenceName": "PeopleTable",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "PeopleCopy",
+            "type": "DatasetReference"
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource"
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "writeBehavior": "insert"
+          }
+        }
+      },
+      {
+        "name": "Finish",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Sync",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "stamp",
+          "value": "after"
+        }
+      },
+      {
+        "name": "Spark",
+        "type": "SparkJob",
+        "dependsOn": [
+          {
+            "activity": "RunPackage",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "SynLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "sparkJob": {
+            "referenceName": "nightly_agg",
+            "type": "SparkJobDefinitionReference"
+          }
+        }
+      }
+    ]
+  }
+}

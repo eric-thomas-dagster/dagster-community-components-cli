@@ -1,0 +1,52 @@
+{
+  "name": "CsvToSql",
+  "properties": {
+    "parameters": {
+      "src": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Load",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "LocalCsv",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.src",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "PeopleTable",
+            "type": "DatasetReference"
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": false,
+              "wildcardFileName": "*.csv"
+            },
+            "formatSettings": {
+              "type": "DelimitedTextReadSettings"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "preCopyScript": "delete from people",
+            "writeBehavior": "insert"
+          }
+        }
+      }
+    ]
+  }
+}

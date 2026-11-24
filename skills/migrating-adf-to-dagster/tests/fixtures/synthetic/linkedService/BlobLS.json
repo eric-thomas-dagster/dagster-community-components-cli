@@ -1,0 +1,12 @@
+{
+  "name": "BlobLS",
+  "properties": {
+    "type": "AzureBlobStorage",
+    "typeProperties": {
+      "connectionString": {
+        "type": "SecureString",
+        "value": "AccountKey=blobkey"
+      }
+    }
+  }
+}

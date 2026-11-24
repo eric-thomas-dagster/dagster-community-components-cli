@@ -1,0 +1,970 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Product build: 2025.1.0.0-2025-02-24-1645_g1ef0ca6b1de -->
+<JobDefinition>
+  <Comment><![CDATA[This is a customer order process.
+sandbox notes:
+
+
+=JobChainParameters.getOutValueString('Credit Check, Job 1',  'Credit_chk') === 'good'
+
+This permits the good credit check to be processed.]]></Comment>
+  <Description>Plan to Produce Process Template</Description>
+  <Name>Plan_to_Produce_Template</Name>
+  <Partition type="Partition" path="GLOBAL" />
+  <ObjectTag>
+    <ObjectTagDefinition type="ObjectTagDefinition" path="GLOBAL.System_Monitored" />
+    <Value><![CDATA[false]]></Value>
+  </ObjectTag>
+  <ParentApplication />
+  <EquivalentObject>false</EquivalentObject>
+  <CriticalProcess>false</CriticalProcess>
+  <Discarded>false</Discarded>
+  <KeepForce>true</KeepForce>
+  <KeepAmount>10</KeepAmount>
+  <KeepUnits>Days</KeepUnits>
+  <KeepType />
+  <KeepJobsInStatus />
+  <KeepInStatusAmount />
+  <KeepInStatusUnit />
+  <MinimumOpenDurationExpression />
+  <Overdue>false</Overdue>
+  <OverdueStatus />
+  <OverviewFormat />
+  <Priority />
+  <MaxPriority>100</MaxPriority>
+  <RestartCount />
+  <ReturncodeMapToCompleted />
+  <HoldOnSubmit>false</HoldOnSubmit>
+  <TopLevel>true</TopLevel>
+  <Template>false</Template>
+  <Maintenance>false</Maintenance>
+  <ReactionJobType />
+  <EvaluationOwnerType>SystemDefault</EvaluationOwnerType>
+  <CompletionStrategy>Default</CompletionStrategy>
+  <OverdueEventDefinition />
+  <DefaultOutputFormat />
+  <JobDefinitionType type="JobDefinitionType" path="GLOBAL.JobChain" />
+  <DefaultLogFormat />
+  <DefaultQueue type="Queue" path="GLOBAL.System" />
+  <Resource />
+  <TimeWindow />
+  <TimeWindowTimeZone />
+  <JobTimeZone />
+  <RELRelatedLibrary />
+  <ActionSubject />
+  <JobDefinitionParameter>
+    <Comment />
+    <Description />
+    <Name>PeriodStart</Name>
+    <DataLength />
+    <DataPrecision />
+    <DataScale />
+    <DataType>DateTimeZone</DataType>
+    <DefaultExpression><![CDATA[=Time.expressionNow('set hour 0 set minute 0 set second 0')]]></DefaultExpression>
+    <DefaultValueEditable />
+    <Direction>InOut</Direction>
+    <SimpleConstraintType>None</SimpleConstraintType>
+    <SimpleConstraintData />
+    <SimpleConstraintMessage />
+    <SimpleConstraintOptional>false</SimpleConstraintOptional>
+    <SimpleConstraintSort>Ascending</SimpleConstraintSort>
+    <Display>true</Display>
+    <Password>false</Password>
+    <DisplayOrder>0</DisplayOrder>
+    <Editable>Always</Editable>
+    <GroupName />
+    <PartOfKey>false</PartOfKey>
+    <Nullable>true</Nullable>
+    <Runtime>false</Runtime>
+    <JobFormat />
+    <Array>false</Array>
+    <ArrayMinLength>0</ArrayMinLength>
+    <ArrayMaxLength />
+    <ArrayDuplicateValuesAllowed>false</ArrayDuplicateValuesAllowed>
+    <ArraySorted>false</ArraySorted>
+    <ParameterMappingType>Normal</ParameterMappingType>
+    <JobDefinitionParameterSubType />
+  </JobDefinitionParameter>
+  <JobDefinitionParameter>
+    <Comment />
+    <Description />
+    <Name>PeriodEnd</Name>
+    <DataLength />
+    <DataPrecision />
+    <DataScale />
+    <DataType>DateTimeZone</DataType>
+    <DefaultExpression><![CDATA[=Time.expressionNow('add 1 day set hour 0 set minute 0 set second 0')]]></DefaultExpression>
+    <DefaultValueEditable />
+    <Direction>InOut</Direction>
+    <SimpleConstraintType>None</SimpleConstraintType>
+    <SimpleConstraintData />
+    <SimpleConstraintMessage />
+    <SimpleConstraintOptional>false</SimpleConstraintOptional>
+    <SimpleConstraintSort>Ascending</SimpleConstraintSort>
+    <Display>true</Display>
+    <Password>false</Password>
+    <DisplayOrder>1</DisplayOrder>
+    <Editable>Always</Editable>
+    <GroupName />
+    <PartOfKey>false</PartOfKey>
+    <Nullable>true</Nullable>
+    <Runtime>false</Runtime>
+    <JobFormat />
+    <Array>false</Array>
+    <ArrayMinLength>0</ArrayMinLength>
+    <ArrayMaxLength />
+    <ArrayDuplicateValuesAllowed>false</ArrayDuplicateValuesAllowed>
+    <ArraySorted>false</ArraySorted>
+    <ParameterMappingType>Normal</ParameterMappingType>
+    <JobDefinitionParameterSubType />
+  </JobDefinitionParameter>
+  <JobDefinitionParameter>
+    <Comment />
+    <Description>To</Description>
+    <Name>To</Name>
+    <DataLength />
+    <DataPrecision />
+    <DataScale />
+    <DataType>String</DataType>
+    <DefaultExpression />
+    <DefaultValueEditable>Always</DefaultValueEditable>
+    <Direction>In</Direction>
+    <SimpleConstraintType>None</SimpleConstraintType>
+    <SimpleConstraintData />
+    <SimpleConstraintMessage />
+    <SimpleConstraintOptional>false</SimpleConstraintOptional>
+    <SimpleConstraintSort>None</SimpleConstraintSort>
+    <Display>true</Display>
+    <Password>false</Password>
+    <DisplayOrder>2</DisplayOrder>
+    <Editable>Always</Editable>
+    <GroupName />
+    <PartOfKey>false</PartOfKey>
+    <Nullable>false</Nullable>
+    <Runtime>false</Runtime>
+    <JobFormat />
+    <Array>false</Array>
+    <ArrayMinLength>0</ArrayMinLength>
+    <ArrayMaxLength />
+    <ArrayDuplicateValuesAllowed>false</ArrayDuplicateValuesAllowed>
+    <ArraySorted>false</ArraySorted>
+    <ParameterMappingType>Normal</ParameterMappingType>
+    <JobDefinitionParameterSubType />
+  </JobDefinitionParameter>
+  <JobFileSearch>
+    <ProcessingOrder>1</ProcessingOrder>
+    <Stop>false</Stop>
+    <JobNote>true</JobNote>
+    <Filename>*.txt</Filename>
+    <SearchPattern><![CDATA[*bad*]]></SearchPattern>
+    <BeginLine>1</BeginLine>
+    <EndLine>-1</EndLine>
+    <EntireLine>false</EntireLine>
+    <WildCard>true</WildCard>
+    <IgnoreCase>false</IgnoreCase>
+    <Reverse>false</Reverse>
+    <NewJobStatus>Error</NewJobStatus>
+    <ReturnCode />
+    <OutParamExpr />
+    <OutputJobDefinitionParameter />
+  </JobFileSearch>
+  <JobChain>
+    <RestartCount />
+    <RequestRestartByDefault>false</RequestRestartByDefault>
+    <RestartDelayAmount>0</RestartDelayAmount>
+    <RestartDelayUnits>Minutes</RestartDelayUnits>
+    <JobChainStep>
+      <Comment />
+      <Description>Demand Forecasting</Description>
+      <Name>Demand Forecasting</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>1</SequenceNumber>
+      <JobChainCall>
+        <Description>Data Collection &amp; Analysis</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+      <JobChainCall>
+        <Description>Forecast Review</Description>
+        <SequenceNumber>2</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition>
+          <Comment />
+          <Description>Plan_to_Produce_Template 1</Description>
+          <Name>System_Internal_Chain164355952</Name>
+          <Partition type="Partition" path="GLOBAL" />
+          <ParentApplication />
+          <EquivalentObject>false</EquivalentObject>
+          <CriticalProcess>false</CriticalProcess>
+          <Discarded>false</Discarded>
+          <KeepForce>false</KeepForce>
+          <KeepAmount />
+          <KeepUnits />
+          <KeepType />
+          <KeepJobsInStatus />
+          <KeepInStatusAmount />
+          <KeepInStatusUnit />
+          <MinimumOpenDurationExpression />
+          <Overdue>false</Overdue>
+          <OverdueStatus />
+          <OverviewFormat />
+          <Priority />
+          <MaxPriority>100</MaxPriority>
+          <RestartCount />
+          <ReturncodeMapToCompleted />
+          <HoldOnSubmit>false</HoldOnSubmit>
+          <TopLevel>false</TopLevel>
+          <Template>false</Template>
+          <Maintenance>false</Maintenance>
+          <ReactionJobType />
+          <EvaluationOwnerType>SystemDefault</EvaluationOwnerType>
+          <CompletionStrategy>Default</CompletionStrategy>
+          <OverdueEventDefinition />
+          <DefaultOutputFormat />
+          <JobDefinitionType type="JobDefinitionType" path="GLOBAL.JobChain" />
+          <DefaultLogFormat />
+          <DefaultQueue />
+          <Resource />
+          <TimeWindow />
+          <TimeWindowTimeZone />
+          <JobTimeZone />
+          <RELRelatedLibrary />
+          <ActionSubject />
+          <JobDefinitionParameter>
+            <Comment><![CDATA[This is an automatically generated parameter, which is used to for a parameter mapping. It cannot be removed manually.]]></Comment>
+            <Description>To</Description>
+            <Name>To</Name>
+            <DataLength />
+            <DataPrecision />
+            <DataScale />
+            <DataType>String</DataType>
+            <DefaultExpression />
+            <DefaultValueEditable>Always</DefaultValueEditable>
+            <Direction>In</Direction>
+            <SimpleConstraintType>None</SimpleConstraintType>
+            <SimpleConstraintData />
+            <SimpleConstraintMessage />
+            <SimpleConstraintOptional>false</SimpleConstraintOptional>
+            <SimpleConstraintSort>None</SimpleConstraintSort>
+            <Display>true</Display>
+            <Password>false</Password>
+            <DisplayOrder>2</DisplayOrder>
+            <Editable>Always</Editable>
+            <GroupName />
+            <PartOfKey>false</PartOfKey>
+            <Nullable>true</Nullable>
+            <Runtime>false</Runtime>
+            <JobFormat />
+            <Array>false</Array>
+            <ArrayMinLength>0</ArrayMinLength>
+            <ArrayMaxLength />
+            <ArrayDuplicateValuesAllowed>false</ArrayDuplicateValuesAllowed>
+            <ArraySorted>false</ArraySorted>
+            <ParameterMappingType>PassThrough</ParameterMappingType>
+            <JobDefinitionParameterSubType />
+          </JobDefinitionParameter>
+          <JobChain>
+            <RestartCount />
+            <RequestRestartByDefault>false</RequestRestartByDefault>
+            <RestartDelayAmount>0</RestartDelayAmount>
+            <RestartDelayUnits>Minutes</RestartDelayUnits>
+            <JobChainStep>
+              <Comment />
+              <Description>Reset Month</Description>
+              <Name>Reset Month</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>1</SequenceNumber>
+              <JobChainCall>
+                <Description>Reset Month To Date Counters</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+                <JobChainCallPrecondition>
+                  <Expression />
+                  <TimeWindowStatus>IsOpen</TimeWindowStatus>
+                  <TimeWindow type="TimeWindow" path="GLOBAL.System_Month_End" />
+                  <TimeZone type="TimeZone" path="CET" />
+                </JobChainCallPrecondition>
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Export Sales Data</Description>
+              <Name>Export Sales Data</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>2</SequenceNumber>
+              <JobChainCall>
+                <Description>Export ERP data</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.SAP_AbapRun" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.JOBNAME" />
+                  <Expression><![CDATA[RW_EXPORT_DATA]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_PROGRAM_NAME" />
+                  <Expression><![CDATA[RSUSR000]]></Expression>
+                </JobChainCallInExpressionParameter>
+              </JobChainCall>
+              <JobChainCall>
+                <Description>Export ERP data</Description>
+                <SequenceNumber>2</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.SAP_AbapRun" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_PROGRAM_NAME" />
+                  <Expression><![CDATA[RSUSR000]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.JOBNAME" />
+                  <Expression><![CDATA[RW_EXPORT_DATA2]]></Expression>
+                </JobChainCallInExpressionParameter>
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Error Mail Incomplete</Description>
+              <Name>Step 3</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>3</SequenceNumber>
+              <JobChainCall>
+                <Description />
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_Mail_Send" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.JobFile" />
+                  <Expression><![CDATA[*]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.Subject" />
+                  <Expression><![CDATA[F&R Data Incomplete]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.RelativeJob" />
+                  <Expression><![CDATA[Export Sales Data, Job 2]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.Text" />
+                  <Expression><![CDATA[<html>
+Dear user,<br>
+<br>
+Not all ERP data was loaded correct into the F&R system.<br>
+The process did continue but missed data for some locations.<br>
+<br>
+<br>
+<i>Sent from RunMyJobs</i>
+</html>]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInReferenceParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.To" />
+                  <SourceJobChainCall />
+                  <SourceJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Internal_Chain164355952.To" />
+                </JobChainCallInReferenceParameter>
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Transform and Load</Description>
+              <Name>Step 4</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>4</SequenceNumber>
+              <JobChainCall>
+                <Description>Run SSIS Package</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+              </JobChainCall>
+              <JobChainCall>
+                <Description>Rub BW Process Chain</Description>
+                <SequenceNumber>2</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.SAP_BW_ProcessChain" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_BW_ProcessChain.CLIENT" />
+                  <Expression><![CDATA[800]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_BW_ProcessChain.NAME" />
+                  <Expression><![CDATA[Z_DEMO]]></Expression>
+                </JobChainCallInExpressionParameter>
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Generate Orders</Description>
+              <Name>Step 5</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>5</SequenceNumber>
+              <JobChainCall>
+                <Description>Pick Lists Month End</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+                <JobChainCallPrecondition>
+                  <Expression />
+                  <TimeWindowStatus>IsOpen</TimeWindowStatus>
+                  <TimeWindow type="TimeWindow" path="GLOBAL.System_Month_LastWorkDay" />
+                  <TimeZone type="TimeZone" path="CET" />
+                </JobChainCallPrecondition>
+              </JobChainCall>
+              <JobChainCall>
+                <Description>Pick Lists Daily</Description>
+                <SequenceNumber>2</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+                <JobChainCallPrecondition>
+                  <Expression />
+                  <TimeWindowStatus>IsOpen</TimeWindowStatus>
+                  <TimeWindow type="TimeWindow" path="GLOBAL.System_Month_LastWorkDay" />
+                  <TimeZone type="TimeZone" path="CET" />
+                </JobChainCallPrecondition>
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Notification</Description>
+              <Name>Notification</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>6</SequenceNumber>
+              <JobChainCall>
+                <Description>Mail Notification</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_Mail_Send" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.Text" />
+                  <Expression><![CDATA[<html>
+Dear user,<br>
+<br>
+Today's Forecast and Replenishment Run for your region is finished.<br>
+<br>
+<br>
+<i>Sent from RunMyJobs</i>
+</html>]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.Subject" />
+                  <Expression><![CDATA[F&R Run Finished]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInReferenceParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.To" />
+                  <SourceJobChainCall />
+                  <SourceJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Internal_Chain164355952.To" />
+                </JobChainCallInReferenceParameter>
+              </JobChainCall>
+            </JobChainStep>
+          </JobChain>
+        </JobDefinition>
+        <JobChainCallInReferenceParameter>
+          <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Internal_Chain164355952.To" />
+          <SourceJobChainCall />
+          <SourceJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.Plan_to_Produce_Template.To" />
+        </JobChainCallInReferenceParameter>
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description>Capacity Planning</Description>
+      <Name>Capacity Planning</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>2</SequenceNumber>
+      <JobChainCall>
+        <Description>Capacity Calculation</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description>Material Requirements Planning</Description>
+      <Name>Material Requirements Planning</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>3</SequenceNumber>
+      <JobChainCall>
+        <Description>Material Requirement Planning</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition>
+          <Comment />
+          <Description>Plan_to_Produce_Template 2</Description>
+          <Name>System_Internal_Chain164358410</Name>
+          <Partition type="Partition" path="GLOBAL" />
+          <ParentApplication />
+          <EquivalentObject>false</EquivalentObject>
+          <CriticalProcess>false</CriticalProcess>
+          <Discarded>false</Discarded>
+          <KeepForce>false</KeepForce>
+          <KeepAmount />
+          <KeepUnits />
+          <KeepType />
+          <KeepJobsInStatus />
+          <KeepInStatusAmount />
+          <KeepInStatusUnit />
+          <MinimumOpenDurationExpression />
+          <Overdue>false</Overdue>
+          <OverdueStatus />
+          <OverviewFormat />
+          <Priority />
+          <MaxPriority>100</MaxPriority>
+          <RestartCount />
+          <ReturncodeMapToCompleted />
+          <HoldOnSubmit>false</HoldOnSubmit>
+          <TopLevel>false</TopLevel>
+          <Template>false</Template>
+          <Maintenance>false</Maintenance>
+          <ReactionJobType />
+          <EvaluationOwnerType>SystemDefault</EvaluationOwnerType>
+          <CompletionStrategy>Default</CompletionStrategy>
+          <OverdueEventDefinition />
+          <DefaultOutputFormat />
+          <JobDefinitionType type="JobDefinitionType" path="GLOBAL.JobChain" />
+          <DefaultLogFormat />
+          <DefaultQueue />
+          <Resource />
+          <TimeWindow />
+          <TimeWindowTimeZone />
+          <JobTimeZone />
+          <RELRelatedLibrary />
+          <ActionSubject />
+          <JobChain>
+            <RestartCount />
+            <RequestRestartByDefault>false</RequestRestartByDefault>
+            <RestartDelayAmount>0</RestartDelayAmount>
+            <RestartDelayUnits>Minutes</RestartDelayUnits>
+            <JobChainStep>
+              <Comment />
+              <Description>Inventory Check</Description>
+              <Name>Step 1</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>1</SequenceNumber>
+              <JobChainCall>
+                <Description>RMPLSC00</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.SAP_AbapRun" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_VARIANT_NAME" />
+                  <Expression><![CDATA[DEMO1]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_PROGRAM_NAME" />
+                  <Expression><![CDATA[RMPLSC00]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.JOBNAME" />
+                  <Expression><![CDATA[RMPLSC00]]></Expression>
+                </JobChainCallInExpressionParameter>
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>BOM Calc</Description>
+              <Name>BOM Calc</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>2</SequenceNumber>
+              <JobChainCall>
+                <Description>RMPLSC00</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.SAP_AbapRun" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.JOBNAME" />
+                  <Expression><![CDATA[RMPLSC00]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_VARIANT_NAME" />
+                  <Expression><![CDATA[DEMO2]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_PROGRAM_NAME" />
+                  <Expression><![CDATA[RMPLSC00]]></Expression>
+                </JobChainCallInExpressionParameter>
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Planning Run</Description>
+              <Name>Step 3</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>3</SequenceNumber>
+              <JobChainCall>
+                <Description>RMMRP010</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.SAP_AbapRun" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_PROGRAM_NAME" />
+                  <Expression><![CDATA[RMMRP010]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.JOBNAME" />
+                  <Expression><![CDATA[RMMRP010]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallPrecondition>
+                  <Expression><![CDATA[false]]></Expression>
+                  <TimeWindowStatus>None</TimeWindowStatus>
+                  <TimeWindow />
+                  <TimeZone />
+                </JobChainCallPrecondition>
+              </JobChainCall>
+              <JobChainCall>
+                <Description>RMMRP010</Description>
+                <SequenceNumber>2</SequenceNumber>
+                <IgnoreStatus>true</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.SAP_AbapRun" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_PROGRAM_NAME" />
+                  <Expression><![CDATA[RMMRP010]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.JOBNAME" />
+                  <Expression><![CDATA[RMMRP010]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallPrecondition>
+                  <Expression><![CDATA[false]]></Expression>
+                  <TimeWindowStatus>None</TimeWindowStatus>
+                  <TimeWindow />
+                  <TimeZone />
+                </JobChainCallPrecondition>
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Data Consolidation</Description>
+              <Name>Data Consolidation</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>4</SequenceNumber>
+              <JobChainCall>
+                <Description>Run Data Consildation in Datasphere</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+              </JobChainCall>
+              <JobChainStepPrecondition>
+                <Expression />
+                <TimeWindowStatus>IsOpen</TimeWindowStatus>
+                <TimeWindow type="TimeWindow" path="GLOBAL.System_Week_WorkDays" />
+                <TimeZone type="TimeZone" path="CET" />
+              </JobChainStepPrecondition>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Optimise Schedules</Description>
+              <Name>Optimise Schedules</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>5</SequenceNumber>
+              <JobChainCall>
+                <Description>Optimize Schedules</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+              </JobChainCall>
+            </JobChainStep>
+          </JobChain>
+        </JobDefinition>
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description>Production Scheduling</Description>
+      <Name>Production Scheduling</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>4</SequenceNumber>
+      <JobChainCall>
+        <Description>Generate Work Orders</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_Sleep" />
+      </JobChainCall>
+      <JobChainCall>
+        <Description>Assign Resources</Description>
+        <SequenceNumber>2</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description>Shop Floor Control</Description>
+      <Name>Shop Floor Control</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>5</SequenceNumber>
+      <JobChainCall>
+        <Description>Progress Tracking</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_Sleep" />
+      </JobChainCall>
+      <JobChainCall>
+        <Description>Quality Control</Description>
+        <SequenceNumber>2</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+      <JobChainCall>
+        <Description>Cost Estimation &amp; Budgeting</Description>
+        <SequenceNumber>3</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition>
+          <Comment />
+          <Description>Plan_to_Produce_Template 3</Description>
+          <Name>System_Internal_Chain164355655</Name>
+          <Partition type="Partition" path="GLOBAL" />
+          <ParentApplication />
+          <EquivalentObject>false</EquivalentObject>
+          <CriticalProcess>false</CriticalProcess>
+          <Discarded>false</Discarded>
+          <KeepForce>false</KeepForce>
+          <KeepAmount />
+          <KeepUnits />
+          <KeepType />
+          <KeepJobsInStatus />
+          <KeepInStatusAmount />
+          <KeepInStatusUnit />
+          <MinimumOpenDurationExpression />
+          <Overdue>false</Overdue>
+          <OverdueStatus />
+          <OverviewFormat />
+          <Priority />
+          <MaxPriority>100</MaxPriority>
+          <RestartCount />
+          <ReturncodeMapToCompleted />
+          <HoldOnSubmit>false</HoldOnSubmit>
+          <TopLevel>false</TopLevel>
+          <Template>false</Template>
+          <Maintenance>false</Maintenance>
+          <ReactionJobType />
+          <EvaluationOwnerType>SystemDefault</EvaluationOwnerType>
+          <CompletionStrategy>Default</CompletionStrategy>
+          <OverdueEventDefinition />
+          <DefaultOutputFormat />
+          <JobDefinitionType type="JobDefinitionType" path="GLOBAL.JobChain" />
+          <DefaultLogFormat />
+          <DefaultQueue />
+          <Resource />
+          <TimeWindow />
+          <TimeWindowTimeZone />
+          <JobTimeZone />
+          <RELRelatedLibrary />
+          <ActionSubject />
+          <JobChain>
+            <RestartCount />
+            <RequestRestartByDefault>false</RequestRestartByDefault>
+            <RestartDelayAmount>0</RestartDelayAmount>
+            <RestartDelayUnits>Minutes</RestartDelayUnits>
+            <JobChainStep>
+              <Comment />
+              <Description />
+              <Name>Cost Calculation</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>1</SequenceNumber>
+              <JobChainCall>
+                <Description>Material Cost Calculation</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_Sleep" />
+              </JobChainCall>
+              <JobChainCall>
+                <Description>Labour Cost Calculation</Description>
+                <SequenceNumber>2</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.System_Sleep" />
+              </JobChainCall>
+            </JobChainStep>
+            <JobChainStep>
+              <Comment />
+              <Description>Variance</Description>
+              <Name>Variance</Name>
+              <RestartCount />
+              <RestartDelayAmount>0</RestartDelayAmount>
+              <RestartDelayUnits>Minutes</RestartDelayUnits>
+              <SequenceNumber>2</SequenceNumber>
+              <JobChainCall>
+                <Description>Variance Analysis</Description>
+                <SequenceNumber>1</SequenceNumber>
+                <IgnoreStatus>false</IgnoreStatus>
+                <StepWaitingOnJob>true</StepWaitingOnJob>
+                <ChainWaitingOnJob>false</ChainWaitingOnJob>
+                <UseRelativeTime>false</UseRelativeTime>
+                <JobDefinition type="JobDefinition" path="GLOBAL.SAP_AbapRun" />
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_PROGRAM_NAME" />
+                  <Expression><![CDATA[RFSBWA00]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.ABAP_VARIANT_NAME" />
+                  <Expression><![CDATA[DEMO]]></Expression>
+                </JobChainCallInExpressionParameter>
+                <JobChainCallInExpressionParameter>
+                  <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.SAP_AbapRun.JOBNAME" />
+                  <Expression><![CDATA[Structured Balances]]></Expression>
+                </JobChainCallInExpressionParameter>
+              </JobChainCall>
+            </JobChainStep>
+          </JobChain>
+        </JobDefinition>
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description>Update Stakeholders</Description>
+      <Name>Update Stakeholders</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>6</SequenceNumber>
+      <JobChainCall>
+        <Description>Email Warehouse</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_Sleep" />
+        <JobChainCallInExpressionParameter>
+          <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Sleep.MilliSeconds" />
+          <Expression><![CDATA[5000]]></Expression>
+        </JobChainCallInExpressionParameter>
+      </JobChainCall>
+      <JobChainCall>
+        <Description>Email Sales</Description>
+        <SequenceNumber>2</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_Mail_Send" />
+        <JobChainCallInExpressionParameter>
+          <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.Text" />
+          <Expression><![CDATA[Quality Check has failed.
+I wanted to let you know that we've experienced a delay in our production timeline. We'll be sure to update you as soon as we have an update.]]></Expression>
+        </JobChainCallInExpressionParameter>
+        <JobChainCallInExpressionParameter>
+          <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.Subject" />
+          <Expression><![CDATA[Customer Order Delay - Failed Quality Check]]></Expression>
+        </JobChainCallInExpressionParameter>
+        <JobChainCallInReferenceParameter>
+          <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.System_Mail_Send.To" />
+          <SourceJobChainCall />
+          <SourceJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.Plan_to_Produce_Template.To" />
+        </JobChainCallInReferenceParameter>
+      </JobChainCall>
+    </JobChainStep>
+  </JobChain>
+</JobDefinition>

@@ -1,0 +1,144 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Product build: 2025.1.0.0-2025-02-24-1645_g1ef0ca6b1de -->
+<JobDefinition>
+  <Comment />
+  <Description />
+  <Name>IS_1A_Read_Bill_Template</Name>
+  <Partition type="Partition" path="GLOBAL" />
+  <ObjectTag>
+    <ObjectTagDefinition type="ObjectTagDefinition" path="GLOBAL.System_Monitored" />
+    <Value><![CDATA[false]]></Value>
+  </ObjectTag>
+  <ParentApplication />
+  <EquivalentObject>false</EquivalentObject>
+  <CriticalProcess>false</CriticalProcess>
+  <Discarded>false</Discarded>
+  <KeepForce>false</KeepForce>
+  <KeepAmount />
+  <KeepUnits />
+  <KeepType />
+  <KeepJobsInStatus />
+  <KeepInStatusAmount />
+  <KeepInStatusUnit />
+  <MinimumOpenDurationExpression />
+  <Overdue>false</Overdue>
+  <OverdueStatus />
+  <OverviewFormat />
+  <Priority />
+  <MaxPriority>100</MaxPriority>
+  <RestartCount />
+  <ReturncodeMapToCompleted />
+  <HoldOnSubmit>false</HoldOnSubmit>
+  <TopLevel>true</TopLevel>
+  <Template>false</Template>
+  <Maintenance>false</Maintenance>
+  <ReactionJobType />
+  <EvaluationOwnerType>SystemDefault</EvaluationOwnerType>
+  <CompletionStrategy>Default</CompletionStrategy>
+  <OverdueEventDefinition />
+  <DefaultOutputFormat />
+  <JobDefinitionType type="JobDefinitionType" path="GLOBAL.JobChain" />
+  <DefaultLogFormat />
+  <DefaultQueue />
+  <Resource />
+  <TimeWindow />
+  <TimeWindowTimeZone />
+  <JobTimeZone />
+  <RELRelatedLibrary />
+  <ActionSubject />
+  <JobDefinitionParameter>
+    <Comment />
+    <Description />
+    <Name>P_REGION</Name>
+    <DataLength />
+    <DataPrecision />
+    <DataScale />
+    <DataType>String</DataType>
+    <DefaultExpression><![CDATA[UK]]></DefaultExpression>
+    <DefaultValueEditable />
+    <Direction>In</Direction>
+    <SimpleConstraintType>None</SimpleConstraintType>
+    <SimpleConstraintData />
+    <SimpleConstraintMessage />
+    <SimpleConstraintOptional>false</SimpleConstraintOptional>
+    <SimpleConstraintSort>Ascending</SimpleConstraintSort>
+    <Display>true</Display>
+    <Password>false</Password>
+    <DisplayOrder>1</DisplayOrder>
+    <Editable>Always</Editable>
+    <GroupName />
+    <PartOfKey>false</PartOfKey>
+    <Nullable>false</Nullable>
+    <Runtime>false</Runtime>
+    <JobFormat />
+    <Array>false</Array>
+    <ArrayMinLength>0</ArrayMinLength>
+    <ArrayMaxLength />
+    <ArrayDuplicateValuesAllowed>false</ArrayDuplicateValuesAllowed>
+    <ArraySorted>false</ArraySorted>
+    <ParameterMappingType>Normal</ParameterMappingType>
+    <JobDefinitionParameterSubType />
+  </JobDefinitionParameter>
+  <JobDefinitionWaitEvent>
+    <Expression />
+    <TimeWindowStatus>None</TimeWindowStatus>
+    <TimeWindow />
+    <TimeZone />
+    <ClearsEvent>false</ClearsEvent>
+    <ClearComment />
+    <AutoSubmit>Never</AutoSubmit>
+    <CreatedBySystem>false</CreatedBySystem>
+    <EventDefinition type="EventDefinition" path="GLOBAL.Start_ISU_Processing" />
+  </JobDefinitionWaitEvent>
+  <JobChain>
+    <RestartCount />
+    <RequestRestartByDefault>false</RequestRestartByDefault>
+    <RestartDelayAmount>0</RestartDelayAmount>
+    <RestartDelayUnits>Minutes</RestartDelayUnits>
+    <JobChainStep>
+      <Comment />
+      <Description />
+      <Name>Read Meters</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>1</SequenceNumber>
+      <JobChainCall>
+        <Description />
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.IS_2_Meter_Template" />
+      </JobChainCall>
+      <JobChainCall>
+        <Description />
+        <SequenceNumber>2</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.IS_3_DailyBilling_Template" />
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description />
+      <Name>ISU Billing</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>2</SequenceNumber>
+      <JobChainCall>
+        <Description>IS Billing</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+    </JobChainStep>
+  </JobChain>
+</JobDefinition>

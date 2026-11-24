@@ -1,0 +1,64 @@
+# A linear chain of shell, Python and SQL steps with the same queue: becomes one TaskChainAssetComponent.
+queues:
+  - {name: BATCH_QUEUE, max_concurrency: 3}
+process_definitions:
+  - name: PULL
+    application: FIN
+    type: os
+    command: "echo pull ${run_date}"
+    queue: BATCH_QUEUE
+    parameters: [{name: run_date, default: "today"}]
+    max_starts: 2
+    timeout_seconds: 600
+    success_exit_codes: [3]
+  - name: TRANSFORM
+    application: FIN
+    type: python
+    command: "print('transform')"
+    queue: BATCH_QUEUE
+    max_starts: 2
+  - name: PUBLISH
+    application: FIN
+    type: sql
+    command: "select 1"
+    connection: WAREHOUSE
+    queue: BATCH_QUEUE
+    max_starts: 2
+    timeout_seconds: 300
+  - name: PUBLISH_ALONE
+    application: FIN
+    type: sql
+    command: "select 2"
+    connection: WAREHOUSE
+    queue: BATCH_QUEUE
+    max_starts: 3
+    timeout_seconds: 120
+    run_window: "22:00-23:59 America/New_York mon,tue"
+chains:
+  - name: FIN_NIGHTLY
+    application: FIN
+    description: Nightly finance publish.
+    run_window: "22:00-23:59 America/New_York mon,tue"
+    steps:
+      - {name: s1, calls: [{name: pull, process: PULL}]}
+      - {name: s2, calls: [{name: transform, process: TRANSFORM}]}
+      - {name: s3, calls: [{name: publish, process: PUBLISH}]}
+  - name: FIN_MIXED_RETRY
+    steps:
+      - {name: s1, calls: [{name: pull, process: PULL}]}
+      - {name: s2, calls: [{name: alone, process: PUBLISH_ALONE}]}
+schedules:
+  - {name: FIN_SCHED, target: FIN_NIGHTLY, time_zone: America/New_York, elements: [{kind: daily, at: "22:30"}]}
+file_events:
+  - name: FIN_FILE_ARRIVED
+    target: FIN_NIGHTLY
+    directory: /data/inbound/fin
+    pattern: "fin_*.csv"
+    poll_seconds: 60
+    min_size_bytes: 1
+    min_age_seconds: 120
+    stable: true
+  - name: FIN_FILE_NO_CHECKS
+    target: FIN_MIXED_RETRY
+    directory: /data/inbound/other
+    one_run_per_poll: true

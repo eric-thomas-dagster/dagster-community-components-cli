@@ -1,0 +1,26 @@
+{
+  "name": "DailyEast",
+  "properties": {
+    "type": "ScheduleTrigger",
+    "runtimeState": "Started",
+    "typeProperties": {
+      "recurrence": {
+        "frequency": "Day",
+        "interval": 1,
+        "startTime": "2025-01-01T06:30:00",
+        "timeZone": "Eastern Standard Time"
+      }
+    },
+    "pipelines": [
+      {
+        "pipelineReference": {
+          "referenceName": "Orchestrator",
+          "type": "PipelineReference"
+        },
+        "parameters": {
+          "region": "eu"
+        }
+      }
+    ]
+  }
+}

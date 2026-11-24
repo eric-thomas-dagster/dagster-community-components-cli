@@ -1,0 +1,14 @@
+{
+  "name": "DbxLS",
+  "properties": {
+    "type": "AzureDatabricks",
+    "typeProperties": {
+      "domain": "https://adb-123.azuredatabricks.net",
+      "accessToken": {
+        "type": "SecureString",
+        "value": "dapi-secret"
+      },
+      "existingClusterId": "0101-abc"
+    }
+  }
+}

@@ -1,0 +1,60 @@
+{
+  "name": "CopyFiles",
+  "properties": {
+    "parameters": {
+      "src": {
+        "type": "String"
+      },
+      "dst": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CopyTxt",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "LocalBin",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.src",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalBin",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dst",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "BinarySource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": true,
+              "wildcardFileName": "*.txt"
+            }
+          },
+          "sink": {
+            "type": "BinarySink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings",
+              "copyBehavior": "PreserveHierarchy"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

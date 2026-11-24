@@ -1,0 +1,57 @@
+{
+  "name": "Notebook",
+  "properties": {
+    "parameters": {
+      "day": {
+        "type": "String",
+        "defaultValue": "2025-01-01"
+      }
+    },
+    "activities": [
+      {
+        "name": "Transform",
+        "type": "DatabricksNotebook",
+        "linkedServiceName": {
+          "referenceName": "DbxLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/etl/transform",
+          "baseParameters": {
+            "day": {
+              "value": "@pipeline().parameters.day",
+              "type": "Expression"
+            },
+            "mode": "full"
+          }
+        }
+      },
+      {
+        "name": "Score",
+        "type": "DatabricksNotebook",
+        "dependsOn": [
+          {
+            "activity": "Transform",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "DbxJobCluster",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebookPath": "/etl/score",
+          "libraries": [
+            {
+              "pypi": {
+                "package": "scikit-learn"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

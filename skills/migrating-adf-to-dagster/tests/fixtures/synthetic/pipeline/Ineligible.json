@@ -1,0 +1,75 @@
+{
+  "name": "Ineligible",
+  "properties": {
+    "parameters": {
+      "region": {
+        "type": "String",
+        "defaultValue": "us"
+      }
+    },
+    "activities": [
+      {
+        "name": "PkgExpr",
+        "type": "ExecuteSSISPackage",
+        "typeProperties": {
+          "packageLocation": {
+            "type": "SSISDB",
+            "packagePath": "Sales/Loads/Daily.dtsx"
+          },
+          "runtime": "x64",
+          "packageParameters": {
+            "Region": {
+              "value": {
+                "value": "@pipeline().parameters.region",
+                "type": "Expression"
+              }
+            }
+          }
+        }
+      },
+      {
+        "name": "NbParams",
+        "type": "SynapseNotebook",
+        "linkedServiceName": {
+          "referenceName": "SynLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "notebook": {
+            "referenceName": "n1",
+            "type": "NotebookReference"
+          },
+          "parameters": {
+            "d": {
+              "value": "x",
+              "type": "string"
+            }
+          }
+        }
+      },
+      {
+        "name": "InLoop",
+        "type": "ForEach",
+        "typeProperties": {
+          "items": {
+            "value": "@createArray('a')",
+            "type": "Expression"
+          },
+          "activities": [
+            {
+              "name": "PkgNested",
+              "type": "ExecuteSSISPackage",
+              "typeProperties": {
+                "packageLocation": {
+                  "type": "SSISDB",
+                  "packagePath": "Sales/Loads/Nested.dtsx"
+                },
+                "runtime": "x64"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,1 @@
+<JobDefinition><Name>LOAD</Name><JobDefinitionType type="JobDefinitionType" path="GLOBAL.Shell"/><Script><Source>echo load</Source></Script></JobDefinition>

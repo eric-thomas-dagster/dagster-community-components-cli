@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "adf-to-dagster"
+version = "0.1.0"
+description = "Convert Azure Data Factory pipelines, triggers and linked services into a Dagster project, with a migration report."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "click>=8.0",
+    "pyyaml>=6.0.4",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8",
+    "dagster>=1.11",
+    "dagster-dg-cli",
+    "databricks-sdk",
+    "fsspec>=2026.9.0",
+    "adlfs>=2026.8.0",
+    "s3fs>=2026.9.0",
+    "dagster-community-components>=0.10.179",
+    "azure-identity>=1.27.0",
+    "azure-synapse-artifacts>=0.22.0",
+    "azure-mgmt-synapse>=2.0.0",
+    "pandas>=2.3.3",
+    "pyarrow>=25.0.1",
+    "openpyxl>=3.1.5",
+]
+
+[project.scripts]
+adf-to-dagster = "adf_to_dagster.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/adf_to_dagster"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[dependency-groups]
+dev = [
+    "duckdb>=1.5.6",
+    "duckdb-engine>=0.17.0",
+]

@@ -1,0 +1,33 @@
+{
+  "name": "FailurePath",
+  "properties": {
+    "activities": [
+      {
+        "name": "Try",
+        "type": "Wait",
+        "typeProperties": {
+          "waitTimeInSeconds": 0
+        }
+      },
+      {
+        "name": "PkgOnFail",
+        "type": "ExecuteSSISPackage",
+        "dependsOn": [
+          {
+            "activity": "Try",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "packageLocation": {
+            "type": "SSISDB",
+            "packagePath": "Sales/Loads/Recover.dtsx"
+          },
+          "runtime": "x64"
+        }
+      }
+    ]
+  }
+}

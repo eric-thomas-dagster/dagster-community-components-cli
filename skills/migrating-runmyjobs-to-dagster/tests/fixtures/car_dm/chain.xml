@@ -1,0 +1,8 @@
+<JobDefinition><Name>NIGHTLY</Name><JobChain><RestartCount>0</RestartCount>
+<JobChainStep><Name>extract</Name><SequenceNumber>1</SequenceNumber><RestartCount>2</RestartCount>
+<JobChainStepStatusHandler><Action>RestartStep</Action><Status>Error</Status></JobChainStepStatusHandler>
+<JobChainCall><SequenceNumber>1</SequenceNumber><JobDefinition type="JobDefinition" path="GLOBAL.EXTRACT"/></JobChainCall></JobChainStep>
+<JobChainStep><Name>load</Name><SequenceNumber>2</SequenceNumber>
+<JobChainStepPrecondition><TimeWindow type="TimeWindow" path="GLOBAL.BIZ"/></JobChainStepPrecondition>
+<JobChainCall><SequenceNumber>1</SequenceNumber><JobDefinition type="JobDefinition" path="GLOBAL.LOAD"/></JobChainCall></JobChainStep>
+</JobChain></JobDefinition>

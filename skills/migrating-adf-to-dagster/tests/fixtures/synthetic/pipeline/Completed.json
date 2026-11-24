@@ -1,0 +1,55 @@
+{
+  "name": "Completed",
+  "properties": {
+    "parameters": {
+      "mode": {
+        "type": "String",
+        "defaultValue": "ok"
+      }
+    },
+    "variables": {
+      "v": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "A",
+        "type": "IfCondition",
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(pipeline().parameters.mode, 'fail')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Boom",
+              "type": "Fail",
+              "typeProperties": {
+                "message": "boom",
+                "errorCode": "X"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Always",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "A",
+            "dependencyConditions": [
+              "Completed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "v",
+          "value": "always"
+        }
+      }
+    ]
+  }
+}
