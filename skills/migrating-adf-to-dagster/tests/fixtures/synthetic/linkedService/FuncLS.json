@@ -1,0 +1,17 @@
+{
+  "name": "FuncLS",
+  "properties": {
+    "type": "AzureFunction",
+    "typeProperties": {
+      "functionAppUrl": "https://funcs.example.invalid",
+      "functionKey": {
+        "type": "AzureKeyVaultSecret",
+        "store": {
+          "referenceName": "Keys",
+          "type": "LinkedServiceReference"
+        },
+        "secretName": "FuncKey"
+      }
+    }
+  }
+}

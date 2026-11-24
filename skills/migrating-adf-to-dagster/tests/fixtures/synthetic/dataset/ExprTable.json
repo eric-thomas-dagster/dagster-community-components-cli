@@ -1,0 +1,22 @@
+{
+  "name": "ExprTable",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "SqlLS",
+      "type": "LinkedServiceReference"
+    },
+    "type": "AzureSqlTable",
+    "parameters": {
+      "T": {
+        "type": "String"
+      }
+    },
+    "typeProperties": {
+      "schema": "dbo",
+      "table": {
+        "value": "@dataset().T",
+        "type": "Expression"
+      }
+    }
+  }
+}

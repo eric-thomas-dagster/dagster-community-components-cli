@@ -1,0 +1,14 @@
+{
+  "name": "CtlTable",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "SqlLS",
+      "type": "LinkedServiceReference"
+    },
+    "type": "AzureSqlTable",
+    "typeProperties": {
+      "schema": "dbo",
+      "table": "ctl"
+    }
+  }
+}

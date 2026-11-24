@@ -1,0 +1,35 @@
+{
+  "name": "LocalCsvFile",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "LocalFiles",
+      "type": "LinkedServiceReference"
+    },
+    "type": "DelimitedText",
+    "parameters": {
+      "Folder": {
+        "type": "String"
+      },
+      "File": {
+        "type": "String"
+      }
+    },
+    "typeProperties": {
+      "location": {
+        "type": "FileServerLocation",
+        "folderPath": {
+          "value": "@dataset().Folder",
+          "type": "Expression"
+        },
+        "fileName": {
+          "value": "@dataset().File",
+          "type": "Expression"
+        }
+      },
+      "columnDelimiter": ",",
+      "firstRowAsHeader": true,
+      "quoteChar": "\"",
+      "encodingName": "UTF-8"
+    }
+  }
+}

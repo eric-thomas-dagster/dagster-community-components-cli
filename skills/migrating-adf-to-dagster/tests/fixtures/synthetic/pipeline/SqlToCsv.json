@@ -1,0 +1,47 @@
+{
+  "name": "SqlToCsv",
+  "properties": {
+    "parameters": {
+      "dst": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Export",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "PeopleTable",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalCsvFile",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dst",
+                "type": "Expression"
+              },
+              "File": "out.csv"
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "select id, name from people order by id"
+          },
+          "sink": {
+            "type": "DelimitedTextSink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

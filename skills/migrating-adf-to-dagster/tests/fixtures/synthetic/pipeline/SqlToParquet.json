@@ -1,0 +1,46 @@
+{
+  "name": "SqlToParquet",
+  "properties": {
+    "parameters": {
+      "dst": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Dump",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "PeopleTable",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalParquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dst",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "select id, name from people order by id"
+          },
+          "sink": {
+            "type": "ParquetSink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

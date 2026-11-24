@@ -1,0 +1,69 @@
+{
+  "name": "Coupled",
+  "properties": {
+    "activities": [
+      {
+        "name": "Look",
+        "type": "Lookup",
+        "linkedServiceName": {
+          "referenceName": "SqlLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": "select 1 as n"
+          },
+          "dataset": {
+            "referenceName": "PeopleTable",
+            "type": "DatasetReference"
+          },
+          "firstRowOnly": true
+        }
+      },
+      {
+        "name": "Pkg2",
+        "type": "ExecuteSSISPackage",
+        "dependsOn": [
+          {
+            "activity": "Look",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "packageLocation": {
+            "type": "SSISDB",
+            "packagePath": "Sales/Loads/Two.dtsx"
+          },
+          "runtime": "x64"
+        }
+      },
+      {
+        "name": "UseIt",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Pkg2",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "v",
+          "value": {
+            "value": "@string(activity('Look').output.firstRow.n)",
+            "type": "Expression"
+          }
+        }
+      }
+    ],
+    "variables": {
+      "v": {
+        "type": "String"
+      }
+    }
+  }
+}

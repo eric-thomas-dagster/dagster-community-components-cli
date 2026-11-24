@@ -1,0 +1,16 @@
+{
+  "name": "DbxJobCluster",
+  "properties": {
+    "type": "AzureDatabricks",
+    "typeProperties": {
+      "domain": "https://adb-123.azuredatabricks.net",
+      "accessToken": {
+        "type": "SecureString",
+        "value": "dapi-secret2"
+      },
+      "newClusterVersion": "14.3.x-scala2.12",
+      "newClusterNodeType": "Standard_DS3_v2",
+      "newClusterNumOfWorker": "2"
+    }
+  }
+}

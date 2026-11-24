@@ -1,0 +1,193 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Product build: 2025.1.0.0-2025-02-24-1645_g1ef0ca6b1de -->
+<JobDefinition>
+  <Comment />
+  <Description>Forecast and Replenishment Daily Overall Chain</Description>
+  <Name>Forecast_Replenishment_Template</Name>
+  <Partition type="Partition" path="GLOBAL" />
+  <ParentApplication />
+  <EquivalentObject>false</EquivalentObject>
+  <CriticalProcess>false</CriticalProcess>
+  <Discarded>false</Discarded>
+  <KeepForce>false</KeepForce>
+  <KeepAmount />
+  <KeepUnits />
+  <KeepType />
+  <KeepJobsInStatus />
+  <KeepInStatusAmount />
+  <KeepInStatusUnit />
+  <MinimumOpenDurationExpression />
+  <Overdue>false</Overdue>
+  <OverdueStatus />
+  <OverviewFormat />
+  <Priority />
+  <MaxPriority>100</MaxPriority>
+  <RestartCount />
+  <ReturncodeMapToCompleted />
+  <HoldOnSubmit>false</HoldOnSubmit>
+  <TopLevel>true</TopLevel>
+  <Template>false</Template>
+  <Maintenance>false</Maintenance>
+  <ReactionJobType />
+  <EvaluationOwnerType>SystemDefault</EvaluationOwnerType>
+  <CompletionStrategy>Default</CompletionStrategy>
+  <OverdueEventDefinition />
+  <DefaultOutputFormat />
+  <JobDefinitionType type="JobDefinitionType" path="GLOBAL.JobChain" />
+  <DefaultLogFormat />
+  <DefaultQueue />
+  <Resource />
+  <TimeWindow />
+  <TimeWindowTimeZone />
+  <JobTimeZone />
+  <RELRelatedLibrary />
+  <ActionSubject />
+  <JobDefinitionParameter>
+    <Comment />
+    <Description>Region</Description>
+    <Name>P_REGION</Name>
+    <DataLength />
+    <DataPrecision />
+    <DataScale />
+    <DataType>String</DataType>
+    <DefaultExpression />
+    <DefaultValueEditable />
+    <Direction>In</Direction>
+    <SimpleConstraintType>None</SimpleConstraintType>
+    <SimpleConstraintData />
+    <SimpleConstraintMessage />
+    <SimpleConstraintOptional>false</SimpleConstraintOptional>
+    <SimpleConstraintSort>Ascending</SimpleConstraintSort>
+    <Display>true</Display>
+    <Password>false</Password>
+    <DisplayOrder>0</DisplayOrder>
+    <Editable>Always</Editable>
+    <GroupName />
+    <PartOfKey>true</PartOfKey>
+    <Nullable>false</Nullable>
+    <Runtime>false</Runtime>
+    <JobFormat />
+    <Array>false</Array>
+    <ArrayMinLength>0</ArrayMinLength>
+    <ArrayMaxLength />
+    <ArrayDuplicateValuesAllowed>false</ArrayDuplicateValuesAllowed>
+    <ArraySorted>false</ArraySorted>
+    <ParameterMappingType>Normal</ParameterMappingType>
+    <JobDefinitionParameterSubType />
+  </JobDefinitionParameter>
+  <JobChain>
+    <RestartCount />
+    <RequestRestartByDefault>false</RequestRestartByDefault>
+    <RestartDelayAmount>0</RestartDelayAmount>
+    <RestartDelayUnits>Minutes</RestartDelayUnits>
+    <JobChainStep>
+      <Comment />
+      <Description />
+      <Name>Initialize</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>1</SequenceNumber>
+      <JobChainCall>
+        <Description>Initialize</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description />
+      <Name>Post POSDM Idocs</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>2</SequenceNumber>
+      <JobChainCall>
+        <Description>Post POSDM Idocs</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description />
+      <Name>Reprocess Idocs in Error</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>3</SequenceNumber>
+      <JobChainCall>
+        <Description>Reprocess Idocs in Error</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description />
+      <Name>Post PIDs</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>4</SequenceNumber>
+      <JobChainCall>
+        <Description>Post PIDs</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.System_DoNothing" />
+      </JobChainCall>
+    </JobChainStep>
+    <JobChainStep>
+      <Comment />
+      <Description />
+      <Name>Nightly Processing</Name>
+      <RestartCount />
+      <RestartDelayAmount>0</RestartDelayAmount>
+      <RestartDelayUnits>Minutes</RestartDelayUnits>
+      <SequenceNumber>5</SequenceNumber>
+      <JobChainCall>
+        <Description>Full Forecast and Replenishment run</Description>
+        <SequenceNumber>1</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.Full_FR_Run" />
+        <JobChainCallInReferenceParameter>
+          <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.Full_FR_Run.P_REGION" />
+          <SourceJobChainCall />
+          <SourceJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.Forecast_Replenishment_Template.P_REGION" />
+        </JobChainCallInReferenceParameter>
+      </JobChainCall>
+      <JobChainCall>
+        <Description>Process Negative Stock</Description>
+        <SequenceNumber>2</SequenceNumber>
+        <IgnoreStatus>false</IgnoreStatus>
+        <StepWaitingOnJob>true</StepWaitingOnJob>
+        <ChainWaitingOnJob>false</ChainWaitingOnJob>
+        <UseRelativeTime>false</UseRelativeTime>
+        <JobDefinition type="JobDefinition" path="GLOBAL.Process_Negative_Stock_Template" />
+        <JobChainCallInReferenceParameter>
+          <LocalJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.Process_Negative_Stock_Template.P_REGION" />
+          <SourceJobChainCall />
+          <SourceJobDefinitionParameter type="JobDefinitionParameter" path="GLOBAL.Forecast_Replenishment_Template.P_REGION" />
+        </JobChainCallInReferenceParameter>
+      </JobChainCall>
+    </JobChainStep>
+  </JobChain>
+</JobDefinition>

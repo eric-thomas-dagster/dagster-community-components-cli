@@ -1,0 +1,24 @@
+{
+  "name": "LocalAvro",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "LocalFiles",
+      "type": "LinkedServiceReference"
+    },
+    "type": "Avro",
+    "parameters": {
+      "Folder": {
+        "type": "String"
+      }
+    },
+    "typeProperties": {
+      "location": {
+        "type": "FileServerLocation",
+        "folderPath": {
+          "value": "@dataset().Folder",
+          "type": "Expression"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "name": "ParquetToSql",
+  "properties": {
+    "parameters": {
+      "src": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Load",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "LocalParquet",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.src",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "PeopleTable",
+            "type": "DatasetReference"
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "ParquetSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": false,
+              "wildcardFileName": "*.parquet"
+            }
+          },
+          "sink": {
+            "type": "AzureSqlSink",
+            "preCopyScript": "delete from people"
+          }
+        }
+      }
+    ]
+  }
+}

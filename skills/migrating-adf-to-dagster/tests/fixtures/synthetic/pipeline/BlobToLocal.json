@@ -1,0 +1,49 @@
+{
+  "name": "BlobToLocal",
+  "properties": {
+    "parameters": {
+      "dst": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Pull",
+        "type": "Copy",
+        "inputs": [
+          {
+            "referenceName": "BlobBin",
+            "type": "DatasetReference"
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "LocalBin",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dst",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "BinarySource",
+            "storeSettings": {
+              "type": "AzureBlobStorageReadSettings",
+              "recursive": true
+            }
+          },
+          "sink": {
+            "type": "BinarySink",
+            "storeSettings": {
+              "type": "FileServerWriteSettings"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

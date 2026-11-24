@@ -1,0 +1,17 @@
+{
+  "name": "BlobBin",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "BlobLS",
+      "type": "LinkedServiceReference"
+    },
+    "type": "Binary",
+    "typeProperties": {
+      "location": {
+        "type": "AzureBlobStorageLocation",
+        "container": "landing",
+        "folderPath": "in/2025"
+      }
+    }
+  }
+}

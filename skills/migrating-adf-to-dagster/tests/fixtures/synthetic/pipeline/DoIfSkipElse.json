@@ -1,0 +1,87 @@
+{
+  "name": "DoIfSkipElse",
+  "properties": {
+    "parameters": {
+      "mode": {
+        "type": "String",
+        "defaultValue": "ok"
+      }
+    },
+    "variables": {
+      "v": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "A",
+        "type": "IfCondition",
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(pipeline().parameters.mode, 'fail')",
+            "type": "Expression"
+          },
+          "ifTrueActivities": [
+            {
+              "name": "Boom",
+              "type": "Fail",
+              "typeProperties": {
+                "message": "boom",
+                "errorCode": "X"
+              }
+            }
+          ],
+          "ifFalseActivities": []
+        }
+      },
+      {
+        "name": "Catch",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "A",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "v",
+          "value": "caught"
+        }
+      },
+      {
+        "name": "Next",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "v",
+          "value": "next"
+        }
+      },
+      {
+        "name": "Dummy",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Next",
+            "dependencyConditions": [
+              "Skipped"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "v",
+          "value": "dummy"
+        }
+      }
+    ]
+  }
+}

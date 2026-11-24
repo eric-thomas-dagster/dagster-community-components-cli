@@ -1,0 +1,31 @@
+{
+  "name": "Producer",
+  "properties": {
+    "activities": [
+      {
+        "name": "Ret",
+        "type": "SetVariable",
+        "typeProperties": {
+          "variableName": "pipelineReturnValue",
+          "setSystemVariable": true,
+          "value": [
+            {
+              "key": "answer",
+              "value": {
+                "type": "Expression",
+                "content": "@concat('4','2')"
+              }
+            },
+            {
+              "key": "fixed",
+              "value": {
+                "type": "String",
+                "content": "x"
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

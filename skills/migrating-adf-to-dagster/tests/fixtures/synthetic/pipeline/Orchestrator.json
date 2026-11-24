@@ -1,0 +1,303 @@
+{
+  "name": "Orchestrator",
+  "properties": {
+    "folder": {
+      "name": "Nightly"
+    },
+    "description": "Synthetic: every native activity",
+    "parameters": {
+      "region": {
+        "type": "String",
+        "defaultValue": "us"
+      },
+      "items": {
+        "type": "Array",
+        "defaultValue": [
+          "a",
+          "b",
+          "c"
+        ]
+      },
+      "batch": {
+        "type": "String"
+      }
+    },
+    "variables": {
+      "log": {
+        "type": "Array"
+      },
+      "done": {
+        "type": "String",
+        "defaultValue": "no"
+      },
+      "picked": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "CallApi",
+        "type": "WebActivity",
+        "policy": {
+          "retry": 2,
+          "retryIntervalInSeconds": 1
+        },
+        "typeProperties": {
+          "url": {
+            "value": "@concat('https://example.invalid/api?region=', pipeline().parameters.region)",
+            "type": "Expression"
+          },
+          "method": "GET"
+        }
+      },
+      {
+        "name": "GetNames",
+        "type": "Lookup",
+        "dependsOn": [
+          {
+            "activity": "CallApi",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderQuery": {
+              "value": "select name from t where region = '@{pipeline().parameters.region}'",
+              "type": "Expression"
+            }
+          },
+          "dataset": {
+            "referenceName": "CtlTable",
+            "type": "DatasetReference"
+          },
+          "firstRowOnly": false
+        }
+      },
+      {
+        "name": "EachItem",
+        "type": "ForEach",
+        "dependsOn": [
+          {
+            "activity": "GetNames",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "items": {
+            "value": "@pipeline().parameters.items",
+            "type": "Expression"
+          },
+          "isSequential": true,
+          "activities": [
+            {
+              "name": "Log",
+              "type": "AppendVariable",
+              "typeProperties": {
+                "variableName": "log",
+                "value": {
+                  "value": "@item()",
+                  "type": "Expression"
+                }
+              }
+            },
+            {
+              "name": "IsB",
+              "type": "IfCondition",
+              "dependsOn": [
+                {
+                  "activity": "Log",
+                  "dependencyConditions": [
+                    "Succeeded"
+                  ]
+                }
+              ],
+              "typeProperties": {
+                "expression": {
+                  "value": "@equals(item(), 'b')",
+                  "type": "Expression"
+                },
+                "ifTrueActivities": [
+                  {
+                    "name": "PickB",
+                    "type": "SetVariable",
+                    "typeProperties": {
+                      "variableName": "picked",
+                      "value": {
+                        "value": "@item()",
+                        "type": "Expression"
+                      }
+                    }
+                  }
+                ],
+                "ifFalseActivities": [
+                  {
+                    "name": "Short",
+                    "type": "Wait",
+                    "typeProperties": {
+                      "waitTimeInSeconds": 0
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "NotA",
+        "type": "Filter",
+        "typeProperties": {
+          "items": {
+            "value": "@pipeline().parameters.items",
+            "type": "Expression"
+          },
+          "condition": {
+            "value": "@not(equals(item(), 'a'))",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "ByRegion",
+        "type": "Switch",
+        "typeProperties": {
+          "on": {
+            "value": "@pipeline().parameters.region",
+            "type": "Expression"
+          },
+          "cases": [
+            {
+              "value": "us",
+              "activities": [
+                {
+                  "name": "UsOnly",
+                  "type": "SetVariable",
+                  "typeProperties": {
+                    "variableName": "picked",
+                    "value": "us-case"
+                  }
+                }
+              ]
+            }
+          ],
+          "defaultActivities": [
+            {
+              "name": "Other",
+              "type": "SetVariable",
+              "typeProperties": {
+                "variableName": "picked",
+                "value": "default-case"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "RunChild",
+        "type": "ExecutePipeline",
+        "typeProperties": {
+          "pipeline": {
+            "referenceName": "Child",
+            "type": "PipelineReference"
+          },
+          "waitOnCompletion": true,
+          "parameters": {
+            "msg": {
+              "value": "@pipeline().parameters.region",
+              "type": "Expression"
+            }
+          }
+        }
+      },
+      {
+        "name": "Poll",
+        "type": "Until",
+        "typeProperties": {
+          "expression": {
+            "value": "@equals(variables('done'), 'yes')",
+            "type": "Expression"
+          },
+          "timeout": "0.00:00:05",
+          "activities": [
+            {
+              "name": "MarkDone",
+              "type": "SetVariable",
+              "typeProperties": {
+                "variableName": "done",
+                "value": "yes"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Tidy",
+        "type": "Script",
+        "linkedServiceName": {
+          "referenceName": "SqlLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "scripts": [
+            {
+              "type": "NonQuery",
+              "text": {
+                "value": "@concat('delete from log where region = ''', pipeline().parameters.region, '''')",
+                "type": "Expression"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "Mark",
+        "type": "SqlServerStoredProcedure",
+        "dependsOn": [
+          {
+            "activity": "Tidy",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "SqlLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "storedProcedureName": "dbo.mark_done",
+          "storedProcedureParameters": {
+            "region": {
+              "value": {
+                "value": "@pipeline().parameters.region",
+                "type": "Expression"
+              },
+              "type": "String"
+            }
+          }
+        }
+      },
+      {
+        "name": "Alert",
+        "type": "Fail",
+        "dependsOn": [
+          {
+            "activity": "CallApi",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "message": "api failed",
+          "errorCode": "E1"
+        }
+      }
+    ]
+  }
+}

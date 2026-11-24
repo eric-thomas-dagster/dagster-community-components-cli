@@ -1,0 +1,13 @@
+{
+  "name": "PeopleTable",
+  "properties": {
+    "linkedServiceName": {
+      "referenceName": "SqlLS",
+      "type": "LinkedServiceReference"
+    },
+    "type": "AzureSqlTable",
+    "typeProperties": {
+      "tableName": "people"
+    }
+  }
+}

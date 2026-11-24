@@ -1,0 +1,8 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- synthetic: layout follows the Redwood description of export-info.xml -->
+<export-info>
+  <source-system>EXAMPLE</source-system>
+  <source-address>https://example.invalid/</source-address>
+  <user>exporter</user>
+  <date>2023-08-16</date>
+</export-info>

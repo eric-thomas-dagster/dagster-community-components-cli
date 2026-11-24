@@ -1,0 +1,65 @@
+{
+  "name": "FabricFlow",
+  "properties": {
+    "variables": {
+      "stamp": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Prep",
+        "type": "SetVariable",
+        "typeProperties": {
+          "variableName": "stamp",
+          "value": "before"
+        }
+      },
+      {
+        "name": "Nb",
+        "type": "TridentNotebook",
+        "dependsOn": [
+          {
+            "activity": "Prep",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "notebookId": "9e1e4bfb-8b70-4a68-9212-97fa7a183a8e",
+          "workspaceId": {
+            "value": "@pipeline().DataFactory",
+            "type": "Expression"
+          },
+          "parameters": {
+            "day": {
+              "value": "2025-01-01",
+              "type": "string"
+            },
+            "n": {
+              "value": "3",
+              "type": "int"
+            }
+          }
+        }
+      },
+      {
+        "name": "After",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Nb",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "stamp",
+          "value": "after"
+        }
+      }
+    ]
+  }
+}

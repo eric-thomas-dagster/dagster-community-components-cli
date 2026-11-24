@@ -1,0 +1,36 @@
+{
+  "name": "Unhandled",
+  "properties": {
+    "activities": [
+      {
+        "name": "A",
+        "type": "Fail",
+        "typeProperties": {
+          "message": "boom",
+          "errorCode": "X"
+        }
+      },
+      {
+        "name": "Next",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "A",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "v",
+          "value": "never"
+        }
+      }
+    ],
+    "variables": {
+      "v": {
+        "type": "String"
+      }
+    }
+  }
+}

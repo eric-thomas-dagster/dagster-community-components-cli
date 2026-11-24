@@ -1,0 +1,118 @@
+{
+  "name": "01-Numbered",
+  "properties": {
+    "parameters": {
+      "executionId": {
+        "type": "String",
+        "defaultValue": "e0"
+      },
+      "folder": {
+        "type": "String",
+        "defaultValue": "/tmp"
+      }
+    },
+    "variables": {
+      "v": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "GetPlan",
+        "type": "Lookup",
+        "linkedServiceName": {
+          "referenceName": "SqlLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource",
+            "sqlReaderStoredProcedureName": "[dbo].[get_plan]",
+            "storedProcedureParameters": {
+              "ExecutionId": {
+                "type": "String",
+                "value": {
+                  "value": "@pipeline().parameters.ExecutionId",
+                  "type": "Expression"
+                }
+              }
+            }
+          },
+          "dataset": {
+            "referenceName": "PeopleTable",
+            "type": "DatasetReference"
+          },
+          "firstRowOnly": false
+        }
+      },
+      {
+        "name": "Call",
+        "type": "AzureFunctionActivity",
+        "dependsOn": [
+          {
+            "activity": "GetPlan",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "linkedServiceName": {
+          "referenceName": "FuncLS",
+          "type": "LinkedServiceReference"
+        },
+        "typeProperties": {
+          "functionName": "DoWork",
+          "method": "POST",
+          "body": {
+            "value": "@concat('{\"id\":\"', pipeline().parameters.executionId, '\"}')",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "Export",
+        "type": "Copy",
+        "dependsOn": [
+          {
+            "activity": "Call",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "inputs": [
+          {
+            "referenceName": "ExprTable",
+            "type": "DatasetReference",
+            "parameters": {
+              "T": "people"
+            }
+          }
+        ],
+        "outputs": [
+          {
+            "referenceName": "PeopleJson",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.folder",
+                "type": "Expression"
+              }
+            }
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "AzureSqlSource"
+          },
+          "sink": {
+            "type": "JsonSink",
+            "formatSettings": {
+              "type": "JsonWriteSettings"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

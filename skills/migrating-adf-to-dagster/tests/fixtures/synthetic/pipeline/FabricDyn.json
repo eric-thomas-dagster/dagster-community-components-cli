@@ -1,0 +1,71 @@
+{
+  "name": "FabricDyn",
+  "properties": {
+    "parameters": {
+      "day": {
+        "type": "String",
+        "defaultValue": "2025-02-02"
+      },
+      "to": {
+        "type": "String",
+        "defaultValue": "ops@example.invalid"
+      }
+    },
+    "activities": [
+      {
+        "name": "Run",
+        "type": "TridentNotebook",
+        "typeProperties": {
+          "notebookId": "9e1e4bfb-8b70-4a68-9212-97fa7a183a8e",
+          "workspaceId": "11111111-2222-3333-4444-555555555555",
+          "parameters": {
+            "day": {
+              "value": {
+                "value": "@pipeline().parameters.day",
+                "type": "Expression"
+              },
+              "type": "string"
+            },
+            "n": {
+              "value": {
+                "value": "@string(add(1, 2))",
+                "type": "Expression"
+              },
+              "type": "int"
+            }
+          }
+        }
+      },
+      {
+        "name": "Notify",
+        "type": "Office365Outlook",
+        "dependsOn": [
+          {
+            "activity": "Run",
+            "dependencyConditions": [
+              "Failed"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "inputs": {
+            "method": "post",
+            "path": "/v2/Mail",
+            "body": {
+              "To": {
+                "value": "@pipeline().parameters.to",
+                "type": "Expression"
+              },
+              "Subject": "Notebook failed",
+              "Body": {
+                "value": "@concat('<b>', activity('Run').error.message, '</b>')",
+                "type": "Expression"
+              },
+              "Importance": "High"
+            }
+          }
+        }
+      }
+    ]
+  }
+}

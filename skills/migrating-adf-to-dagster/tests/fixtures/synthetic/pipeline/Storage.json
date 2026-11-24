@@ -1,0 +1,202 @@
+{
+  "name": "Storage",
+  "properties": {
+    "parameters": {
+      "dir": {
+        "type": "String"
+      }
+    },
+    "variables": {
+      "out": {
+        "type": "String"
+      },
+      "first": {
+        "type": "String"
+      }
+    },
+    "activities": [
+      {
+        "name": "Meta",
+        "type": "GetMetadata",
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "LocalBin",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dir",
+                "type": "Expression"
+              }
+            }
+          },
+          "fieldList": [
+            "exists",
+            "itemType",
+            "childItems"
+          ],
+          "storeSettings": {
+            "type": "FileServerReadSettings",
+            "recursive": true
+          }
+        }
+      },
+      {
+        "name": "Wait4",
+        "type": "Validation",
+        "dependsOn": [
+          {
+            "activity": "Meta",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "LocalBin",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dir",
+                "type": "Expression"
+              }
+            }
+          },
+          "timeout": "0.00:00:05",
+          "sleep": 1
+        }
+      },
+      {
+        "name": "Rows",
+        "type": "Lookup",
+        "dependsOn": [
+          {
+            "activity": "Wait4",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "DelimitedTextSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": false,
+              "wildcardFileName": "*.csv"
+            }
+          },
+          "dataset": {
+            "referenceName": "LocalCsv",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dir",
+                "type": "Expression"
+              }
+            }
+          },
+          "firstRowOnly": false
+        }
+      },
+      {
+        "name": "Names",
+        "type": "Lookup",
+        "dependsOn": [
+          {
+            "activity": "Wait4",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "source": {
+            "type": "JsonSource",
+            "storeSettings": {
+              "type": "FileServerReadSettings",
+              "recursive": false,
+              "wildcardFileName": "*.json"
+            }
+          },
+          "dataset": {
+            "referenceName": "LocalJson",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@pipeline().parameters.dir",
+                "type": "Expression"
+              }
+            }
+          },
+          "firstRowOnly": true
+        }
+      },
+      {
+        "name": "Clean",
+        "type": "Delete",
+        "dependsOn": [
+          {
+            "activity": "Rows",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "dataset": {
+            "referenceName": "LocalBin",
+            "type": "DatasetReference",
+            "parameters": {
+              "Folder": {
+                "value": "@concat(pipeline().parameters.dir, '/tmp')",
+                "type": "Expression"
+              }
+            }
+          },
+          "enableLogging": false,
+          "storeSettings": {
+            "type": "FileServerReadSettings",
+            "recursive": true,
+            "wildcardFileName": "*.tmp"
+          }
+        }
+      },
+      {
+        "name": "Echo",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Clean",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "out",
+          "value": {
+            "value": "@string(activity('Rows').output.count)",
+            "type": "Expression"
+          }
+        }
+      },
+      {
+        "name": "First",
+        "type": "SetVariable",
+        "dependsOn": [
+          {
+            "activity": "Names",
+            "dependencyConditions": [
+              "Succeeded"
+            ]
+          }
+        ],
+        "typeProperties": {
+          "variableName": "first",
+          "value": "@activity('Names').output.firstRow.id"
+        }
+      }
+    ]
+  }
+}

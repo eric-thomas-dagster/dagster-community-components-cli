@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "runmyjobs-to-dagster"
+version = "0.1.0"
+description = "Convert Redwood RunMyJobs definitions (process definitions, chains, schedules, queues) into a Dagster project, with a migration report."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = [
+    "click>=8.0",
+    "PyYAML>=6.0",
+    "defusedxml>=0.7",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "dagster>=1.11", "dagster-dg-cli", "dagster-community-components>=0.10.177"]
+
+[project.scripts]
+runmyjobs-to-dagster = "runmyjobs_to_dagster.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/runmyjobs_to_dagster"]
+
+[tool.hatch.build.targets.wheel.force-include]
+"src/runmyjobs_to_dagster/samples" = "runmyjobs_to_dagster/samples"
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

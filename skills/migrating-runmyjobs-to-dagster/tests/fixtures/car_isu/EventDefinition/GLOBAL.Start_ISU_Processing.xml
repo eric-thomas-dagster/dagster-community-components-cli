@@ -1,0 +1,13 @@
+<?xml version='1.0' encoding='utf-8'?>
+<!-- Product build: 2025.1.0.0-2025-02-24-1645_g1ef0ca6b1de -->
+<EventDefinition>
+  <Comment />
+  <Description>Mass Estimations Complete</Description>
+  <Name>Start_ISU_Processing</Name>
+  <Partition type="Partition" path="GLOBAL" />
+  <ParentApplication />
+  <RequiresCommentOnRaise>false</RequiresCommentOnRaise>
+  <DefaultRaiseComment />
+  <RequiresCommentOnClear>false</RequiresCommentOnClear>
+  <DefaultClearComment />
+</EventDefinition>

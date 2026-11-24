@@ -1,0 +1,10 @@
+{"results":[
+{"Name":"EXTRACT","Partition":"Partition:DEMO","JobDefinitionType":"JobDefinitionType:GLOBAL.BASH","DefaultQueue":"Queue:GLOBAL.Q1","RestartCount":1,
+ "Script":{"Source":"echo extract\n","RunAsUser":"etl"},
+ "JobDefinitionParameters":[{"Name":"day","Direction":"In","DataType":"String","DefaultExpression":"mon","Nullable":false}]},
+{"Name":"LOAD","JobDefinitionType":"JobDefinitionType:GLOBAL.BASH","Script":{"Source":"echo load"}},
+{"Name":"NIGHTLY","JobDefinitionType":"JobDefinitionType:GLOBAL.JobChain","JobChain":{"JobChainSteps":[
+ {"Name":"Step 2","SequenceNumber":2,"JobChainCalls":[{"SequenceNumber":1,"JobDefinition":"JobDefinition:DEMO.LOAD"}]},
+ {"Name":"Step 1","SequenceNumber":1,"RestartCount":3,
+  "JobChainCalls":[{"SequenceNumber":1,"JobDefinition":"JobDefinition:DEMO.EXTRACT"}],
+  "JobChainStepStatusHandlers":[{"Status":"Error","Action":"RestartStep","SequenceNumber":1}]}]}}]}
