@@ -1,10 +1,12 @@
 # Dagster community components
 
 This project can pull from the Dagster community components registry —
-**~970 reusable components** covering integrations, sensors, IO managers,
-transforms, sinks, sources, AI / NLP / agents (with MCP tool support),
-analytics, lakehouse, observability, and more. About 60% are validated
-end-to-end against real systems.
+**~1,460 reusable components** covering integrations, sensors, IO managers,
+transforms, sinks, sources, reverse-ETL, AI / NLP / agents (with MCP tool
+support), analytics, lakehouse, observability, and more. Just under half
+are validated end-to-end against real systems — see "Validation levels"
+below for the real tier names before telling a user something is
+"validated."
 
 - **Registry UI:** <https://dagster-component-ui.vercel.app/>
 - **CLI:** `dagster-component` (install via `pip install dagster-community-components-cli` or run with `uvx`)
@@ -35,9 +37,9 @@ and official `dagster-<vendor>` integrations (dbt / Fivetran / Sling /
 Snowflake / Databricks / etc.). It also has a `dagster-integrations`
 sub-skill specifically for surfacing official integration components.
 
-**This document covers the community registry** — the long tail of ~970
-components beyond official integrations (and ~215 end-to-end walkthroughs
-in `examples/`). Use the two together:
+**This document covers the community registry** — the long tail of
+~1,460 components beyond official integrations (and ~370 end-to-end
+walkthroughs in `examples/`). Use the two together:
 
 - **General Dagster question** (assets, automation, dg, project layout):
   invoke `/dagster-expert`.
@@ -45,8 +47,14 @@ in `examples/`). Use the two together:
   / AWS / GCP / Azure): invoke `/dagster-expert` → its `dagster-integrations`
   sub-skill knows the official packages.
 - **Long-tail component** (MongoDB / Kafka / Oracle / Db2 / Notion / SAP /
-  any of the ~750 others) or **end-to-end walkthrough** of a pattern:
-  recommend `dagster-component search/add/info` + the matching `examples/<topic>.md`.
+  reverse-ETL into any SaaS tool / any of the hundreds of others) or
+  **end-to-end walkthrough** of a pattern: recommend
+  `dagster-component search/add/info` + the matching `examples/<topic>.md`.
+  For deeper, dated-and-verified guidance on this exact registry — the
+  CLI command surface, the real manifest schema, validation tiers, and
+  how to read a component's README correctly — load the
+  **`dagster-community-components`** skill (`skills/dagster-community-components/`
+  in this repo) alongside this document.
 
 If `/dagster-expert` isn't available, this doc still stands alone.
 
@@ -77,6 +85,8 @@ dagster-component list                         # what's installed in this projec
 dagster-component list --available             # full registry listing
 dagster-component remove <id>                  # uninstall (only removes CLI-installed dirs)
 dagster-component update <id>[@<ref>]          # re-fetch / repin
+dagster-component sync-deps                    # install pip deps for every component a project's defs.yaml files use
+dagster-component analyze-schedules            # propose AutomationConditionApplicator rules from existing schedules/jobs
 ```
 
 ## CLI gotchas + silent failures
@@ -126,7 +136,7 @@ The CLI repo ships a large `examples/` folder of end-to-end walkthroughs.
 Each pattern has a `.md` walkthrough + a `setup_<topic>_demo.sh` script
 that scaffolds a working Dagster project in one command:
 
-- **Walkthrough index (TOC of ~215 demos):**
+- **Walkthrough index (TOC of ~370 demos):**
   <https://github.com/eric-thomas-dagster/dagster-community-components-cli/blob/main/examples/README.md>
 - **Per-topic walkthroughs** — direct GitHub raw URLs follow the pattern:
   `https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/<topic>.md`
@@ -163,16 +173,23 @@ For anything else, browse the walkthrough TOC linked above.
 
 ## Validation levels
 
-Each manifest entry carries a `validation` field — use it to set user expectations:
+Most (not all) manifest entries carry a `validation` field — use it to set
+user expectations. The real tier names (there is no `infra` tier — if you
+see that term anywhere it's stale):
 
 | Level | Meaning |
 |---|---|
-| `live` | End-to-end validated against a real system; safe to recommend |
-| `code` | YAML loads cleanly + `dg check defs` passes, but no live materialization run |
-| `infra` | Component depends on paid / proprietary infra; level depends on the user's environment |
+| `live` | End-to-end validated against a real live system/account — the strongest tier |
+| `code` | Code-reviewed / passes its test suite, not necessarily run against a live external system |
+| `unit` | Has unit tests — a narrower claim than `code` |
+| `component_only` | The component mechanism itself was exercised, not the full integration surface |
+| *(no `validation` block at all)* | No validation metadata — don't assume a tier; say so explicitly |
 
-About 620 of ~970 components are `live`. The `validation.evidence` field
-points at the walkthrough that validated it.
+Roughly 684 of ~1,461 components (just under half) are `live`. The
+`validation.evidence` field, when present, points at the walkthrough or
+writeup that validated it — read it before citing a component as
+"live-validated" for a specific capability, since the evidence may cover
+only one config shape, not every field the schema exposes.
 
 ## Where `add` installs
 
@@ -415,9 +432,20 @@ tooling can detect drift between pinned and latest.
 
 ## Component categories
 
-`resource`, `io_manager`, `sensor`, `observation`, `external`, `integration`,
-`check`, `transformation`, `ingestion`, `ai`, `analytics`, `infrastructure`,
-`source`, `sink`, `jobs`, `data-warehouse`, `dbt`.
+`ingestion`, `ai`, `resource`, `transformation`, `source`, `analytics`,
+`integration`, `sensor`, `reverse_etl`, `sink`, `jobs`, `infrastructure`,
+`external`, `io_manager`, `observation`, `security`, `decorator`, `check`
+(descending by component count — `ingestion` and `ai` are the two
+largest, each with 150+ components; `reverse_etl`, at ~80, is easy to
+forget since it's newer than this list was first written).
+
+The category field isn't fully normalized — a handful of components carry
+near-duplicate variants (`sensors` instead of `sensor`, `sinks` instead of
+`sink`, and similar singular/plural or casing drift) from organic growth
+across ~1,460 individually-authored components. **Don't filter by an
+exact category string and assume you've seen everything in it** — prefer
+a text `search` over `--category` alone, or try a couple of spellings if
+you do filter.
 
 Filter with `--category`: `dagster-component search "" --category io_manager`.
 
