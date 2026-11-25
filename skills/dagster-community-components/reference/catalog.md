@@ -7,14 +7,14 @@ All figures below are from a live fetch of `manifest.json` — treat them as a s
 Real category breakdown (component count, descending):
 
 ```
-ingestion 190, ai 181, resource 177, transformation 129, source 102, analytics 95,
-integration 81, sensor 79, reverse_etl 79, sink 66, jobs 63, infrastructure 62,
+ingestion 190, ai 184, resource 177, transformation 129, source 103, analytics 95,
+integration 85, sensor 84, reverse_etl 79, sink 67, infrastructure 64, jobs 63,
 external 34, io_manager 33, observation 22, security 20, decorator 18, check 17
 ```
 
-**The category field is not fully normalized.** A handful of components carry near-duplicate or singular/plural variants that are really the same category: `sensors` (5, should be `sensor`), `sinks` (2, should be `sink`), `sources` (1, should be `source`), `core` (3), `dbt` (2). This is organic drift across ~1,461 individually-authored components, not a documented taxonomy — **don't filter by an exact category string and assume you've seen everything in that category.** Prefer `dagster-component search "<term>"` (which matches across id/name/description/tags/keywords, not just category) over `--category <exact-string>`, or search with a couple of category spellings if you do filter.
+(18 categories, 1,464 components total — `manifest.total` and `manifest.components.length` agree as of this snapshot.)
 
-**The manifest's own `total` field can lag the real array length** (observed: `manifest.total` read 1404 while `manifest.components.length` was 1461 at the same fetch). Count `components.length` yourself rather than quoting `total`.
+A prior drift had near-duplicate/singular-plural category variants (`sensors`/`sinks`/`sources`/`core`/`dbt`) and a stale `total` field that lagged the real array length — both were cleaned up upstream. Still worth defending against regardless: **don't filter by an exact category string and assume you've seen everything in that category**, and count `components.length` yourself rather than trusting a cached `total`. Prefer `dagster-component search "<term>"` (which matches across id/name/description/tags/keywords, not just category) over `--category <exact-string>`.
 
 ## Validation tiers
 
@@ -23,7 +23,7 @@ Real tier names found in `validation.level` (component count):
 | Tier | Count (snapshot) | Meaning |
 |---|---|---|
 | `live` | 684 | Validated against a real live system/account — the strongest tier. |
-| `code` | 575 | Code-reviewed / passes its test suite, not necessarily run against a live external system. |
+| `code` | 578 | Code-reviewed / passes its test suite, not necessarily run against a live external system. |
 | (no `validation` block) | 188 | No validation metadata at all — don't assume a tier for these; say so. |
 | `unit` | 9 | Has unit tests, narrower claim than `code`. |
 | `component_only` | 5 | The component mechanism itself was exercised, not the full integration surface. |

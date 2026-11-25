@@ -8,7 +8,7 @@ CLAUDE_MD = """\
 # Dagster component registry
 
 This project can pull from the Dagster component registry —
-**~1,460 reusable components** covering integrations, sensors, IO managers,
+**~1,464 reusable components** covering integrations, sensors, IO managers,
 transforms, sinks, sources, reverse-ETL, AI / NLP / agents (with MCP tool
 support), analytics, lakehouse, observability, and more. Just under half
 are validated end-to-end against real systems — see "Validation levels"
@@ -45,7 +45,7 @@ Snowflake / Databricks / etc.). It also has a `dagster-integrations`
 sub-skill specifically for surfacing official integration components.
 
 **This document covers the component registry** — the long tail of
-~1,460 components beyond official integrations (and ~370 end-to-end
+~1,464 components beyond official integrations (and ~370 end-to-end
 walkthroughs in `examples/`). Use the two together:
 
 - **General Dagster question** (assets, automation, dg, project layout):
@@ -192,7 +192,7 @@ see that term anywhere it's stale):
 | `component_only` | The component mechanism itself was exercised, not the full integration surface |
 | *(no `validation` block at all)* | No validation metadata — don't assume a tier; say so explicitly |
 
-Roughly 684 of ~1,461 components (just under half) are `live`. The
+Roughly 684 of ~1,464 components (just under half) are `live`. The
 `validation.evidence` field, when present, points at the walkthrough or
 writeup that validated it — read it before citing a component as
 "live-validated" for a specific capability, since the evidence may cover
@@ -440,19 +440,17 @@ tooling can detect drift between pinned and latest.
 ## Component categories
 
 `ingestion`, `ai`, `resource`, `transformation`, `source`, `analytics`,
-`integration`, `sensor`, `reverse_etl`, `sink`, `jobs`, `infrastructure`,
+`integration`, `sensor`, `reverse_etl`, `sink`, `infrastructure`, `jobs`,
 `external`, `io_manager`, `observation`, `security`, `decorator`, `check`
 (descending by component count — `ingestion` and `ai` are the two
 largest, each with 150+ components; `reverse_etl`, at ~80, is easy to
 forget since it's newer than this list was first written).
 
-The category field isn't fully normalized — a handful of components carry
-near-duplicate variants (`sensors` instead of `sensor`, `sinks` instead of
-`sink`, and similar singular/plural or casing drift) from organic growth
-across ~1,460 individually-authored components. **Don't filter by an
-exact category string and assume you've seen everything in it** — prefer
-a text `search` over `--category` alone, or try a couple of spellings if
-you do filter.
+A prior category-normalization drift (near-duplicate variants like
+`sensors` instead of `sensor`, `sinks` instead of `sink`) has been cleaned
+up, but still **don't filter by an exact category string and assume
+you've seen everything in it** — prefer a text `search` over `--category`
+alone, or try a couple of spellings if you do filter.
 
 Filter with `--category`: `dagster-component search "" --category io_manager`.
 
