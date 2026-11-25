@@ -53,6 +53,10 @@ Translated (stage class = last `_` segment of `stageName`):
 | `FieldHasherDProcessor` | Hash **in place** with MD5, SHA1, SHA256, SHA512 (lower-case hex of the UTF-8 string form; maps and lists element by element). Hash to target / header / whole record, and MURMUR3_128, are stubs. Property names come from one real (old-schema) export. |
 | `MultiKafkaDSource` | JSON values, no key capture. One run reads from the group's committed offsets until a poll returns nothing, and commits only after the run succeeds. Records carry `topic`, `partition`, `offset`. Tested against a fake client only. |
 | `KafkaDTarget` | JSON, one message per record, topic from the stage (or the topic expression when runtime resolution is on). Partitioner and serializer settings are not applied. Tested against a fake client only. |
+| `ElasticsearchDSource` | Micro-batch: `${OFFSET}` in the query body is replaced by the stored offset (raw text), the query repeats until no hits, and the last hit's offset field is stored. Connection through the registry's `ElasticsearchResource` (credentials `SDC_SECRET_<STAGE>_API_KEY` or `_USERNAME`/`_PASSWORD`); first URI only. |
+| `ElasticSearchDTarget` (transport-protocol stage) | Bulk index over HTTP through the registry resource, **so `SDC_ES_URL` must point at the HTTP endpoint** (the stage used port 9300); no document type. |
+| `MongoDBDSource` | Documents with the offset field greater than the stored offset, in order; OBJECTID (initial offset date becomes an ObjectId), STRING and DATE offsets. The connection string is removed from the export: `SDC_SECRET_<STAGE>_CONNECTION_STRING`. Connection through the registry's `MongoDBResource`. Tested against mongomock. |
+| `HttpClientDSource` | Polling mode, no pagination, JSON or DELIMITED; one request per run (schedule at the polling interval). |
 | `LocalFileSystemDTarget` | DELIMITED, JSON (one object per line), TEXT. One file per directory per run (`<prefix>_<uuid>`); no rolling, compression or late-record handling. |
 | `DatabricksDeltaLakeDTarget` | SQL writes through SQLAlchemy (`databricks-sqlalchemy`; the URL is derived from the JDBC URL, or set `SDC_SQLALCHEMY_URL_<STAGE>`). Auto-creates the table from the first record, adds columns when drift is on, and in CDC mode applies `sdc.operation.type` by key as delete-then-insert. **StreamSets stages files and runs COPY INTO / MERGE**; this is slow for bulk loads. A CDC stage with no key columns is a stub. |
 
@@ -70,8 +74,7 @@ Stubs with a pointer to the registry (check `dagster-community-components` befor
 | Groovy / JavaScript evaluators | Rewrite as Python and pass it with `--override`. The script text is kept in the manifest notes |
 | Jython evaluator | Translated (runs under CPython); see the catalog |
 
-Other stage types seen in real exports and not translated: JDBC Lookup, Geolocation, Kafka producer and consumers, MongoDB, Elasticsearch, Field Mask, HTTP Client origin,
-the SDC_JSON and LOG data formats, Groovy. Also not translated: Transformer/Spark stages
+Other stage types seen in real exports and not translated: JDBC Lookup (the lookup's column-mapping property names are not verified), Groovy, the dev-only Simulator, Kafka single-topic consumer, the Encrypt and Decrypt Fields stage (see Encryption). Also not translated: Transformer/Spark stages
 , MongoDB, REST client, Kafka producer, ...) have no translation yet and are reported as stubs.
 
 ## Expression language (EL)

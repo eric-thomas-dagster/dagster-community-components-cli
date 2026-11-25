@@ -25,11 +25,11 @@ names and to test shapes the six samples lack. They are not redistributed. Their
 | First pass (six samples' stages only) | 100 of 196 (51%) | 19 of 27 |
 | JavaScript, HTTP and vendor HTTP destination, Jython origin, Local Lookup, date conversion, `time:` functions | 174 of 196 (89%) | 19 of 27 |
 | File Tail, LOG format, SDC_JSON, Geolocation, Field Mask, Kafka consumer and producer, raw data | 187 of 196 (95%) | 4 of 27 |
+| Elasticsearch, MongoDB (through the registry's resources), HTTP origin, older Geolocation schema | 192 of 196 (98%) | 1 of 27 |
 
 Translated is not correct: a script stage that translates still has to be reviewed (the 25 JavaScript scripts run in QuickJS; 19 ran on a trivial record, 6 raised).
-What is left (9 stages): Elasticsearch and MongoDB (the registry has `elasticsearch_reader`, `elasticsearch_asset` and `mongodb_reader` for those), two JDBC lookups,
-the HTTP client origin, a Groovy evaluator, a dev-only simulator, and a Geolocation stage with an unsupported database type. The vendor's 14 pipelines inflate the JavaScript and HTTP
-counts: a different customer's mix will differ. The 95% is a count of stages the converter produces code for; Kafka, Geolocation, HTTP and the scripting stages were only run against fakes,
-local servers and trivial records.
+What is left (4 stages): two JDBC lookups, a Groovy evaluator and a dev-only simulator. The vendor's 14 pipelines inflate the JavaScript and HTTP counts: a different customer's mix will differ.
+The 98% counts stages the converter produces code for. Kafka, Geolocation, Elasticsearch, MongoDB, HTTP and the scripting stages were run only against fakes, in-memory databases, local servers and trivial
+records, never against the real systems; the Encrypt/Decrypt stage did not appear in any sample and is deliberately not translated.
 
 Gates on the six samples' generated project: 1 (compiles), 2 (loads), 3 (units match) pass; gate 4 dry run: 1 ok, 5 fail on a stub as designed, 0 unexpected.

@@ -1389,6 +1389,92 @@ def field_hasher(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ER
     _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
 
 
+# ---- Elasticsearch, MongoDB, HTTP origin (connections come from the registry's resources) --------------------------------------------------
+def es_origin(run: Run, inst: str, hosts: str, index: str, query: str, offset_field: str, initial_offset: str, batch: int, *, outputs, events=()):
+    """Elasticsearch origin as a micro-batch. `${OFFSET}` in the query body is replaced by the stored offset (raw text, as StreamSets does); the query repeats
+    until it returns no hits, and the last hit's `offset_field` is stored. Connection: the registry's ElasticsearchResource
+    (credentials from SDC_SECRET_<STAGE>_API_KEY, or _USERNAME and _PASSWORD)."""
+    def gen():
+        if run.dry:
+            run.log(f"[dry run] {inst}: would query index {index}")
+            return
+        from dagster_community_components.resources.elasticsearch_resource.component import ElasticsearchResource
+        client = ElasticsearchResource(hosts=hosts, api_key=stage_secret(inst, "API_KEY"), username=stage_secret(inst, "USERNAME"),
+                                       password=stage_secret(inst, "PASSWORD")).get_client()
+        offset = str(run.offsets_in.get(inst, initial_offset))
+        while True:
+            body = json.loads(query.replace("${OFFSET}", offset))
+            hits = client.search(index=index, body=body, size=batch)["hits"]["hits"]
+            if not hits:
+                break
+            yield {outputs[0]: [Record(dict(h["_source"])) for h in hits]}
+            if not offset_field or "${OFFSET}" not in query:
+                break
+            offset = str(get_path(hits[-1]["_source"], "/" + offset_field.strip("/")))
+            run.offsets_out[inst] = offset
+    run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
+def es_target(run: Run, inst: str, hosts_fn, index_fn, *, inputs, on_error="TO_ERROR", pre=(), req=()):
+    """Elasticsearch destination: bulk-indexes each record into `index_fn(record)`. The stage speaks the transport protocol (port 9300); this uses
+    the HTTP API, so the hosts come from `SDC_ES_URL` (or the stage's URIs) and must point at the HTTP port."""
+    def go(recs):
+        if run.dry:
+            run.log(f"[dry run] {inst}: would index {len(recs)} record(s)")
+            return {}
+        from dagster_community_components.resources.elasticsearch_resource.component import ElasticsearchResource
+        from elasticsearch.helpers import bulk
+        client = ElasticsearchResource(hosts=os.environ.get("SDC_ES_URL") or hosts_fn(), api_key=stage_secret(inst, "API_KEY"), username=stage_secret(inst, "USERNAME"),
+                                       password=stage_secret(inst, "PASSWORD")).get_client()
+        bulk(client, ({"_index": index_fn(r), "_source": r.value} for r in recs))
+        return {}
+    run.add(Stage(inst, go, inputs=inputs, on_error=on_error, pre=pre, req=req))
+
+
+def mongo_origin(run: Run, inst: str, conn_fn, database: str, collection: str, offset_field: str, offset_type: str, initial_offset: str, batch: int, *, outputs, events=()):
+    """MongoDB origin as a micro-batch: documents with `offset_field` greater than the stored offset, in order, until none are left. OBJECTID offsets start
+    from an ObjectId built from the initial offset date; DATE and STRING offsets are compared as such. Connection: the registry's MongoDBResource."""
+    def gen():
+        if run.dry:
+            run.log(f"[dry run] {inst}: would read {database}.{collection}")
+            return
+        from dagster_community_components.resources.mongodb_resource.component import MongoDBResource
+        client = MongoDBResource(connection_string=conn_fn(), database=database).get_client()
+        coll = client[database][collection]
+        import bson
+
+        def start():
+            stored = run.offsets_in.get(inst)
+            if stored is not None:
+                return bson.ObjectId(stored) if offset_type == "OBJECTID" else (_dt.datetime.fromisoformat(stored) if offset_type == "DATE" else stored)
+            if offset_type == "OBJECTID":
+                return bson.ObjectId.from_datetime(_dt.datetime.strptime(initial_offset, "%Y-%m-%d %H:%M:%S"))
+            return _dt.datetime.strptime(initial_offset, "%Y-%m-%d %H:%M:%S") if offset_type == "DATE" else initial_offset
+        cur = start()
+        while True:
+            docs = list(coll.find({offset_field: {"$gt": cur}}).sort(offset_field, 1).limit(batch))
+            if not docs:
+                break
+            cur = docs[-1][offset_field]
+            run.offsets_out[inst] = cur.isoformat() if isinstance(cur, _dt.datetime) else str(cur)
+            yield {outputs[0]: [Record({k: (str(v) if isinstance(v, bson.ObjectId) else v) for k, v in d.items()}) for d in docs]}
+    run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
+def http_origin(run: Run, inst: str, url_fn, method: str, auth_fn, fmt: str, header: bool, delimiter: str, *, outputs, events=()):
+    """HTTP Client origin in polling mode, as one request per run; the response body is parsed as DELIMITED or JSON."""
+    def gen():
+        if run.dry:
+            run.log(f"[dry run] {inst}: would {method} {str(url_fn()).split('?')[0]}")
+            return
+        import io
+        resp = _http(run, inst, method, url_fn(), auth=auth_fn())
+        rows = list(_parse(io.StringIO(resp.text), fmt, header, delimiter)) if fmt != "JSON" else (
+            resp.json() if isinstance(resp.json(), list) else [resp.json()])
+        yield {outputs[0]: [Record(x if isinstance(x, dict) else {"value": x}) for x in rows]}
+    run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
 # ---- more origins and destinations -----------------------------------------------------------------------------------------------------------
 def spooldir_origin(run: Run, inst: str, directory: str, pattern: str, fmt: str, *, header: bool, delimiter: str, outputs, events, batch: int = 1000,
                     order: str = "LEXICOGRAPHICAL", log_mode: str = ""):

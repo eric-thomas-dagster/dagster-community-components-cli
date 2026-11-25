@@ -21,18 +21,14 @@ STREAMING_ORIGINS = {
     "TcpServerDSource": "TCP server", "UDPDSource": "UDP source", "CoapServerDSource": "CoAP server",
 }
 # origins that poll forever in StreamSets but can be read as one batch of what exists when the run starts
-BATCHED_CONTINUOUS = {"SpoolDirDSource": "Directory", "JythonDSource": "Jython scripting", "FileTailDSource": "File tail", "MultiKafkaDSource": "Kafka consumer"}
+BATCHED_CONTINUOUS = {"ElasticsearchDSource": "Elasticsearch", "MongoDBDSource": "MongoDB", "HttpClientDSource": "HTTP client (polling)", "SpoolDirDSource": "Directory", "JythonDSource": "Jython scripting", "FileTailDSource": "File tail", "MultiKafkaDSource": "Kafka consumer"}
 SCRIPTS = {"GroovyDProcessor": "Groovy", "GroovyDSource": "Groovy", "JavaScriptDSource": "JavaScript"}
 SUGGEST = {
     "HdfsDTarget": "write to object storage (fsspec) or load the warehouse directly; Hadoop is usually being retired in the same move",
     "HiveMetadataDProcessor": "Hive drift handling belongs to the warehouse load; replace it with a schema-sync step",
     "HiveMetastoreDTarget": "see HiveMetadataDProcessor", "HiveQueryDExecutor": "run the query through the warehouse resource",
     "KafkaDSource": "use the registry's KafkaToDatabaseAssetComponent with kafka_monitor, or keep the stream in StreamSets",
-    "MongoDBDSource": "use the registry's mongodb_reader component",
-    "ElasticsearchDSource": "use the registry's elasticsearch_reader component",
-    "ElasticSearchDTarget": "use the registry's elasticsearch_asset component",
     "JdbcLookupDProcessor": "use the registry's lookup transform, or a join in the warehouse",
-    "HttpClientDSource": "use the registry's REST API Fetcher (rest_api_fetcher) or dlt_rest_api_source",
 }
 
 
@@ -330,6 +326,55 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         raise _Stub("Encrypt/Decrypt Fields is not translated: its property names are not verified against a real export, and ciphertext written by StreamSets cannot be read "
                     "by a replacement. Build it with --override using runtime.crypto_fields (AWS Encryption SDK; see reference/mapping.md, Encryption)")
 
+    if cls == "ElasticsearchDSource":
+        uris = [u for u in (c.get("conf.httpUris") or []) if isinstance(u, str)]
+        if not uris or not c.get("conf.index") or not c.get("conf.query"):
+            raise _Stub("Elasticsearch origin needs HTTP URIs, an index and a query")
+        n.append("an Elasticsearch origin polls forever in StreamSets; here one run reads until the query returns nothing and stores the last offset field value")
+        n.append("connection through the registry's ElasticsearchResource (credentials: SDC_SECRET_<STAGE>_API_KEY, or _USERNAME and _PASSWORD); only the first URI is used")
+        return (f"rt.es_origin(run, {I}, {uris[0]!r}, {c.get('conf.index')!r}, {c.get('conf.query')!r}, {c.get('conf.offsetField') or ''!r}, "
+                f"{str(c.get('conf.initialOffset') or '')!r}, {int(c.get('conf.maxBatchSize') or 1000)}, outputs={s.outputs!r}, events={s.events!r})"), n
+
+    if cls in ("ElasticSearchDTarget", "ElasticsearchDTarget") and c.get("indexTemplate"):
+        n.append("the stage uses the transport protocol (port 9300); this writes over HTTP through the registry's ElasticsearchResource, so set SDC_ES_URL to the HTTP endpoint (credentials: SDC_SECRET_<STAGE>_API_KEY or _USERNAME/_PASSWORD)")
+        n.append("document type is not set (types are gone in current Elasticsearch)")
+        uris = [u for u in (c.get("uris") or []) if isinstance(u, str)]
+        return f"rt.es_target(run, {I}, lambda: {('http://' + uris[0]) if uris else ''!r}, {_el(c.get('indexTemplate'))}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
+
+    if cls == "MongoDBDSource":
+        if (c.get("configBean.mongoConfig.authenticationType") or "NONE") != "NONE":
+            raise _Stub("MongoDB origin is translated without separate authentication settings (credentials go in the connection string)")
+        conn = c.get("configBean.mongoConfig.connectionString")
+        cfn = f"lambda: rt.stage_secret({s.instance!r}, 'CONNECTION_STRING')" if (not conn or conn == "<redacted>") else f"lambda: ({translate(conn)})"
+        otype = c.get("configBean.offsetType") or "OBJECTID"
+        if otype not in ("OBJECTID", "STRING", "DATE"):
+            raise _Stub(f"offset type {otype} is not translated")
+        n.append("a MongoDB origin polls forever in StreamSets; here one run reads documents after the stored offset until none are left")
+        n.append("the connection string was removed from the export: set SDC_SECRET_" + __import__("re").sub(r"[^A-Za-z0-9]", "_", s.instance).upper() + "_CONNECTION_STRING; connection through the registry's MongoDBResource")
+        return (f"rt.mongo_origin(run, {I}, {cfn}, {c.get('configBean.mongoConfig.database')!r}, {c.get('configBean.mongoConfig.collection')!r}, "
+                f"{c.get('configBean.offsetField') or '_id'!r}, {otype!r}, {str(c.get('configBean.initialOffset') or '')!r}, {int(c.get('configBean.batchSize') or 1000)}, "
+                f"outputs={s.outputs!r}, events={s.events!r})"), n
+
+    if cls == "HttpClientDSource":
+        if (c.get("conf.httpMode") or "POLLING") != "POLLING" or (c.get("conf.pagination.mode") or "NONE") != "NONE":
+            raise _Stub("HTTP origin is translated for polling mode without pagination")
+        if (c.get("conf.dataFormat") or "JSON") not in ("JSON", "DELIMITED"):
+            raise _Stub(f"HTTP data format {c.get('conf.dataFormat')} is not translated")
+        method = c.get("conf.httpMethod") or "GET"
+        auth = c.get("conf.client.authType") or "NONE"
+        if auth == "BASIC":
+            u, pw = c.get("conf.client.basicAuth.username"), c.get("conf.client.basicAuth.password")
+            afn = f"lambda: (({translate(u) if u else repr('')}), ({translate(pw) if pw and pw != '<redacted>' else 'rt.stage_secret(' + repr(s.instance) + ', ' + repr('PASSWORD') + ')'}))"
+        elif auth == "NONE":
+            afn = "lambda: None"
+        else:
+            raise _Stub(f"authentication {auth} is not translated")
+        n.append("an HTTP polling origin polls forever (every conf.pollingInterval); here one run makes one request. Schedule the asset at the polling interval")
+        n.append("retry/backoff, TLS and proxy settings are not applied")
+        fmt = c.get("conf.dataFormat") or "JSON"
+        return (f"rt.http_origin(run, {I}, {_el(c.get('conf.resourceUrl'))}, {method!r}, {afn}, {fmt!r}, {(_pick(c, 'csvHeader') or 'NO_HEADER') != 'NO_HEADER'}, "
+                f"{(_pick(c, 'csvCustomDelimiter') or ',')!r}, outputs={s.outputs!r}, events={s.events!r})"), n
+
     if cls == "FileTailDSource":
         if (c.get("conf.dataFormat") or "") != "LOG":
             raise _Stub("File Tail is translated for the LOG data format (TEXT's field name is not documented)")
@@ -349,7 +394,7 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         return f"rt.raw_data_origin(run, {I}, {str(c.get('rawData') or '')!r}, {fmt!r}, outputs={s.outputs!r}, events={s.events!r})", n
 
     if cls == "GeolocationDProcessor":
-        dbs = _rows(c.get("dbConfigs"))
+        dbs = _rows(c.get("dbConfigs")) or ([{"geoIP2DBFile": c["geoIP2DBFile"], "geoIP2DBType": "CITY"}] if c.get("geoIP2DBFile") else [])
         if len(dbs) != 1 or dbs[0].get("geoIP2DBType") != "CITY":
             raise _Stub("Geolocation is translated for one GeoIP2 City database")
         if (c.get("missingAddressAction") or "TO_ERROR") != "TO_ERROR":
@@ -358,7 +403,7 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         bad = [t for t, _, _ in convs if t not in ("LATITUDE", "LONGITUDE", "COUNTRY_NAME", "COUNTRY_ISO_CODE", "CITY_NAME", "POSTAL_CODE")]
         if bad or not convs:
             raise _Stub(f"geolocation fields {bad or 'none'} are not translated")
-        n.append("needs the MaxMind GeoIP2 City database file at the configured path (or SDC_GEOIP_DB) and the `maxminddb` package")
+        n.append("needs the MaxMind GeoIP2/GeoLite2 City database file at the configured path (or SDC_GEOIP_DB). The database is MaxMind-licensed (an account and license key are required to download GeoLite2) and is not obtained or refreshed by this project")
         return f"rt.geolocation(run, {I}, {dbs[0].get('geoIP2DBFile')!r}, {convs!r}, 'TO_ERROR', {lanes}{err}{pre})", n
 
     if cls == "FieldMaskDProcessor":
@@ -646,6 +691,10 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
             deps += ['"confluent-kafka"']
         if "rt.crypto_fields" in result.code or "encrypt_value" in "".join(result.files.values()):
             deps += ['"aws-encryption-sdk"']
+        if any(x in result.code for x in ("rt.es_origin", "rt.es_target")):
+            deps += ['"dagster-community-components>=0.10.179"', '"elasticsearch"']
+        if "rt.mongo_origin" in result.code:
+            deps += ['"dagster-community-components>=0.10.179"', '"pymongo"']
         if "rt.geolocation" in result.code:
             deps += ['"maxminddb"']
     root = out_dir / "src" / pkg
