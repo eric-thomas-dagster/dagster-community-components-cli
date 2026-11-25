@@ -23,10 +23,13 @@ names and to test shapes the six samples lack. They are not redistributed. Their
 | After | Stages translated | Pipelines with a stub |
 |---|---|---|
 | First pass (six samples' stages only) | 100 of 196 (51%) | 19 of 27 |
-| JavaScript, HTTP and vendor HTTP destination, Jython origin, Local Lookup, date conversion, `time:` functions | 174 of 196 (89%) | 19 of 27 (most have one or two left) |
+| JavaScript, HTTP and vendor HTTP destination, Jython origin, Local Lookup, date conversion, `time:` functions | 174 of 196 (89%) | 19 of 27 |
+| File Tail, LOG format, SDC_JSON, Geolocation, Field Mask, Kafka consumer and producer, raw data | 187 of 196 (95%) | 4 of 27 |
 
 Translated is not correct: a script stage that translates still has to be reviewed (the 25 JavaScript scripts run in QuickJS; 19 ran on a trivial record, 6 raised).
-What is left (22 stages): the SDC_JSON data format (4), JDBC lookup (2), geolocation (2), and one each of MongoDB, Elasticsearch, Kafka consumers and producer,
-file tail, Groovy, Field Mask, HTTP origin and a dev-only source. The vendor's 14 pipelines inflate the JavaScript and HTTP counts: a different customer's mix will differ.
+What is left (9 stages): Elasticsearch and MongoDB (the registry has `elasticsearch_reader`, `elasticsearch_asset` and `mongodb_reader` for those), two JDBC lookups,
+the HTTP client origin, a Groovy evaluator, a dev-only simulator, and a Geolocation stage with an unsupported database type. The vendor's 14 pipelines inflate the JavaScript and HTTP
+counts: a different customer's mix will differ. The 95% is a count of stages the converter produces code for; Kafka, Geolocation, HTTP and the scripting stages were only run against fakes,
+local servers and trivial records.
 
 Gates on the six samples' generated project: 1 (compiles), 2 (loads), 3 (units match) pass; gate 4 dry run: 1 ok, 5 fail on a stub as designed, 0 unexpected.

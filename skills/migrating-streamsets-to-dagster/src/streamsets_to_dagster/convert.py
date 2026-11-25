@@ -17,26 +17,22 @@ STREAMING_ORIGINS = {
     "KafkaMultiDSource": "Kafka multi-topic consumer", "KinesisDSource": "Kinesis consumer", "JmsDSource": "JMS consumer",
     "MqttClientDSource": "MQTT subscriber", "RabbitDSource": "RabbitMQ consumer", "PulsarDSource": "Pulsar consumer",
     "HttpServerDSource": "HTTP server", "WebSocketServerDSource": "WebSocket server", "RestServiceDSource": "REST service",
-    "FileTailDSource": "File tail", "GoogleCloudPubSubDSource": "Google Pub/Sub",
+    "GoogleCloudPubSubDSource": "Google Pub/Sub",
     "TcpServerDSource": "TCP server", "UDPDSource": "UDP source", "CoapServerDSource": "CoAP server",
 }
 # origins that poll forever in StreamSets but can be read as one batch of what exists when the run starts
-BATCHED_CONTINUOUS = {"SpoolDirDSource": "Directory", "JythonDSource": "Jython scripting"}
+BATCHED_CONTINUOUS = {"SpoolDirDSource": "Directory", "JythonDSource": "Jython scripting", "FileTailDSource": "File tail", "MultiKafkaDSource": "Kafka consumer"}
 SCRIPTS = {"GroovyDProcessor": "Groovy", "GroovyDSource": "Groovy", "JavaScriptDSource": "JavaScript"}
 SUGGEST = {
     "HdfsDTarget": "write to object storage (fsspec) or load the warehouse directly; Hadoop is usually being retired in the same move",
     "HiveMetadataDProcessor": "Hive drift handling belongs to the warehouse load; replace it with a schema-sync step",
     "HiveMetastoreDTarget": "see HiveMetadataDProcessor", "HiveQueryDExecutor": "run the query through the warehouse resource",
     "KafkaDSource": "use the registry's KafkaToDatabaseAssetComponent with kafka_monitor, or keep the stream in StreamSets",
-    "MultiKafkaDSource": "use the registry's KafkaToDatabaseAssetComponent with kafka_monitor, or keep the stream in StreamSets",
     "MongoDBDSource": "use the registry's mongodb_reader component",
     "ElasticsearchDSource": "use the registry's elasticsearch_reader component",
     "ElasticSearchDTarget": "use the registry's elasticsearch_asset component",
-    "FieldMaskDProcessor": "use the registry's data_masking transform",
     "JdbcLookupDProcessor": "use the registry's lookup transform, or a join in the warehouse",
     "HttpClientDSource": "use the registry's REST API Fetcher (rest_api_fetcher) or dlt_rest_api_source",
-    "KafkaDTarget": "no registry Kafka producer sink exists (see reference/component-wishlist.md); write it by hand with --override",
-    "GeolocationDProcessor": "needs a MaxMind GeoIP2 database lookup; no registry component does that (the registry's geocoder is address-based); write it by hand with --override",
 }
 
 
@@ -93,10 +89,26 @@ def _pick(c: dict, suffix: str, default=None):
     return default
 
 
+def _log_mode(c: dict) -> str:
+    mode = _pick(c, "logMode") or "COMMON_LOG_FORMAT"
+    if mode == "GROK":
+        import re as _re
+        g = (_pick(c, "grokPattern") or "").strip()
+        m = _re.fullmatch(r"%\{(COMMONAPACHELOG|COMBINEDAPACHELOG)\}", g)
+        if not m:
+            raise _Stub(f"grok pattern {g!r} is not translated (COMMONAPACHELOG and COMBINEDAPACHELOG are)")
+        return m.group(1)
+    if mode in ("COMMON_LOG_FORMAT", "COMBINED_LOG_FORMAT"):
+        return mode
+    raise _Stub(f"log mode {mode} is not translated")
+
+
 def _delimited(c: dict) -> tuple[str, bool, str]:
     fmt = _pick(c, "dataFormat") or "DELIMITED"
+    if fmt == "LOG":
+        return fmt, False, ","
     if fmt not in ("DELIMITED", "JSON"):
-        raise _Stub(f"data format {fmt} is not translated (DELIMITED and JSON are)")
+        raise _Stub(f"data format {fmt} is not translated (DELIMITED, JSON and LOG are)")
     ff = _pick(c, "csvFileFormat") or "CSV"
     delim = {"CSV": ",", "TDF": "\t", "CUSTOM": _pick(c, "csvCustomDelimiter") or ","}.get(ff)
     if delim is None:
@@ -303,10 +315,87 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         n.append("a batch run ends when its origins are exhausted; the finisher's precondition is not evaluated against a stop")
         return f"rt.pipeline_finisher(run, {I}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
 
+    if cls == "FieldHasherDProcessor":
+        rules = []
+        for r in _rows(c.get("fieldHasherConfigs")):
+            if r.get("hashType") not in ("MD5", "SHA1", "SHA256", "SHA512"):
+                raise _Stub(f"hash type {r.get('hashType')} is not translated (MD5, SHA1, SHA256 and SHA512 are)")
+            rules.append((list(r.get("fieldsToHash") or []), r["hashType"]))
+        if any(k.startswith(("recordHasherConfig", "targetFieldHasherConfigs", "inPlaceFieldHasherConfigs")) and v for k, v in c.items()):
+            raise _Stub("hash to target field / header attribute and whole-record hashing are not translated (hash in place is)")
+        n.append("the hash is lower-case hex over the value's UTF-8 string form; compare one hashed value with your Data Collector's before relying on joins against old hashes")
+        return f"rt.field_hasher(run, {I}, {rules!r}, {lanes}{err}{pre})", n
+
+    if "crypt" in cls.lower():
+        raise _Stub("Encrypt/Decrypt Fields is not translated: its property names are not verified against a real export, and ciphertext written by StreamSets cannot be read "
+                    "by a replacement. Build it with --override using runtime.crypto_fields (AWS Encryption SDK; see reference/mapping.md, Encryption)")
+
+    if cls == "FileTailDSource":
+        if (c.get("conf.dataFormat") or "") != "LOG":
+            raise _Stub("File Tail is translated for the LOG data format (TEXT's field name is not documented)")
+        infos = _rows(c.get("conf.fileInfos"))
+        if not infos:
+            raise _Stub("no files configured")
+        n.append("a File Tail origin follows files forever in StreamSets; here one run reads the lines added since the last run (byte offset stored as asset metadata). Rolled/archived files are not followed")
+        n.append("log field names come from StreamSets' documented Common/Combined Log Format or grok names; compare a parsed record with your Data Collector's")
+        ev = f", events={s.events!r}" if s.events else ""
+        return (f"rt.file_tail_origin(run, {I}, {[i['fileFullPath'] for i in infos]!r}, 'LOG', {_log_mode(c)!r}, {int(c.get('conf.batchSize') or 1000)}, "
+                f"outputs={s.outputs!r}{ev})"), n
+
+    if cls == "RawDataDSource":
+        fmt = c.get("dataFormat") or "JSON"
+        if fmt not in ("JSON", "DELIMITED"):
+            raise _Stub(f"raw data format {fmt} is not translated")
+        return f"rt.raw_data_origin(run, {I}, {str(c.get('rawData') or '')!r}, {fmt!r}, outputs={s.outputs!r}, events={s.events!r})", n
+
+    if cls == "GeolocationDProcessor":
+        dbs = _rows(c.get("dbConfigs"))
+        if len(dbs) != 1 or dbs[0].get("geoIP2DBType") != "CITY":
+            raise _Stub("Geolocation is translated for one GeoIP2 City database")
+        if (c.get("missingAddressAction") or "TO_ERROR") != "TO_ERROR":
+            raise _Stub("missing-address action other than TO_ERROR is not translated")
+        convs = [(r["targetType"], r["inputFieldName"], r["outputFieldName"]) for r in _rows(c.get("fieldTypeConverterConfigs"))]
+        bad = [t for t, _, _ in convs if t not in ("LATITUDE", "LONGITUDE", "COUNTRY_NAME", "COUNTRY_ISO_CODE", "CITY_NAME", "POSTAL_CODE")]
+        if bad or not convs:
+            raise _Stub(f"geolocation fields {bad or 'none'} are not translated")
+        n.append("needs the MaxMind GeoIP2 City database file at the configured path (or SDC_GEOIP_DB) and the `maxminddb` package")
+        return f"rt.geolocation(run, {I}, {dbs[0].get('geoIP2DBFile')!r}, {convs!r}, 'TO_ERROR', {lanes}{err}{pre})", n
+
+    if cls == "FieldMaskDProcessor":
+        rules = []
+        for r in _rows(c.get("fieldMaskConfigs")):
+            k = r.get("maskType")
+            if k not in ("VARIABLE_LENGTH", "FIXED_LENGTH", "REGEX"):
+                raise _Stub(f"mask type {k} is not translated (variable length, fixed length and regex are)")
+            show = [int(x) for x in str(r.get("groupsToShow") or "").split(",") if x.strip().isdigit()]
+            rules.append((list(r.get("fields") or []), k, r.get("regex") or "", show))
+        n.append("the mask character is `x` (as StreamSets does) and a value that does not match a regex mask is masked entirely; compare with your Data Collector")
+        return f"rt.field_mask(run, {I}, {rules!r}, {lanes}{err}{pre})", n
+
+    if cls == "MultiKafkaDSource":
+        if (c.get("conf.dataFormat") or "JSON") != "JSON" or (c.get("conf.keyCaptureMode") or "NONE") != "NONE":
+            raise _Stub("Kafka consumer is translated for JSON values without key capture")
+        n.append("a Kafka consumer runs forever in StreamSets; here one run reads from the group's committed offsets until nothing more arrives, and commits only after the run succeeds. Schedule the asset (or drive it with the registry's kafka_monitor)")
+        n.append("values that are not valid JSON are counted as error records")
+        return (f"rt.kafka_origin(run, {I}, {c.get('conf.brokerURI')!r}, {c.get('conf.consumerGroup') or 'streamsetsDataCollector'!r}, "
+                f"{list(c.get('conf.topicList') or [])!r}, {c.get('conf.kafkaAutoOffsetReset') or 'EARLIEST'!r}, {int(c.get('conf.maxBatchSize') or 1000)}, "
+                f"{int(c.get('conf.batchWaitTime') or 2000)}, outputs={s.outputs!r}, events={s.events!r})"), n
+
+    if cls == "KafkaDTarget":
+        if (c.get("conf.dataFormat") or "JSON") != "JSON":
+            raise _Stub("Kafka producer is translated for JSON values")
+        topic = c.get("conf.topicExpression") if c.get("conf.runtimeTopicResolution") else c.get("conf.topic")
+        if not topic or not c.get("conf.metadataBrokerList"):
+            raise _Stub("no topic or broker list")
+        n.append("one JSON message per record; the partition strategy, key and value serializer settings are not applied (librdkafka defaults)")
+        return f"rt.kafka_target(run, {I}, {c.get('conf.metadataBrokerList')!r}, {_el(topic)}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
+
     if cls == "SpoolDirDSource":
         if (c.get("conf.pathMatcherMode") or "GLOB") != "GLOB":
             raise _Stub("path matcher mode other than GLOB is not translated")
         fmt, header, delim = _delimited(c)
+        if fmt == "LOG":
+            n.append("Common/Combined Log Format fields (/remoteHost, /request, /status, ...) and the grok field names are taken from StreamSets' documented names; compare a parsed record with your Data Collector's")
         n.append("a Directory origin polls forever in StreamSets; here one run reads the files present when it starts. Schedule the asset (or add a file sensor) to pick up new files")
         if (c.get("conf.postProcessing") or "NONE") != "NONE":
             n.append("post-processing (archive/delete after reading) is not performed")
@@ -314,7 +403,7 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         ev = f", events={s.events!r}" if s.events else ", events=[]"
         return (f"rt.spooldir_origin(run, {I}, {c.get('conf.spoolDir')!r}, {c.get('conf.filePattern') or '*'!r}, {fmt!r}, header={header}, "
                 f"delimiter={delim!r}, outputs={s.outputs!r}{ev}, batch={int(c.get('conf.batchSize') or 1000)}, "
-                f"order={'TIMESTAMP' if c.get('conf.useLastModified') == 'TIMESTAMP' else 'LEXICOGRAPHICAL'!r})"), n
+                f"order={'TIMESTAMP' if c.get('conf.useLastModified') == 'TIMESTAMP' else 'LEXICOGRAPHICAL'!r}, log_mode={_log_mode(c) if fmt == 'LOG' else ''!r})"), n
 
     if cls == "ForceDSource":
         if not c.get("forceConfig.queryExistingData"):
@@ -392,8 +481,10 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
 
     if cls == "LocalFileSystemDTarget":
         fmt = c.get("configs.dataFormat") or "TEXT"
-        if fmt not in ("DELIMITED", "JSON", "TEXT"):
-            raise _Stub(f"data format {fmt} is not translated (DELIMITED, JSON and TEXT are)")
+        if fmt not in ("DELIMITED", "JSON", "TEXT", "SDC_JSON"):
+            raise _Stub(f"data format {fmt} is not translated (DELIMITED, JSON, TEXT and SDC_JSON are)")
+        if fmt == "SDC_JSON":
+            n.append("SDC_JSON is written as one JSON object per line holding {value, attributes}: not byte-compatible with StreamSets' own record format (fine if a converted pipeline reads it back)")
         if (c.get("configs.compression") or "NONE") != "NONE" or (c.get("configs.fileType") or "TEXT") != "TEXT":
             raise _Stub("compressed output and sequence files are not translated")
         ff = _pick(c, "csvFileFormat") or "CSV"
@@ -551,6 +642,12 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
         deps += ['"fsspec"', '"s3fs"', '"pymysql"', '"simple-salesforce"', '"databricks-sqlalchemy"', '"requests"']
         if "rt.js_processor" in result.code:
             deps += ['"quickjs"']
+        if "rt.kafka_" in result.code:
+            deps += ['"confluent-kafka"']
+        if "rt.crypto_fields" in result.code or "encrypt_value" in "".join(result.files.values()):
+            deps += ['"aws-encryption-sdk"']
+        if "rt.geolocation" in result.code:
+            deps += ['"maxminddb"']
     root = out_dir / "src" / pkg
     (root / "defs").mkdir(parents=True, exist_ok=True)
     (out_dir / "pyproject.toml").write_text(textwrap.dedent(f'''\

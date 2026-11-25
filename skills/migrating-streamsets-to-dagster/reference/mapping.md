@@ -46,6 +46,13 @@ Translated (stage class = last `_` segment of `stageName`):
 | `LocalLookupDProcessor` | Static key/value table; RECORD and BATCH give the same result. A missing key sets the field to null (assumed). |
 | `HttpDProcessor` (HTTP Client processor) | JSON; GET/POST/PUT/PATCH/DELETE/HEAD; EL in URL, headers and body; NONE and BASIC auth; response parsed into the output field. No pagination (stub). Retry/backoff, TLS, proxy and response-header capture are not applied. HTTP error status sends the record to the error policy. |
 | `HttpClientDTarget`, `AnodotDTarget` (vendor) | JSON POST/PUT etc.; one request per batch (ARRAY_OBJECTS: a JSON array; otherwise one object per line) or per record. The response is ignored; an error status sends the batch's records to the error policy. The Anodot stage is translated as the HTTP POST it sends; its agent-offset callback is not performed. |
+| `FileTailDSource` | LOG data format only. One run reads the lines added since the last run (byte offset stored); a partial last line waits for the next run; rolled files are not followed. Attributes `offset`, `filename`, `file`, `mtime`. |
+| `RawDataDSource` (dev) | JSON objects or delimited text, emitted once. |
+| `GeolocationDProcessor` | One GeoIP2 **City** `.mmdb` (path from the stage, or `SDC_GEOIP_DB`); LATITUDE, LONGITUDE, COUNTRY_NAME, COUNTRY_ISO_CODE, CITY_NAME, POSTAL_CODE; an unknown address is a record error. Needs `maxminddb`. |
+| `FieldMaskDProcessor` | VARIABLE_LENGTH, FIXED_LENGTH (ten `x`), REGEX with groups to show. Mask character `x`; a value that does not match a regex is masked entirely (assumed, fail-closed). CUSTOM is a stub. |
+| `FieldHasherDProcessor` | Hash **in place** with MD5, SHA1, SHA256, SHA512 (lower-case hex of the UTF-8 string form; maps and lists element by element). Hash to target / header / whole record, and MURMUR3_128, are stubs. Property names come from one real (old-schema) export. |
+| `MultiKafkaDSource` | JSON values, no key capture. One run reads from the group's committed offsets until a poll returns nothing, and commits only after the run succeeds. Records carry `topic`, `partition`, `offset`. Tested against a fake client only. |
+| `KafkaDTarget` | JSON, one message per record, topic from the stage (or the topic expression when runtime resolution is on). Partitioner and serializer settings are not applied. Tested against a fake client only. |
 | `LocalFileSystemDTarget` | DELIMITED, JSON (one object per line), TEXT. One file per directory per run (`<prefix>_<uuid>`); no rolling, compression or late-record handling. |
 | `DatabricksDeltaLakeDTarget` | SQL writes through SQLAlchemy (`databricks-sqlalchemy`; the URL is derived from the JDBC URL, or set `SDC_SQLALCHEMY_URL_<STAGE>`). Auto-creates the table from the first record, adds columns when drift is on, and in CDC mode applies `sdc.operation.type` by key as delete-then-insert. **StreamSets stages files and runs COPY INTO / MERGE**; this is slow for bulk loads. A CDC stage with no key columns is a stub. |
 
@@ -59,6 +66,7 @@ Stubs with a pointer to the registry (check `dagster-community-components` befor
 | Table-to-table replication (multitable origin to a warehouse) | `SlingReplicationAssetComponent` (bring a Sling replication YAML) |
 | `AmazonS3DSource` to a table | `S3ToDatabaseAssetComponent` with `s3_monitor` |
 | `HdfsDTarget`, Hive stages | Object storage or the warehouse; no Hadoop in the target |
+| Encrypt / decrypt fields | `runtime.crypto_fields` / `encrypt_value` / `decrypt_value` via `--override`; see *Encryption* below |
 | Groovy / JavaScript evaluators | Rewrite as Python and pass it with `--override`. The script text is kept in the manifest notes |
 | Jython evaluator | Translated (runs under CPython); see the catalog |
 
@@ -73,6 +81,25 @@ concat replace replaceAll contains startsWith endsWith matches regExCapture inde
 `time:now`, `file:` (`fileName parentPath pathElement removeExtension`), `f:` (Field Mapper context), `uuid`, `YYYY() MM() DD() hh() mm() ss()`,
 runtime parameters by name, `SECONDS MINUTES HOURS DAYS`, the operators `== != < > <= >= && || ! ? : + - * / %` and `eq ne lt gt le ge and or not empty div mod`.
 Any other function raises Untranslatable and the stage becomes a stub.
+
+## Encryption, decryption and hashing
+
+StreamSets has one **Encrypt and Decrypt Fields** processor (the Mode property picks encrypt or decrypt; one per stage). From IBM's documentation: it uses the **AWS Encryption SDK**
+(envelope encryption: a data key per operation, stored encrypted with the ciphertext), key provider **AWS KMS** (a key ARN) or a **user-supplied Base64 key** (with an optional key id),
+cipher suites that are AES-GCM (default `ALG_AES_256_GCM_IV12_TAG16_HKDF_SHA384_ECDSA_P384`; 12-byte IV, 16-byte tag), a frame size (default 4096), an optional
+**encryption context** (additional authenticated data that must match on decrypt), and optional data-key caching. The field's original type is stored in the ciphertext and restored on decrypt.
+Related stages: **Field Hasher** (MD5/SHA1/SHA256/SHA512/MURMUR3_128; in place, to a target field or header, or whole record) and **Field Masker**.
+
+What the converter does:
+
+- The Encrypt/Decrypt stage is a **stub**, on purpose. No real export of it was found, so its property names are unverified, and **ciphertext written by StreamSets cannot be read by a replacement
+  unless the byte layout inside the AWS Encryption SDK message is known** (StreamSets stores the type with the data in a layout this project has not seen). Both are questions for the customer
+  (the report asks them): is data encrypted by StreamSets still read after the move, with which key provider, and is an encryption context used?
+- `runtime.py` has what a hand-written replacement needs: `encrypt_value` / `decrypt_value` (AWS Encryption SDK, KMS or a Base64 AES key, encryption context enforced, types restored) and a stage
+  `crypto_fields(run, inst, mode, fields, kms_key_arn_fn=..., key_fn=..., context=...)`. The AWS Encryption SDK message format is interoperable between its Java and Python implementations,
+  so KMS-encrypted data is readable if the **plaintext layout** matches; the layout used here (`{"t": type, "v": value}` JSON) is this project's own.
+- Keys never go in generated code: pass them from the environment (`SDC_SECRET_*`) or KMS.
+- Hashes: only in-place hashing is translated (see the catalog). A pipeline that hashes to join against old hashes must be compared on one value first.
 
 ## Verified and not verified
 
@@ -93,3 +120,6 @@ Not verified, so check on a real run before trusting parity:
 - HTTP: `ARRAY_OBJECTS` is taken from a destination's own `jsonMode`; the `MULTIPLE_OBJECTS` form (one object per line) and the response handling are assumed.
 - Transformer (Spark) pipelines load, but none of their stages is translated, and no real Transformer export was available.
 - Control Hub export archives are read (`.zip` of pipeline JSON); the Control Hub job and schedule objects are not parsed.
+- Log formats: the Common/Combined Log Format field names (`/remoteHost /request /status ...`) and the grok names (`/clientip /verb /response /bytes ...`) are the documented/standard ones, not checked against a Data Collector's output.
+- Kafka and Geolocation are tested against a fake client and a generated `.mmdb`, not a broker or MaxMind's database.
+- Encrypt/Decrypt: see *Encryption*; the stage itself is not translated.

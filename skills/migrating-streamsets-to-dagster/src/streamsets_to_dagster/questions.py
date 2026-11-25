@@ -1,6 +1,8 @@
 """Per-pipeline questions the converter cannot answer from an export, kept in the manifest so `report` reproduces them."""
 from __future__ import annotations
 
+import re
+
 
 def build_questions(est, res) -> dict:
     q: dict[str, list[str]] = {}
@@ -22,6 +24,10 @@ def build_questions(est, res) -> dict:
         if any(s.cls in ("JdbcDTarget", "TableJdbcDSource", "JdbcQueryDExecutor") for s in p.stages):
             qs.append("JDBC stages derive a SQLAlchemy URL from the JDBC URL (MySQL, MariaDB, PostgreSQL, Redshift). For any other database set "
                       "SDC_SQLALCHEMY_URL_<STAGE> to the full SQLAlchemy URL.")
+        if any(re.search(r"crypt|hash|mask", s.cls, re.I) for s in p.stages):
+            qs.append("This pipeline encrypts, decrypts, hashes or masks fields. Tell me, per field: which stage and key provider (AWS KMS key ARN, or a user-supplied key), whether "
+                      "data encrypted by StreamSets must still be decrypted after the move (the converted code cannot read StreamSets ciphertext), whether the encryption context is used, "
+                      "and whether old hashes must still match new ones. Send an export of an encrypting pipeline so the stage's properties can be checked.")
         if meta["stubs"]:
             qs.append("Stages that were not translated: " + "; ".join(f"{i} ({w.split(';')[0].split('.')[0]})" for i, w in meta["stubs"]) + ". Which of these must be rebuilt by hand, and which are retired?")
         q[title] = qs

@@ -8,3 +8,4 @@
 6. **Which databases** the JDBC stages point at (the converter derives SQLAlchemy URLs for MySQL, MariaDB, PostgreSQL and Redshift only).
 7. **Their Data Collector or Transformer version.** Expression functions and defaults differ between versions.
 8. **Any pipeline that uses scripting stages** (Groovy, Jython, JavaScript): those are rewritten by hand.
+9. **Encryption and hashing.** Which pipelines encrypt, decrypt, hash or mask fields; the stage (Encrypt and Decrypt Fields, Field Hasher, Field Masker, or a script); the key provider (AWS KMS key ARN, or a user-supplied key and who holds it); the cipher suite and whether an encryption context is used; and **whether data already encrypted by StreamSets must still be decrypted after the move** (that decides whether the byte format has to be matched). An export of one encrypting pipeline lets the stage's properties be checked.

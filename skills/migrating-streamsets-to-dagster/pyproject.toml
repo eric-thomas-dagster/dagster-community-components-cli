@@ -12,7 +12,7 @@ license = { text = "MIT" }
 dependencies = ["click>=8.0", "pyyaml>=6.0.4"]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "dagster>=1.11", "dagster-dg-cli", "sqlalchemy>=2", "pandas>=2.3.3", "fsspec", "duckdb>=1.5.6", "duckdb-engine>=0.17.0", "quickjs", "requests"]
+dev = ["pytest>=8", "dagster>=1.11", "dagster-dg-cli", "sqlalchemy>=2", "pandas>=2.3.3", "fsspec", "duckdb>=1.5.6", "duckdb-engine>=0.17.0", "quickjs", "requests", "mmdb-writer", "maxminddb", "aws-encryption-sdk"]
 
 [project.scripts]
 streamsets-to-dagster = "streamsets_to_dagster.cli:main"

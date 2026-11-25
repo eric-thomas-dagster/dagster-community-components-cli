@@ -263,6 +263,12 @@ class fx:
         return d if d.tzinfo else d.replace(tzinfo=zoneinfo.ZoneInfo(tz))
 
     @staticmethod
+    def date_time_zone_offset(d, tz):
+        import zoneinfo
+        d = d if d.tzinfo else d.replace(tzinfo=_dt.timezone.utc)
+        return int(d.astimezone(zoneinfo.ZoneInfo(tz)).utcoffset().total_seconds() * 1000)
+
+    @staticmethod
     def extract_string_from_date(d, java_fmt):
         return d.strftime(_strptime_format(java_fmt))
     empty_map = staticmethod(lambda: {})
@@ -344,6 +350,7 @@ class Run:
         self.dry = dry_run()
         self.stubs: list[tuple[str, str]] = []
         self.closers: list = []
+        self.on_success: list = []
 
     def add(self, stage: Stage) -> None:
         self.stages.append(stage)
@@ -392,7 +399,10 @@ class Run:
 
     def execute(self) -> dict:
         try:
-            return self._execute()
+            stats = self._execute()
+            for hook in self.on_success:          # e.g. commit Kafka offsets, only once the whole run succeeded
+                hook()
+            return stats
         finally:
             for c in self.closers:
                 c()
@@ -710,8 +720,33 @@ def s3_origin(run: Run, inst: str, bucket_fn, prefix_fn, pattern: str, fmt: str,
     run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
 
 
-def _parse(fh, fmt: str, header: bool, delimiter: str):
+_APACHE = (r'(?P<clientip>\S+) (?P<ident>\S+) (?P<auth>\S+) \[(?P<timestamp>[^\]]+)\] "(?:(?P<verb>\w+) (?P<request>\S+)(?: HTTP/(?P<httpversion>[0-9.]+))?'
+           r'|(?P<rawrequest>[^"]*))" (?P<response>\d+) (?:(?P<bytes>\d+)|-)')
+_LOG_PATTERNS = {
+    "COMMONAPACHELOG": re.compile("^" + _APACHE + "$"),
+    "COMBINEDAPACHELOG": re.compile("^" + _APACHE + r' (?P<referrer>"[^"]*"|\S+) (?P<agent>"[^"]*"|\S+)$'),
+}
+# Common / Combined Log Format modes name their fields differently from the grok patterns
+_CLF = re.compile(r'^(?P<remoteHost>\S+) (?P<logName>\S+) (?P<remoteUser>\S+) \[(?P<requestTime>[^\]]+)\] "(?P<request>[^"]*)" (?P<status>\d+) (?P<bytesSent>\S+)'
+                  r'(?: "(?P<referer>[^"]*)" "(?P<userAgent>[^"]*)")?$')
+
+
+def parse_log(line: str, mode: str):
+    """mode: a grok name (COMMONAPACHELOG, COMBINEDAPACHELOG), or COMMON_LOG_FORMAT / COMBINED_LOG_FORMAT. Unparsable lines raise."""
+    pat = _CLF if mode.endswith("_LOG_FORMAT") else _LOG_PATTERNS[mode]
+    m = pat.match(line.rstrip("\n"))
+    if not m:
+        raise ValueError(f"line does not match {mode}: {line[:80]!r}")
+    return {k: v for k, v in m.groupdict().items() if v is not None}
+
+
+def _parse(fh, fmt: str, header: bool, delimiter: str, log_mode: str = ""):
     import csv
+    if fmt == "LOG":
+        for line in fh:
+            if line.strip():
+                yield parse_log(line, log_mode)
+        return
     if fmt == "DELIMITED":
         rd = csv.reader(fh, delimiter=delimiter)
         cols = None
@@ -1083,9 +1118,280 @@ def jython_origin(run: Run, inst: str, script: str, params: dict, *, outputs, ev
     run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
 
 
+def file_tail_origin(run: Run, inst: str, paths: list[str], fmt: str, log_mode: str, batch: int, *, outputs, events=()):
+    """File Tail as one batch: reads each file from the stored byte offset to the end (a file shorter than its offset restarts at 0).
+    Records carry `offset`, `filename`, `file` and `mtime`. Rolled files are not followed."""
+    def gen():
+        if run.dry:
+            run.log(f"[dry run] {inst}: would read new lines of {paths}")
+            return
+        offs = dict(run.offsets_in.get(inst) or {})
+        for p in paths:
+            if not os.path.exists(p):
+                continue
+            start = offs.get(p, 0)
+            if os.path.getsize(p) < start:
+                start = 0
+            buf = []
+            with open(p, "rb") as fh:
+                fh.seek(start)
+                pos = start
+                for raw in iter(fh.readline, b""):
+                    here, pos = pos, pos + len(raw)
+                    if not raw.endswith(b"\n"):                 # a partial last line is read on the next run
+                        pos = here
+                        break
+                    line = raw.decode("utf-8", "replace")
+                    attrs = {"offset": str(here), "filename": os.path.basename(p), "file": p, "mtime": str(int(os.path.getmtime(p) * 1000))}
+                    try:
+                        value = next(iter(_parse([line], fmt, False, ",", log_mode)))
+                    except ValueError:
+                        value = None
+                    if value is None:
+                        run.counts["errors"][inst] = run.counts["errors"].get(inst, 0) + 1
+                        continue
+                    buf.append(Record(value, attrs))
+                    if len(buf) >= batch:
+                        yield {outputs[0]: buf}
+                        buf = []
+            if buf:
+                yield {outputs[0]: buf}
+            offs[p] = pos
+        run.offsets_out[inst] = offs
+    run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
+def raw_data_origin(run: Run, inst: str, text: str, fmt: str, *, header: bool = True, delimiter: str = ",", outputs, events=()):
+    """Dev Raw Data Source: emits the configured text once (JSON objects, or delimited rows)."""
+    def gen():
+        import io
+        if fmt == "JSON":
+            dec, i, out = json.JSONDecoder(), 0, []
+            while i < len(text):
+                if text[i].isspace():
+                    i += 1
+                    continue
+                obj, i = dec.raw_decode(text, i)
+                out.append(Record(obj if isinstance(obj, dict) else {"value": obj}))
+        else:
+            out = [Record(row) for row in _parse(io.StringIO(text), fmt, header, delimiter)]
+        yield {outputs[0]: out}
+    run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
+def geolocation(run: Run, inst: str, db_file: str, conversions, missing: str, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Geo-IP lookup in a MaxMind GeoIP2 City database (`.mmdb`). conversions = [(TARGET, input path, output path)]; TARGET is one of LATITUDE,
+    LONGITUDE, COUNTRY_NAME, COUNTRY_ISO_CODE, CITY_NAME, POSTAL_CODE. An address with no entry is a record error. Set SDC_GEOIP_DB to override the path."""
+    reader: list = []
+    get = {"LATITUDE": lambda d: d["location"]["latitude"], "LONGITUDE": lambda d: d["location"]["longitude"],
+           "COUNTRY_NAME": lambda d: d["country"]["names"]["en"], "COUNTRY_ISO_CODE": lambda d: d["country"]["iso_code"],
+           "CITY_NAME": lambda d: d["city"]["names"]["en"], "POSTAL_CODE": lambda d: d["postal"]["code"]}
+
+    def one(r: Record):
+        if not reader:
+            import maxminddb
+            reader.append(maxminddb.open_database(os.environ.get("SDC_GEOIP_DB", db_file)))
+        cache = {}
+        for target, src, dst in conversions:
+            addr = get_path(r.value, src)
+            if addr not in cache:
+                cache[addr] = reader[0].get(str(addr))
+            rec = cache[addr]
+            if rec is None:
+                raise KeyError(f"no geolocation entry for {addr}")
+            try:
+                set_path(r.value, dst, get[target](rec))
+            except KeyError:
+                raise KeyError(f"{target} is not in the database entry for {addr}")
+        return r
+    run.closers.append(lambda: reader and reader[0].close())
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def field_mask(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Field Masker: rules = [([paths], MASK_TYPE, regex, groups_to_show)]. Mask character is `x`. FIXED_LENGTH gives ten x's; VARIABLE_LENGTH one x
+    per character; REGEX keeps the listed groups and masks the rest (a value that does not match is masked entirely)."""
+    def mask(v, kind, regex, show):
+        v = str(v)
+        if kind == "VARIABLE_LENGTH":
+            return "x" * len(v)
+        if kind == "FIXED_LENGTH":
+            return "x" * 10
+        m = re.fullmatch(regex, v)
+        if not m:
+            return "x" * len(v)
+        out = ""
+        for i in range(1, (m.re.groups or 0) + 1):
+            g = m.group(i) or ""
+            out += g if i in show else "x" * len(g)
+        return out
+
+    def one(r: Record):
+        for paths, kind, regex, show in rules:
+            for p in paths:
+                v = get_path(r.value, p, _MISSING)
+                if v is not _MISSING and v is not None:
+                    set_path(r.value, p, mask(v, kind, regex, show))
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+# ---- Kafka (confluent-kafka) ------------------------------------------------------------------------------------------------------------------
+def kafka_origin(run: Run, inst: str, brokers: str, group: str, topics: list[str], reset: str, batch: int, wait_ms: int, *, outputs, events=()):
+    """Kafka consumer as a micro-batch: reads from the group's committed offsets until a poll returns nothing, then stops. Offsets are committed only
+    after the whole run succeeds. Values must be JSON. Records carry `topic`, `partition`, `offset`."""
+    def gen():
+        if run.dry:
+            run.log(f"[dry run] {inst}: would consume {topics} as group {group}")
+            return
+        import confluent_kafka as ck
+        c = ck.Consumer({"bootstrap.servers": brokers, "group.id": group, "auto.offset.reset": reset.lower(), "enable.auto.commit": False})
+        c.subscribe(topics)
+        run.on_success.append(lambda: c.commit(asynchronous=False))
+        run.closers.append(c.close)
+        while True:
+            msgs = c.consume(num_messages=batch, timeout=wait_ms / 1000)
+            good = [m for m in msgs if m.error() is None]
+            if not good:
+                break
+            recs = []
+            for m in good:
+                try:
+                    v = json.loads(m.value())
+                except ValueError:
+                    run.counts["errors"][inst] = run.counts["errors"].get(inst, 0) + 1
+                    continue
+                recs.append(Record(v if isinstance(v, dict) else {"value": v},
+                                   {"topic": m.topic(), "partition": str(m.partition()), "offset": str(m.offset())}))
+            if recs:
+                yield {outputs[0]: recs}
+    run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
+def kafka_target(run: Run, inst: str, brokers: str, topic_fn, *, inputs, on_error="TO_ERROR", pre=(), req=()):
+    """Kafka producer: one JSON message per record to `topic_fn(record)`; flushed at the end of each batch."""
+    prod: list = []
+
+    def go(recs):
+        if run.dry:
+            run.log(f"[dry run] {inst}: would produce {len(recs)} message(s)")
+            return {}
+        if not prod:
+            import confluent_kafka as ck
+            prod.append(ck.Producer({"bootstrap.servers": brokers}))
+        for r in recs:
+            prod[0].produce(topic_fn(r), json.dumps(r.value, default=str).encode())
+        prod[0].flush()
+        return {}
+    run.add(Stage(inst, go, inputs=inputs, on_error=on_error, pre=pre, req=req))
+
+
+# ---- encryption, decryption and hashing ---------------------------------------------------------------------------------------------------------
+def _crypto_provider(kms_key_arn: str | None, raw_key_b64: str | None, key_id: str):
+    """AWS Encryption SDK master key provider: AWS KMS (needs credentials and network) or a user-supplied Base64 AES key (16, 24 or 32 bytes)."""
+    if kms_key_arn:
+        from aws_encryption_sdk import StrictAwsKmsMasterKeyProvider
+        return StrictAwsKmsMasterKeyProvider(key_ids=[kms_key_arn])
+    if not raw_key_b64:
+        raise SdcCaveat("SDC-CAVEAT: encryption needs a KMS key ARN or a Base64 key (SDC_SECRET_* or an environment variable)")
+    import base64
+    from aws_encryption_sdk.identifiers import EncryptionKeyType, WrappingAlgorithm
+    from aws_encryption_sdk.internal.crypto.wrapping_keys import WrappingKey
+    from aws_encryption_sdk.key_providers.raw import RawMasterKeyProvider
+    key = base64.b64decode(raw_key_b64)
+    alg = {16: WrappingAlgorithm.AES_128_GCM_IV12_TAG16_NO_PADDING, 24: WrappingAlgorithm.AES_192_GCM_IV12_TAG16_NO_PADDING,
+           32: WrappingAlgorithm.AES_256_GCM_IV12_TAG16_NO_PADDING}.get(len(key))
+    if alg is None:
+        raise SdcCaveat(f"SDC-CAVEAT: a user-supplied key must be 16, 24 or 32 bytes, got {len(key)}")
+
+    class _Provider(RawMasterKeyProvider):
+        provider_id = "streamsets-migrated"
+
+        def _get_raw_key(self, key_id_):
+            return WrappingKey(wrapping_algorithm=alg, wrapping_key=key, wrapping_key_type=EncryptionKeyType.SYMMETRIC)
+    p = _Provider()
+    p.add_master_key(key_id or "key")
+    return p
+
+
+def encrypt_value(value, *, kms_key_arn: str | None = None, raw_key_b64: str | None = None, key_id: str = "", context: dict | None = None) -> bytes:
+    """Envelope-encrypt one field value (AWS Encryption SDK, AES-256-GCM by default). The value's type is stored in the ciphertext, as the
+    StreamSets processor does, so decrypt_value restores it. **The plaintext layout is this module's own** (`{"t": type, "v": value}` as JSON):
+    ciphertext written by Data Collector's Encrypt and Decrypt Fields stage is not readable with it (see mapping.md)."""
+    import decimal
+    import aws_encryption_sdk
+    kind = {bool: "Boolean", int: "Long", float: "Double", str: "String", bytes: "ByteArray", decimal.Decimal: "Decimal",
+            _dt.datetime: "Datetime", _dt.date: "Date"}.get(type(value))
+    if kind is None:
+        raise TypeError(f"cannot encrypt a value of type {type(value).__name__}")
+    v = value.hex() if kind == "ByteArray" else (value.isoformat() if kind in ("Datetime", "Date") else str(value) if kind == "Decimal" else value)
+    blob, _ = aws_encryption_sdk.EncryptionSDKClient().encrypt(
+        source=json.dumps({"t": kind, "v": v}).encode(), key_provider=_crypto_provider(kms_key_arn, raw_key_b64, key_id), encryption_context=context or {})
+    return blob
+
+
+def decrypt_value(blob: bytes, *, kms_key_arn: str | None = None, raw_key_b64: str | None = None, key_id: str = "", context: dict | None = None):
+    """Inverse of encrypt_value. The same key and the same encryption context are required (a context mismatch fails)."""
+    import decimal
+    import aws_encryption_sdk
+    plain, header = aws_encryption_sdk.EncryptionSDKClient().decrypt(source=blob, key_provider=_crypto_provider(kms_key_arn, raw_key_b64, key_id))
+    for k, want in (context or {}).items():
+        if header.encryption_context.get(k) != want:
+            raise ValueError(f"encryption context mismatch for {k!r}")
+    d = json.loads(plain)
+    t, v = d["t"], d["v"]
+    return {"ByteArray": lambda: bytes.fromhex(v), "Decimal": lambda: decimal.Decimal(v), "Datetime": lambda: _dt.datetime.fromisoformat(v),
+            "Date": lambda: _dt.date.fromisoformat(v)}.get(t, lambda: v)()
+
+
+def crypto_fields(run: Run, inst: str, mode: str, fields: list[str], *, kms_key_arn_fn=None, key_fn=None, key_id: str = "", context: dict | None = None,
+                  inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Encrypt or decrypt the listed fields in place (mode ENCRYPT | DECRYPT). Encrypted fields hold bytes. Use from a hand-written override or a
+    translated stage; keys are read when the first record arrives."""
+    def kw():
+        return {"kms_key_arn": kms_key_arn_fn() if kms_key_arn_fn else None, "raw_key_b64": key_fn() if key_fn else None, "key_id": key_id, "context": context}
+
+    def one(r: Record):
+        for f in fields:
+            v = get_path(r.value, f, _MISSING)
+            if v is _MISSING or v is None:
+                continue
+            set_path(r.value, f, encrypt_value(v, **kw()) if mode == "ENCRYPT" else decrypt_value(v, **kw()))
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+_HASHES = {"MD5": "md5", "SHA1": "sha1", "SHA256": "sha256", "SHA512": "sha512"}
+
+
+def field_hasher(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Field Hasher, hash in place: rules = [([paths], HASH_TYPE)]. The hash is the lower-case hex of the algorithm over the value's UTF-8 string form.
+    Maps and lists are hashed element by element; a missing field is skipped; null stays null."""
+    import hashlib
+
+    def h(t, v):
+        return hashlib.new(_HASHES[t], str(v).encode()).hexdigest()
+
+    def walk(t, v):
+        if isinstance(v, dict):
+            return {k: walk(t, x) for k, x in v.items()}
+        if isinstance(v, list):
+            return [walk(t, x) for x in v]
+        return None if v is None else h(t, v)
+
+    def one(r: Record):
+        for paths, t in rules:
+            for p in paths:
+                v = get_path(r.value, p, _MISSING)
+                if v is not _MISSING:
+                    set_path(r.value, p, walk(t, v))
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
 # ---- more origins and destinations -----------------------------------------------------------------------------------------------------------
 def spooldir_origin(run: Run, inst: str, directory: str, pattern: str, fmt: str, *, header: bool, delimiter: str, outputs, events, batch: int = 1000,
-                    order: str = "LEXICOGRAPHICAL"):
+                    order: str = "LEXICOGRAPHICAL", log_mode: str = ""):
     """Directory origin as one batch: reads the files that match when the run starts, in order, then stops (StreamSets keeps polling).
     Files already read by an earlier run are skipped (the last file's order key is stored as an offset)."""
     def gen():
@@ -1101,9 +1407,10 @@ def spooldir_origin(run: Run, inst: str, directory: str, pattern: str, fmt: str,
             if mark is not None and (list(k) if isinstance(k, tuple) else k) <= mark:
                 continue
             n, meta = 0, {"file": p, "filename": os.path.basename(p), "Name": os.path.basename(p)}
-            with open(p, newline="") as fh:
+            import gzip
+            with (gzip.open(p, "rt", newline="") if p.endswith(".gz") else open(p, newline="")) as fh:
                 buf = []
-                for row in _parse(fh, fmt, header, delimiter):
+                for row in _parse(fh, fmt, header, delimiter, log_mode):
                     buf.append(Record(row, dict(meta)))
                     n += 1
                     if len(buf) >= batch:
@@ -1244,7 +1551,9 @@ def local_fs_target(run: Run, inst: str, dir_fn, prefix: str, fmt: str, *, heade
                 os.makedirs(d, exist_ok=True)
                 files[d] = (open(os.path.join(d, f"{prefix}_{_uuid.uuid4()}"), "w", newline=""), {})
             fh, st = files[d]
-            if fmt == "JSON":
+            if fmt == "SDC_JSON":
+                fh.write(json.dumps({"value": r.value, "attributes": r.attrs}, default=str) + "\n")
+            elif fmt == "JSON":
                 fh.write(json.dumps(r.value, default=str) + "\n")
             elif fmt == "TEXT":
                 fh.write(str(get_path(r.value, text_path, "")) + "\n")

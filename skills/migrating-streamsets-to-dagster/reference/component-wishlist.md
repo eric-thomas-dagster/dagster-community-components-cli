@@ -19,6 +19,9 @@ top of each section. Keep this file current whenever the converter gains or drop
 | 10 | **Record transforms with StreamSets semantics**: field type conversion (incl. Java date patterns), rename, order, split, flatten, mask, lookup | Eight processors are generated as record-level Python | Registry has dataframe versions (`type_coercer`, `dynamic_rename`, `data_masking`, `lookup`, `dataframe_flatten_nested_columns`, `filter`); confirm they can replace the record-level ones, or say they cannot (edge semantics differ) |
 | 11 | **Script evaluators**: Jython (runs unchanged under CPython), JavaScript (QuickJS), Groovy (not translated) | 25 JavaScript and 11 Jython-origin stages in the 27-pipeline sample | Generated shims. Nothing to ask of the registry; recorded so the components session knows why a scripting component is not requested |
 
+| 12 | **Field-level encrypt/decrypt component** (AWS Encryption SDK message format, KMS or user-supplied key, encryption context, type-preserving; ideally able to read ciphertext written by StreamSets' Encrypt and Decrypt Fields stage) | The prospect is believed to encrypt and decrypt; StreamSets' stage uses the AWS Encryption SDK. Interop with existing ciphertext hinges on the plaintext layout inside the SDK message, which is not documented | `runtime.encrypt_value/decrypt_value/crypto_fields` (own plaintext layout, not StreamSets-compatible). The registry has `data_masking` but no encryption component. Needs a real export and a ciphertext sample to decide |
+| 13 | **Hashing/masking transforms with StreamSets semantics** (Field Hasher in place/target/record, MURMUR3_128, Field Masker custom) | Hash joins against old hashes need identical output | Generated in-place MD5/SHA family only |
+
 ## Registry components the skill already points customers at (verify each still exists)
 
 `StreamSetsWorkspaceComponent` (tier 1), `KafkaToDatabaseAssetComponent` + `kafka_monitor`, `SalesforceIngestionComponent`, `DataframeToDeltaTableComponent`,
@@ -28,3 +31,10 @@ top of each section. Keep this file current whenever the converter gains or drop
 ## Resolved
 
 (none yet)
+
+## Dropped from the asks
+
+| Was | Why |
+|---|---|
+| #6 Kafka producer sink | the skill now translates the Kafka producer (against a fake client); a registry sink would still be better |
+| #7 GeoIP lookup | the skill now translates Geolocation with `maxminddb`; a registry transform would still be better |
