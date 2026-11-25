@@ -18,8 +18,8 @@ Input is Data Collector or Control Hub pipeline JSON (a file, a folder, or a `.z
 - **Stages you rewrite by hand** (Groovy, JavaScript, Hive, a CDC origin) are passed with `--override` and stay labelled as hand-written in the report.
 - **Credentials are never copied.** Credential-named runtime parameters are dropped and read from `SDC_SECRET_<NAME>`.
 
-See `SKILL.md` for the workflow, `reference/mapping.md` for what is translated and what is only assumed, and `reference/corpus-results.md` for results on the public samples (six pipelines; no larger corpus exists).
+See `skills/migrating-streamsets-to-dagster/SKILL.md` for the workflow, `reference/mapping.md` for what is translated and what is only assumed, and `reference/corpus-results.md` for results on the public samples (six pipelines; no larger corpus exists).
 
-Tests: `uv run pytest` (add `SDC_PARITY_URL=...` to also run the 14 parity cases against a real Data Collector) (143; all six sample pipelines are converted and run end to end, against in-memory S3, SQLite, a fake Salesforce client and local files).
+Tests: `uv run pytest` (add `SDC_PARITY_URL=...` to also run the 14 parity cases against a real Data Collector) (145 with an engine, 108 without; all six sample pipelines are converted and run end to end, against in-memory S3, SQLite, a fake Salesforce client and local files).
 
 The six sample pipelines in `tests/fixtures/sdc` are from the public StreamSets `pipeline-library` (Apache License 2.0).

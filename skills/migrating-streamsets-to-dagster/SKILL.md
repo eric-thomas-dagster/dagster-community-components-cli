@@ -23,6 +23,7 @@ StreamSets pipelines are *record streams*: a pipeline is usually a continuously 
 | Tier | What it is | Use when |
 |---|---|---|
 | 1. Observe and orchestrate | The registry `StreamSetsWorkspaceComponent` (`dagster-community-components`) wraps Control Hub jobs as assets: `action: start` ensures the job is running, a sensor observes status changes, an asset check asserts it is `ACTIVE`. StreamSets still does the work. | You want StreamSets jobs in Dagster's graph and alerting now, with nothing converted. First phase for every estate, and the end state for continuous pipelines. Jobs are declared by id (`jobs:`), because no list-jobs call is verified. |
+| 1b. Engine direct (no Control Hub) | `convert --engine-tier1 noop|start` also writes `defs/streamsets_engine/defs.yaml`: the registry `StreamSetsEngineComponent` (0.10.187) with one asset per Data Collector pipeline (`pipeline_id` from the export), a status sensor and a running check. `noop` observes, `start` makes materializing start the pipeline. Fill `STREAMSETS_ENGINE_URL` / `_USERNAME` / `_PASSWORD`. Data Collector only (not Transformer). | The engine runs with no Control Hub in front of it. Loading and asset listing are tested in the component's demo mode; start/stop against a live engine is not run by this skill's tests. |
 | 2. Native | This skill's converter: batch pipelines become Dagster assets | You want Dagster to own execution and to retire the StreamSets pipeline |
 
 ## Hard rules

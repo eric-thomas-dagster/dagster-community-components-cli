@@ -31,7 +31,9 @@ def _load(path: str):
 @click.option("--pkg", default="streamsets_migrated", help="Python package name for the generated project")
 @click.option("--override", "overrides", multiple=True, metavar="'PIPELINE/STAGE=file.py'",
               help="Replace a stage with hand-written Python (`process(records, sdc)`; an origin: `produce(sdc)`). Repeatable.")
-def convert_cmd(export_dir: str, out_dir: str | None, pkg: str, overrides: tuple[str, ...]) -> None:
+@click.option("--engine-tier1", "engine_action", type=click.Choice(["noop", "start"]), default=None,
+              help="Also emit a StreamSetsEngineComponent that keeps every Data Collector pipeline on its engine: noop = observe only, start = materializing starts the pipeline.")
+def convert_cmd(export_dir: str, out_dir: str | None, pkg: str, overrides: tuple[str, ...], engine_action: str | None) -> None:
     """Convert the pipeline JSON under EXPORT_DIR into a Dagster project plus MIGRATION.md."""
     ov = {}
     for spec in overrides:
@@ -41,7 +43,7 @@ def convert_cmd(export_dir: str, out_dir: str | None, pkg: str, overrides: tuple
             raise click.ClickException(f"--override expects 'PIPELINE/STAGE=file.py', got {spec!r}")
         ov[(title, inst)] = Path(path).read_text()
     try:
-        result = convert(_load(export_dir), pkg=pkg, overrides=ov)
+        result = convert(_load(export_dir), pkg=pkg, overrides=ov, engine_action=engine_action)
     except ValueError as e:
         raise click.ClickException(str(e))
     out = Path(out_dir or pkg)

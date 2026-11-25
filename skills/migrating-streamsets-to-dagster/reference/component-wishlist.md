@@ -53,6 +53,13 @@ The Transformer (Spark) pipelines convert to `polars_pipeline` steps today (join
 ### 1.10 JDBC table-pattern replication with per-table offsets
 `sql_to_database_asset` has `watermark_column` for one table or query. The JDBC Multitable origin takes **table patterns** (`%`) with an offset column per table, discovered at run time. Ask: a `tables:` pattern that fans out to one asset (or one multi-asset) per matching table with its own watermark, or confirm `sling_replication_asset` covers it.
 
+## 1b. Adoption status of the 0.10.187 components in the converter
+
+| Component | Status | Why |
+|---|---|---|
+| `streamsets_engine` | **emitted** (`convert --engine-tier1`), loaded in demo mode in tests | whole-pipeline, no dataframe needed |
+| `dataframe_to_http`, `dataframe_to_kafka`, `geoip_lookup`, `mysql_cdc_monitor`, `scd_type_*` | not emitted | Data Collector pipelines run as a record graph inside one asset; these components take a DataFrame asset. Using them means splitting a pipeline at the destination (graph asset -> frame asset -> component). That is a design decision, listed in section 2, not a drop-in swap. Transformer stage class names for Kafka/HTTP/SCD destinations are unverified (no export has them) |
+
 ## 2. Decision for the components session
 
 **Should the skill emit components instead of its own record-graph stages for stateless transforms?** It plans this already (`components_plan.py`) but generates only the Transformer route. If yes, each candidate component needs to match the
@@ -70,6 +77,6 @@ behaviour the skill verified; these are the points where StreamSets differs from
 | Log Parser | Common/Combined formats use grok field names (`clientip`, `verb`, `response`, `bytes`); parsing into `/` **replaces** the record | `regex_parser` |
 | XML Parser | attributes `attr|name`, text `value`, children as lists of maps | `xml_parser` (XPath) |
 | JDBC Lookup | modes FIRST_ONLY / SPLIT_INTO_MULTIPLE_RECORDS / ALL_AS_LIST; missing: pass on or error | `lookup`, `warehouse_join` |
-| Slowly Changing Dimension (Transformer) | types 1 and 2 | `scd_type_1`, `scd_type_2` (exist; the skill does not emit them yet) |
+| Slowly Changing Dimension (Transformer) | types 1 and 2 | `scd_type_1`, `scd_type_2` (exist; **not emitted**: no Transformer SCD stage exists in any export or definition set available, so its property names are unverified) |
 
 If the answer is no, the skill keeps generating these as record-graph stages and none of §2 is needed.
