@@ -265,21 +265,13 @@ every 5 minutes, 288 ticks/day):
 
 ## What's hand-rolled vs. a registry component
 
-**Updated.** This demo originally hand-rolled the sensor with raw
-`@dg.sensor` + `MultiPartitionKey`, because nothing in the registry
-generalized "group new files by a business-key dimension, batch under a
-time window, one run per `(key, window)` with that tick's exact file list"
-— `s3_monitor` only supported plain `run_config` (one `RunRequest` per
-file, no partitioning) or `dynamic_partition` mode (one dynamic partition
-**per file**, exactly the anti-pattern this demo avoids). Rather than ship
-an example that hand-rolls something a registry component should own,
-`s3_monitor` gained a real `business_key_batch` partition mode (see its
+`bank_file_sensor` is configured entirely via plain YAML, using the real
+`s3_monitor`'s `business_key_batch` partition mode (see its
 [README](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/sensors/s3_monitor/README.md))
-that does exactly this, and `bank_file_sensor` now configures it via plain
-YAML — zero custom sensor code.
+— zero custom sensor code.
 
-**What still stays hand-rolled, and why**: `bank_batch_staged` — the
-decrypt → transform → re-encrypt → stage asset body. That's inherently
+What stays hand-rolled, and why: `bank_batch_staged` — the decrypt →
+transform → re-encrypt → stage asset body. That's inherently
 business-specific logic (your encryption scheme, your transform rules,
 your destination schema), not a generic pattern a registry component
 should own. The sensor (a generic "batch by business key" shape) and the
