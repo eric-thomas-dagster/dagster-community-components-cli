@@ -182,3 +182,23 @@ def test_a_remaining_stub_and_a_secret_fail_their_gates(tiny, tmp_path):
     body = GOOD.replace("context.log.info(out)", 'context.log.info(out)\n    raise Exception("RMJ-CAVEAT: not ported")\n\n\nPASSWORD = "abcdefgh123"')
     res = {r["gate"]: r for r in run_gates(spec, _project(tmp_path, body))}
     assert not res["no_stub_left"]["passed"] and not res["no_secret_values"]["passed"]
+
+
+def test_every_registered_command_is_unique_and_inventory_writes_a_manifest(tmp_path):
+    """The model-to-manifest `inventory` was once shadowed by a second registration of the same name."""
+    import re
+
+    from click.testing import CliRunner
+
+    from runmyjobs_to_dagster import cli
+    src = (HERE.parent / "src/runmyjobs_to_dagster/cli.py").read_text()
+    names = re.findall(r'@(?:main|status_grp)\.(?:command|group)\("([^"]+)"', src)
+    assert len(names) == len(set(names)), sorted(n for n in names if names.count(n) > 1)
+    assert {"inventory", "inventory-html", "convert", "analyze", "prompt", "accept", "equivalence"} <= set(cli.main.commands)
+    out = tmp_path / "m.json"
+    r = CliRunner().invoke(cli.main, ["inventory", str(SAMPLE), "--out", str(out)])
+    assert r.exit_code == 0, r.output
+    assert len(json.loads(out.read_text())["units"]) > 5
+    html = tmp_path / "l.html"
+    html.write_text("<table><tr><th>JobDefinition</th></tr></table>")
+    assert "inventory-html" in CliRunner().invoke(cli.main, ["inventory", str(html)]).output

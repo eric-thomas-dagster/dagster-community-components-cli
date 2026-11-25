@@ -68,7 +68,9 @@ def sample_cmd(dest: str) -> None:
 @click.argument("model_file", type=click.Path(exists=True, dir_okay=False))
 @click.option("--out", "out_file", default="migration_manifest.json", help="Manifest path to write")
 def inventory_cmd(model_file: str, out_file: str) -> None:
-    """Read-only: enumerate every source object into a manifest (nothing is generated)."""
+    """Read-only: enumerate every source object of a model YAML into a manifest (nothing is generated). For an HTML job listing use `inventory-html`."""
+    if Path(model_file).suffix.lower() in (".html", ".htm"):
+        raise click.ClickException("this looks like an HTML job listing: size and triage it with `inventory-html` (inventory takes a model YAML)")
     try:
         model = load_model(model_file)
     except ModelError as e:
@@ -200,7 +202,7 @@ def extract_cmd(car: str, out_file: str) -> None:
         click.echo(f"warning: {w}")
 
 
-@main.command("inventory")
+@main.command("inventory-html")
 @click.argument("report", type=click.Path(exists=True))
 @click.option("--csv", "csv_out", default="", help="Write the classified list to this CSV file")
 def inventory_cmd(report: str, csv_out: str) -> None:

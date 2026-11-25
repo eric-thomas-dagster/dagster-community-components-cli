@@ -5,7 +5,7 @@ Derived from a real job listing (570 job definitions; the listing has names, des
 ## Already known from the listing
 
 - About 340 chains (`JC_`) and 230 definitions (`JD_`); 25 are system-generated wrapper chains (`System_Internal_Chain<n>`) that fold into their parent; 17 are notification templates (`Z_JD_*Email*`), which become alert policies, not jobs; 7 are reports.
-- By name: roughly 108 dbt Cloud chains, 6 HVR-refresh definitions, many Python extract and dbt Core ("Linux process server") chains. These counts are approximate; run `runmyjobs-to-dagster inventory <report.html>` for the current numbers and a CSV.
+- By name: roughly 108 dbt Cloud chains, 6 HVR-refresh definitions, many Python extract and dbt Core ("Linux process server") chains. These counts are approximate; run `runmyjobs-to-dagster inventory-html <report.html>` for the current numbers and a CSV.
 - About 50 names look retired or are copies (`Decommissioned`, `DEPRECATED`, `OLD_`, `Archived_`, `(Copied at ...)`). Treat as candidates only; confirm with run history (the customer already said to drop anything not running).
 - Reusable definitions the chains call: `JD_dbt_Cloud_Job_Trigger` (dbt Cloud API, optional polling), `JD_HVR_Refresh_CMD` and `JD_LDP_Refresh_CMD` (HVR channel refresh), `JD_Snowflake_dbt_Linux*` (dbt Core), `JD_aws_s3_*` (S3 transfer).
 
