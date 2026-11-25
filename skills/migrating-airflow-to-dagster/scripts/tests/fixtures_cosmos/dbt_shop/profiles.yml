@@ -1,0 +1,7 @@
+shop:
+  target: dev
+  outputs:
+    dev:
+      type: duckdb
+      path: "{{ env_var('SHOP_DUCKDB_PATH', 'shop.duckdb') }}"
+      threads: 1

@@ -17,6 +17,7 @@ import argparse
 import inspect
 import json
 import os
+import re
 import sys
 import tempfile
 import textwrap
@@ -286,6 +287,112 @@ def _loop_ir(task: Any) -> dict[str, Any] | None:
             "until": _callable_info(until) if callable(until) else None}
 
 
+_SECRET_NAME = re.compile(r"pass|secret|token|key|credential|private|auth", re.I)
+_COSMOS_OP = re.compile(r"^Dbt(RunOperation|Run|Test|Seed|Build|Snapshot|Ls|Source|Compile|Clone|Docs|Deps)(.*?)Operator$")
+
+
+def _redact(v: Any) -> Any:
+    """A dict of settings with the value of every secret-looking key replaced: nothing that looks like a credential reaches the IR."""
+    if isinstance(v, dict):
+        return {str(k): ("<redacted>" if _SECRET_NAME.search(str(k)) else _redact(x)) for k, x in v.items()}
+    return _jsonable(v)
+
+
+def _cosmos_profile(pc: Any) -> dict[str, Any] | None:
+    """Cosmos ProfileConfig: names and structure only. A profile mapping lists the dbt fields it fills from an Airflow connection and which are
+    secret; its `profile_args` are kept with secret-looking keys redacted. The profiles.yml file's contents are never read."""
+    if pc is None:
+        return None
+    out: dict[str, Any] = {"profile_name": getattr(pc, "profile_name", None), "target_name": getattr(pc, "target_name", None),
+                           "profiles_yml_filepath": str(pc.profiles_yml_filepath) if getattr(pc, "profiles_yml_filepath", None) else None, "mapping": None}
+    pm = getattr(pc, "profile_mapping", None)
+    if pm is not None:
+        out["mapping"] = {"class": type(pm).__name__, "conn_id": getattr(pm, "conn_id", None), "dbt_profile_type": getattr(pm, "dbt_profile_type", None),
+                          "dbt_fields": sorted(getattr(pm, "airflow_param_mapping", {}) or {}), "secret_fields": sorted(getattr(pm, "secret_fields", []) or []),
+                          "profile_args": _redact(getattr(pm, "profile_args", None) or {})}
+    return out
+
+
+def _cosmos_node(extra: Any) -> dict[str, Any] | None:
+    n = (extra or {}).get("dbt_node_config") if isinstance(extra, dict) else None
+    if not n:
+        return None
+    return {"unique_id": n.get("unique_id"), "resource_type": n.get("resource_type"), "depends_on": list(n.get("depends_on") or []), "tags": list(n.get("tags") or []),
+            "fqn": n.get("fqn")}
+
+
+def _cosmos_group_root(task: Any) -> str | None:
+    """The DbtTaskGroup this task was rendered into (outermost one), "" when the whole DAG is a DbtDag, None for a standalone Cosmos operator."""
+    root = None
+    g = getattr(task, "task_group", None)
+    while g is not None and getattr(g, "group_id", None):
+        if g.__class__.__name__ == "DbtTaskGroup":
+            root = g.group_id
+        g = getattr(g, "parent_group", None)
+    if root is None and getattr(task, "dag", None) is not None and task.dag.__class__.__name__ == "DbtDag":
+        return ""
+    return root
+
+
+def _cosmos_task_ir(task: Any) -> dict[str, Any] | None:
+    """The settings of an Astronomer Cosmos operator (DbtRunLocalOperator, DbtBuildKubernetesOperator, ...), or None for any other task."""
+    cls = type(task)
+    if not cls.__module__.startswith("cosmos"):
+        return None
+    m = _COSMOS_OP.match(cls.__name__)
+    if not m:
+        return {"kind": None, "mode": None, "class": cls.__name__, "group_root": _cosmos_group_root(task)}
+    g = lambda n, d=None: getattr(task, n, d)          # noqa: E731
+    inv = g("invocation_mode")
+    return {
+        "class": cls.__name__, "kind": m.group(1).lower() if m.group(1) != "RunOperation" else "run_operation", "mode": (m.group(2) or "Local").lower(),
+        "group_root": _cosmos_group_root(task), "project_dir": str(g("project_dir")) if g("project_dir") else None, "profile": _cosmos_profile(g("profile_config")),
+        "select": g("select"), "exclude": g("exclude"), "selector": g("selector"), "models": g("models"), "vars": _redact(g("vars")) if g("vars") else None,
+        "full_refresh": bool(g("full_refresh", False)), "dbt_cmd_flags": _jsonable(list(g("dbt_cmd_flags") or [])),
+        "dbt_cmd_global_flags": _jsonable(list(g("dbt_cmd_global_flags") or [])), "env_names": sorted((g("env") or {}).keys()) if isinstance(g("env"), dict) else [],
+        "install_deps": bool(g("install_deps", False)), "invocation_mode": getattr(inv, "value", inv), "dbt_executable_path": str(g("dbt_executable_path")) if g("dbt_executable_path") else None,
+        "emit_datasets": bool(g("emit_datasets", False)), "warn_error": bool(g("warn_error", False)), "quiet": bool(g("quiet", False)), "fail_fast": bool(g("fail_fast", False)),
+        "no_version_check": bool(g("no_version_check", False)), "indirect_selection": getattr(g("indirect_selection"), "value", g("indirect_selection")),
+        "has_callback": bool(g("callback")), "py_requirements": _jsonable(list(g("py_requirements") or [])) or None, "image": g("image"),
+        "node": _cosmos_node(g("extra_context")),
+    }
+
+
+def _cosmos_groups(dag: Any) -> list[dict[str, Any]]:
+    """Each DbtDag / DbtTaskGroup in the DAG with the Cosmos configuration it was built from and the dbt nodes it rendered."""
+    graphs: list[tuple[str, Any]] = []
+    if dag.__class__.__name__ == "DbtDag" and getattr(dag, "dbt_graph", None) is not None:
+        graphs.append(("", dag.dbt_graph))
+    for gid, tg in (getattr(dag, "task_group_dict", None) or {}).items():
+        if tg.__class__.__name__ == "DbtTaskGroup" and getattr(tg, "dbt_graph", None) is not None:
+            par = getattr(tg, "parent_group", None)
+            if not (par is not None and par.__class__.__name__ == "DbtTaskGroup"):
+                graphs.append((gid, tg.dbt_graph))
+    out = []
+    for gid, gr in graphs:
+        rc, ec, pr = getattr(gr, "render_config", None), getattr(gr, "execution_config", None), getattr(gr, "project", None)
+        enum = lambda v: getattr(v, "value", v)         # noqa: E731
+        env = getattr(pr, "env_vars", None) or {}
+        out.append({
+            "group": gid, "cosmos_type": (getattr(gr, "airflow_metadata", None) or {}).get("cosmos_type"),
+            "project_dir": str(getattr(gr, "project_path", None) or getattr(pr, "dbt_project_path", None) or "") or None,
+            "project_name": getattr(pr, "project_name", None), "profile": _cosmos_profile(getattr(gr, "profile_config", None)),
+            "render": {"select": list(getattr(rc, "select", []) or []), "exclude": list(getattr(rc, "exclude", []) or []), "selector": getattr(rc, "selector", None),
+                       "test_behavior": enum(getattr(rc, "test_behavior", None)), "load_method": enum(getattr(rc, "load_method", None)),
+                       "emit_datasets": bool(getattr(rc, "emit_datasets", False)), "source_rendering_behavior": enum(getattr(rc, "source_rendering_behavior", None)),
+                       "seed_rendering_behavior": enum(getattr(rc, "seed_rendering_behavior", None)), "node_converters": bool(getattr(rc, "node_converters", None)),
+                       "normalize_task_id": bool(getattr(rc, "normalize_task_id", None)), "group_nodes_by_folder": bool(getattr(rc, "group_nodes_by_folder", False))},
+            "execution": {"mode": enum(getattr(ec, "execution_mode", None)), "invocation_mode": enum(getattr(ec, "invocation_mode", None)),
+                          "dbt_executable_path": str(getattr(ec, "dbt_executable_path", "") or "") or None,
+                          "test_indirect_selection": enum(getattr(ec, "test_indirect_selection", None))},
+            "dbt_vars": _redact(getattr(gr, "dbt_vars", None) or {}), "env_names": sorted(env), "operator_args": _redact({k: v for k, v in (getattr(gr, "operator_args", None) or {}).items()
+                                                                                                                      if not callable(v)}),
+            "nodes": [{"unique_id": n.unique_id, "resource_type": enum(n.resource_type), "depends_on": list(n.depends_on or []), "tags": list(n.tags or [])}
+                      for n in (getattr(gr, "filtered_nodes", None) or {}).values()],
+        })
+    return out
+
+
 def _task_ir(task: Any) -> dict[str, Any]:
     t: dict[str, Any] = {
         "task_id": task.task_id, "type": task.task_type, "module": type(task).__module__,
@@ -295,7 +402,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "pool": task.pool if task.pool and task.pool != "default_pool" else None,
         "do_xcom_push": bool(getattr(task, "do_xcom_push", True)),
         "sensor": _sensor_ir(task),
-        "operator_class": (_class_info(type(task)) if not type(task).__module__.startswith("airflow") and hasattr(type(task), "execute") else None),
+        "operator_class": (_class_info(type(task)) if not type(task).__module__.startswith(("airflow", "cosmos")) and hasattr(type(task), "execute") else None),     # Cosmos operators are mapped by cosmos_ops.py, not copied
         "trigger_rule": str(getattr(task.trigger_rule, "value", task.trigger_rule)),
         "owner": task.owner, "queue": task.queue if getattr(task, "queue", None) != "default" else None,
         "execution_timeout_s": task.execution_timeout.total_seconds() if getattr(task, "execution_timeout", None) else None,
@@ -303,6 +410,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "expand": _expand_ir(task),
         "is_mapped": any(c.__name__ == "MappedOperator" for c in type(task).__mro__) or bool(getattr(task, "is_mapped", False)),
         "loop": _loop_ir(task),
+        "cosmos": _cosmos_task_ir(task),
         "is_setup": bool(getattr(task, "is_setup", False)), "is_teardown": bool(getattr(task, "is_teardown", False)),
         "on_failure_fail_dagrun": bool(getattr(task, "on_failure_fail_dagrun", False)),
         "short_circuit_hard": bool(getattr(task, "ignore_downstream_trigger_rules", True)),
@@ -369,6 +477,7 @@ def _dag_ir(dag: Any, folder: Path) -> dict[str, Any]:
                          "max_consecutive_failed_dag_runs", "render_template_as_native_obj", "is_paused_upon_creation", "concurrency")
                          if getattr(dag, k, None) is not None},
         "has_callbacks": any(getattr(dag, a, None) for a in ("on_failure_callback", "on_success_callback", "sla_miss_callback")),
+        "cosmos_groups": _cosmos_groups(dag),
         "tasks": [_task_ir(t) for t in dag.tasks],
     }
 

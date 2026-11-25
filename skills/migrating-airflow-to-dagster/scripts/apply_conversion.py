@@ -72,11 +72,13 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
                     status.defer(manifest, u["id"], f"AIRFLOW-CAVEAT stub (the DAG converts around it): {caveat[tid]}"[:900])
                     stats["tasks_deferred"] += 1
                 continue
-            if t["type"] in ELIDED and tid not in keys:         # in the graph form an EmptyOperator is a real step
+            if tid in (rep.get("cosmos_tasks") or {}):          # a Cosmos task: it became part of a dbt component, whose assets are this unit's target
+                u["target"] = {"assets": rep["cosmos_tasks"][tid], "deps": {}}
+            elif t["type"] in ELIDED and tid not in keys:         # in the graph form an EmptyOperator is a real step
                 u["target"] = {"none": "EmptyOperator elided; its dependencies were rewired through it"}
             else:
                 key = keys[tid]
-                ups = {keys[x] for x in eff_up(tid) if x in keys}
+                ups = {keys[x] for x in eff_up(tid) if x in keys} | {k for x in eff_up(tid) for k in (rep.get("cosmos_sinks") or {}).get(x, [])}
                 deps = ups | {i_key(i) for i in t["inlets"] if i_key(i) != key}
                 if not eff_up(tid):                                    # root tasks also depend on the assets that trigger the DAG
                     deps |= {i_key(x) for x in rep.get("triggers", [])}

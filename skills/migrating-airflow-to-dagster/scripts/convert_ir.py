@@ -37,6 +37,7 @@ import argparse
 import ast
 import builtins
 import json
+import os
 import re
 import textwrap
 from collections import Counter
@@ -44,6 +45,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import cosmos_ops as K
 import provider_ops as P
 
 CONTEXT_PARAMS = {"ds", "ds_nodash", "ts", "ti", "task_instance", "dag_run", "logical_date", "data_interval_start",
@@ -90,6 +92,7 @@ PLAIN_RULES = {"all_success", "none_failed", "none_failed_min_one_success"}     
 S3_OPS = {"S3ListOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "LocalFilesystemToS3Operator", "S3CreateObjectOperator"}
 SNOWFLAKE_OPS = {"CopyFromExternalStageToSnowflakeOperator", "SnowflakeOperator", "SQLExecuteQueryOperator"}
 PROV = P.TYPES                  # provider operators translated by provider_ops.py (HTTP, SQL on other databases, Kubernetes pods, email, Slack, dbt Cloud, Airbyte, Fivetran, Databricks)
+COSMOS_STEP = {"CosmosDbtStep"}      # a per-task Cosmos operator, run through dagster_dbt.DbtCliResource (cosmos_ops.py)
 PROV_STEPS = PROV - {"HttpSensor"}          # the ones that run as a step of their own (the sensor is a polling step)
 
 
@@ -111,6 +114,7 @@ RUNTIME_PARTS: dict[str, str] = {}   # asset key -> dynamic partitions name, for
 PARTITIONS: dict[str, dict] = {}   # asset key -> its time partitioning, from the partition timetables in the IR (filled by build_partition_catalog)
 AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
 MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
+DBT_DIR = "dbt"          # --dbt-dir: where the dbt projects of converted Cosmos DAGs are expected, inside the package
 RETURN_ALL = False        # set by --return-all: keep every Python return value so a parity run can compare them
 
 
@@ -389,7 +393,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
 # --------------------------------------------------------------------------------------------------------------------
 def is_custom(t: dict[str, Any]) -> bool:
     """A user-defined operator (an `execute` method on a BaseOperator subclass in the project, not a provider's) that nothing else here maps."""
-    known = ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | TRIGGER | S3_OPS | SNOWFLAKE_OPS | PROV | {"ExternalTaskSensor"}
+    known = ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | TRIGGER | S3_OPS | SNOWFLAKE_OPS | PROV | COSMOS_STEP | {"ExternalTaskSensor"}
     return bool(t.get("operator_class")) and t["type"] not in known and not t.get("is_mapped")
 
 
@@ -1323,6 +1327,10 @@ def tname(t: dict[str, Any]) -> str:
 def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tuple[str, dict[str, Any]]:
     """(module source, summary). Raises Defer if any part of the DAG cannot be converted."""
     dag = normalise_provider_tasks(dag)
+    dag, cosmos_clusters, cosmos_stubs = K.plan(dag, produced, DBT_DIR)        # Cosmos groups become dbt components, per-task operators become steps, the rest stub
+    cosmos_steps: list[dict[str, Any]] = []
+    cosmos_files: dict[str, str] = {}
+    cosmos_reqs: set[str] = set()
     reasons: list[str] = []
     caveats: list[dict[str, str]] = []                         # kind "stub": a task written as a marked stub; "degraded": translated with a known difference
     catchup_note = ""
@@ -1347,10 +1355,14 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 reasons += why
         dag = {**dag, "tasks": [({**t, "type": "EmptyOperator"} if t["task_id"] in ext_ids else t) for t in dag["tasks"]]}
     dag = expand_loops(dag)
+    if CAVEATS == "off":
+        reasons += [f"{tid}: {why}" for tid, why in cosmos_stubs.items()]
     if CAVEATS != "off":                                     # tasks the converter cannot translate become marked stubs; the DAG keeps its shape
-        soft_known = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | SENSORS | TRIGGER | BRANCH | SHORT | CLOCK_BRANCH
+        soft_known = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | SENSORS | TRIGGER | BRANCH | SHORT | CLOCK_BRANCH | COSMOS_STEP
 
         def soft_reason(t: dict[str, Any]) -> str | None:
+            if t["task_id"] in cosmos_stubs:
+                return cosmos_stubs[t["task_id"]]
             if t["type"] in TRIGGER:
                 tgt = (t.get("args") or {}).get("trigger_dag_id")
                 if isinstance(tgt, str) and "{{" not in tgt and tgt not in ALL_DAG_IDS:
@@ -1577,7 +1589,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 reasons.append(f"{tid}: TimeDeltaSensor delta not found")
             if sn.get("soft_fail") and not (mplan and mplan["mode"] == "graph"):
                 reasons.append(f"{tid}: a sensor with soft_fail (skip handling needs the graph form)")
-        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | SENSORS | TRIGGER and not is_custom(t) and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT | CLOCK_BRANCH):
+        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | SENSORS | TRIGGER | COSMOS_STEP and not is_custom(t) and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT | CLOCK_BRANCH):
             reasons.append(f"{tid}: operator {ty}")
         _, jprob = jinja_vars(task_templates(t))
         if jprob:
@@ -1592,6 +1604,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     part_var = f"{safe(dag_id)}_partitions"
     if ppart and (mplan or any(t["type"] in BRANCH | SHORT | SENSORS | TRIGGER for t in tasks.values())):
         raise Defer("a partitioned DAG with mapped, branching, sensor or trigger steps (not converted yet)")
+    has_cosmos = bool(cosmos_clusters) or any(t["type"] in COSMOS_STEP for t in tasks.values())
+    if has_cosmos and (gplan or ppart or triggers):
+        raise Defer("Cosmos dbt tasks in a DAG with dynamic mapping, branching, partitions or an asset trigger (not converted yet)")
 
     elided = set() if gplan else ELIDED       # in the graph form an EmptyOperator stays a step: its trigger rule is what joins skipped branches
 
@@ -1602,7 +1617,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         return list(dict.fromkeys(out))
 
     real = [t for t in dag["tasks"] if t["type"] not in elided]
-    if not real:
+    if not real and not cosmos_clusters:
         raise Defer("only EmptyOperators: nothing to run")
     notes: list[str] = [catchup_note] if catchup_note else []
     if any(t["type"] == "LatestOnlyOperator" for t in tasks.values()):
@@ -1656,6 +1671,29 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             keyparts[tid] = [safe(dag_id)] + [safe(p) for p in tid.split(".")]
         notes.append(f"{' -> '.join(order)} all update {k}; only {order[-1]} produces the asset (the earlier steps are plain assets). "
                      "Airflow emits a dataset event after each of them; Dagster emits one, after the last.")
+    cosmos_out: list[dict[str, Any]] = []
+    cosmos_keys: list[list[str]] = []
+    for c in cosmos_clusters:
+        up = [keyparts[x] for u in c["ext_up_tasks"] for x in (eff_up(u) if tasks[u]["type"] in elided else [u]) if x in keyparts] + c["ext_up_keys"]
+        up = [list(k) for k in dict.fromkeys(tuple(k) for k in up)]
+        cosmos_files[f"defs/{c['dir']}/defs.yaml"] = K.component_yaml(c, up)
+        cosmos_files.update(c["profile"]["generated"])
+        cosmos_keys += c["keys"]
+        for pl in c["pools"]:
+            pool_limits.setdefault(pl, None)
+        if len(c["pools"]) > 1:
+            caveats.append({"task": c["members"][0], "kind": "degraded", "reason": f"the Cosmos tasks use several pools {c['pools']}; the component takes one op pool, so none was applied"})
+        cosmos_reqs.update(["dagster-dbt", *c["requirements"]])
+        caveats += [{**cv, "task": cv["task"] or c["members"][0]} for cv in c["caveats"]]
+        notes += c["notes"]
+        notes.append(f"Cosmos {'DbtDag' if not c['gid'] else 'DbtTaskGroup ' + repr(c['gid'])} ({len(c['members'])} Airflow tasks) became one dbt component, defs/{c['dir']}/defs.yaml: "
+                     f"{len(c['keys'])} dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. Copy the dbt project from "
+                     f"{c['project_path']} to <package>/{c['dbt_dir']}/{c['project']} and run `dbt deps` there; with `dg dev` the component refreshes its manifest, in a deployment run "
+                     "`dg utils refresh-defs-state` at build time")
+        cosmos_out.append({"id": c["id"], "dir": c["dir"], "members": c["members"], "project": c["project"], "airflow_project_path": c["project_path"], "select": c["select"],
+                           "exclude": c["exclude"], "selector": c["selector"], "cli_args": c["cli_args"], "keys": ["/".join(k) for k in c["keys"]],
+                           "upstream_keys": ["/".join(k) for k in up], "profile": c["profile"]["profile"], "target": c["profile"]["target"], "environment": c["env"],
+                           "test_behavior": c["test_behavior"], "prefix": c["prefix"], "pools": c["pools"]})
     consumed: set[str] = set()
     for t in real:
         consumed |= xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")) | xcom_refs(t["template_fields"])
@@ -2230,6 +2268,24 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             else:
                 body = ctx_line + (f"    return {inner}" if not ret_none else f"    {inner}")
                 deco.append("kinds={'python'}")
+        elif ty in COSMOS_STEP:
+            cs = t["cosmos_step"]
+            cosmos_steps.append({"task": tid, **{k: cs[k] for k in ("project", "project_path", "kind", "args", "profile", "target", "profiles_dir", "env", "mode")}})
+            cosmos_files.update(cs["generated"])
+            cosmos_reqs.update(["dagster-dbt", *cs["requirements"]])
+            body = ctx_line + K.step_body(cs)
+            deco.append("kinds={'dbt'}")
+            pre = ""
+            ret_none = True
+            caveats.append({"task": tid, "kind": "degraded", "reason": "a per-task Cosmos operator runs one dbt command from a `select` string and never records which nodes it ran, so this is one asset "
+                                                                         "without model-level lineage; use a DbtDag or DbtTaskGroup (or build a dbt component by hand) for per-model assets"})
+            for text in cs["profile_notes"]:
+                caveats.append({"task": tid, "kind": "degraded", "reason": text})
+            notes += [f"{tid}: {x}" for x in cs["profile_info"]]
+            if cs.get("has_callback"):
+                caveats.append({"task": tid, "kind": "degraded", "reason": "the Cosmos `callback` is not applied"})
+            if cs["mode"] == "virtualenv":
+                caveats.append({"task": tid, "kind": "degraded", "reason": "Cosmos ran dbt in a virtualenv built from py_requirements; the step runs dbt in the Dagster environment"})
         elif ty in PROV_STEPS:
             pv = prov_for(t, params, ctxn)
             if pv.resource:
@@ -2286,7 +2342,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             body = f"    def _run():\n{inner_}\n    _result = _run()\n    af_runtime_partition_tag(context, {rt_outlets[tid]!r})\n    return _result"
         blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\n" + hook_deco + "def " + fname + sig + ":\n" + body + "\n")
 
-    keys = [keyparts[t["task_id"]] for t in real] + ([[safe(dag_id), "run_check"]] if graph_outs else [])
+    keys = [keyparts[t["task_id"]] for t in real] + ([[safe(dag_id), "run_check"]] if graph_outs else []) + cosmos_keys
     imports = (["import itertools"] if gplan else []) + ["import dagster as dg"] + (["from dagster_community_components import on_hooks"] if cb_code else []) \
         + (["from dagster_community_components import PartitionWindowSensorComponent"] if ppart and ppart.get("via") else []) + ["", "from ..runtime import *  # noqa: F401,F403"]
     mod = [f'"""Converted from Airflow DAG `{dag_id}` ({dag["file"]}) by convert_ir.py.', "", note, '"""', *imports, ""]
@@ -2369,12 +2425,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     elif tt["kind"] in ("cron_trigger", "cron_data_interval"):
         out += (f"\n{safe(dag_id)}_schedule = dg.ScheduleDefinition(name={safe(dag_id) + '_schedule'!r}, job={safe(dag_id)}_job, "
                 f"cron_schedule={tt['cron']!r}, execution_timezone={tz_name(tt['timezone'])!r})\n")
-    for k in own_keys:
+    for k in own_keys | {"/".join(x) for x in cosmos_keys}:
         produced[k] = dag_id
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "provider_connections": dict(sorted(prov_conns.items())), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "catalog_keys": [list(v) for v in rt_outlets.values()], "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
-                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | prov_reqs | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | prov_reqs | cosmos_reqs | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "cosmos": cosmos_out, "cosmos_steps": cosmos_steps, "cosmos_files": cosmos_files,
+                 "cosmos_tasks": {m: ["/".join(k) for k in c["keys"]] for c in cosmos_clusters for m in c["members"]},
+                 "cosmos_sinks": {m: ["/".join(k) for k in c["sink_keys"]] for c in cosmos_clusters for m in c["members"]},
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
@@ -3518,6 +3577,7 @@ RUNTIME += ITEM_SRC + GATE_SRC
 
 
 RUNTIME += P.PROVIDER_RUNTIME
+RUNTIME += K.RUNTIME
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -3541,10 +3601,13 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--output", choices=["python", "components"], default="python",
                     help="python (default): generated Python for every DAG. components: registry components (a defs.yaml per DAG with one component per task, "
                          "a schedule component, post-processing where needed) for each DAG whose every task has a component form; the others stay Python")
+    ap.add_argument("--dbt-dir", default="dbt", help="where the dbt projects of converted Cosmos DAGs are expected, relative to the package (default dbt): the converter "
+                    "writes components that point at <package>/<dbt-dir>/<project name>; it does not copy the projects")
     ap.add_argument("--partition-start", default="2025-01-01", help="where time-partitioned assets begin (Airflow's partitions have no start date)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
-    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP, CAVEATS, OUTPUT
+    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP, CAVEATS, OUTPUT, DBT_DIR
+    DBT_DIR = a.dbt_dir
     OUTPUT = a.output
     CAVEATS = a.caveats
     RETURN_ALL = a.return_all
@@ -3562,10 +3625,13 @@ def main(argv: list[str] | None = None) -> int:
     _m = re.match(r"(\d+)", str(ir.get("airflow_version") or ""))
     AF_MAJOR = int(_m.group(1)) if _m else 2
     a.out_dir.mkdir(parents=True, exist_ok=True)
+    root_ = next((p for p in [a.out_dir.resolve(), *a.out_dir.resolve().parents] if (p / "pyproject.toml").exists() or (p / "dg.toml").exists()), a.out_dir.resolve().parent)
+    rel_ = os.path.relpath(a.out_dir.resolve().parent, root_)
+    K.PACKAGE_REL = "" if rel_ == "." else rel_.replace(os.sep, "/")           # the package directory relative to the Dagster project root
     (a.out_dir / "__init__.py").touch()
     _v = re.match(r"(\d+)\.(\d+)", str(ir.get("airflow_version") or ""))
     iso = bool(_v) and (int(_v.group(1)), int(_v.group(2))) < (2, 8)
-    (a.out_dir.parent / "runtime.py").write_text(RUNTIME.replace("AF_ISO_DT = False", f"AF_ISO_DT = {iso}", 1).replace('DATASET_KEYS_MODE = "path"', f'DATASET_KEYS_MODE = "{DATASET_KEYS}"', 1))
+    (a.out_dir.parent / "runtime.py").write_text(RUNTIME.replace("AF_ISO_DT = False", f"AF_ISO_DT = {iso}", 1).replace('DATASET_KEYS_MODE = "path"', f'DATASET_KEYS_MODE = "{DATASET_KEYS}"', 1).replace('DBT_DIR = "dbt"', f'DBT_DIR = {DBT_DIR!r}', 1))
     note = ("Schedule semantics: tasks converted here use no date values, so a plain cron schedule is exact for Airflow 3 "
             "(trigger timetable) and Airflow 2 (data-interval timetable).")
     report: dict[str, Any] = {"airflow_version": ir.get("airflow_version"), "dataset_keys": DATASET_KEYS, "dags": {}}
@@ -3579,7 +3645,12 @@ def main(argv: list[str] | None = None) -> int:
         try:
             code, summary = convert_dag(dag, note, produced)
             compile(code, name, "exec")
-            comp = component_files(dag, summary, a.out_dir.parent.name) if OUTPUT == "components" else None
+            for rel, text in (summary.get("cosmos_files") or {}).items():       # dbt components (defs/<dag>_dbt*/defs.yaml) and generated profiles
+                dest = (a.out_dir / rel[len("defs/"):]) if rel.startswith("defs/") else (a.out_dir.parent / rel)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(text)
+            summary = {**summary, "cosmos_files": sorted((summary.get("cosmos_files") or {}))}
+            comp = component_files(dag, summary, a.out_dir.parent.name) if OUTPUT == "components" and not summary.get("cosmos") and not summary.get("cosmos_steps") else None
             if comp:
                 files, over = comp
                 for rel, text in files.items():
@@ -3628,6 +3699,16 @@ def main(argv: list[str] | None = None) -> int:
             "import dagster as dg\n\n\n@dg.definitions\ndef sources() -> dg.Definitions:\n    return dg.Definitions(assets=[\n" +
             "".join(f"        dg.AssetSpec(key={e.split('/')!r}),\n" for e in ext) + "    ])\n")
     conv = {k: v for k, v in report["dags"].items() if v["status"] == "converted"}
+    dbt_projects: dict[str, dict[str, Any]] = {}
+    for dag_id_, v in conv.items():
+        for cl in [*(v.get("cosmos") or []), *(v.get("cosmos_steps") or [])]:
+            nm = cl["project"]
+            e = dbt_projects.setdefault(nm, {"airflow_path": cl.get("airflow_project_path") or cl.get("project_path"), "expected_path": f"{a.out_dir.parent.name}/{DBT_DIR}/{nm}",
+                                             "used_by": [], "environment": []})
+            e["used_by"].append(f"{dag_id_}:{cl.get('id') or cl.get('task')}")
+            e["environment"] = sorted(set(e["environment"]) | set(cl.get("environment") or cl.get("env") or []))
+    if dbt_projects:                                   # names only: the profile fields every generated profiles.yml reads, and where each dbt project must be copied to
+        report["dbt"] = {"projects": dbt_projects, "dbt_dir": DBT_DIR}
     limits = {k: v["max_active_runs"] for k, v in conv.items() if v.get("max_active_runs")}
     pools: dict[str, int | None] = {}
     for v in conv.values():
