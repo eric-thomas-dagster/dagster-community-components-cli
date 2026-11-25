@@ -1,0 +1,692 @@
+{
+  "version": 1,
+  "root": "dags",
+  "units": [
+    {
+      "id": "A001",
+      "kind": "dag",
+      "dag_id": "feature_build",
+      "file": "feature_build.py",
+      "line": 6,
+      "schedule": {
+        "kind": "cron",
+        "raw": "0 3 * * *",
+        "cron": "0 3 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": null,
+      "default_args": {},
+      "edges": [],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {},
+      "task_ids": [
+        "build"
+      ],
+      "task_classes": {
+        "JUDG": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "tasks: 1 JUDG",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A002",
+      "kind": "task",
+      "dag_id": "feature_build",
+      "task_id": "build",
+      "file": "feature_build.py",
+      "line": 7,
+      "operator": "KubernetesPodOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "pod execution: dagster-k8s Pipes client or run launcher",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A003",
+      "kind": "dag",
+      "dag_id": "nightly_reports",
+      "file": "nightly_reports.py",
+      "line": 7,
+      "schedule": {
+        "kind": "cron",
+        "raw": "0 7 * * *",
+        "cron": "0 7 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": null,
+      "default_args": {},
+      "edges": [
+        [
+          "pull",
+          "write"
+        ]
+      ],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {},
+      "task_ids": [
+        "pull",
+        "write"
+      ],
+      "task_classes": {
+        "MECH": 1,
+        "JUDG": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "tasks: 1 JUDG, 1 MECH",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A004",
+      "kind": "task",
+      "dag_id": "nightly_reports",
+      "task_id": "pull",
+      "file": "nightly_reports.py",
+      "line": 16,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "MECH",
+      "classification_reason": "TaskFlow task: asset or op running the same function",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A005",
+      "kind": "task",
+      "dag_id": "nightly_reports",
+      "task_id": "write",
+      "file": "nightly_reports.py",
+      "line": 16,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "pull"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A006",
+      "kind": "cosmos",
+      "dag_id": "orders_dbt",
+      "file": "orders_dbt.py",
+      "line": 5,
+      "schedule": {
+        "kind": "cron",
+        "raw": "0 5 * * *",
+        "cron": "0 5 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": null,
+      "default_args": {},
+      "edges": [],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {
+        "cosmos": 1
+      },
+      "task_ids": [],
+      "task_classes": {},
+      "classification": "JUDG",
+      "classification_reason": "Cosmos DbtDag: dagster-dbt",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A007",
+      "kind": "dag",
+      "dag_id": "partner_drop",
+      "file": "partner_drop.py",
+      "line": 7,
+      "schedule": {
+        "kind": "cron",
+        "raw": "@hourly",
+        "cron": "0 * * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": null,
+      "default_args": {},
+      "edges": [
+        [
+          "wait_for_file",
+          "load"
+        ],
+        [
+          "wait_for_manifest",
+          "load"
+        ]
+      ],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {},
+      "task_ids": [
+        "load",
+        "wait_for_file",
+        "wait_for_manifest"
+      ],
+      "task_classes": {
+        "JUDG": 2,
+        "MECH": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "tasks: 2 JUDG, 1 MECH",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A008",
+      "kind": "task",
+      "dag_id": "partner_drop",
+      "task_id": "wait_for_file",
+      "file": "partner_drop.py",
+      "line": 8,
+      "operator": "FileSensor",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "sensor: Dagster sensor or declarative automation (eager/on_cron); check the registry for the service",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A009",
+      "kind": "task",
+      "dag_id": "partner_drop",
+      "task_id": "wait_for_manifest",
+      "file": "partner_drop.py",
+      "line": 9,
+      "operator": "FileSensor",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "sensor: Dagster sensor or declarative automation (eager/on_cron); check the registry for the service",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A010",
+      "kind": "task",
+      "dag_id": "partner_drop",
+      "task_id": "load",
+      "file": "partner_drop.py",
+      "line": 10,
+      "operator": "PythonOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "wait_for_file",
+        "wait_for_manifest"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "MECH",
+      "classification_reason": "python callable: asset or op running the same function",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A011",
+      "kind": "dag",
+      "dag_id": "route_by_region",
+      "file": "route_by_region.py",
+      "line": 7,
+      "schedule": {
+        "kind": "cron",
+        "raw": "@daily",
+        "cron": "0 0 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": null,
+      "default_args": {},
+      "edges": [
+        [
+          "amer",
+          "join"
+        ],
+        [
+          "choose",
+          "amer"
+        ],
+        [
+          "choose",
+          "emea"
+        ],
+        [
+          "emea",
+          "join"
+        ]
+      ],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {
+        "trigger_rule": 1
+      },
+      "task_ids": [
+        "amer",
+        "choose",
+        "emea",
+        "join"
+      ],
+      "task_classes": {
+        "REDESIGN": 1,
+        "MECH": 2,
+        "JUDG": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "tasks: 1 JUDG, 2 MECH, 1 REDESIGN",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A012",
+      "kind": "task",
+      "dag_id": "route_by_region",
+      "task_id": "choose",
+      "file": "route_by_region.py",
+      "line": 8,
+      "operator": "BranchPythonOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "trigger_rule": 1
+      },
+      "classification": "REDESIGN",
+      "classification_reason": "branching: model as conditional asset logic, asset checks or an op with dynamic outputs",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A013",
+      "kind": "task",
+      "dag_id": "route_by_region",
+      "task_id": "emea",
+      "file": "route_by_region.py",
+      "line": 9,
+      "operator": "PythonOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "choose"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "trigger_rule": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "python callable: asset or op running the same function",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A014",
+      "kind": "task",
+      "dag_id": "route_by_region",
+      "task_id": "amer",
+      "file": "route_by_region.py",
+      "line": 10,
+      "operator": "PythonOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "choose"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "trigger_rule": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "python callable: asset or op running the same function",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A015",
+      "kind": "task",
+      "dag_id": "route_by_region",
+      "task_id": "join",
+      "file": "route_by_region.py",
+      "line": 11,
+      "operator": "EmptyOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": "none_failed_min_one_success",
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "amer",
+        "emea"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "trigger_rule": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "no-op: becomes a dependency join only, usually no asset; trigger_rule=none_failed_min_one_success: no direct equivalent; model with checks, hooks or automation conditions",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A016",
+      "kind": "dag",
+      "dag_id": "s3_to_warehouse",
+      "file": "s3_to_warehouse.py",
+      "line": 7,
+      "schedule": {
+        "kind": "cron",
+        "raw": "@daily",
+        "cron": "0 0 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": null,
+      "default_args": {},
+      "edges": [
+        [
+          "list_files",
+          "copy_orders"
+        ]
+      ],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {
+        "connection_id": 1
+      },
+      "task_ids": [
+        "copy_orders",
+        "list_files"
+      ],
+      "task_classes": {
+        "JUDG": 2
+      },
+      "classification": "JUDG",
+      "classification_reason": "Airflow Variables/Connections: map to env vars, secrets and resources (Phase 5); tasks: 2 JUDG",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A017",
+      "kind": "task",
+      "dag_id": "s3_to_warehouse",
+      "task_id": "list_files",
+      "file": "s3_to_warehouse.py",
+      "line": 8,
+      "operator": "S3ListOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "connection_id": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "provider operator: dagster-aws or a registry component",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A018",
+      "kind": "task",
+      "dag_id": "s3_to_warehouse",
+      "task_id": "copy_orders",
+      "file": "s3_to_warehouse.py",
+      "line": 9,
+      "operator": "CopyFromExternalStageToSnowflakeOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "list_files"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "connection_id": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "provider operator: official dagster-snowflake or a registry component",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A019",
+      "kind": "dag",
+      "dag_id": "slack_digest",
+      "file": "slack_digest.py",
+      "line": 7,
+      "schedule": {
+        "kind": "cron",
+        "raw": "0 9 * * 1",
+        "cron": "0 9 * * 1"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": null,
+      "default_args": {},
+      "edges": [
+        [
+          "start",
+          "mail"
+        ]
+      ],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {},
+      "task_ids": [
+        "mail",
+        "start"
+      ],
+      "task_classes": {
+        "MECH": 1,
+        "JUDG": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "tasks: 1 JUDG, 1 MECH",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A020",
+      "kind": "task",
+      "dag_id": "slack_digest",
+      "task_id": "start",
+      "file": "slack_digest.py",
+      "line": 8,
+      "operator": "EmptyOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "MECH",
+      "classification_reason": "no-op: becomes a dependency join only, usually no asset",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A021",
+      "kind": "task",
+      "dag_id": "slack_digest",
+      "task_id": "mail",
+      "file": "slack_digest.py",
+      "line": 9,
+      "operator": "EmailOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "start"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "notification: alerts or a notification component",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    }
+  ]
+}

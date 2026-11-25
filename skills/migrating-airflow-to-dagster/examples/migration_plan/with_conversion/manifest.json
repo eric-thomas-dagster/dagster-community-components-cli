@@ -1,0 +1,306 @@
+{
+  "version": 1,
+  "root": "scripts/tests/fixtures_cosmos/dags",
+  "units": [
+    {
+      "id": "A001",
+      "kind": "cosmos",
+      "dag_id": "shop_dbt_dag",
+      "file": "cosmos_shop.py",
+      "line": 25,
+      "schedule": {
+        "kind": "cron",
+        "raw": "0 6 * * *",
+        "cron": "0 6 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": [
+        "cosmos"
+      ],
+      "default_args": {},
+      "edges": [],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {
+        "cosmos": 1
+      },
+      "task_ids": [],
+      "task_classes": {},
+      "classification": "JUDG",
+      "classification_reason": "Cosmos DbtDag: dagster-dbt",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A002",
+      "kind": "dag",
+      "dag_id": "shop_mixed",
+      "file": "cosmos_shop.py",
+      "line": 39,
+      "schedule": {
+        "kind": "cron",
+        "raw": "@daily",
+        "cron": "0 0 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": [
+        "cosmos"
+      ],
+      "default_args": {},
+      "edges": [],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {
+        "cosmos": 1
+      },
+      "task_ids": [
+        "extract",
+        "publish"
+      ],
+      "task_classes": {
+        "MECH": 2
+      },
+      "classification": "MECH",
+      "classification_reason": "plain DAG: job plus schedule",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A003",
+      "kind": "task",
+      "dag_id": "shop_mixed",
+      "task_id": "extract",
+      "file": "cosmos_shop.py",
+      "line": 40,
+      "operator": "PythonOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "cosmos": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "python callable: asset or op running the same function",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A004",
+      "kind": "task",
+      "dag_id": "shop_mixed",
+      "task_id": "publish",
+      "file": "cosmos_shop.py",
+      "line": 48,
+      "operator": "BashOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "cosmos": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "shell command: asset running the command (Pipes subprocess or component)",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A005",
+      "kind": "dag",
+      "dag_id": "shop_operators",
+      "file": "cosmos_shop.py",
+      "line": 52,
+      "schedule": {
+        "kind": "manual",
+        "raw": "None"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": [
+        "cosmos"
+      ],
+      "default_args": {},
+      "edges": [
+        [
+          "build_totals",
+          "test_all"
+        ],
+        [
+          "run_staging",
+          "build_totals"
+        ],
+        [
+          "seed",
+          "run_staging"
+        ]
+      ],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {
+        "cosmos": 1
+      },
+      "task_ids": [
+        "build_totals",
+        "run_staging",
+        "seed",
+        "test_all"
+      ],
+      "task_classes": {
+        "MECH": 4
+      },
+      "classification": "MECH",
+      "classification_reason": "plain DAG: job plus schedule",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A006",
+      "kind": "task",
+      "dag_id": "shop_operators",
+      "task_id": "seed",
+      "file": "cosmos_shop.py",
+      "line": 54,
+      "operator": "DbtSeedLocalOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "cosmos": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "dbt via Cosmos: dagster-dbt (@dbt_assets / DbtProjectComponent)",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A007",
+      "kind": "task",
+      "dag_id": "shop_operators",
+      "task_id": "run_staging",
+      "file": "cosmos_shop.py",
+      "line": 55,
+      "operator": "DbtRunLocalOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "seed"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "cosmos": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "dbt via Cosmos: dagster-dbt (@dbt_assets / DbtProjectComponent)",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A008",
+      "kind": "task",
+      "dag_id": "shop_operators",
+      "task_id": "build_totals",
+      "file": "cosmos_shop.py",
+      "line": 56,
+      "operator": "DbtBuildLocalOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "run_staging"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "cosmos": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "dbt via Cosmos: dagster-dbt (@dbt_assets / DbtProjectComponent)",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    },
+    {
+      "id": "A009",
+      "kind": "task",
+      "dag_id": "shop_operators",
+      "task_id": "test_all",
+      "file": "cosmos_shop.py",
+      "line": 57,
+      "operator": "DbtTestLocalOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "build_totals"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "cosmos": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "dbt via Cosmos: dagster-dbt (@dbt_assets / DbtProjectComponent)",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "target": {}
+    }
+  ]
+}

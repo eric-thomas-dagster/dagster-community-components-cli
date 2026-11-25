@@ -1,0 +1,185 @@
+{
+  "by_path": {
+    "native rewrite": 3
+  },
+  "by_pattern": {
+    "dbt": 3
+  },
+  "dags": [
+    {
+      "bucket": "needs-care",
+      "bucket_reasons": [
+        "needs-care from the manifest (Cosmos DbtDag: dagster-dbt)",
+        "the converter produced Dagster code with no stubbed task, so what remains is review and parity (1 stated difference(s) to confirm)"
+      ],
+      "classes": {
+        "JUDG": 0,
+        "MECH": 0,
+        "REDESIGN": 0
+      },
+      "conversion": "converted",
+      "dag_id": "shop_dbt_dag",
+      "effective_bucket": "mechanical",
+      "effort_days": 0.5,
+      "file": "cosmos_shop.py",
+      "lineage_value": "high",
+      "path": "native rewrite",
+      "path_why": "mechanical: the converter or a short manual pass covers it",
+      "pattern": "dbt",
+      "pattern_why": "Cosmos DbtDag / DbtTaskGroup / dbt operators",
+      "schedule": "cron",
+      "score": 2,
+      "signals": [
+        "cosmos"
+      ],
+      "size": "XS",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 5,
+      "unit": "A001",
+      "wave": 1
+    },
+    {
+      "bucket": "mechanical",
+      "bucket_reasons": [
+        "mechanical from the manifest (plain DAG: job plus schedule)",
+        "the converter produced Dagster code with no stubbed task, so what remains is review and parity (2 stated difference(s) to confirm)"
+      ],
+      "classes": {
+        "JUDG": 0,
+        "MECH": 2,
+        "REDESIGN": 0
+      },
+      "conversion": "converted",
+      "dag_id": "shop_mixed",
+      "effective_bucket": "mechanical",
+      "effort_days": 0.5,
+      "file": "cosmos_shop.py",
+      "lineage_value": "high",
+      "path": "native rewrite",
+      "path_why": "mechanical: the converter or a short manual pass covers it",
+      "pattern": "dbt",
+      "pattern_why": "Cosmos DbtDag / DbtTaskGroup / dbt operators",
+      "schedule": "cron",
+      "score": 4,
+      "signals": [
+        "cosmos"
+      ],
+      "size": "XS",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 5,
+      "unit": "A002",
+      "wave": 1
+    },
+    {
+      "bucket": "mechanical",
+      "bucket_reasons": [
+        "mechanical from the manifest (plain DAG: job plus schedule)",
+        "the converter produced Dagster code with no stubbed task, so what remains is review and parity (4 stated difference(s) to confirm)"
+      ],
+      "classes": {
+        "JUDG": 0,
+        "MECH": 4,
+        "REDESIGN": 0
+      },
+      "conversion": "converted",
+      "dag_id": "shop_operators",
+      "effective_bucket": "mechanical",
+      "effort_days": 0.5,
+      "file": "cosmos_shop.py",
+      "lineage_value": "high",
+      "path": "native rewrite",
+      "path_why": "mechanical: the converter or a short manual pass covers it",
+      "pattern": "dbt",
+      "pattern_why": "Cosmos DbtDag / DbtTaskGroup / dbt operators",
+      "schedule": "manual",
+      "score": 6,
+      "signals": [
+        "cosmos"
+      ],
+      "size": "XS",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 4,
+      "unit": "A005",
+      "wave": 1
+    }
+  ],
+  "heuristic": true,
+  "inputs": {
+    "ir": true,
+    "manifest": true,
+    "report": true
+  },
+  "pilot": [
+    {
+      "covers": "a plain scheduled DAG",
+      "dag_id": "shop_dbt_dag",
+      "wave": 1
+    },
+    {
+      "covers": "next lowest complexity",
+      "dag_id": "shop_mixed",
+      "wave": 1
+    },
+    {
+      "covers": "next lowest complexity",
+      "dag_id": "shop_operators",
+      "wave": 1
+    }
+  ],
+  "rules": {
+    "effort_days": {
+      "base": {
+        "mechanical": 0.5,
+        "needs-care": 2.0,
+        "redesign": 5.0
+      },
+      "per_stub": 0.5,
+      "per_task": {
+        "JUDG": 0.4,
+        "MECH": 0.1,
+        "REDESIGN": 1.0
+      },
+      "reviewed_only_factor": 0.5
+    },
+    "pilot_size": 3,
+    "signal_points": 2,
+    "size_days": [
+      [
+        0.5,
+        "XS"
+      ],
+      [
+        1.5,
+        "S"
+      ],
+      [
+        3.0,
+        "M"
+      ],
+      [
+        6.0,
+        "L"
+      ]
+    ],
+    "task_points": {
+      "JUDG": 3,
+      "MECH": 1,
+      "REDESIGN": 8
+    }
+  },
+  "total_effort_days": 1.5,
+  "waves": [
+    {
+      "dags": [
+        "shop_dbt_dag",
+        "shop_mixed",
+        "shop_operators"
+      ],
+      "effort_days": 1.5,
+      "wave": 1
+    }
+  ]
+}

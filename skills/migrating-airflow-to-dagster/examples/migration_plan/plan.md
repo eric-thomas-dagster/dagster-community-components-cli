@@ -1,0 +1,75 @@
+# Migration plan
+
+**Every number and label here is a heuristic.** It is computed from the manifest by fixed rules (below), not measured on your team. Use it to order the work and to start the conversation about scope; replace the estimates with your own after the pilot.
+
+7 DAGs, 3 waves, about 22 person-days in total (a coarse estimate; see the formula).
+
+## Suggested pilot
+
+Migrate these first, end to end through the gates (`SKILL.md`, Phase 3); what they teach updates the mapping before the rest.
+
+- `orders_dbt` (wave 2): a plain scheduled DAG
+- `partner_drop` (wave 2): a sensor or dataset trigger
+- `feature_build` (wave 2): next lowest complexity
+
+## Waves
+
+### Wave 2: other mechanical, and needs-care with medium or high lineage value
+
+5 DAGs, about 13 person-days.
+
+| DAG | Pattern | Complexity | Path | Effort | Score | Why |
+|---|---|---|---|---|---|---|
+| `orders_dbt` | dbt | needs-care | native rewrite | M (2 d) | 2 | needs care (judgment calls, each recorded) but has a mapping; Cosmos DbtDag / DbtTaskGroup / dbt operators |
+| `feature_build` | containers spark | needs-care | native rewrite | M (2.5 d) | 3 | needs care (judgment calls, each recorded) but has a mapping; 1 of 1 tasks are containers spark operators |
+| `nightly_reports` | python etl | needs-care | native rewrite | M (2.5 d) | 4 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are Python or Bash |
+| `partner_drop` | sensor driven | needs-care | native rewrite | M (3 d) | 7 | needs care (judgment calls, each recorded) but has a mapping; 2 of 3 tasks are sensor driven operators |
+| `s3_to_warehouse` | elt transfer | needs-care | native rewrite | M (3 d) | 8 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are elt transfer operators |
+
+### Wave 3: remaining needs-care
+
+1 DAGs, about 2.5 person-days.
+
+| DAG | Pattern | Complexity | Path | Effort | Score | Why |
+|---|---|---|---|---|---|---|
+| `slack_digest` | ops notification | needs-care | native rewrite | M (2.5 d) | 4 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are ops notification operators |
+
+### Wave 4: redesign-heavy, deferred and bridged
+
+1 DAGs, about 6.5 person-days.
+
+| DAG | Pattern | Complexity | Path | Effort | Score | Why |
+|---|---|---|---|---|---|---|
+| `route_by_region` | python etl | redesign | observe/bridge with airlift | XL (6.5 d) | 15 | needs a design decision: observe it (and proxy it when ready) while the redesign is done; 3 of 4 tasks are Python or Bash |
+
+## How this was computed
+
+**Pattern** (first match wins, by the share of the DAG's tasks whose operator matches): dbt or Cosmos, containers/Spark, ELT/transfer, SQL, sensor-driven, ops/notification; otherwise Python ETL.
+
+**Complexity** is the skill's own classification: MECH = mechanical, JUDG = needs care, REDESIGN = redesign (`reference/mapping.md`). The DAG's bucket is the worst class among the DAG's own classification and its tasks'. With a conversion report, a converted DAG with no stubbed task is treated as mechanical (review and parity remain), or as needs-care when it was redesign.
+
+**Score** = 1 x MECH tasks + 3 x JUDG tasks + 8 x REDESIGN tasks + 2 x distinct signals (XCom, datasets, dynamic mapping, Jinja, connections, pools, task groups, ...). Used to order DAGs within a wave and to pick the pilot; it is not a size.
+
+**Effort** (person-days, rounded to half days, minimum 0.5) = base (mechanical 0.5, needs-care 2, redesign 5) by the effective bucket + 0.1 x MECH + 0.4 x JUDG + 1 x REDESIGN tasks + 0.5 per stubbed task; multiplied by 0.5 when the converter produced the DAG with no stub. Size: XS up to 0.5 d, S up to 1.5 d, M up to 3 d, L up to 6 d, else XL. It covers conversion, review and a parity check; it does not cover cutover coordination, infrastructure, training or on-call changes.
+
+**Path.** Native rewrite: mechanical, or needs-care with a mapping. Observe/bridge with airlift (`reference/tiers.md`, `reference/airlift.md`): redesign DAGs that are scheduled or have high lineage value, so Dagster sees them while the redesign is done. Defer: redesign with no schedule and no lineage value.
+
+**Wave** (fixed numbers; a wave with no DAG is not listed). 1: mechanical, high lineage value (dbt, ELT, SQL). 2: other mechanical, and needs-care with medium or high lineage value. 3: remaining needs-care. 4: redesign-heavy, deferred and bridged. Lineage value is high for dbt, ELT/transfer and SQL DAGs, medium for Python ETL, containers/Spark and sensor-driven ones, low for ops/notification.
+
+**Pilot.** The lowest-score native-rewrite DAG for each of: a plain scheduled DAG, a sensor or dataset trigger, XCom/branching/mapping; then the next lowest until there are three.
+
+## Totals
+
+| Pattern | DAGs |
+|---|---|
+| containers spark | 1 |
+| dbt | 1 |
+| elt transfer | 1 |
+| ops notification | 1 |
+| python etl | 2 |
+| sensor driven | 1 |
+
+| Path | DAGs |
+|---|---|
+| native rewrite | 6 |
+| observe/bridge with airlift | 1 |

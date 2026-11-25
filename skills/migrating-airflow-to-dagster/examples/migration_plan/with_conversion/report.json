@@ -1,0 +1,478 @@
+{
+ "airflow_version": "2.10.5",
+ "dataset_keys": "path",
+ "dags": {
+  "shop_dbt_dag": {
+   "status": "converted",
+   "assets": 0,
+   "elided": 0,
+   "schedule": "0 6 * * *",
+   "timezone": "UTC",
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "provider_connections": {},
+   "shims": [],
+   "notes": [
+    "Cosmos emitted an Airflow Dataset per model; the dbt assets have their own keys, so a DAG scheduled on those datasets needs an automation condition on the dbt asset keys",
+    "profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)",
+    "Cosmos DbtDag (5 Airflow tasks) became one dbt component, defs/shop_dbt_dag_dbt/defs.yaml: 3 dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. Copy the dbt project from /opt/airflow/dbt_shop to <package>/dbt/dbt_shop and run `dbt deps` there; with `dg dev` the component refreshes its manifest, in a deployment run `dg utils refresh-defs-state` at build time"
+   ],
+   "caveats": [
+    {
+     "task": "customer_totals.run",
+     "kind": "degraded",
+     "reason": "retries=2 on the Cosmos tasks is not applied: the dbt component has no per-step retry policy (use run retries: set `dagster/max_retries` through the deployment's run retry settings)"
+    }
+   ],
+   "catalog_keys": [],
+   "local_modules": [],
+   "requirements": [
+    "dagster-dbt"
+   ],
+   "external": [],
+   "keys": [
+    [
+     "customer_totals"
+    ],
+    [
+     "stg_customers"
+    ],
+    [
+     "stg_orders"
+    ]
+   ],
+   "cosmos": [
+    {
+     "id": "all",
+     "dir": "shop_dbt_dag_dbt",
+     "members": [
+      "customer_totals.run",
+      "customer_totals.test",
+      "stg_customers_run",
+      "stg_orders.run",
+      "stg_orders.test"
+     ],
+     "project": "dbt_shop",
+     "airflow_project_path": "/opt/airflow/dbt_shop",
+     "select": "path:models",
+     "exclude": "",
+     "selector": null,
+     "cli_args": [
+      "build",
+      {
+       "--vars": {
+        "min_amount": 5
+       }
+      }
+     ],
+     "keys": [
+      "customer_totals",
+      "stg_customers",
+      "stg_orders"
+     ],
+     "upstream_keys": [],
+     "profile": "shop",
+     "target": "dev",
+     "environment": [
+      "SHOP_DUCKDB_PATH"
+     ],
+     "test_behavior": "after_each",
+     "prefix": null,
+     "pools": []
+    }
+   ],
+   "cosmos_steps": [],
+   "cosmos_files": [
+    "defs/shop_dbt_dag_dbt/defs.yaml"
+   ],
+   "cosmos_tasks": {
+    "customer_totals.run": [
+     "customer_totals",
+     "stg_customers",
+     "stg_orders"
+    ],
+    "customer_totals.test": [
+     "customer_totals",
+     "stg_customers",
+     "stg_orders"
+    ],
+    "stg_customers_run": [
+     "customer_totals",
+     "stg_customers",
+     "stg_orders"
+    ],
+    "stg_orders.run": [
+     "customer_totals",
+     "stg_customers",
+     "stg_orders"
+    ],
+    "stg_orders.test": [
+     "customer_totals",
+     "stg_customers",
+     "stg_orders"
+    ]
+   },
+   "cosmos_sinks": {
+    "customer_totals.run": [
+     "customer_totals"
+    ],
+    "customer_totals.test": [
+     "customer_totals"
+    ],
+    "stg_customers_run": [
+     "customer_totals"
+    ],
+    "stg_orders.run": [
+     "customer_totals"
+    ],
+    "stg_orders.test": [
+     "customer_totals"
+    ]
+   },
+   "uses_context": false,
+   "run_timeout_s": null,
+   "partitions": null,
+   "mapping": null,
+   "max_active_runs": null,
+   "max_active_tasks": null,
+   "pools": {},
+   "task_keys": {},
+   "output": "python"
+  },
+  "shop_mixed": {
+   "status": "converted",
+   "assets": 2,
+   "elided": 0,
+   "schedule": "0 0 * * *",
+   "timezone": "UTC",
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "provider_connections": {},
+   "shims": [],
+   "notes": [
+    "Cosmos emitted an Airflow Dataset per model; the dbt assets have their own keys, so a DAG scheduled on those datasets needs an automation condition on the dbt asset keys",
+    "profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)",
+    "Cosmos DbtTaskGroup 'transform' (3 Airflow tasks) became one dbt component, defs/shop_mixed_dbt_transform/defs.yaml: 2 dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. Copy the dbt project from /opt/airflow/dbt_shop to <package>/dbt/dbt_shop and run `dbt deps` there; with `dg dev` the component refreshes its manifest, in a deployment run `dg utils refresh-defs-state` at build time"
+   ],
+   "caveats": [
+    {
+     "task": "transform.customer_totals_run",
+     "kind": "degraded",
+     "reason": "test_behavior=AFTER_ALL runs every model, then one test task. The component runs `dbt build`, which runs each model's tests right after it, so a failing test now stops the models downstream of it, which Airflow did not do under AFTER_ALL"
+    },
+    {
+     "task": "transform.customer_totals_run",
+     "kind": "degraded",
+     "reason": "dbt assets with the same keys are already produced by another DAG or Cosmos group; Dagster allows one producer per asset, so these assets are keyed under `by_shop_mixed_transform/`"
+    }
+   ],
+   "catalog_keys": [],
+   "local_modules": [],
+   "requirements": [
+    "dagster-dbt"
+   ],
+   "external": [
+    "by_shop_mixed_transform/customer_totals"
+   ],
+   "keys": [
+    [
+     "shop_mixed",
+     "extract"
+    ],
+    [
+     "shop_mixed",
+     "publish"
+    ],
+    [
+     "by_shop_mixed_transform",
+     "customer_totals"
+    ],
+    [
+     "by_shop_mixed_transform",
+     "stg_orders"
+    ]
+   ],
+   "cosmos": [
+    {
+     "id": "transform",
+     "dir": "shop_mixed_dbt_transform",
+     "members": [
+      "transform.customer_totals_run",
+      "transform.stg_orders_run",
+      "transform.dbt_shop_test"
+     ],
+     "project": "dbt_shop",
+     "airflow_project_path": "/opt/airflow/dbt_shop",
+     "select": "tag:staging customer_totals",
+     "exclude": "stg_customers",
+     "selector": null,
+     "cli_args": [
+      "build",
+      {
+       "--vars": {
+        "min_amount": 5
+       }
+      }
+     ],
+     "keys": [
+      "by_shop_mixed_transform/customer_totals",
+      "by_shop_mixed_transform/stg_orders"
+     ],
+     "upstream_keys": [
+      "shop_mixed/extract"
+     ],
+     "profile": "shop",
+     "target": "dev",
+     "environment": [
+      "SHOP_DUCKDB_PATH"
+     ],
+     "test_behavior": "after_all",
+     "prefix": "by_shop_mixed_transform",
+     "pools": []
+    }
+   ],
+   "cosmos_steps": [],
+   "cosmos_files": [
+    "defs/shop_mixed_dbt_transform/defs.yaml"
+   ],
+   "cosmos_tasks": {
+    "transform.customer_totals_run": [
+     "by_shop_mixed_transform/customer_totals",
+     "by_shop_mixed_transform/stg_orders"
+    ],
+    "transform.stg_orders_run": [
+     "by_shop_mixed_transform/customer_totals",
+     "by_shop_mixed_transform/stg_orders"
+    ],
+    "transform.dbt_shop_test": [
+     "by_shop_mixed_transform/customer_totals",
+     "by_shop_mixed_transform/stg_orders"
+    ]
+   },
+   "cosmos_sinks": {
+    "transform.customer_totals_run": [
+     "by_shop_mixed_transform/customer_totals"
+    ],
+    "transform.stg_orders_run": [
+     "by_shop_mixed_transform/customer_totals"
+    ],
+    "transform.dbt_shop_test": [
+     "by_shop_mixed_transform/customer_totals"
+    ]
+   },
+   "uses_context": false,
+   "run_timeout_s": null,
+   "partitions": null,
+   "mapping": null,
+   "max_active_runs": null,
+   "max_active_tasks": null,
+   "pools": {},
+   "task_keys": {
+    "extract": "shop_mixed/extract",
+    "publish": "shop_mixed/publish"
+   },
+   "output": "python"
+  },
+  "shop_operators": {
+   "status": "converted",
+   "assets": 4,
+   "elided": 0,
+   "schedule": null,
+   "timezone": null,
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "provider_connections": {},
+   "shims": [],
+   "notes": [
+    "seed: profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)",
+    "run_staging: profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)",
+    "build_totals: profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)",
+    "test_all: profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)"
+   ],
+   "caveats": [
+    {
+     "task": "seed",
+     "kind": "degraded",
+     "reason": "a per-task Cosmos operator runs one dbt command from a `select` string and never records which nodes it ran, so this is one asset without model-level lineage; use a DbtDag or DbtTaskGroup (or build a dbt component by hand) for per-model assets"
+    },
+    {
+     "task": "run_staging",
+     "kind": "degraded",
+     "reason": "a per-task Cosmos operator runs one dbt command from a `select` string and never records which nodes it ran, so this is one asset without model-level lineage; use a DbtDag or DbtTaskGroup (or build a dbt component by hand) for per-model assets"
+    },
+    {
+     "task": "build_totals",
+     "kind": "degraded",
+     "reason": "a per-task Cosmos operator runs one dbt command from a `select` string and never records which nodes it ran, so this is one asset without model-level lineage; use a DbtDag or DbtTaskGroup (or build a dbt component by hand) for per-model assets"
+    },
+    {
+     "task": "test_all",
+     "kind": "degraded",
+     "reason": "a per-task Cosmos operator runs one dbt command from a `select` string and never records which nodes it ran, so this is one asset without model-level lineage; use a DbtDag or DbtTaskGroup (or build a dbt component by hand) for per-model assets"
+    }
+   ],
+   "catalog_keys": [],
+   "local_modules": [],
+   "requirements": [
+    "dagster-dbt"
+   ],
+   "external": [],
+   "keys": [
+    [
+     "shop_operators",
+     "seed"
+    ],
+    [
+     "shop_operators",
+     "run_staging"
+    ],
+    [
+     "shop_operators",
+     "build_totals"
+    ],
+    [
+     "shop_operators",
+     "test_all"
+    ]
+   ],
+   "cosmos": [],
+   "cosmos_steps": [
+    {
+     "task": "seed",
+     "project": "dbt_shop",
+     "project_path": "/opt/airflow/dbt_shop",
+     "kind": "seed",
+     "args": [
+      "seed"
+     ],
+     "profile": "shop",
+     "target": "dev",
+     "profiles_dir": null,
+     "env": [],
+     "mode": "local"
+    },
+    {
+     "task": "run_staging",
+     "project": "dbt_shop",
+     "project_path": "/opt/airflow/dbt_shop",
+     "kind": "run",
+     "args": [
+      "run",
+      "--select",
+      "tag:staging",
+      "--vars",
+      "{\"min_amount\": 1}",
+      "--full-refresh"
+     ],
+     "profile": "shop",
+     "target": "dev",
+     "profiles_dir": null,
+     "env": [],
+     "mode": "local"
+    },
+    {
+     "task": "build_totals",
+     "project": "dbt_shop",
+     "project_path": "/opt/airflow/dbt_shop",
+     "kind": "build",
+     "args": [
+      "build",
+      "--select",
+      "customer_totals",
+      "--exclude",
+      "tag:slow"
+     ],
+     "profile": "shop",
+     "target": "dev",
+     "profiles_dir": null,
+     "env": [],
+     "mode": "local"
+    },
+    {
+     "task": "test_all",
+     "project": "dbt_shop",
+     "project_path": "/opt/airflow/dbt_shop",
+     "kind": "test",
+     "args": [
+      "test"
+     ],
+     "profile": "shop",
+     "target": "dev",
+     "profiles_dir": null,
+     "env": [],
+     "mode": "local"
+    }
+   ],
+   "cosmos_files": [],
+   "cosmos_tasks": {},
+   "cosmos_sinks": {},
+   "uses_context": false,
+   "run_timeout_s": null,
+   "partitions": null,
+   "mapping": null,
+   "max_active_runs": null,
+   "max_active_tasks": null,
+   "pools": {},
+   "task_keys": {
+    "seed": "shop_operators/seed",
+    "run_staging": "shop_operators/run_staging",
+    "build_totals": "shop_operators/build_totals",
+    "test_all": "shop_operators/test_all"
+   },
+   "output": "python"
+  }
+ },
+ "dbt": {
+  "projects": {
+   "dbt_shop": {
+    "airflow_path": "/opt/airflow/dbt_shop",
+    "expected_path": "pkg/dbt/dbt_shop",
+    "used_by": [
+     "shop_dbt_dag:all",
+     "shop_mixed:transform",
+     "shop_operators:seed",
+     "shop_operators:run_staging",
+     "shop_operators:build_totals",
+     "shop_operators:test_all"
+    ],
+    "environment": [
+     "SHOP_DUCKDB_PATH"
+    ]
+   }
+  },
+  "dbt_dir": "dbt"
+ },
+ "operators": {
+  "DbtRunLocalOperator": {
+   "tasks": 6,
+   "mapped_by_converter": false
+  },
+  "DbtTestLocalOperator": {
+   "tasks": 4,
+   "mapped_by_converter": false
+  },
+  "PythonOperator": {
+   "tasks": 1,
+   "mapped_by_converter": true
+  },
+  "BashOperator": {
+   "tasks": 1,
+   "mapped_by_converter": true,
+   "registry": [
+    "shell_command_asset"
+   ],
+   "gap": "no retries, pool, multi-part asset key, automation condition or metadata attributes"
+  },
+  "DbtSeedLocalOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "DbtBuildLocalOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  }
+ }
+}

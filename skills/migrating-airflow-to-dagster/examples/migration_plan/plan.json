@@ -1,0 +1,324 @@
+{
+  "by_path": {
+    "native rewrite": 6,
+    "observe/bridge with airlift": 1
+  },
+  "by_pattern": {
+    "containers_spark": 1,
+    "dbt": 1,
+    "elt_transfer": 1,
+    "ops_notification": 1,
+    "python_etl": 2,
+    "sensor_driven": 1
+  },
+  "dags": [
+    {
+      "bucket": "needs-care",
+      "bucket_reasons": [
+        "needs-care from the manifest (Cosmos DbtDag: dagster-dbt)"
+      ],
+      "classes": {
+        "JUDG": 0,
+        "MECH": 0,
+        "REDESIGN": 0
+      },
+      "conversion": null,
+      "dag_id": "orders_dbt",
+      "effective_bucket": "needs-care",
+      "effort_days": 2.0,
+      "file": "orders_dbt.py",
+      "lineage_value": "high",
+      "path": "native rewrite",
+      "path_why": "needs care (judgment calls, each recorded) but has a mapping",
+      "pattern": "dbt",
+      "pattern_why": "Cosmos DbtDag / DbtTaskGroup / dbt operators",
+      "schedule": "cron",
+      "score": 2,
+      "signals": [
+        "cosmos"
+      ],
+      "size": "M",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 0,
+      "unit": "A006",
+      "wave": 2
+    },
+    {
+      "bucket": "needs-care",
+      "bucket_reasons": [
+        "needs-care from the manifest (tasks: 1 JUDG)"
+      ],
+      "classes": {
+        "JUDG": 1,
+        "MECH": 0,
+        "REDESIGN": 0
+      },
+      "conversion": null,
+      "dag_id": "feature_build",
+      "effective_bucket": "needs-care",
+      "effort_days": 2.5,
+      "file": "feature_build.py",
+      "lineage_value": "medium",
+      "path": "native rewrite",
+      "path_why": "needs care (judgment calls, each recorded) but has a mapping",
+      "pattern": "containers_spark",
+      "pattern_why": "1 of 1 tasks are containers spark operators",
+      "schedule": "cron",
+      "score": 3,
+      "signals": [],
+      "size": "M",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 1,
+      "unit": "A001",
+      "wave": 2
+    },
+    {
+      "bucket": "needs-care",
+      "bucket_reasons": [
+        "needs-care from the manifest (tasks: 1 JUDG, 1 MECH)"
+      ],
+      "classes": {
+        "JUDG": 1,
+        "MECH": 1,
+        "REDESIGN": 0
+      },
+      "conversion": null,
+      "dag_id": "nightly_reports",
+      "effective_bucket": "needs-care",
+      "effort_days": 2.5,
+      "file": "nightly_reports.py",
+      "lineage_value": "medium",
+      "path": "native rewrite",
+      "path_why": "needs care (judgment calls, each recorded) but has a mapping",
+      "pattern": "python_etl",
+      "pattern_why": "2 of 2 tasks are Python or Bash",
+      "schedule": "cron",
+      "score": 4,
+      "signals": [],
+      "size": "M",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 2,
+      "unit": "A003",
+      "wave": 2
+    },
+    {
+      "bucket": "needs-care",
+      "bucket_reasons": [
+        "needs-care from the manifest (tasks: 2 JUDG, 1 MECH)"
+      ],
+      "classes": {
+        "JUDG": 2,
+        "MECH": 1,
+        "REDESIGN": 0
+      },
+      "conversion": null,
+      "dag_id": "partner_drop",
+      "effective_bucket": "needs-care",
+      "effort_days": 3.0,
+      "file": "partner_drop.py",
+      "lineage_value": "medium",
+      "path": "native rewrite",
+      "path_why": "needs care (judgment calls, each recorded) but has a mapping",
+      "pattern": "sensor_driven",
+      "pattern_why": "2 of 3 tasks are sensor driven operators",
+      "schedule": "cron",
+      "score": 7,
+      "signals": [],
+      "size": "M",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 3,
+      "unit": "A007",
+      "wave": 2
+    },
+    {
+      "bucket": "needs-care",
+      "bucket_reasons": [
+        "needs-care from the manifest (Airflow Variables/Connections: map to env vars, secrets and resources (Phase 5); tasks: 2 JUDG)"
+      ],
+      "classes": {
+        "JUDG": 2,
+        "MECH": 0,
+        "REDESIGN": 0
+      },
+      "conversion": null,
+      "dag_id": "s3_to_warehouse",
+      "effective_bucket": "needs-care",
+      "effort_days": 3.0,
+      "file": "s3_to_warehouse.py",
+      "lineage_value": "high",
+      "path": "native rewrite",
+      "path_why": "needs care (judgment calls, each recorded) but has a mapping",
+      "pattern": "elt_transfer",
+      "pattern_why": "2 of 2 tasks are elt transfer operators",
+      "schedule": "cron",
+      "score": 8,
+      "signals": [
+        "connection_id"
+      ],
+      "size": "M",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 2,
+      "unit": "A016",
+      "wave": 2
+    },
+    {
+      "bucket": "needs-care",
+      "bucket_reasons": [
+        "needs-care from the manifest (tasks: 1 JUDG, 1 MECH)"
+      ],
+      "classes": {
+        "JUDG": 1,
+        "MECH": 1,
+        "REDESIGN": 0
+      },
+      "conversion": null,
+      "dag_id": "slack_digest",
+      "effective_bucket": "needs-care",
+      "effort_days": 2.5,
+      "file": "slack_digest.py",
+      "lineage_value": "low",
+      "path": "native rewrite",
+      "path_why": "needs care (judgment calls, each recorded) but has a mapping",
+      "pattern": "ops_notification",
+      "pattern_why": "2 of 2 tasks are ops notification operators",
+      "schedule": "cron",
+      "score": 4,
+      "signals": [],
+      "size": "M",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 2,
+      "unit": "A019",
+      "wave": 3
+    },
+    {
+      "bucket": "redesign",
+      "bucket_reasons": [
+        "redesign from the manifest (tasks: 1 JUDG, 2 MECH, 1 REDESIGN)"
+      ],
+      "classes": {
+        "JUDG": 1,
+        "MECH": 2,
+        "REDESIGN": 1
+      },
+      "conversion": null,
+      "dag_id": "route_by_region",
+      "effective_bucket": "redesign",
+      "effort_days": 6.5,
+      "file": "route_by_region.py",
+      "lineage_value": "medium",
+      "path": "observe/bridge with airlift",
+      "path_why": "needs a design decision: observe it (and proxy it when ready) while the redesign is done",
+      "pattern": "python_etl",
+      "pattern_why": "3 of 4 tasks are Python or Bash",
+      "schedule": "cron",
+      "score": 15,
+      "signals": [
+        "trigger_rule"
+      ],
+      "size": "XL",
+      "status": "pending",
+      "stubs": 0,
+      "tasks": 4,
+      "unit": "A011",
+      "wave": 4
+    }
+  ],
+  "heuristic": true,
+  "inputs": {
+    "ir": false,
+    "manifest": true,
+    "report": false
+  },
+  "pilot": [
+    {
+      "covers": "a plain scheduled DAG",
+      "dag_id": "orders_dbt",
+      "wave": 2
+    },
+    {
+      "covers": "a sensor or dataset trigger",
+      "dag_id": "partner_drop",
+      "wave": 2
+    },
+    {
+      "covers": "next lowest complexity",
+      "dag_id": "feature_build",
+      "wave": 2
+    }
+  ],
+  "rules": {
+    "effort_days": {
+      "base": {
+        "mechanical": 0.5,
+        "needs-care": 2.0,
+        "redesign": 5.0
+      },
+      "per_stub": 0.5,
+      "per_task": {
+        "JUDG": 0.4,
+        "MECH": 0.1,
+        "REDESIGN": 1.0
+      },
+      "reviewed_only_factor": 0.5
+    },
+    "pilot_size": 3,
+    "signal_points": 2,
+    "size_days": [
+      [
+        0.5,
+        "XS"
+      ],
+      [
+        1.5,
+        "S"
+      ],
+      [
+        3.0,
+        "M"
+      ],
+      [
+        6.0,
+        "L"
+      ]
+    ],
+    "task_points": {
+      "JUDG": 3,
+      "MECH": 1,
+      "REDESIGN": 8
+    }
+  },
+  "total_effort_days": 22.0,
+  "waves": [
+    {
+      "dags": [
+        "orders_dbt",
+        "feature_build",
+        "nightly_reports",
+        "partner_drop",
+        "s3_to_warehouse"
+      ],
+      "effort_days": 13.0,
+      "wave": 2
+    },
+    {
+      "dags": [
+        "slack_digest"
+      ],
+      "effort_days": 2.5,
+      "wave": 3
+    },
+    {
+      "dags": [
+        "route_by_region"
+      ],
+      "effort_days": 6.5,
+      "wave": 4
+    }
+  ]
+}
