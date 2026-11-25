@@ -96,6 +96,28 @@ runmyjobs-to-dagster report migration_manifest.json --out MIGRATION.md
 
 The report states: the go/no-go outcome, every disposition, schedule equivalence (source frame vs. cron and time zone), what was deferred and why, and the behaviors that changed.
 
+## Two routes: convert (default) and rewrite
+
+| | `convert` (default) | `rewrite` (opt-in, per unit) |
+|---|---|---|
+| What it does | transforms the extracted model one object at a time, deterministically | analyzes the unit into a facts-only spec, generates a prompt, you write the Dagster project from scratch (with `dagster-expert` and `dagster-community-components`), gates accept or reject it |
+| Use it for | everything it translates (MECH units), and as the first pass over the whole estate | units the converter **stubs or degrades** (RedwoodScript, a "last day of month" frame, a precondition you can now enforce), redesign-heavy chains, pilots where idiomatic output matters |
+| Cost | none per unit (no model) | model effort per unit: read a spec and prompt (about 4,000 to 6,000 tokens of input for the small units measured, an estimate; output and iterations were not measured), search the registry, write, iterate on the gates; about 30 s per `accept` run. Details and what was not measured: `reference/rewrite-route.md` |
+| Fallback | | the converter's output stays the reference draft and the fallback; a rewrite that fails a gate stays deferred |
+
+Both routes share the manifest and the completeness rule: `route: converter | rewrite` is recorded per unit, with the rewrite's gate result. Nothing is complete without its gates. If the skill's tiers (inventory, convert, validate) are in your head: they are the same steps for both routes; only Phase 2 differs.
+
+```
+runmyjobs-to-dagster convert model.yaml --out-dir out --pkg my_migrated --output components   # the default route, and the reference draft
+runmyjobs-to-dagster analyze model.yaml --out-dir rewrite --manifest out/migration_manifest.json   # <unit>.spec.md/.json + ESTATE.md, deterministic
+runmyjobs-to-dagster prompt rewrite --project my_rewrite --package my_rewrite --converter-dir out   # <unit>.prompt.md + ESTATE.prompt.md
+# ... load dagster-expert and dagster-community-components, follow rewrite/<unit>.prompt.md, write src/my_rewrite/defs/<unit>/ ...
+runmyjobs-to-dagster accept rewrite/<unit>.spec.json --project my_rewrite --manifest out/migration_manifest.json   # the gates; exit 0 only when all pass
+runmyjobs-to-dagster equivalence rewrite/<unit>.spec.json --converter-project out --rewrite-project my_rewrite   # behavior comparison of the two routes
+```
+
+The spec holds only facts (inferred statements are marked *inferred*): every call with its type, resolved parameters and the command or SQL verbatim, parameters and defaults, the order graph, schedules (with the cron the converter derives and the elements it cannot), queues and what is shared, preconditions, status handlers, wait events, notification targets, connection names (never values), time zones, what must be preserved, what differences are acceptable, and what the converter does with the unit today. `ESTATE.md` relates the units (chains calling chains, shared queues and definitions, events) so asset boundaries can be chosen across units. The gates are in `reference/rewrite-route.md`; the loud-stub rule applies: a rewrite that still contains an `RMJ-CAVEAT` stub fails the gate and the unit stays deferred.
+
 ## Scripts and commands
 
 | Command | Purpose |
@@ -105,5 +127,9 @@ The report states: the go/no-go outcome, every disposition, schedule equivalence
 | `validate [--advance] [--execute]` | Gates 1-3 (and the dry-run gate 4) and manifest comparison |
 | `status summary / advance / defer / reopen` | Per-unit state; summary is the completeness gate |
 | `report` | Render MIGRATION.md from the manifest |
+| `analyze` | Rewrite route: spec per unit and the estate view (read-only) |
+| `prompt` | Rewrite route: the prompt per unit and for the estate |
+| `accept` | Rewrite route: the acceptance gates; records `route: rewrite` and the gate result in the manifest |
+| `equivalence` | Compare the converter's and the rewrite's behavior per unit |
 
 See `reference/component-wishlist.md` for the components the converter would use if they existed, and `reference/mapping.md` for the object mapping and its verification status, and `reference/dagster-targets.md` for what each Dagster target (pools, schedules, sensors, run-status sensors, declarative automation, freshness policies) does and how to configure it.

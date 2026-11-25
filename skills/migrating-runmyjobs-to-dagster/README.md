@@ -13,6 +13,27 @@ uv run runmyjobs-to-dagster fetch-dbt-jobs <account id> --out dbt_jobs.json   # 
 uv run runmyjobs-to-dagster validate out --execute   # gates 1-3, plus a dry run of every asset (commands and SQL rendered, not executed)
 ```
 
+## Two routes
+
+`convert` (above) is the default and stays as it is. For units it stubs or degrades, redesign-heavy chains and pilots there is a second, opt-in route: analyze each unit into a facts-only spec, generate a prompt, have Claude (with the `dagster-expert` and `dagster-community-components` skills) write the Dagster project from scratch, and accept it only if the gates pass. The converter's output stays the reference draft and the fallback.
+
+```bash
+uv run runmyjobs-to-dagster analyze my_model.yaml --out-dir rewrite --manifest out/migration_manifest.json   # <unit>.spec.md/.json, ESTATE.md, estate.json
+uv run runmyjobs-to-dagster prompt rewrite --project my_rewrite --package my_rewrite --converter-dir out     # <unit>.prompt.md, ESTATE.prompt.md
+# Claude follows rewrite/<unit>.prompt.md and writes src/my_rewrite/defs/<unit>/
+uv run runmyjobs-to-dagster accept rewrite/<unit>.spec.json --project my_rewrite --manifest out/migration_manifest.json
+uv run runmyjobs-to-dagster equivalence rewrite/<unit>.spec.json --converter-project out --rewrite-project my_rewrite
+```
+
+`accept` needs an environment with dagster, `dg` and `dagster-community-components` (`--python` points at it; the dev extra installs them). Gates: definitions load (`dg check defs`), matches the spec (order, schedules, pools, retries), commands preserved, every RunMyJobs object accounted for in the header docstring, a generated pytest (materializes what has no external system), structural checks where derivable, no loud stub left, no secrets, no invented APIs. Results and measured evidence: `reference/rewrite-route.md`; worked before/after: `examples/rewrite/`.
+
+## Layout
+
+- `src/runmyjobs_to_dagster/`: the converter (`convert.py`, `extract_*.py`, `validate.py`, `manifest.py`, `cli.py`) and `rewrite/` (`spec.py` analyze, `prompt.py`, `accept.py` gates, `equivalence.py`, `introspect.py`)
+- `reference/`: `mapping.md`, `dagster-targets.md`, `component-wishlist.md`, `rewrite-route.md`
+- `examples/rewrite/`: specs, prompts, gate results, converter output and rewritten project per fixture set
+- `tests/`: `uv run --extra dev pytest` (needs `dg` in the environment for the `accept` tests, which take about 90 s). 69 tests (59 existing, 10 for the rewrite route).
+
 ## Mapping
 
 | RunMyJobs | Dagster |

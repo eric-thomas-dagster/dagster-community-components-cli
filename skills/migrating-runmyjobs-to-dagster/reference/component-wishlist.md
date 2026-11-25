@@ -86,6 +86,8 @@ The three asks below were delivered in 0.10.176 and the converter uses them (Pla
 
 **Fixed in 0.10.177:** `SapRFCResourceComponent` `client` ("100") and `sysnr` ("00") used to be turned into integers by Dagster's YAML resolver, so the component's own example did not load. Checked: they load from YAML now, and the converter writes the resource as YAML. The same coercion still affects any other string-typed field the converter fills (`env_vars`, `asset_tags`), which it works around.
 
+**Update, registry 0.10.188 (re-run on 2026-11-25): the XBP gaps below are fixed.** The component now calls only functions in SAP's XBP documentation (`tests/test_sap_xbp.py` was an xfail and a "fails at logon" test; it now asserts a job runs to completion against the strict fake and that every call is documented). The table is kept as the record of what 0.10.177 did; the BW `RSPC_API_*` functions remain unchecked.
+
 **For the components session: `SapJobTriggerAssetComponent` (0.10.177) against SAP's XBP documentation.** Checked against SAP's XBP 6.10 interface description (the only XBP spec found online; XBP 2.0 has been stable since, but confirm on a current system). `tests/xbp_fake.py` is a strict fake written from it, and `tests/test_sap_xbp.py` runs the converter's generated component against it. The component fails at the first call today:
 
 | Component calls | Documentation says |
@@ -101,3 +103,17 @@ The three asks below were delivered in 0.10.176 and the converter uses them (Pla
 The BW process chain functions (`RSPC_API_*`) are not in any SAP-published interface and are still unchecked.
 
 Still without a component: time-window preconditions need the window definition (the converter needs it, not the component); event waits need to know where the event is raised (`EventAutomationComponent` or a sensor).
+
+
+## Hit by the rewrite route (checked against registry 0.10.188, 2026-11-25)
+
+The rewrite route (`reference/rewrite-route.md`) writes units from scratch with registry components first. These are the places it fell back to hand-written Python, and what is missing. Everything here came from the fixtures' units; the sample is small, so this list is short, not complete.
+
+| Missing in 0.10.188 | Where it was hit | Today's workaround |
+|---|---|---|
+| A "last day of month" (or business-calendar) option on `CronScheduleComponent` (fields checked: `cron_expression`, `cadence`, `end_date`, partition fields; no calendar field; `dagster-component search` for "last day of month" and "business calendar" returns nothing) | `PURGE_TEMP`: a RunMyJobs submit-frame element "last day of month at 23:00" | a hand-written `@dg.schedule` on `0 23 28-31 * *` that skips unless tomorrow is the 1st |
+| A log-only or run-a-command action on `EventAutomationComponent` (27 actions checked: Slack, email, webhook, launch_job, and so on; none runs a command or just logs) | `NIGHTLY_SALES_LOAD/notify`: a step whose whole job is `echo notifying` (no recipient to email) | a hand-written `run_status_sensor` that logs; a real recipient would use the `email` action |
+| A shared `run_window` for several assets (it is a field on each shell and SQL component, and on the task-chain component for a whole chain) | `FIN_NIGHTLY` rewritten as three assets: the window is repeated per asset | repeat the string; the converter's one-asset task chain carries it once |
+| A way to declare a pool's limit next to the assets (the limit is instance configuration; `EventAutomationComponent`'s `set_concurrency_limit` action sets it at run time) | every unit with a queue | the header lists `dagster instance concurrency set <pool> <n>` |
+
+Not a component gap but worth knowing: a component asset with a `run_window` skips outside the window, so the gate's materialization of such a unit at an arbitrary time proves the unit loads and exits cleanly, not that the command ran. The gate says so in its detail line.

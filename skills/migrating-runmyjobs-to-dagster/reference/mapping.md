@@ -26,6 +26,22 @@ Class: MECH = converter output expected correct; JUDG = confirm or fix; REDESIGN
 | Named calendars, nested time windows | schedule filter | not built | |
 | Process outputs (tables, files) | `metadata.produces` | not built | Real lineage needs external assets and table-level deps. |
 
+## What the rewrite route does with the constructs the converter stubs or degrades
+
+The second route (`SKILL.md`, "Two routes") writes these by hand from the spec. Status says what was actually run (the worked units are in `examples/rewrite/`); everything else is not run.
+
+| Construct (converter today) | Rewrite route | Status |
+|---|---|---|
+| RedwoodScript process (loud stub) | ported to a Python asset; the header says `reimplemented` and names what was dropped (a RunMyJobs API lookup such as `getJobByName` has no Dagster counterpart). The stub gate fails while any `RMJ-CAVEAT` remains | run on a synthetic unit (`sample`, `CALC_MARGIN`): ported, gates pass. The source is synthetic, so this says nothing about real RedwoodScript volume |
+| "Last day of month" submit-frame element (dropped, degraded) | a `@dg.schedule` function on `0 23 28-31 * *` that only requests a run when tomorrow is the 1st | run on `PURGE_TEMP` (synthetic): gate checks the schedule exists with an explicit time zone; the day logic itself is not tested by the gates |
+| Step or call precondition with a time window not in the export (not enforced) | stays unenforced and says so (`dropped: ... needs the hours`); with the hours it would be a `run_window` | run: both routes leave it unenforced; the rewrite cannot know the window either |
+| Step status handler: restart | retry policy on the asset that holds the call (the gate checks the number) | run |
+| Notification step that only echoes (generated shell step) | a run-status sensor that logs (a real email target would use `EmailSendAssetComponent` or an `EventAutomationComponent` email action) | run on `sample` (`notify`); not materialized by the gate (a sensor) |
+| Chain with parallel calls (one asset per call) or a linear chain (one task-chain asset) | assets with the same order, folded or split as the spec's data products suggest; the gate checks every earlier-to-later pair | run |
+| Queue shared by several chains | one pool, one limit; the manifest queue unit completes only when every unit using it has passed | run on `linear_chain` (two chains, one queue) |
+| SAP call with no job name or process chain in the export | cannot be ported: the rewrite stays a loud stub and fails the gate | run on `sample` (`LEGACY_SAP_EXTRACT`): deferred |
+| Chains that call chains (inlined by the converter) | an estate decision (one pipeline, or parent over separate sub-pipelines), made from `ESTATE.md` | the estate view is produced and tested; only unit-level rewrites were written, the estate prompt was not followed |
+
 ## Confirmed from public documentation
 
 (via search summaries of documentation.runmyjobs.cloud and docs.cs.redwood.com; the sites block automated fetches)
