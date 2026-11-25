@@ -99,7 +99,7 @@ Migrate two or three representative DAGs end to end through the gates before fan
 
 ### Phase 4: Migrate, domain by domain
 
-**Convert the mechanical units by code, first.** Run `airflow_ir.py` then `convert_ir.py` (see `reference/conversion.md`): every DAG built from Python, Bash, S3, Snowflake and EmptyOperator tasks, cron or asset-triggered, converts without hand work, and each unconverted DAG comes with the reason and the integration or component that fits. Run the parity harness on the converted DAGs (`examples/runtime_conversion/`): loading proves nothing about behavior. Then hand-convert what the report defers, using the other references.
+**Convert the mechanical units by code, first.** Run `airflow_ir.py` then `convert_ir.py` (see `reference/conversion.md`): every DAG built from Python, Bash, S3, Snowflake, EmptyOperator and the provider operators listed in `reference/conversion.md` (HTTP, SQL, Kubernetes pods, email, Slack webhook, dbt Cloud, Airbyte, Fivetran, Databricks) tasks, cron or asset-triggered, converts without hand work (the provider mappings that were not run against a live service carry an UNVERIFIED caveat: confirm them in the side-by-side run), and each unconverted DAG comes with the reason and the integration or component that fits. Run the parity harness on the converted DAGs (`examples/runtime_conversion/`): loading proves nothing about behavior. Then hand-convert what the report defers, using the other references.
 
 
 Per unit: `pending` → translate → `dg check defs` → validate → `complete`, or `deferred` with a reason. Use `dagster-expert` for project layout (`dg scaffold defs`), components and automation. Prefer registry components for provider operators.

@@ -2,7 +2,7 @@
 
 Migrate Apache Airflow DAGs to Dagster. The skill (`SKILL.md`) is the method: pick a tier (observe, bridge or native), inventory the Airflow project, convert what has a mechanical mapping by code, hand-convert the rest, then check behavior against Airflow before cutover. The scripts in `scripts/` do the deterministic parts: a static scanner, a runtime extractor, a converter that writes Dagster code, a manifest with a completeness gate, and parity harnesses.
 
-**Status: scripts, not a packaged CLI.** There is no `pyproject.toml` and no installed command; each step is a Python script run from `scripts/`. Conversion covers Python, Bash, S3 and Snowflake tasks, plus the scheduling, branching, mapping and partition constructs listed below. Provider operators with no conversion become loud stubs. Nothing here has run against a live Airflow deployment, real S3 or real Snowflake.
+**Status: scripts, not a packaged CLI.** There is no `pyproject.toml` and no installed command; each step is a Python script run from `scripts/`. Conversion covers Python, Bash, S3 and Snowflake tasks, the provider operators in the table below (HTTP, SQL, Kubernetes pods, email, Slack webhook, dbt Cloud, Airbyte, Fivetran, Databricks), plus the scheduling, branching, mapping and partition constructs. Other provider operators become loud stubs. Nothing here has run against a live Airflow deployment, real S3, Snowflake, Kubernetes, dbt Cloud, Airbyte, Fivetran or Databricks; each provider mapping says how far it was checked in [reference/conversion.md](reference/conversion.md).
 
 ## Quick start
 
@@ -40,6 +40,12 @@ Details and the full list are in [reference/conversion.md](reference/conversion.
 | Value passed between tasks | Asset parameter (the IO manager carries it) |
 | S3 list, copy, delete (explicit keys), upload operators; `S3Hook` in callables | Assets calling boto through the `aws_*` resource; a mirrored `S3Hook` subset in `runtime.py` |
 | Snowflake COPY INTO, `SnowflakeOperator`, `SQLExecuteQueryOperator` on a Snowflake connection | Assets running the SQL through the Snowflake resource |
+| `HttpOperator`, `SimpleHttpOperator`, `HttpSensor` | `requests` step (body is the value); sensor as a polling step. Connection from `<CONN>_BASE_URL` etc. Run against a local HTTP server |
+| `SQLExecuteQueryOperator` (not Snowflake), `PostgresOperator`, `MySqlOperator`, `MsSqlOperator`, `SqliteOperator` | SQLAlchemy step (`<CONN>_URL`); `sql_asset` with `--output components`. Run against SQLite |
+| `KubernetesPodOperator` | `dagster-k8s` `execute_k8s_job`. Job built by the real library, cluster calls faked; **not run on a cluster** |
+| `EmailOperator`, `SlackWebhookOperator` | `smtplib` and `requests` steps. Run against a local SMTP and HTTP server |
+| `DbtCloudRunJobOperator`, `AirbyteTriggerSyncOperator`, `FivetranOperator`, `DatabricksRunNowOperator`, `DatabricksSubmitRunOperator` | `dagster-dbt`, `dagster-airbyte`, `dagster-fivetran`, `dagster-databricks` resources in `resources.py`. Recording fakes and signature checks only; **not run against the services** (a degraded caveat says so) |
+| `BashSensor` (with `retry_exit_code`), `TimeSensor` | `wait_until_asset` with `--output components` |
 | Outlets and inlets | Asset keys and dependencies |
 | Schedule: none, `@once`, cron | No schedule or `ScheduleDefinition` with the timezone |
 | Schedule: one asset, any of several, all of several | `AutomationCondition.eager()`; all-of uses a per-asset `newly_updated().since_last_handled()` condition |
@@ -51,7 +57,7 @@ Details and the full list are in [reference/conversion.md](reference/conversion.
 | `CronPartitionTimetable`, `PartitionedAssetTimetable` with identity and start-of-period mappers | Partitioned assets and per-partition automation; see [reference/partitions.md](reference/partitions.md) |
 | dag-factory, Blueprint and loop-generated DAGs | Converted from the runtime IR like any DAG; factory handling in [reference/factories.md](reference/factories.md) |
 
-Generated output per project: `defs/<dag>.py`, `runtime.py` (shims copied into the project), `resources.py`, `sources.py` (assets a DAG reads but no converted DAG produces), `converted_requirements.txt`, `concurrency_limits.yaml` (limits the deployment must apply), and the `report.json`. With `--output components`, DAGs whose tasks all have a registry component form are written as `defs/<dag>/defs.yaml` (Bash, Python callable, S3 operators, cron schedule) and the rest stay Python.
+Generated output per project: `defs/<dag>.py`, `runtime.py` (shims copied into the project), `resources.py`, `sources.py` (assets a DAG reads but no converted DAG produces), `converted_requirements.txt`, `concurrency_limits.yaml` (limits the deployment must apply), and the `report.json`. With `--output components`, DAGs whose tasks all have a registry component form are written as `defs/<dag>/defs.yaml` (Bash, Python callable, S3 operators, SQL, `BashSensor`/`TimeSensor`, cron schedule) and the rest stay Python.
 
 Not converted by code: Variables, `default_args` beyond retries, alerts and callbacks, and deployment. Those are the manual "platform layer" step in `SKILL.md`.
 
@@ -74,7 +80,7 @@ Measured results are recorded in [reference/conversion.md](reference/conversion.
 ## Layout
 
 - `SKILL.md`: the workflow (phases 0 to 7), hard rules, the tier choice.
-- `scripts/`: `inventory.py`, `airflow_ir.py`, `airflow_truth.py`, `reconcile.py`, `convert_ir.py`, `apply_conversion.py`, `validate_defs.py`, `status.py`, `parity_incremental.py`, `parity/` (both sides and the comparer), `tests/`.
+- `scripts/`: `inventory.py`, `airflow_ir.py`, `provider_ops.py` (provider operator mappings), `airflow_truth.py`, `reconcile.py`, `convert_ir.py`, `apply_conversion.py`, `validate_defs.py`, `status.py`, `parity_incremental.py`, `parity/` (both sides and the comparer), `tests/`.
 - `reference/`: `tiers.md`, `mapping.md`, `conversion.md`, `parity.md`, `factories.md`, `dynamic-mapping.md`, `partitions.md`, `compatibility.md`, `component-wishlist.md`.
 - `examples/`: `three_dags/` (a completed trial with equivalence rows), `s3_to_snowflake_factories/`, `dagfactory_family/`, `runtime_conversion/` (converted repo and parity harness), `airflow_release_matrix/` (18 one-construct DAG files run across Airflow releases).
 
@@ -83,16 +89,18 @@ Measured results are recorded in [reference/conversion.md](reference/conversion.
 ```bash
 unset VIRTUAL_ENV
 uv run --no-project --with pytest --with pyyaml --with dagster --with dagster-aws \
-  --with dagster-snowflake --with jinja2 --with croniter --with boto3 \
+  --with dagster-snowflake --with jinja2 --with croniter --with boto3 --with requests \
+  --with sqlalchemy --with dagster-k8s --with dagster-dbt --with dagster-airbyte \
+  --with dagster-databricks --with dagster-fivetran --with dagster-community-components \
   python -m pytest -q scripts/tests
 ```
 
-152 tests (`test_convert_ir.py`, `test_inventory.py`): 150 pass and 2 are skipped when `dagster_community_components` is not installed. Without `dagster` and `jinja2` installed, many tests skip or fail on import, so install them. The tests do not need Airflow; the extractor (`airflow_ir.py`) and the parity harness do.
+180 tests (`test_convert_ir.py`, `test_inventory.py`, `test_provider_ops.py`) pass with the packages above installed; tests that need a package skip when it is missing (before the provider operators there were 152, 150 passing and 2 skipped). Without `dagster` and `jinja2` installed, many tests skip or fail on import, so install them. The tests do not need Airflow; the extractor (`airflow_ir.py`) and the parity harness do.
 
 ## Limitations
 
 - `airflow_ir.py` and `airflow_truth.py` execute DAG code. Run them only on trusted code in a sandbox.
-- Only Python, Bash, S3 and Snowflake operators convert by default. Other provider operators (for example `KubernetesPodOperator` and HTTP operators) have no conversion yet and become stubs (or defer the DAG with `--caveats off`); the report names the integration or component that fits.
+- Operators convert if they are Python, Bash, S3, Snowflake or in the provider table above. Others (for example `SSHOperator`, `DockerOperator`, `BigQueryInsertJobOperator`, `SlackAPIPostOperator`) become stubs (or defer the DAG with `--caveats off`); the report names the integration or component that fits, and [reference/component-wishlist.md](reference/component-wishlist.md) lists what is missing. A provider operator with an argument the mapping cannot carry (a `response_check` function, `full_pod_spec`, ...) is a stub too, with the reason. Mapped (`.expand`) provider operators other than S3 and Snowflake are stubs.
 - A DAG is converted whole or stubbed per task; the converter does not partially convert a graph silently.
 - Not enforced in Dagster (reported as degraded or deferred): `depends_on_past`, `wait_for_downstream`, `max_active_tis_per_dagrun`, `pool_slots` above 1, `execution_timeout` on a Python task, `fail_stop`, `max_consecutive_failed_dag_runs`, `render_template_as_native_obj`.
 - `catchup=True` defers the DAG unless `--catchup ignore`, which runs from now on and does not replay history.

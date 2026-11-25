@@ -23,6 +23,7 @@ Loops, factories, dag-factory YAML, Blueprints and dynamic DAG generation only e
 | values returned from one task and passed to another | asset parameters (the IO manager carries them) |
 | `S3ListOperator`, `S3CopyObjectOperator`, `S3DeleteObjectsOperator` (explicit keys), `LocalFilesystemToS3Operator` | assets calling boto through the `aws_*` resource, mirroring what the hook calls |
 | `CopyFromExternalStageToSnowflakeOperator`, `SnowflakeOperator`, `SQLExecuteQueryOperator` on a Snowflake connection | assets running the same SQL through the Snowflake resource; operator-level warehouse/database/role/schema become `USE` statements |
+| `HttpOperator`, `HttpSensor`, SQL on other databases, `KubernetesPodOperator`, `EmailOperator`, `SlackWebhookOperator`, dbt Cloud, Airbyte, Fivetran and Databricks operators | steps that call `requests`, SQLAlchemy, `smtplib` or the Dagster integration library; see "Provider operators" below |
 | one task with one outlet | the asset with that key (`s3://b/x` becomes `s3/b/x`); inlets are dependencies |
 | tasks in a chain that name the same outlet | the last one produces the asset; the earlier ones are plain assets (note recorded) |
 | schedule: none, `@once`, cron (trigger or data-interval timetable) | no schedule or `ScheduleDefinition` with the timezone |
@@ -38,6 +39,40 @@ Connections become resources under the same key (`resources.py`); third-party im
 - **`TriggerDagRunOperator` without `wait_for_completion`:** the run is created and executed in the background without waiting (the same split the registry's `trigger_job_asset` `wait: false` uses).
 - **Task `sla`:** the step records an `sla_breach` observation on its asset when it finishes later than the SLA after the scheduled tick (`dagster/scheduled_execution_time`; the run start for a manual run). The task is not stopped, as in Airflow.
 - **`.map(f)` that raises `AirflowSkipException`:** that item is left out, as Airflow skips that mapped instance.
+
+## Provider operators (HTTP, SQL, Kubernetes, email, Slack, dbt Cloud, Airbyte, Fivetran, Databricks)
+
+These used to become stubs. They are now translated by `scripts/provider_ops.py` into a step that calls an official Dagster integration library or plain Python. Order of preference per operator: a registry component or integration component expressed as YAML (the `--output components` forms below), then an integration library call, then inline Python, then a loud stub. A mapped (`.expand`) provider operator, and an operator argument the mapping cannot carry, make a loud stub with the reason named; they are never ignored. The argument checks use the operator's real constructor arguments (the IR also records which arguments hold a function, such as `response_check`, so those are refused rather than dropped; `airflow_ir.py` now writes them under `callable_args`).
+
+| Airflow operator | Becomes | Environment the step reads | Refused (stub) | Stated difference (degraded caveat) |
+|---|---|---|---|---|
+| `HttpOperator`, `SimpleHttpOperator` | `requests`, following `HttpHook.run`: GET sends `data` as query parameters, other methods as the body, the response text is the value, an HTTP error status fails the step unless `check_response` is false | `<CONN>_BASE_URL`, optional `<CONN>_AUTH_HEADER`, `<CONN>_LOGIN` and `<CONN>_PASSWORD`, `<CONN>_HEADERS` | `response_check`, `response_filter`, `pagination_function`, `auth_type`, `request_kwargs`, `retry_args`, `extra_options` other than `timeout`, `verify`, `check_response`, `allow_redirects` | `deferrable=True` is ignored; `tcp_keep_alive*` are not applied |
+| `HttpSensor` | A polling step (the same loop as the other sensors): a request, true once it succeeds; `404` or any `response_error_codes_allowlist` code means not yet, any other error fails | as above | `response_check` and the options above | `deferrable=True` is ignored |
+| `SQLExecuteQueryOperator` on a connection that is not Snowflake, `PostgresOperator`, `MySqlOperator`, `MsSqlOperator`, `SqliteOperator` | SQLAlchemy `exec_driver_sql` over one connection: every statement gets `parameters`, one transaction committed at the end (or each statement committed with `autocommit=True`), the rows of the last statement that returned any are the value (as lists, which is what Airflow's XCom holds) | `<CONN>_URL`, a SQLAlchemy URL (the driver package is yours to install) | `handler` other than the default, `output_processor`, `database`, `hook_params`, `return_last=False` with several statements, `parameters` that are not a dict or list | none beyond the connection (the URL and driver replace the connection type) |
+| `KubernetesPodOperator` | `dagster-k8s` `execute_k8s_job`: the image as a Kubernetes Job, logs streamed into the run log, a failed Job fails the step | none (kubeconfig, or in-cluster config with `in_cluster=True`) | `secrets`, `ports`, `init_containers`, `full_pod_spec`, `pod_template_file`/`pod_template_dict`, `skip_on_exit_code`, `do_xcom_push=True`, pod and container security contexts, host and DNS settings, env vars from `value_from`, unreadable Kubernetes objects | UNVERIFIED against a live cluster (below); a succeeded Job is not deleted; `on_finish_action`, `get_logs=False`, `kubernetes_conn_id`, `startup_timeout_seconds`, `active_deadline_seconds` are not applied as Airflow applies them |
+| `EmailOperator` | `smtplib`, following `airflow.utils.email.send_email_smtp`: one HTML part, files attached, Bcc kept out of the headers | `<CONN>_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_STARTTLS`, `_SSL`, `_FROM` | `html_content`, `files` or `custom_headers` that are not plain values | none beyond the connection |
+| `SlackWebhookOperator` | `requests.post` of the JSON payload (text, channel, username, icons, blocks, attachments) to the webhook URL; any status but 200 fails | `<CONN>_WEBHOOK_URL` | `proxy` | none |
+| `DbtCloudRunJobOperator` | `dagster-dbt` `DbtCloudClientResource`, created with `disable_schedule_on_trigger=False` (Dagster's default would switch off the job's schedule, which the operator never does); `run_job` with `cause`, `steps_override`, `schema_override` and `additional_run_config`, then `poll_run` unless `wait_for_termination` is false; the run id is the value | `<CONN>_API_TOKEN`, `<CONN>_ACCOUNT_ID` (resource in `resources.py`) | `reuse_existing_run`, `retry_from_failure` | UNVERIFIED against a live account; `account_id` comes from the environment, not the argument |
+| `AirbyteTriggerSyncOperator` | `dagster-airbyte` `AirbyteResource.sync_and_poll` (or `start_sync` when `asynchronous`); the job id is the value | `<CONN>_HOST`, `_PORT`, `_USER`, `_PASSWORD` | none | UNVERIFIED against a live server |
+| `FivetranOperator` (`airflow-provider-fivetran`) | `dagster-fivetran` `FivetranResource.sync_and_poll` (the resource sets the connector to manual scheduling, as the operator does) | `<CONN>_API_KEY`, `<CONN>_API_SECRET` | `schedule_type` other than `manual` | UNVERIFIED against a live account |
+| `DatabricksRunNowOperator`, `DatabricksSubmitRunOperator` | `dagster-databricks` client: the operator's JSON body POSTed to `/api/2.1/jobs/run-now` or `/runs/submit`, then `wait_for_run_to_complete` unless `wait_for_termination` is false; the run id is the value | `<CONN>_HOST`, `<CONN>_TOKEN` (resource in `resources.py`) | `job_name` without a `job_id`, `repair_run`, `cancel_previous_runs` | UNVERIFIED against a live workspace |
+
+`<CONN>` is the Airflow connection id upper-cased with non-alphanumeric characters as `_` (`partner_api` becomes `PARTNER_API`). No connection value is ever copied; `report.json` lists each connection with the variable names it needs under `connections`. The packages each mapping needs (`requests`, `sqlalchemy`, `dagster-k8s`, `dagster-dbt`, `dagster-airbyte`, `dagster-fivetran`, `dagster-databricks`) go into `converted_requirements.txt`.
+
+`PipesK8sClient` is not used for `KubernetesPodOperator`: the registry's `k8s_job_asset` README says a container that does not speak the Pipes protocol hangs under it, and a pod operator's image usually does not. `execute_k8s_job` runs any image.
+
+### How each mapping was checked
+
+| Mapping | Checked by running | Not checked |
+|---|---|---|
+| HTTP operator and sensor | converted DAG run against a local HTTP server: URL join, query and body, headers, error statuses, polling through two 404s | TLS, proxies, authentication beyond the header and basic auth the environment supplies |
+| SQL | converted DAG run against SQLite through SQLAlchemy: parameters, one transaction rolled back on error, autocommit, rows passed to a downstream task | any other database or driver, parameter styles other than the driver's own |
+| Email | converted DAG run against a local SMTP server: recipients, rendered subject, HTML part, attachment, Bcc | STARTTLS, SMTP login |
+| Slack webhook | converted DAG run against a local HTTP server: JSON payload, error status | the real Slack API |
+| Kubernetes pod | the real `execute_k8s_job` ran and built the real `V1Job` from the converted arguments (image, command, args, env, resources, volumes, service account, node selector, labels, env-from); the calls to the cluster were replaced | any cluster: pod scheduling, log streaming, the wait, cleanup |
+| dbt Cloud, Airbyte, Fivetran, Databricks | converted DAG run with a recording fake in place of the client; every call checked against the real library's method signature | the vendor services; the response shapes the code reads (`id` of a dbt Cloud run, `job_details["job"]["id"]` of Airbyte, `run_id` of Databricks) come from the libraries' source and the vendors' API docs |
+
+Each mapping that was not run against its real service carries a `degraded` caveat that says so (`UNVERIFIED against a live ...`), so it shows in the report, and with `--caveats off` it defers the DAG.
 
 ## Settings that map or degrade
 
@@ -74,15 +109,17 @@ Consumers of runtime-partitioned assets with a rollup, fan-out, product or allow
 | `BashOperator` | `ShellCommandAssetComponent` (retries, timeout, env, cwd, `skip_on_exit_code: 99`) |
 | `PythonOperator`, `@task` | `PythonCallableAssetComponent` (the callable is copied to `callables/<dag>.py`) |
 | S3 copy, delete (key list), list, upload, create object | the matching `S3...AssetComponent` with `resource_key` set to the connection id |
+| `SQLExecuteQueryOperator` (not Snowflake), `PostgresOperator`, `MySqlOperator`, `MsSqlOperator`, `SqliteOperator` | `SqlAssetComponent` with `connection_env` (the `<CONN>_URL` variable), one statement per `sql_statements` entry. Only when the statements are plain text, `parameters` is a dict, nothing is split, and with `autocommit` there is a single statement: the component runs everything in one transaction and returns no rows |
+| `BashSensor` with `retry_exit_code`, `TimeSensor` | `WaitUntilAssetComponent` (`shell_exit_zero` with `retry_exit_code`, or `time_of_day` in the DAG's timezone), `poll_seconds` and `timeout_seconds` from the sensor. Not `BashSensor` without `retry_exit_code` (Airflow keeps polling on any failure, the component fails at once), not a sensor with `soft_fail` (the component does not skip what follows), not `TimeDeltaSensor`, `FileSensor` or `PythonSensor` (reference time, directory and callable semantics differ) |
 | `EmptyOperator` | none: dependencies are rewired through it |
 
-A DAG stays Python when any task is templated (the component YAML has its own Jinja), consumes another task's value, is mapped, gated, or a branch, has outlets or inlets, a pool, an SLA, callbacks or a caveat, or when its schedule is anything but a cron or none. Asset keys in this form are single-part, `<dag>__<task>`, because the components name their asset with one string. A DAG without a schedule gets no job. On the example corpus 18 DAGs convert this way and load and run in a Dagster project; the rest stay Python. Snowflake, triggers, and anything that needs `post_processing` are the next candidates.
+A DAG stays Python when any task is templated (the component YAML has its own Jinja), consumes another task's value, is mapped, gated, or a branch, has outlets or inlets, a pool, an SLA, callbacks or a caveat, or when its schedule is anything but a cron or none. Asset keys in this form are single-part, `<dag>__<task>`, because the components name their asset with one string. A DAG without a schedule gets no job. On the example corpus 18 DAGs convert this way and load and run in a Dagster project; the rest stay Python. The SQL and wait components were validated by building each generated document with the registry's own component class (a wrong field name fails) and materializing it, against SQLite for the SQL. `KubernetesPodOperator` has no component form: `k8s_job_asset` has no `args`, labels, node selector, tolerations, env-from or kubeconfig fields, runs only with in-cluster config, and names every Job from the first 32 characters of the run id, so two pod steps in one run would collide (see the component wishlist). Snowflake, triggers, and anything that needs `post_processing` are the next candidates.
 
 ## Caveats: convert the shape, mark what is not translated
 
-By default (`--caveats raise`) a DAG with one untranslatable task keeps its shape and the task is written as a stub: an asset in its place whose body calls `af_caveat(reason)`, with an `# AIRFLOW-CAVEAT:` comment. It applies to a callable that uses the Airflow API, an unresolved import or an async function, an operator with no conversion yet (provider operators, `PythonVirtualenvOperator`, human-in-the-loop operators), `templates_dict`, and templates that use names the runtime does not rebuild. The report lists each one under the DAG's `caveats`, and `apply_conversion.py` leaves that task's unit `deferred` with the reason.
+By default (`--caveats raise`) a DAG with one untranslatable task keeps its shape and the task is written as a stub: an asset in its place whose body calls `af_caveat(reason)`, with an `# AIRFLOW-CAVEAT:` comment. It applies to a callable that uses the Airflow API, an unresolved import or an async function, an operator with no conversion yet (a provider operator that is not in the table below, a provider operator with an argument the mapping cannot carry, human-in-the-loop operators), `templates_dict`, and templates that use names the runtime does not rebuild. The report lists each one under the DAG's `caveats`, and `apply_conversion.py` leaves that task's unit `deferred` with the reason.
 
-Two kinds of caveat appear in the report: `stub` (the task body is not translated) and `degraded` (translated, with a known difference: for example the settings listed in the table below, a dropped `ExternalTaskSensor` wait that the converter cannot express, or DAG-level callbacks that were not attached). Each unconverted operator names the registry component that covers the same work (`OPERATOR_COMPONENTS` in `convert_ir.py`).
+Two kinds of caveat appear in the report: `stub` (the task body is not translated) and `degraded` (translated, with a known difference: for example the settings listed in the table below, a dropped `ExternalTaskSensor` wait that the converter cannot express, or DAG-level callbacks that were not attached). Each unconverted operator names the registry component that covers the same work (`OPERATOR_COMPONENTS` and `HINTS` in `convert_ir.py`), in the stub message and in the report's `operators` section.
 
 - `--caveats raise` (default): the stub fails when it runs, with the reason in the message, so nothing succeeds by accident.
 - `--caveats skip`: the stub returns nothing and the rest of the DAG runs. Use it to see the shape run end to end; read the caveat list before trusting any output.
@@ -103,20 +140,23 @@ A whole DAG is deferred only when part of it cannot be expressed at all (a parti
 
 ## Existing integrations and community components
 
-Prefer an official `dagster-*` integration or a registry component over hand-written helpers (the dagster-expert skill's rule). `convert_ir.py` writes an `operators` section into `report.json`: every operator type in the IR with its task count, whether the converter maps it, and the integration or component that fits. Component ids below were found with `dagster-component search "<term>" --json`; confirm with `dagster-component info <id>` before relying on them.
+Prefer an official `dagster-*` integration or a registry component over hand-written helpers (the dagster-expert skill's rule). `convert_ir.py` writes an `operators` section into `report.json`: every operator type in the IR with its task count, whether the converter maps it, and the integration or component that fits. Component ids below were found by reading the installed `dagster-community-components` package (each `schema.json` and `README.md`); confirm with `dagster-component info <id>` before relying on them.
 
-| Airflow | Official integration | Registry component | What is missing |
+| Airflow | Official integration | Registry component | What the converter does |
 |---|---|---|---|
-| `BashOperator`, `@task.bash` | none usable: `dagster-shell` on PyPI is stale (0.25.13, pins `dagster==1.9.13`) | `shell_command_asset` (works: it calls `subprocess` itself) | retries, pool, multi-part asset key, automation condition, metadata attributes |
-| S3 operators | `dagster-aws` `S3Resource` (attaches the boto client) | `aws_s3_resource`, `s3_cleanup_job`, `external_s3_asset` | list-objects, copy-object, upload-file and delete-by-key assets |
-| Snowflake operators | `dagster-snowflake` `SnowflakeResource` (attaches a `SnowflakeConnection`) | `snowflake_resource`, `snowflake_stored_procedure_call_asset` | a run-SQL-statements asset (multi-statement split, `USE` overrides) and a COPY INTO asset |
-| `KubernetesPodOperator` | `dagster-k8s` `PipesK8sClient` | `k8s_job_asset` | not mapped by the converter yet |
-| HTTP operators | none | `http_resource`, `http_poll_sensor` | a request-as-an-asset component |
-| `TriggerDagRunOperator` | none | `asset_to_job_trigger_sensor` | usually an asset dependency or automation condition instead |
-| `PythonVirtualenvOperator`, `ExternalPythonOperator` | Dagster Pipes (`PipesSubprocessClient`) | none | run-a-callable-in-a-virtualenv |
-| time and task sensors | none | none | time-of-day wait; a sensor on a task state in another job |
+| `BashOperator`, `@task.bash` | none usable: `dagster-shell` on PyPI is stale (0.25.13, pins `dagster==1.9.13`) | `shell_command_asset` | Python by default; the component with `--output components` |
+| S3 operators | `dagster-aws` `S3Resource` | `s3_*_asset`, `aws_s3_resource` | `S3Resource` calls by default; the components with `--output components` |
+| Snowflake operators | `dagster-snowflake` `SnowflakeResource` | `snowflake_resource`, `snowflake_sql_asset`, `snowflake_copy_into_asset` | `SnowflakeResource` calls (the registry assets are not emitted: no `USE` overrides or statement splitting) |
+| `KubernetesPodOperator` | `dagster-k8s` `execute_k8s_job` | `k8s_job_asset` | `execute_k8s_job`; see the component wishlist for what `k8s_job_asset` lacks |
+| HTTP operators and sensor | none | `http_resource`, `http_external_asset`, `http_poll_sensor`, `http_webhook_job` | `requests` (no component returns a response body or holds a step open) |
+| SQL on other databases | none | `sql_asset` (`connection_env`) | SQLAlchemy call; the component with `--output components` when the DAG has nothing the component cannot carry |
+| Email, Slack webhook | none | `smtp_send_asset`, `slack_message_send`, `slack_notification_job` | `smtplib`, `requests` (the components need a DataFrame or are jobs) |
+| dbt Cloud, Airbyte, Fivetran, Databricks | `dagster-dbt`, `dagster-airbyte`, `dagster-fivetran`, `dagster-databricks` | `dbt_cloud_trigger_job`, `airbyte_sync_trigger_job`, `fivetran_sync_trigger_job`, `databricks_asset_bundle` | integration resource calls (the registry jobs are jobs, not steps in a DAG) |
+| `TriggerDagRunOperator` | none | `asset_to_job_trigger_sensor`, `trigger_job_asset` | the runtime's own launch (an asset dependency or automation condition is usually better) |
+| `PythonVirtualenvOperator`, `ExternalPythonOperator` | Dagster Pipes (`PipesSubprocessClient`) | none | `af_isolated` in the runtime |
+| time and task sensors | none | `wait_until_asset` | polling step in the runtime; `wait_until_asset` with `--output components` |
 
-The converter currently emits plain Python assets so converted code has no dependency on the components repo. Switching a handler to emit a component's YAML is the natural next step once the component carries the attributes the conversion needs (see "what is missing"). The generated code uses `dagster-aws` and `dagster-snowflake` resources directly.
+Operators with no mapping yet are listed in [component-wishlist.md](component-wishlist.md) with what is missing.
 
 ## Compatibility shim: S3Hook
 

@@ -30,8 +30,37 @@ Human-in-the-loop operators inside a run (pause, wait for a person's choice, con
 ## Low priority
 
 - `automation_condition` presets on `shell_command_asset` and `snowflake_stored_procedure_call_asset`.
-- `k8s_job_asset` has no Pipes variant for streamed logs.
 - Timeouts abandon the thread at the deadline and the work continues; say so in each README that offers one.
+
+## Operators the converter calls a library for because no component fits
+
+Checked against `dagster-community-components` 0.10.186 (each component's `schema.json` and `README.md`). The converter now translates these operators itself (see `reference/conversion.md`, "Provider operators"); a component with the fields below would let `--output components` write YAML for them instead of generated Python.
+
+| Airflow operator | Closest component | What is missing |
+|---|---|---|
+| `HttpOperator`, `SimpleHttpOperator` | `http_external_asset`, `http_webhook_job`, `http_resource` | A one-request asset: method, endpoint joined to the resource's base URL, query parameters (GET) or body, headers, the status that counts as success (Airflow fails on any error status unless `check_response` is false), the response body returned as the asset's value. `http_external_asset` requires a trigger, a status poll and a run id; `http_webhook_job` is a job and returns nothing |
+| `HttpSensor` | `http_poll_sensor` | A condition for `wait_until_asset` (for example `http_ok`: url, method, headers, status codes that mean "not yet", default 404). `http_poll_sensor` starts a run when a response changes; it does not hold a step open |
+| `KubernetesPodOperator` | `k8s_job_asset` | `args` (separate from `command`), `labels`, `node_selector`, `tolerations`, `affinity`, `env_from` (config maps and secrets), `kubeconfig_file`, `kube_context` and `load_incluster_config` (it runs only with in-cluster config), a Job name that is unique per asset (it uses the first 32 characters of the run id, so two pod steps in one run collide), `delete_failed_k8s_jobs` and a TTL for finished Jobs |
+| `SQLExecuteQueryOperator` and the database-specific SQL operators | `sql_asset` | Returning the rows of the last statement (Airflow pushes them to XCom), per-statement commit (`autocommit`), splitting a script into statements, positional (list) parameters. The component's `connection_env` already matches what the converter reads (`<CONN>_URL`) |
+| `EmailOperator` | `smtp_send_asset` | A message with a fixed recipient list, subject, HTML body and attachments and no upstream DataFrame (the component sends one email per row or one summary of a DataFrame) |
+| `SlackWebhookOperator` | `slack_notification_job`, `slack_message_send` | The same webhook post as a step: `slack_notification_job` is a job and `slack_message_send` needs an upstream DataFrame |
+| `DbtCloudRunJobOperator` | `dbt_cloud_trigger_job` | An asset form (a step in a DAG, with `deps`) of what the job does; the job is not a step. Confirm that its resource does not switch off the dbt Cloud job's schedule: `DbtCloudClientResource` does by default (`disable_schedule_on_trigger=True`), the operator never does |
+| `AirbyteTriggerSyncOperator`, `FivetranOperator` | `airbyte_sync_trigger_job`, `fivetran_sync_trigger_job` | An asset form that waits for the sync (the Fivetran job has no wait), and returns the job id |
+| `DatabricksRunNowOperator`, `DatabricksSubmitRunOperator` | `databricks_asset_bundle` | A component that runs an existing job by id or submits a one-off run from a JSON body and waits for it |
+| `wait_until_asset` as the target of sensors | `wait_until_asset` | `SFTPSensor`, `S3KeySensor`, `GCSObjectExistenceSensor` and the other file sensors need `sftp_file_exists`, `s3_key_exists`, `gcs_object_exists` conditions (the `*_monitor` sensors start runs; they do not hold a step). A skip on timeout that also skips what follows (`soft_fail`) |
+
+## Operators not converted yet that have a component or library
+
+Not "no component fits": not done in this pass. The report names the component for each; each is a loud stub today.
+
+| Airflow operator | Where it would go |
+|---|---|
+| `SSHOperator` | `ssh_asset` (commands, host and credentials from environment variables). Extracting the IR needs the Airflow connection to exist, because the operator builds its hook when it is created |
+| `DockerOperator` | `docker_container_asset` (image, command, env vars, network only: no mounts, `auto_remove`, `mem_limit`, TLS) |
+| `BigQueryInsertJobOperator` | `dagster-gcp` `BigQueryResource` with the job configuration; the registry's `bigquery_query_asset` returns a DataFrame and has no job configuration |
+| `SlackAPIPostOperator` | `dagster-slack` `SlackResource` (`chat_postMessage`) |
+| `SQLColumnCheckOperator`, `SQLCheckOperator` | `enhanced_data_quality_checks` as asset checks |
+| `GlueJobOperator`, `SageMakerTrainingOperator`, `RedshiftSQLOperator`, `AzureDataFactoryRunPipelineOperator`, `DataflowTemplatedJobStartOperator` | `aws_glue`, `aws_sagemaker`, `aws_redshift`, `azure_data_factory`, `google_dataflow` |
 
 ## How each component gets checked
 
