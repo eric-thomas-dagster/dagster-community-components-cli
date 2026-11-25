@@ -17,3 +17,12 @@ Two runs of `scripts/plan.py`. The numbers in `plan.md` are heuristics (the file
    ```
 
 The plan is deterministic: running it again on the same files gives identical `plan.md` and `plan.json` (a test checks the committed copies).
+
+## Cutover checklists
+
+`with_conversion/cutover/` is `scripts/cutover.py` run on the same three files (`cutover-<dag_id>.md` per converted DAG and `cutover-index.md`). The script writes markdown and prints commands for a person to run; it pauses, starts, stops and deletes nothing. The DAGs show up with blockers because the manifest in this folder was never advanced (its units are still `pending`), which is what the checklist should say.
+
+```bash
+python3 ../../scripts/cutover.py with_conversion/manifest.json with_conversion/report.json \
+  --ir with_conversion/ir.json --out-dir with_conversion/cutover
+```
