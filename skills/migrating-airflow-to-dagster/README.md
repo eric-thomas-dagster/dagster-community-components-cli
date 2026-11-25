@@ -32,7 +32,7 @@ python3 scripts/status.py defer manifest.json A031 --reason "custom timetable"
 python3 scripts/cutover.py manifest.json report.json --ir ir.json --parity-state parity_state --out-dir cutover
 ```
 
-Create the target project with `uvx create-dagster project <name> --uv-sync` first (the skill relies on `dagster-expert` for the Dagster side). `convert_ir.py --help` lists the options: `--caveats {off,raise,skip}`, `--catchup {defer,ignore}`, `--mapping {graph,partitions}`, `--output {python,components}`, `--dataset-keys {path,script-orchestrator}`, `--partition-start`, `--return-all`, `--dbt-dir` (where the dbt projects of Cosmos DAGs are expected, default `dbt`).
+Create the target project with `uvx create-dagster project <name> --uv-sync` first (the skill relies on `dagster-expert` for the Dagster side). `convert_ir.py --help` lists the options: `--caveats {off,raise,skip}`, `--catchup {defer,ignore}`, `--mapping {graph,partitions}`, `--output {python,components}`, `--dataset-keys {path,script-orchestrator}`, `--granularity {task,product}`, `--partition-start`, `--return-all`, `--dbt-dir` (where the dbt projects of Cosmos DAGs are expected, default `dbt`).
 
 ## What gets converted
 
@@ -90,7 +90,7 @@ Measured results are recorded in [reference/conversion.md](reference/conversion.
 - `SKILL.md`: the workflow (phases 0 to 7), hard rules, the tier choice.
 - `scripts/`: `inventory.py`, `airflow_ir.py`, `provider_ops.py` (provider operator mappings), `cosmos_ops.py` (Cosmos mapping), `plan.py` (wave plan), `cutover.py` (cutover checklists), `airflow_truth.py`, `reconcile.py`, `convert_ir.py`, `apply_conversion.py`, `validate_defs.py`, `status.py`, `parity_incremental.py`, `parity/` (both sides and the comparer), `tests/`.
 - `reference/`: `tiers.md`, `mapping.md`, `conversion.md`, `parity.md`, `factories.md`, `dynamic-mapping.md`, `partitions.md`, `compatibility.md`, `component-wishlist.md`, `airlift.md` (peer, observe, proxy; the Airflow 3 limitation), `hosted-airflow.md` (MWAA, Composer, Astro), `cutover-checklist.md`.
-- `examples/`: `three_dags/` (a completed trial with equivalence rows), `s3_to_snowflake_factories/`, `dagfactory_family/`, `runtime_conversion/` (converted repo and parity harness), `migration_plan/` (a wave plan and cutover checklists), `airflow_release_matrix/` (18 one-construct DAG files run across Airflow releases).
+- `examples/`: `three_dags/` (a completed trial with equivalence rows), `s3_to_snowflake_factories/`, `dagfactory_family/`, `runtime_conversion/` (converted repo and parity harness), `migration_plan/` (a wave plan and cutover checklists), `granularity/` (task versus product output for one DAG), `airflow_release_matrix/` (18 one-construct DAG files run across Airflow releases).
 
 ## Tests
 
@@ -104,7 +104,7 @@ uv run --no-project --with pytest --with pyyaml --with dagster --with dagster-aw
   python -m pytest -q scripts/tests
 ```
 
-233 tests pass with the packages above installed (`test_convert_ir.py`, `test_inventory.py`, `test_provider_ops.py`, and new: `test_cosmos.py` 28, `test_plan.py` 7, `test_cutover.py` 8, `test_airlift.py` 3, `test_generated_tests.py` 6; the suite was 180 before the Cosmos, planning, cutover and Airlift work). Tests that need a package skip when it is missing: without `dagster-dbt`, `duckdb` and `dbt-duckdb` the Cosmos tests that load and run dbt skip, and without `dagster-airlift` the Airlift tests skip. Without `dagster` and `jinja2` installed, many tests skip or fail on import, so install them. The tests do not need Airflow; the extractor (`airflow_ir.py`) and the parity harness do (`tests/fixtures_cosmos/ir.json` was extracted with Airflow 2.10.5 and astronomer-cosmos 1.15.1; `regenerate.sh` shows how).
+240 tests pass with the packages above installed (`test_convert_ir.py`, `test_inventory.py`, `test_provider_ops.py`, and new: `test_cosmos.py` 29, `test_plan.py` 7, `test_cutover.py` 8, `test_airlift.py` 3, `test_generated_tests.py` 6, `test_granularity.py` 7; the suite was 180 before the Cosmos, planning, cutover and Airlift work). Tests that need a package skip when it is missing: without `dagster-dbt`, `duckdb` and `dbt-duckdb` the Cosmos tests that load and run dbt skip, and without `dagster-airlift` the Airlift tests skip. Without `dagster` and `jinja2` installed, many tests skip or fail on import, so install them. The tests do not need Airflow; the extractor (`airflow_ir.py`) and the parity harness do (`tests/fixtures_cosmos/ir.json` was extracted with Airflow 2.10.5 and astronomer-cosmos 1.15.1; `regenerate.sh` shows how).
 
 ## Limitations
 

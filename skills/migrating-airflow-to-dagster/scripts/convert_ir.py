@@ -116,6 +116,7 @@ PARTITIONS: dict[str, dict] = {}   # asset key -> its time partitioning, from th
 AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
 MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
 DBT_DIR = "dbt"          # --dbt-dir: where the dbt projects of converted Cosmos DAGs are expected, inside the package
+GRANULARITY = "task"      # --granularity task (one asset per task, faithful) | product (steps folded into the asset they feed; see the report's `granularity`)
 RETURN_ALL = False        # set by --return-all: keep every Python return value so a parity run can compare them
 
 
@@ -2126,14 +2127,85 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                      "and a task after them receives the collected list. Differences from Airflow: retries and pools apply per op; individual tasks cannot be "
                      "re-run on their own (the asset is the unit), and an empty list skips the mapped step and gives the next step an empty list.")
 
+    # ---- product granularity: which tasks are data products, which are steps folded into the asset they feed, which are glue ------------------------------------
+    fold_into: dict[str, str] = {}
+    gran_decisions: dict[str, dict[str, Any]] = {}
+    if GRANULARITY == "product":
+        cons: dict[str, list[str]] = {t["task_id"]: [] for t in real}
+        for t in real:
+            for u in eff_up(t["task_id"]):
+                if u in cons:
+                    cons[u].append(t["task_id"])
+        foldable = PY_TASKS - ISOLATED
+        for t in dag["tasks"]:
+            if t["type"] in ELIDED and t["task_id"] not in cons:
+                gran_decisions[t["task_id"]] = {"role": "glue", "reason": f"{t['type']} only joins dependencies (or has no effect once schedules do not backfill): not an asset, its edges are rewired"}
+        stop = bool(gplan or pplan or ppart or triggers or rt_producer or cosmos_clusters)
+        for t in real:
+            tid, ty = t["task_id"], t["type"]
+            why = None
+            if ty in ELIDED:
+                gran_decisions[tid] = {"role": "glue", "reason": "an EmptyOperator only joins dependencies: elided"}
+                continue
+            if stop:
+                why = "product folding is not applied to graph-form, partitioned, asset-triggered, runtime-partitioned or Cosmos DAGs"
+            elif t["outlets"] or t["inlets"]:
+                why = "its output is persisted under an asset key (outlets or inlets)"
+            elif ty not in foldable | BASH or t.get("_caveat") or t.get("is_mapped"):
+                why = f"{tname(t)} is an external or special step (storage, warehouse, sensor, trigger, branch, mapped, stub), kept as its own asset"
+            elif len(cons[tid]) != 1:
+                why = "no downstream task consumes it" if not cons[tid] else f"{len(cons[tid])} downstream tasks consume it"
+            elif t["retries"] or t.get("execution_timeout_s") or t["pool"] or t.get("max_active_tis_per_dag") or t.get("callback_fns") or t.get("sla_s") or t["trigger_rule"] != "all_success":
+                why = "it has its own retries, timeout, pool, callback, SLA or trigger rule: kept as its own restart point"
+            elif tid in ctx_tasks or ti_inputs.get(tid) or resolved.get(tid, ("", [], {}))[2].get("async") or resolved.get(tid, ("", [], {}))[2].get("skips"):
+                why = "it uses the Airflow context, XCom pulls by task id, async code or skip logic"
+            else:
+                c_ = cons[tid][0]
+                ct = tasks[c_]
+                if ct["type"] not in foldable | BASH or ct.get("_caveat") or ct.get("is_mapped") or ct["type"] in ISOLATED:
+                    why = f"its consumer {c_} is a {tname(ct)}, which cannot host the step"
+                elif ti_inputs.get(c_):
+                    why = f"its consumer {c_} pulls XComs by task id"
+                else:
+                    fold_into[tid] = c_
+                    gran_decisions[tid] = {"role": "step", "into": c_, "reason": f"its value feeds only {c_} and nothing persists it or needs its own restart point: plain Python inside {c_}'s asset"}
+                    continue
+            gran_decisions[tid] = {"role": "product", "reason": why or "it is not a foldable step"}
+        for tid in fold_into:                                   # a chain folds into the final consumer
+            while fold_into[tid] in fold_into:
+                fold_into[tid] = fold_into[fold_into[tid]]
+        for tid, c_ in fold_into.items():
+            gran_decisions[tid]["into"] = c_
+        real = [t for t in real if t["task_id"] not in fold_into]
+        notes.append(f"granularity=product: {len(fold_into)} step task(s) were folded into the asset they feed ({', '.join(f'{k} into {v}' for k, v in sorted(fold_into.items())) or 'none'}); "
+                     "they restart with that asset (plain Python steps restart from the beginning), so they no longer have asset keys of their own") if fold_into else None
+
+    def folded_chain(tid: str) -> list[str]:
+        out: list[str] = []
+        for u in eff_up(tid):
+            if u in fold_into:
+                out += [*folded_chain(u), u]
+        return list(dict.fromkeys(out))
+
+    def expand_ups(tid: str) -> list[str]:
+        out: list[str] = []
+        for u in eff_up(tid):
+            out += expand_ups(u) if u in fold_into else ([u] if u in keyparts else [])
+        return list(dict.fromkeys(out))
+
     if gplan:
         emit_graph()
     for t in ([] if gplan else real):
         tid = t["task_id"]
-        ups = [u for u in eff_up(tid) if u in keyparts]
+        chain_ = folded_chain(tid) if fold_into else []
+        ups = expand_ups(tid) if fold_into else [u for u in eff_up(tid) if u in keyparts]
         refs = xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")) | xcom_refs(t["template_fields"])
+        for f_ in chain_:
+            refs |= xcom_refs(tasks[f_].get("op_args")) | xcom_refs(tasks[f_].get("op_kwargs")) | xcom_refs(tasks[f_]["template_fields"])
         ordered = list(dict.fromkeys([*ups, *ti_inputs.get(tid, [])]))
         params = {u: f"in_{i}" for i, u in enumerate(ordered)}
+        for f_ in chain_:
+            params[f_] = f"_v_{safe(f_)}"
         data = {u for u in ordered if u in refs or u in ti_inputs.get(tid, [])}
         if pplan and pplan["kind"] == "xcom" and tid in pplan["args"]:
             data.add(pplan["producer"])                       # the mapped task finds its item in the producer's list
@@ -2340,6 +2412,26 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 kw.append(f"on_success=[f'{{__name__}}:{ad}_success']")
             pre = pre + adapters
             hook_deco = "@on_hooks(" + ", ".join(kw) + ")\n"
+        if chain_:                                              # the folded steps run first, in order, as plain Python inside this asset
+            prelude = ""
+            for f_ in chain_:
+                ft = tasks[f_]
+                if ft["type"] in BASH:
+                    cmd_ = (ft.get("template_files") or {}).get("bash_command") or ft["template_fields"].get("bash_command")
+                    envf = ft["template_fields"].get("env")
+                    call_ = (f"run_shell(context, {expr(cmd_, params, None)}, env={expr(envf, params, None) if envf else 'None'}, cwd={expr(ft['template_fields'].get('cwd'), params, None)}, "
+                             f"timeout=None{', xcom_json=True' if AF_MAJOR >= 3 else ''})")
+                else:
+                    fcode, fsup, fmeta = resolved[f_]
+                    for sline in fsup:
+                        support.setdefault(sline, len(support))
+                    fpy = "_af_" + safe(f_)
+                    pre = re.sub(r"^(async\s+)?def\s+\w+", lambda mm: f"def {fpy}", fcode, count=1) + "\n\n\n" + pre
+                    fpos = [expr(a_, params, None) for a_ in (ft.get("op_args") or [])]
+                    fkws = {k: expr(v_, params, None) for k, v_ in (ft.get("op_kwargs") or {}).items()}
+                    call_ = f"{fpy}(" + ", ".join(fpos + [f"{k}={v_}" for k, v_ in fkws.items()]) + ")"
+                prelude += f"    {params[f_]} = {call_}      # folded from Airflow task {f_!r}\n"
+            body = prelude + body
         body = sla_wrap(body, t, "/".join(keyparts[tid]))
         if tid in rt_outlets:
             inner_ = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
@@ -2502,7 +2594,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                  "cosmos_sinks": {m: ["/".join(k) for k in c["sink_keys"]] for c in cosmos_clusters for m in c["members"]},
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
-                 "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}, "test_info": test_info, "asset_checks": check_list}
+                 "task_keys": {**{t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}, **{f: "/".join(keyparts[c]) for f, c in fold_into.items()}},
+                 "folded": dict(sorted(fold_into.items())), "granularity": ({"mode": "product", "decisions": dict(sorted(gran_decisions.items()))} if GRANULARITY == "product" else None), "test_info": test_info, "asset_checks": check_list}
 
 
 RUNTIME = '''"""Helpers used by the converted DAGs. Each mirrors what the Airflow operator or hook does."""
@@ -3679,10 +3772,14 @@ def main(argv: list[str] | None = None) -> int:
                          "a schedule component, post-processing where needed) for each DAG whose every task has a component form; the others stay Python")
     ap.add_argument("--dbt-dir", default="dbt", help="where the dbt projects of converted Cosmos DAGs are expected, relative to the package (default dbt): the converter "
                     "writes components that point at <package>/<dbt-dir>/<project name>; it does not copy the projects")
+    ap.add_argument("--granularity", choices=["task", "product"], default="task",
+                    help="task (default): one asset per Airflow task, the faithful form. product: a step whose value feeds only one downstream task, with no outlets and no restart need of its own, "
+                         "is folded into that task's asset as plain Python; EmptyOperators are glue; the report's `granularity` section lists the decision and reason for every task")
     ap.add_argument("--partition-start", default="2025-01-01", help="where time-partitioned assets begin (Airflow's partitions have no start date)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)
-    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP, CAVEATS, OUTPUT, DBT_DIR
+    global RETURN_ALL, MAP_MODE, AF_MAJOR, DATASET_KEYS, CATCHUP, CAVEATS, OUTPUT, DBT_DIR, GRANULARITY
+    GRANULARITY = a.granularity
     DBT_DIR = a.dbt_dir
     OUTPUT = a.output
     CAVEATS = a.caveats

@@ -18,7 +18,7 @@ for did in ids:
     rep = report[did]
     try:
         mod = importlib.import_module(f"{os.environ.get('PARITY_PKG', 'pkg')}.defs.{safe(did)}")
-        assets = [v for v in vars(mod).values() if isinstance(v, dg.AssetsDefinition)]
+        assets = [v for v in vars(mod).values() if isinstance(v, dg.AssetsDefinition) and not isinstance(v, dg.AssetChecksDefinition)]      # the structural asset checks are not assets
         signal.alarm(300)
         r = dg.materialize(assets, raise_on_error=False)
         tasks = {}

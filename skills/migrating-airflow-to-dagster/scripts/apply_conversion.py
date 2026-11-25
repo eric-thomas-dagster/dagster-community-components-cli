@@ -48,11 +48,12 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
             continue
         tasks = {t["task_id"]: t for t in d["tasks"]}
         keys = rep["task_keys"]
+        folded = rep.get("folded") or {}                       # --granularity product: steps folded into the asset they feed
 
         def eff_up(tid: str) -> list[str]:
             out: list[str] = []
             for u in tasks[tid]["upstream"]:
-                out += eff_up(u) if tasks[u]["type"] in ELIDED and u not in keys else [u]      # in the graph form an EmptyOperator is a step
+                out += eff_up(u) if (tasks[u]["type"] in ELIDED and u not in keys) or u in folded else [u]      # in the graph form an EmptyOperator is a step; a folded step has no asset
             return list(dict.fromkeys(out))
 
         dag_unit = by_dag.get(dag_id)
@@ -72,7 +73,9 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
                     status.defer(manifest, u["id"], f"AIRFLOW-CAVEAT stub (the DAG converts around it): {caveat[tid]}"[:900])
                     stats["tasks_deferred"] += 1
                 continue
-            if tid in (rep.get("cosmos_tasks") or {}):          # a Cosmos task: it became part of a dbt component, whose assets are this unit's target
+            if tid in folded:                                   # no asset of its own: it runs inside its consumer's asset
+                u["target"] = {"assets": [keys[tid]], "folded_into": folded[tid]}
+            elif tid in (rep.get("cosmos_tasks") or {}):          # a Cosmos task: it became part of a dbt component, whose assets are this unit's target
                 u["target"] = {"assets": rep["cosmos_tasks"][tid], "deps": {}}
             elif t["type"] in ELIDED and tid not in keys:         # in the graph form an EmptyOperator is a real step
                 u["target"] = {"none": "EmptyOperator elided; its dependencies were rewired through it"}

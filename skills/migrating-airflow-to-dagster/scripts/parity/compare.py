@@ -21,6 +21,8 @@ def dag_issues(a, d, rep_dag):
         a_s = "success" in at["state"].lower(); d_s = dt["state"] == "success"
         if a_s != d_s:
             issues.append(f"{tid}: airflow {at['state']} vs dagster {dt['state']}")
+        elif tid in (rep_dag.get("folded") or {}):
+            pass                                                # a step folded into another task's asset (--granularity product): its outcome is the asset's, and it has no value of its own
         elif dt["value"] != "None" and not any(m in dt["value"] for m in ("Skipped", "BranchResult", "ShortCircuit", "Failed(", "UpstreamFailed")) and not at["value"].startswith("'xcom") and at["value"] != "'xcom-unavailable-3x'" and at["value"] != dt["value"] \
                 and not (dt["value"].startswith("[") and at["value"] in dt["value"]):
             issues.append(f"{tid}: value airflow {at['value'][:60]} vs dagster {dt['value'][:60]}")
