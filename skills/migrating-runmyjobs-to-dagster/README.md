@@ -32,7 +32,7 @@ uv run runmyjobs-to-dagster equivalence rewrite/<unit>.spec.json --converter-pro
 - `src/runmyjobs_to_dagster/`: the converter (`convert.py`, `extract_*.py`, `validate.py`, `manifest.py`, `cli.py`) and `rewrite/` (`spec.py` analyze, `prompt.py`, `accept.py` gates, `equivalence.py`, `introspect.py`)
 - `reference/`: `mapping.md`, `dagster-targets.md`, `component-wishlist.md`, `rewrite-route.md`
 - `examples/rewrite/`: specs, prompts, gate results, converter output and rewritten project per fixture set
-- `tests/`: `uv run --extra dev pytest` (needs `dg` in the environment for the `accept` tests, which take about 90 s). 69 tests (59 existing, 10 for the rewrite route).
+- `tests/`: `uv run --extra dev pytest` (needs `dg` in the environment for the `accept` tests, which take about 90 s). 70 tests (59 existing, 11 for the rewrite route and the command-registry check).
 
 ## Mapping
 
