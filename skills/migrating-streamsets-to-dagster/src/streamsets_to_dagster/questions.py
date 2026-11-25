@@ -25,9 +25,9 @@ def build_questions(est, res) -> dict:
             qs.append("JDBC stages derive a SQLAlchemy URL from the JDBC URL (MySQL, MariaDB, PostgreSQL, Redshift). For any other database set "
                       "SDC_SQLALCHEMY_URL_<STAGE> to the full SQLAlchemy URL.")
         if any(re.search(r"crypt|hash|mask", s.cls, re.I) for s in p.stages):
-            qs.append("This pipeline encrypts, decrypts, hashes or masks fields. Tell me, per field: which stage and key provider (AWS KMS key ARN, or a user-supplied key), whether "
-                      "data encrypted by StreamSets must still be decrypted after the move (the converted code cannot read StreamSets ciphertext), whether the encryption context is used, "
-                      "and whether old hashes must still match new ones. Send an export of an encrypting pipeline so the stage's properties can be checked.")
+            qs.append("This pipeline encrypts, decrypts, hashes or masks fields. Converted Encrypt and Decrypt Fields stages read and write StreamSets-compatible ciphertext (user-supplied keys "
+                      "were checked against Data Collector 6.4.1; AWS KMS was not). Tell me where the key lives (the export drops it: SDC_SECRET_<STAGE>_KEY, or a KMS key ARN with AWS credentials), "
+                      "whether date or time fields are encrypted (not supported yet), and whether old hashes must still match new ones (hashing matches Data Collector for in-place and target-field hashes).")
         if any(s.cls == "GeolocationDProcessor" for s in p.stages):
             qs.append("Geolocation uses a MaxMind GeoIP2/GeoLite2 database. Does the customer hold a MaxMind account and license key (GeoLite2 downloads require one), and who refreshes the .mmdb file? "
                       "The converted code reads a file path (or SDC_GEOIP_DB); it does not download or update the database.")

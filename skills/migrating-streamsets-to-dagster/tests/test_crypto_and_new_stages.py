@@ -23,9 +23,8 @@ def feed(run, records, lane="in"):
 
 
 def test_encrypt_decrypt_round_trips_types_and_enforces_the_context():
-    import datetime
     import decimal
-    for v in ("secret", 42, 2.5, True, b"\x00\x01", decimal.Decimal("1.10"), datetime.datetime(2020, 1, 2, 3, 4, 5), datetime.date(2020, 1, 2)):
+    for v in ("secret", 42, 12345678901, 2.5, True, b"\x00\x01", decimal.Decimal("1.10")):
         blob = rt.encrypt_value(v, raw_key_b64=KEY, key_id="k1", context={"purpose": "pii"})
         assert isinstance(blob, bytes) and blob != str(v).encode()
         assert rt.decrypt_value(blob, raw_key_b64=KEY, key_id="k1", context={"purpose": "pii"}) == v
@@ -35,6 +34,8 @@ def test_encrypt_decrypt_round_trips_types_and_enforces_the_context():
     wrong = base64.b64encode(bytes(range(1, 33))).decode()
     with pytest.raises(Exception):
         rt.decrypt_value(blob, raw_key_b64=wrong)
+    with pytest.raises(TypeError, match="dates and times"):
+        rt.encrypt_value(__import__("datetime").date(2020, 1, 2), raw_key_b64=KEY)
     with pytest.raises(rt.SdcCaveat, match="16, 24 or 32"):
         rt.encrypt_value("x", raw_key_b64=base64.b64encode(b"short").decode())
 
@@ -196,3 +197,25 @@ def test_kafka_consumer_drains_commits_after_success_and_producer_sends(monkeypa
 def test_time_zone_offset_function():
     import datetime
     assert fx.date_time_zone_offset(datetime.datetime(2020, 7, 1, tzinfo=datetime.timezone.utc), "America/New_York") == -4 * 3600 * 1000
+
+
+def test_encrypt_decrypt_stage_translates_and_round_trips():
+    import json
+    from streamsets_to_dagster.convert import emit
+    from streamsets_to_dagster.model import Pipeline, Stage
+    def build(mode, conf_extra=None):
+        conf = {"conf.mode": mode, "conf.primaryKeyProvider": "USER", "conf.key": "${K}", "conf.keyId": "k1", "conf.fieldPaths": ["/ssn", "/n"], "conf.context": [{"key": "purpose", "value": "pii"}]}
+        st = Stage("E_01", "FieldEncryptDProcessor", "x_FieldEncryptDProcessor", "crypto-lib", "processor", ["in"], ["out"], [], {**conf, **(conf_extra or {})})
+        return emit(Pipeline("p", "p"), st)
+    (call, notes), (call2, _) = build("ENCRYPT"), build("DECRYPT")
+    assert any("StreamSets-compatible" in x for x in notes)
+    run = Run(None, "t", {"K": KEY})
+    mid = []
+    ns = {"rt": rt, "fx": fx, "run": run, "C": {"K": KEY}}
+    eval(call, ns)
+    run.add(rt.Stage("tap", lambda recs: mid.extend(Record(dict(r.value)) for r in recs) or {"m2": recs}, inputs=["out"], outputs=["m2"]))
+    eval(call2.replace("inputs=['in'], outputs=['out']", "inputs=['m2'], outputs=['out2']").replace("'E_01'", "'E_02'"), ns)
+    got = collect(run, "out2")
+    feed(run, [Record({"ssn": "123-45-6789", "n": 42})])
+    run.execute()
+    assert isinstance(mid[0].value["ssn"], bytes) and got[0].value == {"ssn": "123-45-6789", "n": 42}

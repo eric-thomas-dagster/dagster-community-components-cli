@@ -176,7 +176,12 @@ def test_field_order_and_dedup(sdc):
 
 
 def test_base64_and_json_parser(sdc):
-    same(sdc, "Base64EncodingDProcessor", {"originFieldPath": "/a", "resultFieldPath": "/enc", "urlSafe": False}, [{"a": "hello"}])
+    conf = ({"fieldsToEncode": [{"originFieldPath": "/a", "resultFieldPath": "/enc"}], "urlSafe": False} if "fieldsToEncode" in sdc.defs()["Base64EncodingDProcessor"]["configDefinitions"][1]["name"]
+            or any(k["name"] == "fieldsToEncode" for k in sdc.defs()["Base64EncodingDProcessor"]["configDefinitions"])
+            else {"originFieldPath": "/a", "resultFieldPath": "/enc", "urlSafe": False})
+    a, aerr = theirs(sdc, "Base64EncodingDProcessor", conf, [{"a": "hello"}])
+    b, berr = ours(sdc, "Base64EncodingDProcessor", conf, [{"a": "hello"}])
+    assert a == b == {"o2": []} and len(aerr) == 1 and sum(berr.values()) == 1          # a string field is a record error in both
     same(sdc, "JsonParserDProcessor", {"fieldPathToParse": "/raw", "parsedFieldPath": "/doc"}, [{"raw": '{"x": [1, 2], "y": {"z": "q"}}'}])
 
 

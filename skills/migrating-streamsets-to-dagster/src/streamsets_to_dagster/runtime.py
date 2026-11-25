@@ -1397,8 +1397,17 @@ def kafka_target(run: Run, inst: str, brokers: str, topic_fn, *, inputs, on_erro
 
 
 # ---- encryption, decryption and hashing ---------------------------------------------------------------------------------------------------------
+def _crypto_client():
+    """AWS Encryption SDK client. Data Collector writes (and expects) the older non-committing algorithm suites, so reading and writing StreamSets-compatible ciphertext needs
+    FORBID_ENCRYPT_ALLOW_DECRYPT; the SDK's default policy refuses to decrypt them. This weakens the SDK's default key-commitment guarantee on purpose, for compatibility only."""
+    import aws_encryption_sdk
+    from aws_encryption_sdk.identifiers import CommitmentPolicy
+    return aws_encryption_sdk.EncryptionSDKClient(commitment_policy=CommitmentPolicy.FORBID_ENCRYPT_ALLOW_DECRYPT)
+
+
 def _crypto_provider(kms_key_arn: str | None, raw_key_b64: str | None, key_id: str):
-    """AWS Encryption SDK master key provider: AWS KMS (needs credentials and network) or a user-supplied Base64 AES key (16, 24 or 32 bytes)."""
+    """Master key provider: AWS KMS (needs credentials and network), or a user-supplied Base64 AES key (16, 24 or 32 bytes) under the provider id Data Collector uses for its
+    'User Supplied Key' option, `JceMasterKeyProvider`, with the stage's Key ID (verified against Data Collector 6.4.1)."""
     if kms_key_arn:
         from aws_encryption_sdk import StrictAwsKmsMasterKeyProvider
         return StrictAwsKmsMasterKeyProvider(key_ids=[kms_key_arn])
@@ -1415,43 +1424,54 @@ def _crypto_provider(kms_key_arn: str | None, raw_key_b64: str | None, key_id: s
         raise SdcCaveat(f"SDC-CAVEAT: a user-supplied key must be 16, 24 or 32 bytes, got {len(key)}")
 
     class _Provider(RawMasterKeyProvider):
-        provider_id = "streamsets-migrated"
+        provider_id = "JceMasterKeyProvider"
 
         def _get_raw_key(self, key_id_):
             return WrappingKey(wrapping_algorithm=alg, wrapping_key=key, wrapping_key_type=EncryptionKeyType.SYMMETRIC)
     p = _Provider()
-    p.add_master_key(key_id or "key")
+    p.add_master_key(key_id or "")
     return p
 
 
 def encrypt_value(value, *, kms_key_arn: str | None = None, raw_key_b64: str | None = None, key_id: str = "", context: dict | None = None) -> bytes:
-    """Envelope-encrypt one field value (AWS Encryption SDK, AES-256-GCM by default). The value's type is stored in the ciphertext, as the
-    StreamSets processor does, so decrypt_value restores it. **The plaintext layout is this module's own** (`{"t": type, "v": value}` as JSON):
-    ciphertext written by Data Collector's Encrypt and Decrypt Fields stage is not readable with it (see mapping.md)."""
+    """Encrypt one field value the way Data Collector's Encrypt and Decrypt Fields stage does (verified against 6.4.1, both directions): an AWS Encryption SDK message
+    whose plaintext is the value's text in UTF-8 (`42`, `2.5`, `true`) and whose encryption context carries `SDC_FIELD_TYPE` (STRING, INTEGER, LONG, DOUBLE, BOOLEAN, DECIMAL,
+    BYTE_ARRAY) plus your own entries. Data Collector can decrypt this, and this can decrypt Data Collector's. Date and time types are not supported (not yet verified)."""
     import decimal
-    import aws_encryption_sdk
-    kind = {bool: "Boolean", int: "Long", float: "Double", str: "String", bytes: "ByteArray", decimal.Decimal: "Decimal",
-            _dt.datetime: "Datetime", _dt.date: "Date"}.get(type(value))
-    if kind is None:
-        raise TypeError(f"cannot encrypt a value of type {type(value).__name__}")
-    v = value.hex() if kind == "ByteArray" else (value.isoformat() if kind in ("Datetime", "Date") else str(value) if kind == "Decimal" else value)
-    blob, _ = aws_encryption_sdk.EncryptionSDKClient().encrypt(
-        source=json.dumps({"t": kind, "v": v}).encode(), key_provider=_crypto_provider(kms_key_arn, raw_key_b64, key_id), encryption_context=context or {})
+    if isinstance(value, bool):
+        kind, plain = "BOOLEAN", b"true" if value else b"false"
+    elif isinstance(value, int):
+        kind, plain = ("INTEGER" if -2**31 <= value < 2**31 else "LONG"), str(value).encode()
+    elif isinstance(value, float):
+        kind, plain = "DOUBLE", repr(value).encode()
+    elif isinstance(value, decimal.Decimal):
+        kind, plain = "DECIMAL", str(value).encode()
+    elif isinstance(value, str):
+        kind, plain = "STRING", value.encode()
+    elif isinstance(value, (bytes, bytearray)):
+        kind, plain = "BYTE_ARRAY", bytes(value)
+    else:
+        raise TypeError(f"cannot encrypt a value of type {type(value).__name__} (dates and times are not supported yet)")
+    blob, _ = _crypto_client().encrypt(source=plain, key_provider=_crypto_provider(kms_key_arn, raw_key_b64, key_id),
+                                       encryption_context={"SDC_FIELD_TYPE": kind, **{str(k): str(v) for k, v in (context or {}).items()}})
     return blob
 
 
 def decrypt_value(blob: bytes, *, kms_key_arn: str | None = None, raw_key_b64: str | None = None, key_id: str = "", context: dict | None = None):
-    """Inverse of encrypt_value. The same key and the same encryption context are required (a context mismatch fails)."""
+    """Inverse of encrypt_value; reads Data Collector's ciphertext. The type comes from `SDC_FIELD_TYPE` in the encryption context. The same key is required, and
+    any `context` entries you pass must match the ciphertext's."""
     import decimal
-    import aws_encryption_sdk
-    plain, header = aws_encryption_sdk.EncryptionSDKClient().decrypt(source=blob, key_provider=_crypto_provider(kms_key_arn, raw_key_b64, key_id))
+    plain, header = _crypto_client().decrypt(source=blob, key_provider=_crypto_provider(kms_key_arn, raw_key_b64, key_id))
     for k, want in (context or {}).items():
-        if header.encryption_context.get(k) != want:
+        if header.encryption_context.get(str(k)) != str(want):
             raise ValueError(f"encryption context mismatch for {k!r}")
-    d = json.loads(plain)
-    t, v = d["t"], d["v"]
-    return {"ByteArray": lambda: bytes.fromhex(v), "Decimal": lambda: decimal.Decimal(v), "Datetime": lambda: _dt.datetime.fromisoformat(v),
-            "Date": lambda: _dt.date.fromisoformat(v)}.get(t, lambda: v)()
+    kind = header.encryption_context.get("SDC_FIELD_TYPE", "STRING")
+    text = plain.decode() if kind != "BYTE_ARRAY" else b""
+    conv = {"STRING": lambda: text, "INTEGER": lambda: int(text), "LONG": lambda: int(text), "SHORT": lambda: int(text), "BYTE": lambda: int(text), "DOUBLE": lambda: float(text),
+            "FLOAT": lambda: float(text), "BOOLEAN": lambda: text == "true", "DECIMAL": lambda: decimal.Decimal(text), "BYTE_ARRAY": lambda: plain}
+    if kind not in conv:
+        raise ValueError(f"field type {kind} is not supported yet")
+    return conv[kind]()
 
 
 def crypto_fields(run: Run, inst: str, mode: str, fields: list[str], *, kms_key_arn_fn=None, key_fn=None, key_id: str = "", context: dict | None = None,
@@ -1607,19 +1627,21 @@ def http_origin(run: Run, inst: str, url_fn, method: str, auth_fn, fmt: str, hea
 
 
 # ---- more processors --------------------------------------------------------------------------------------------------------------------------
-def base64_field(run: Run, inst: str, mode: str, src: str, dst: str, url_safe: bool, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
-    """Base64 Field Encoder/Decoder: byte array in, byte array out; a string field is a record error (as in Data Collector)."""
+def base64_field(run: Run, inst: str, mode: str, src, dst: str, url_safe: bool, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Base64 Field Encoder/Decoder: byte array in, byte array out; a string field is a record error (as in Data Collector). `src` is one path (with `dst`) or, in the
+    Data Collector 6.x schema, a list of (origin path, result path) pairs."""
     import base64
+    pairs = list(src) if isinstance(src, (list, tuple)) else [(src, dst)]
 
     def one(r: Record):
-        v = get_path(r.value, src, _MISSING)
-        if v is _MISSING or v is None:
-            raise KeyError(f"field {src} is missing")
-        if isinstance(v, str):
-            raise TypeError(f"field {src} is a string: Base64 works on byte array fields only")      # Data Collector 3.18.1 sends such a record to error
-        raw = bytes(v)
-        enc, dec = (base64.urlsafe_b64encode, base64.urlsafe_b64decode) if url_safe else (base64.b64encode, base64.b64decode)
-        set_path(r.value, dst, enc(raw) if mode == "ENCODE" else dec(raw))
+        for s, d in pairs:
+            v = get_path(r.value, s, _MISSING)
+            if v is _MISSING or v is None:
+                raise KeyError(f"field {s} is missing")
+            if isinstance(v, str):
+                raise TypeError(f"field {s} is a string: Base64 works on byte array fields only")      # Data Collector sends such a record to error
+            enc, dec = (base64.urlsafe_b64encode, base64.urlsafe_b64decode) if url_safe else (base64.b64encode, base64.b64decode)
+            set_path(r.value, d, enc(bytes(v)) if mode == "ENCODE" else dec(bytes(v)))
         return r
     _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
 

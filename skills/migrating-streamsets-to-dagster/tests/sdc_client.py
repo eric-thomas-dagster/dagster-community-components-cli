@@ -11,10 +11,16 @@ import requests
 
 class Sdc:
     def __init__(self, url="http://localhost:18632", auth=("admin", "admin")):
+        """auth is admin/admin for a standalone engine; an engine run from a Control Hub deployment (which is how 6.x is activated) takes the Control Hub API credentials from
+        SDC_PARITY_COMPONENT_ID and SDC_PARITY_TOKEN instead (never put them in a file)."""
+        import os
         self.b = url.rstrip("/") + "/rest/v1"
         self.s = requests.Session()
-        self.s.auth = auth
         self.s.headers.update({"X-Requested-By": "sdc"})
+        if os.environ.get("SDC_PARITY_TOKEN"):
+            self.s.headers.update({"X-SS-App-Component-Id": os.environ["SDC_PARITY_COMPONENT_ID"], "X-SS-App-Auth-Token": os.environ["SDC_PARITY_TOKEN"]})
+        else:
+            self.s.auth = auth
         self._defs = None
 
     def defs(self):
@@ -53,6 +59,7 @@ class Sdc:
         r.raise_for_status()
         cfg = r.json()
         cfg["stages"] = stages
+        cfg["metadata"] = cfg.get("metadata") or {"labels": []}        # 6.x previews fail with a NullPointerException when the pipeline metadata is null
         cfg["errorStage"] = self.stage("ToErrorNullDTarget", "ErrorStage")
         cfg["errorStage"]["uiInfo"]["stageType"] = "TARGET"
         r = self.s.post(f"{self.b}/pipeline/{pid}", json=cfg)

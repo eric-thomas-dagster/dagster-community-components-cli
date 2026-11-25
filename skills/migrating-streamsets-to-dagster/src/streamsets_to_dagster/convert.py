@@ -339,58 +339,26 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         n.append("the hash is lower-case hex over the value's UTF-8 string form (checked against Data Collector 3.18.1 in the parity tests)")
         return f"rt.field_hasher(run, {I}, {rules!r}, targets={targets!r}, {lanes}{err}{pre})", n
 
-    if "crypt" in cls.lower():
-        raise _Stub("Encrypt/Decrypt Fields is not translated: its property names are not verified against a real export, and ciphertext written by StreamSets cannot be read "
-                    "by a replacement. Build it with --override using runtime.crypto_fields (AWS Encryption SDK; see reference/mapping.md, Encryption)")
-
-    if cls == "ElasticsearchDSource":
-        uris = [u for u in (c.get("conf.httpUris") or []) if isinstance(u, str)]
-        if not uris or not c.get("conf.index") or not c.get("conf.query"):
-            raise _Stub("Elasticsearch origin needs HTTP URIs, an index and a query")
-        n.append("an Elasticsearch origin polls forever in StreamSets; here one run reads until the query returns nothing and stores the last offset field value")
-        n.append("connection through the registry's ElasticsearchResource (credentials: SDC_SECRET_<STAGE>_API_KEY, or _USERNAME and _PASSWORD); only the first URI is used")
-        return (f"rt.es_origin(run, {I}, {uris[0]!r}, {c.get('conf.index')!r}, {c.get('conf.query')!r}, {c.get('conf.offsetField') or ''!r}, "
-                f"{str(c.get('conf.initialOffset') or '')!r}, {int(c.get('conf.maxBatchSize') or 1000)}, outputs={s.outputs!r}, events={s.events!r})"), n
-
-    if cls in ("ElasticSearchDTarget", "ElasticsearchDTarget") and c.get("indexTemplate"):
-        n.append("the stage uses the transport protocol (port 9300); this writes over HTTP through the registry's ElasticsearchResource, so set SDC_ES_URL to the HTTP endpoint (credentials: SDC_SECRET_<STAGE>_API_KEY or _USERNAME/_PASSWORD)")
-        n.append("document type is not set (types are gone in current Elasticsearch)")
-        uris = [u for u in (c.get("uris") or []) if isinstance(u, str)]
-        return f"rt.es_target(run, {I}, lambda: {('http://' + uris[0]) if uris else ''!r}, {_el(c.get('indexTemplate'))}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
-
-    if cls == "MongoDBDSource":
-        if (c.get("configBean.mongoConfig.authenticationType") or "NONE") != "NONE":
-            raise _Stub("MongoDB origin is translated without separate authentication settings (credentials go in the connection string)")
-        conn = c.get("configBean.mongoConfig.connectionString")
-        cfn = f"lambda: rt.stage_secret({s.instance!r}, 'CONNECTION_STRING')" if (not conn or conn == "<redacted>") else f"lambda: ({translate(conn)})"
-        otype = c.get("configBean.offsetType") or "OBJECTID"
-        if otype not in ("OBJECTID", "STRING", "DATE"):
-            raise _Stub(f"offset type {otype} is not translated")
-        n.append("a MongoDB origin polls forever in StreamSets; here one run reads documents after the stored offset until none are left")
-        n.append("the connection string was removed from the export: set SDC_SECRET_" + __import__("re").sub(r"[^A-Za-z0-9]", "_", s.instance).upper() + "_CONNECTION_STRING; connection through the registry's MongoDBResource")
-        return (f"rt.mongo_origin(run, {I}, {cfn}, {c.get('configBean.mongoConfig.database')!r}, {c.get('configBean.mongoConfig.collection')!r}, "
-                f"{c.get('configBean.offsetField') or '_id'!r}, {otype!r}, {str(c.get('configBean.initialOffset') or '')!r}, {int(c.get('configBean.batchSize') or 1000)}, "
-                f"outputs={s.outputs!r}, events={s.events!r})"), n
-
-    if cls == "HttpClientDSource":
-        if (c.get("conf.httpMode") or "POLLING") != "POLLING" or (c.get("conf.pagination.mode") or "NONE") != "NONE":
-            raise _Stub("HTTP origin is translated for polling mode without pagination")
-        if (c.get("conf.dataFormat") or "JSON") not in ("JSON", "DELIMITED"):
-            raise _Stub(f"HTTP data format {c.get('conf.dataFormat')} is not translated")
-        method = c.get("conf.httpMethod") or "GET"
-        auth = c.get("conf.client.authType") or "NONE"
-        if auth == "BASIC":
-            u, pw = c.get("conf.client.basicAuth.username"), c.get("conf.client.basicAuth.password")
-            afn = f"lambda: (({translate(u) if u else repr('')}), ({translate(pw) if pw and pw != '<redacted>' else 'rt.stage_secret(' + repr(s.instance) + ', ' + repr('PASSWORD') + ')'}))"
-        elif auth == "NONE":
-            afn = "lambda: None"
+    if cls == "FieldEncryptDProcessor":
+        mode, prov = c.get("conf.mode"), c.get("conf.primaryKeyProvider") or "USER"
+        if mode not in ("ENCRYPT", "DECRYPT") or not c.get("conf.fieldPaths"):
+            raise _Stub("Encrypt and Decrypt Fields needs a mode and field paths")
+        ctx = {str(r.get("key")): str(r.get("value")) for r in _rows(c.get("conf.context")) if r.get("key")}
+        if prov == "AWS_KMS":
+            if not c.get("conf.aws.keyArn"):
+                raise _Stub("AWS KMS provider without a key ARN")
+            kms, keyfn = f"lambda: {c.get('conf.aws.keyArn')!r}", "None"
+            n.append("AWS KMS: uses the standard AWS credential chain of the code location; this path is interoperable with Data Collector by design but was not exercised (no AWS account in the parity tests)")
         else:
-            raise _Stub(f"authentication {auth} is not translated")
-        n.append("an HTTP polling origin polls forever (every conf.pollingInterval); here one run makes one request. Schedule the asset at the polling interval")
-        n.append("retry/backoff, TLS and proxy settings are not applied")
-        fmt = c.get("conf.dataFormat") or "JSON"
-        return (f"rt.http_origin(run, {I}, {_el(c.get('conf.resourceUrl'))}, {method!r}, {afn}, {fmt!r}, {(_pick(c, 'csvHeader') or 'NO_HEADER') != 'NO_HEADER'}, "
-                f"{(_pick(c, 'csvCustomDelimiter') or ',')!r}, outputs={s.outputs!r}, events={s.events!r})"), n
+            key = c.get("conf.key")
+            keyfn = (f"lambda: rt.stage_secret({s.instance!r}, 'KEY')" if (not key or key == "<redacted>") else f"lambda: ({translate(key)})")
+            kms = "None"
+            n.append("the Base64 key was removed from the export: set SDC_SECRET_" + __import__("re").sub(r"[^A-Za-z0-9]", "_", s.instance).upper() + "_KEY")
+        if (c.get("conf.cipher") or "").startswith("ALG_") and c.get("conf.cipher") != "ALG_AES_256_GCM_IV12_TAG16_HKDF_SHA384_ECDSA_P384":
+            n.append(f"cipher {c.get('conf.cipher')} is not applied: the AWS Encryption SDK's default suite for the key is used (decryption reads any suite)")
+        n.append("ciphertext is StreamSets-compatible both ways (checked against Data Collector 6.4.1); the SDK's key-commitment default is relaxed for that. Date and time fields are not supported yet")
+        return (f"rt.crypto_fields(run, {I}, {mode!r}, {list(c.get('conf.fieldPaths'))!r}, kms_key_arn_fn={kms}, key_fn={keyfn}, key_id={c.get('conf.keyId') or ''!r}, "
+                f"context={ctx!r}, {lanes}{err}{pre})"), n
 
     if cls == "GroovyDProcessor":
         if (c.get("scriptRecordType") or "NATIVE_OBJECTS") != "NATIVE_OBJECTS":
@@ -432,6 +400,10 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
     if cls in ("Base64EncodingDProcessor", "Base64DecodingDProcessor"):
         mode = "ENCODE" if cls.startswith("Base64Enc") else "DECODE"
         n.append("works on byte array fields only: a string field is a record error, as in Data Collector")
+        rows = _rows(c.get("fieldsToEncode") or c.get("fieldsToDecode"))
+        if rows:                                       # the 6.x schema: a list of (origin, result) pairs
+            pairs = [(r["originFieldPath"], r.get("resultFieldPath") or r["originFieldPath"]) for r in rows]
+            return f"rt.base64_field(run, {I}, {mode!r}, {pairs!r}, '', {bool(c.get('urlSafe'))}, {lanes}{err}{pre})", n
         return f"rt.base64_field(run, {I}, {mode!r}, {c.get('originFieldPath')!r}, {c.get('resultFieldPath')!r}, {bool(c.get('urlSafe'))}, {lanes}{err}{pre})", n
 
     if cls == "FieldValueReplacerDProcessor":

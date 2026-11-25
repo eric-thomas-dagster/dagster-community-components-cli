@@ -114,22 +114,23 @@ All evaluators get the scripting objects (`records`, `output.write`, `error.writ
 
 ## Encryption, decryption and hashing
 
-StreamSets has one **Encrypt and Decrypt Fields** processor (the Mode property picks encrypt or decrypt; one per stage). From IBM's documentation: it uses the **AWS Encryption SDK**
-(envelope encryption: a data key per operation, stored encrypted with the ciphertext), key provider **AWS KMS** (a key ARN) or a **user-supplied Base64 key** (with an optional key id),
-cipher suites that are AES-GCM (default `ALG_AES_256_GCM_IV12_TAG16_HKDF_SHA384_ECDSA_P384`; 12-byte IV, 16-byte tag), a frame size (default 4096), an optional
-**encryption context** (additional authenticated data that must match on decrypt), and optional data-key caching. The field's original type is stored in the ciphertext and restored on decrypt.
-Related stages: **Field Hasher** (MD5/SHA1/SHA256/SHA512/MURMUR3_128; in place, to a target field or header, or whole record) and **Field Masker**.
+**Encrypt and Decrypt Fields is translated, and its ciphertext is compatible in both directions** (checked against Data Collector 6.4.1: `tests/test_sdc_crypto_parity.py`).
+What the real stage does, as observed:
 
-What the converter does:
+- Ciphertext is a standard **AWS Encryption SDK message** (default suite `AES_256_GCM_IV12_TAG16_HKDF_SHA384_ECDSA_P384`, which is a *non-committing* suite).
+- With the **User Supplied Key** provider, the key provider id is `JceMasterKeyProvider`, the key id is the stage's *Key ID*, and the key is the Base64 AES key (16, 24 or 32 bytes).
+- The **plaintext is the value's text in UTF-8** (`42`, `2.5`, `true`), and the **field type is in the encryption context** as `SDC_FIELD_TYPE` (STRING, INTEGER, LONG, DOUBLE, BOOLEAN, DECIMAL, BYTE_ARRAY), next to your own context entries and the SDK's signing key. Decryption restores the type from there.
+- The Python SDK refuses non-committing suites by default; reading and writing StreamSets-compatible data needs `CommitmentPolicy.FORBID_ENCRYPT_ALLOW_DECRYPT`. `runtime.py` sets that and says why. It is a deliberate weakening of the SDK's key-commitment default, for compatibility only; a project that
+  only ever writes new data can use the SDK default and a committing suite.
 
-- The Encrypt/Decrypt stage is a **stub**, on purpose. No real export of it was found, so its property names are unverified, and **ciphertext written by StreamSets cannot be read by a replacement
-  unless the byte layout inside the AWS Encryption SDK message is known** (StreamSets stores the type with the data in a layout this project has not seen). Both are questions for the customer
-  (the report asks them): is data encrypted by StreamSets still read after the move, with which key provider, and is an encryption context used?
-- `runtime.py` has what a hand-written replacement needs: `encrypt_value` / `decrypt_value` (AWS Encryption SDK, KMS or a Base64 AES key, encryption context enforced, types restored) and a stage
-  `crypto_fields(run, inst, mode, fields, kms_key_arn_fn=..., key_fn=..., context=...)`. The AWS Encryption SDK message format is interoperable between its Java and Python implementations,
-  so KMS-encrypted data is readable if the **plaintext layout** matches; the layout used here (`{"t": type, "v": value}` JSON) is this project's own.
-- Keys never go in generated code: pass them from the environment (`SDC_SECRET_*`) or KMS.
-- Hashes: only in-place hashing is translated (see the catalog). A pipeline that hashes to join against old hashes must be compared on one value first.
+So **data StreamSets encrypted can be read after the move, and data the converted code encrypts can be read by StreamSets**, given the same key, key id and context. `runtime.encrypt_value`, `decrypt_value` and the stage `crypto_fields` implement this; the translated stage
+reads the Base64 key from `SDC_SECRET_<STAGE>_KEY` (the export drops it).
+
+Not covered: the **AWS KMS** provider is translated (the SDK's KMS provider is interoperable by design) but was not exercised, since there was no AWS account in the tests; **date and time fields** are not supported yet (their plaintext form was not checked); the `cipher` setting is not applied
+(the SDK's default suite is used; decryption reads any suite); data-key caching and frame size have no effect.
+
+Other stages in this family: **Field Hasher** is translated for in-place and target-field/header hashing with MD5, SHA1, SHA256, SHA512 (hash of the field's **native bytes**: integers as 4 little-endian bytes, 8 past 32 bits; doubles as 8; strings as UTF-8; checked against 3.18.1 and 6.4.1);
+whole-record hashing and MURMUR3_128 are stubs. **Field Masker** is translated for variable length, fixed length (ten `x`), custom (`#` shows the character) and regex (groups to show; a value that does not match is left as it is).
 
 ## Verified against a real Data Collector (3.18.1)
 
@@ -194,4 +195,3 @@ Not verified, so check on a real run before trusting parity:
 - Control Hub export archives are read (`.zip` of pipeline JSON); the Control Hub job and schedule objects are not parsed.
 - Log formats: the Common/Combined Log Format field names (`/remoteHost /request /status ...`) and the grok names (`/clientip /verb /response /bytes ...`) are the documented/standard ones, not checked against a Data Collector's output.
 - Kafka and Geolocation are tested against a fake client and a generated `.mmdb`, not a broker or MaxMind's database.
-- Encrypt/Decrypt: see *Encryption*; the stage itself is not translated.
