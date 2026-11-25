@@ -1,0 +1,22 @@
+[project]
+name = "rmj_sample"
+version = "0.1.0"
+requires-python = ">=3.10"
+dependencies = ["dagster>=1.11", "sqlalchemy>=2", "dagster-community-components>=0.10.177"]
+
+[dependency-groups]
+dev = ["dagster-webserver", "dagster-dg-cli"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/rmj_sample"]
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "rmj_sample"
+registry_modules = ["rmj_sample.components"]

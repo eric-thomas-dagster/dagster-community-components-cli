@@ -1,0 +1,43 @@
+type: dagster_community_components.ShellCommandAssetComponent
+attributes:
+  asset_name: sales_raw
+  command: "echo extracting sales for ${run_date}"
+  env_vars: {run_date: "today"}
+  pool: batch_queue
+  retry_policy_max_retries: 2
+  group_name: nightly_sales_load
+---
+type: dagster_community_components.ShellCommandAssetComponent
+attributes:
+  asset_name: inventory_raw
+  command: "echo extracting inventory"
+  pool: batch_queue
+  retry_policy_max_retries: 2
+  group_name: nightly_sales_load
+---
+type: dagster_community_components.SqlAssetComponent
+attributes:
+  asset_key: fact_sales
+  connection_env: RMJ_CONN_WAREHOUSE
+  sql: "select 1"
+  deps: [sales_raw, inventory_raw]
+  pool: db_queue
+  group_name: nightly_sales_load
+---
+type: dagster_community_components.SqlAssetComponent
+attributes:
+  asset_key: fact_inventory
+  connection_env: RMJ_CONN_WAREHOUSE
+  sql: "select 1"
+  deps: [sales_raw, inventory_raw]
+  pool: db_queue
+  group_name: nightly_sales_load
+---
+type: dagster_community_components.CronScheduleComponent
+attributes:
+  schedule_name: nightly_sales_load
+  cron_expression: "30 2 * * *"
+  asset_keys: [sales_raw, inventory_raw, fact_sales, fact_inventory, sales_margin]
+  job_name: nightly_sales_load
+  execution_timezone: America/Chicago
+  default_status: STOPPED

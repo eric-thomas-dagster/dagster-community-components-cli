@@ -1,0 +1,22 @@
+type: dagster_community_components.ShellCommandAssetComponent
+attributes:
+  asset_name: extract
+  command: "echo hi"
+  retry_policy_max_retries: 2
+  group_name: nightly
+---
+type: dagster_community_components.ShellCommandAssetComponent
+attributes:
+  asset_name: load
+  command: "echo load"
+  deps: [extract]
+  group_name: nightly
+---
+type: dagster_community_components.CronScheduleComponent
+attributes:
+  schedule_name: nightly
+  cron_expression: "30 2 * * *"
+  asset_keys: [extract, load]
+  job_name: nightly
+  execution_timezone: UTC
+  default_status: STOPPED

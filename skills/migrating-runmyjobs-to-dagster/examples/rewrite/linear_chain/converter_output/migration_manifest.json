@@ -1,0 +1,420 @@
+{
+  "version": 1,
+  "units": [
+    {
+      "id": "U001",
+      "kind": "process_definition",
+      "source": "FIN_NIGHTLY/pull (PULL)",
+      "artifact": "step pull of asset fin_nightly",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+      ],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "FIN_NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U002",
+      "kind": "process_definition",
+      "source": "FIN_NIGHTLY/transform (TRANSFORM)",
+      "artifact": "step transform of asset fin_nightly",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+      ],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "FIN_NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U003",
+      "kind": "process_definition",
+      "source": "FIN_NIGHTLY/publish (PUBLISH)",
+      "artifact": "step publish of asset fin_nightly",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')",
+        "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it",
+        "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database"
+      ],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "FIN_NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U004",
+      "kind": "chain",
+      "source": "FIN_NIGHTLY",
+      "artifact": "asset fin_nightly (TaskChainAssetComponent)",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "per-step timeouts become one chain timeout of 900s (the sum of the steps that have one)",
+        "3 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call"
+      ],
+      "expected": {
+        "assets": [
+          "fin_nightly"
+        ],
+        "asset": "fin_nightly",
+        "deps": [],
+        "job": "fin_nightly_job"
+      },
+      "route": "rewrite",
+      "rewrite_unit": "FIN_NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U005",
+      "kind": "process_definition",
+      "source": "FIN_MIXED_RETRY/pull (PULL)",
+      "artifact": "fin_mixed_retry__pull",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+      ],
+      "expected": {
+        "asset": "fin_mixed_retry__pull",
+        "deps": []
+      },
+      "route": "rewrite",
+      "rewrite_unit": "FIN_MIXED_RETRY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U006",
+      "kind": "process_definition",
+      "source": "FIN_MIXED_RETRY/alone (PUBLISH_ALONE)",
+      "artifact": "fin_mixed_retry__alone",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')",
+        "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+      ],
+      "expected": {
+        "asset": "fin_mixed_retry__alone",
+        "deps": [
+          "fin_mixed_retry__pull"
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "FIN_MIXED_RETRY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U007",
+      "kind": "chain",
+      "source": "FIN_MIXED_RETRY",
+      "artifact": "job fin_mixed_retry",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "kept as one asset per call: steps have different retry counts (the component retries the whole chain)"
+      ],
+      "expected": {
+        "assets": [
+          "fin_mixed_retry__pull",
+          "fin_mixed_retry__alone"
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "FIN_MIXED_RETRY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U008",
+      "kind": "schedule",
+      "source": "FIN_SCHED",
+      "artifact": "1 schedule(s)",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "schedules": [
+          {
+            "name": "fin_sched",
+            "cron": "30 22 * * *"
+          }
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "FIN_NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U009",
+      "kind": "file_event",
+      "source": "FIN_FILE_ARRIVED",
+      "artifact": "sensor fin_file_arrived -> job fin_nightly_job_on_fin_file_arrived",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "the sensor starts stopped; its cursor remembers files already seen, so turn it on once the parallel run starts"
+      ],
+      "expected": {
+        "sensor": "fin_file_arrived",
+        "job": "fin_nightly_job_on_fin_file_arrived"
+      },
+      "route": "rewrite",
+      "rewrite_unit": "FIN_NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U010",
+      "kind": "file_event",
+      "source": "FIN_FILE_NO_CHECKS",
+      "artifact": "sensor fin_file_no_checks -> job fin_mixed_retry_on_fin_file_no_checks",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "no minimum size, age or stability check: a file still being written can start the job (RunMyJobs files events usually have one; check the source)",
+        "the sensor starts stopped; its cursor remembers files already seen, so turn it on once the parallel run starts"
+      ],
+      "expected": {
+        "sensor": "fin_file_no_checks",
+        "job": "fin_mixed_retry_on_fin_file_no_checks"
+      },
+      "route": "rewrite",
+      "rewrite_unit": "FIN_MIXED_RETRY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U011",
+      "kind": "queue",
+      "source": "BATCH_QUEUE",
+      "artifact": "pool batch_queue",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: every unit using this queue passed its gates (FIN_MIXED_RETRY, FIN_NIGHTLY); pool and limit are in the header",
+      "reason": "",
+      "notes": [
+        "configure Dagster pool 'batch_queue' with limit 3"
+      ],
+      "expected": {
+        "pool": "batch_queue",
+        "limit": 3
+      },
+      "route": "rewrite",
+      "rewrite_units": [
+        "FIN_MIXED_RETRY",
+        "FIN_NIGHTLY"
+      ],
+      "gates_by_unit": {
+        "FIN_NIGHTLY": {
+          "passed": true,
+          "gates": {
+            "definitions_load": "pass",
+            "matches_spec": "pass",
+            "commands_preserved": "pass",
+            "completeness": "pass",
+            "generated_tests": "pass",
+            "structural_checks": "not run",
+            "no_stub_left": "pass",
+            "no_secret_values": "pass",
+            "no_invented_apis": "pass"
+          }
+        },
+        "FIN_MIXED_RETRY": {
+          "passed": true,
+          "gates": {
+            "definitions_load": "pass",
+            "matches_spec": "pass",
+            "commands_preserved": "pass",
+            "completeness": "pass",
+            "generated_tests": "pass",
+            "structural_checks": "not run",
+            "no_stub_left": "pass",
+            "no_secret_values": "pass",
+            "no_invented_apis": "pass"
+          }
+        }
+      }
+    }
+  ],
+  "questions": {
+    "FIN_NIGHTLY": [
+      "Confirm the schedule against what actually runs today (the Q1 run history is the check)",
+      "Which database does each SQL connection point to (WAREHOUSE), and how are its credentials supplied?",
+      "Who owns this chain, and how fresh must its output be (an SLA)? Owners and freshness are added as Dagster metadata once known"
+    ],
+    "FIN_MIXED_RETRY": [
+      "Confirm the schedule against what actually runs today (the Q1 run history is the check)",
+      "Which database does each SQL connection point to (WAREHOUSE), and how are its credentials supplied?",
+      "Who owns this chain, and how fresh must its output be (an SLA)? Owners and freshness are added as Dagster metadata once known"
+    ]
+  },
+  "rewrite_passed": [
+    "FIN_MIXED_RETRY",
+    "FIN_NIGHTLY"
+  ]
+}

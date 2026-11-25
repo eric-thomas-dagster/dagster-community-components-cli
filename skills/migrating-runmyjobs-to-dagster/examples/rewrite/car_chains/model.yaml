@@ -1,0 +1,230 @@
+queues: []
+process_definitions: []
+chains:
+- name: Forecast_Replenishment_Template
+  application: ''
+  description: Forecast and Replenishment Daily Overall Chain
+  steps:
+  - name: Initialize
+    calls:
+    - name: initialize
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Post POSDM Idocs
+    calls:
+    - name: post posdm idocs
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Reprocess Idocs in Error
+    calls:
+    - name: reprocess idocs in error
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Post PIDs
+    calls:
+    - name: post pids
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Nightly Processing
+    calls:
+    - name: full forecast and replenishment run
+      process: Full_FR_Run
+      params: {}
+      param_refs:
+        P_REGION: P_REGION
+      wait_events: []
+      precondition: null
+    - name: process negative stock
+      process: Process_Negative_Stock_Template
+      params: {}
+      param_refs:
+        P_REGION: P_REGION
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  precondition: null
+  parameters:
+  - name: P_REGION
+    direction: in
+    type: String
+    default: null
+    mandatory: true
+  inline: false
+  notes: []
+  run_window: ''
+- name: Full_FR_Run
+  application: ''
+  description: Full Forecast and Replenishment run
+  steps:
+  - name: Preparation Run
+    calls:
+    - name: preparation run
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Promotion Forecast
+    calls:
+    - name: promotion forecast
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Replenish the Shops
+    calls:
+    - name: replenish shop 1
+      process: ReplenishShop
+      params:
+        P_AREA: North
+      param_refs:
+        P_REGION: P_REGION
+      wait_events:
+      - event: WaitForShop1
+        clears: true
+      precondition: null
+    - name: replenish shop 2
+      process: ReplenishShop
+      params:
+        P_AREA: South
+      param_refs:
+        P_REGION: P_REGION
+      wait_events:
+      - event: WaitForShop2
+        clears: true
+      precondition: null
+    precondition: null
+    status_handlers: []
+  precondition: null
+  parameters:
+  - name: P_REGION
+    direction: in
+    type: String
+    default: null
+    mandatory: true
+  inline: false
+  notes: []
+  run_window: ''
+- name: Process_Negative_Stock_Template
+  application: ''
+  description: Process Negative Stock
+  steps:
+  - name: Count Negative Stock
+    calls:
+    - name: count negative stock
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Create PIDs
+    calls:
+    - name: create pids
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  precondition: null
+  parameters:
+  - name: P_REGION
+    direction: in
+    type: String
+    default: null
+    mandatory: true
+  inline: false
+  notes: []
+  run_window: ''
+- name: ReplenishShop
+  application: ''
+  description: Replenish a Shop
+  steps:
+  - name: Wait for Truck
+    calls:
+    - name: wait for truck
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Calculate Replenishment
+    calls:
+    - name: calculate replenishment
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Pick Orders
+    calls:
+    - name: pick orders
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  - name: Confirmation Truck loaded
+    calls:
+    - name: confirmation truck loaded
+      process: System_DoNothing
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers: []
+  precondition: null
+  parameters:
+  - name: P_REGION
+    direction: in
+    type: String
+    default: null
+    mandatory: true
+  - name: P_AREA
+    direction: in
+    type: String
+    default: null
+    mandatory: true
+  inline: false
+  notes: []
+  run_window: ''
+schedules: []
+events:
+  WaitForShop1: ''
+  WaitForShop2: ''

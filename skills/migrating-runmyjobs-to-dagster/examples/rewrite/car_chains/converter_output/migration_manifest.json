@@ -1,0 +1,877 @@
+{
+  "version": 1,
+  "units": [
+    {
+      "id": "U001",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/initialize (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__initialize",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__initialize",
+        "deps": []
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U002",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/post posdm idocs (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__post_posdm_idocs",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__post_posdm_idocs",
+        "deps": [
+          "forecast_replenishment_template__initialize"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U003",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/reprocess idocs in error (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__reprocess_idocs_in_error",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__reprocess_idocs_in_error",
+        "deps": [
+          "forecast_replenishment_template__post_posdm_idocs"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U004",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/post pids (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__post_pids",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__post_pids",
+        "deps": [
+          "forecast_replenishment_template__reprocess_idocs_in_error"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U005",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/preparation run (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run",
+        "deps": [
+          "forecast_replenishment_template__post_pids"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U006",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/promotion forecast (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U007",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/wait for truck (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U008",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/calculate replenishment (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U009",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/pick orders (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U010",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/confirmation truck loaded (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U011",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/wait for truck (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U012",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/calculate replenishment (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U013",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/pick orders (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U014",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/confirmation truck loaded (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+        "deps": [
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U015",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/count negative stock (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__process_negative_stock__count_negative_stock",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__process_negative_stock__count_negative_stock",
+        "deps": [
+          "forecast_replenishment_template__post_pids"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U016",
+      "kind": "process_definition",
+      "source": "Forecast_Replenishment_Template/create pids (System_DoNothing)",
+      "artifact": "forecast_replenishment_template__process_negative_stock__create_pids",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "forecast_replenishment_template__process_negative_stock__create_pids",
+        "deps": [
+          "forecast_replenishment_template__process_negative_stock__count_negative_stock"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U017",
+      "kind": "chain",
+      "source": "Forecast_Replenishment_Template",
+      "artifact": "job forecast_replenishment_template",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [
+        "kept as one asset per call: step 'Nightly Processing' runs 2 calls in parallel, which one chain asset cannot express",
+        "step 'Nightly Processing' calls chain 'Full_FR_Run': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+        "step 'Replenish the Shops' calls chain 'ReplenishShop': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+        "the call to 'ReplenishShop' waits for event(s) WaitForShop1: not enforced (see the first inlined step)",
+        "step 'Replenish the Shops' calls chain 'ReplenishShop': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+        "the call to 'ReplenishShop' waits for event(s) WaitForShop2: not enforced (see the first inlined step)",
+        "step 'Nightly Processing' calls chain 'Process_Negative_Stock_Template': its steps are inlined here as assets named forecast_replenishment_template__process_negative_stock__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)"
+      ],
+      "expected": {
+        "assets": [
+          "forecast_replenishment_template__initialize",
+          "forecast_replenishment_template__post_posdm_idocs",
+          "forecast_replenishment_template__reprocess_idocs_in_error",
+          "forecast_replenishment_template__post_pids",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+          "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+          "forecast_replenishment_template__process_negative_stock__count_negative_stock",
+          "forecast_replenishment_template__process_negative_stock__create_pids"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Forecast_Replenishment_Template"
+    },
+    {
+      "id": "U018",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/preparation run (System_DoNothing)",
+      "artifact": "full_fr_run__preparation_run",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__preparation_run",
+        "deps": []
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U019",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/promotion forecast (System_DoNothing)",
+      "artifact": "full_fr_run__promotion_forecast",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__promotion_forecast",
+        "deps": [
+          "full_fr_run__preparation_run"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U020",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/wait for truck (System_DoNothing)",
+      "artifact": "full_fr_run__replenish_shop_1__wait_for_truck",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__replenish_shop_1__wait_for_truck",
+        "deps": [
+          "full_fr_run__promotion_forecast"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U021",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/calculate replenishment (System_DoNothing)",
+      "artifact": "full_fr_run__replenish_shop_1__calculate_replenishment",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__replenish_shop_1__calculate_replenishment",
+        "deps": [
+          "full_fr_run__replenish_shop_1__wait_for_truck"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U022",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/pick orders (System_DoNothing)",
+      "artifact": "full_fr_run__replenish_shop_1__pick_orders",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__replenish_shop_1__pick_orders",
+        "deps": [
+          "full_fr_run__replenish_shop_1__calculate_replenishment"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U023",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/confirmation truck loaded (System_DoNothing)",
+      "artifact": "full_fr_run__replenish_shop_1__confirmation_truck_loaded",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__replenish_shop_1__confirmation_truck_loaded",
+        "deps": [
+          "full_fr_run__replenish_shop_1__pick_orders"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U024",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/wait for truck (System_DoNothing)",
+      "artifact": "full_fr_run__replenish_shop_2__wait_for_truck",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__replenish_shop_2__wait_for_truck",
+        "deps": [
+          "full_fr_run__promotion_forecast"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U025",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/calculate replenishment (System_DoNothing)",
+      "artifact": "full_fr_run__replenish_shop_2__calculate_replenishment",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__replenish_shop_2__calculate_replenishment",
+        "deps": [
+          "full_fr_run__replenish_shop_2__wait_for_truck"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U026",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/pick orders (System_DoNothing)",
+      "artifact": "full_fr_run__replenish_shop_2__pick_orders",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__replenish_shop_2__pick_orders",
+        "deps": [
+          "full_fr_run__replenish_shop_2__calculate_replenishment"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U027",
+      "kind": "process_definition",
+      "source": "Full_FR_Run/confirmation truck loaded (System_DoNothing)",
+      "artifact": "full_fr_run__replenish_shop_2__confirmation_truck_loaded",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "full_fr_run__replenish_shop_2__confirmation_truck_loaded",
+        "deps": [
+          "full_fr_run__replenish_shop_2__pick_orders"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U028",
+      "kind": "chain",
+      "source": "Full_FR_Run",
+      "artifact": "job full_fr_run",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [
+        "kept as one asset per call: step 'Replenish the Shops' runs 2 calls in parallel, which one chain asset cannot express",
+        "step 'Replenish the Shops' calls chain 'ReplenishShop': its steps are inlined here as assets named full_fr_run__replenish_shop_1__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+        "the call to 'ReplenishShop' waits for event(s) WaitForShop1: not enforced (see the first inlined step)",
+        "step 'Replenish the Shops' calls chain 'ReplenishShop': its steps are inlined here as assets named full_fr_run__replenish_shop_2__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+        "the call to 'ReplenishShop' waits for event(s) WaitForShop2: not enforced (see the first inlined step)"
+      ],
+      "expected": {
+        "assets": [
+          "full_fr_run__preparation_run",
+          "full_fr_run__promotion_forecast",
+          "full_fr_run__replenish_shop_1__wait_for_truck",
+          "full_fr_run__replenish_shop_1__calculate_replenishment",
+          "full_fr_run__replenish_shop_1__pick_orders",
+          "full_fr_run__replenish_shop_1__confirmation_truck_loaded",
+          "full_fr_run__replenish_shop_2__wait_for_truck",
+          "full_fr_run__replenish_shop_2__calculate_replenishment",
+          "full_fr_run__replenish_shop_2__pick_orders",
+          "full_fr_run__replenish_shop_2__confirmation_truck_loaded"
+        ]
+      },
+      "route": "converter",
+      "rewrite_unit": "Full_FR_Run"
+    },
+    {
+      "id": "U029",
+      "kind": "process_definition",
+      "source": "Process_Negative_Stock_Template/count negative stock (System_DoNothing)",
+      "artifact": "step count_negative_stock of asset process_negative_stock_template",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "Process_Negative_Stock_Template",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U030",
+      "kind": "process_definition",
+      "source": "Process_Negative_Stock_Template/create pids (System_DoNothing)",
+      "artifact": "step create_pids of asset process_negative_stock_template",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "Process_Negative_Stock_Template",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U031",
+      "kind": "chain",
+      "source": "Process_Negative_Stock_Template",
+      "artifact": "asset process_negative_stock_template (TaskChainAssetComponent)",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "2 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call"
+      ],
+      "expected": {
+        "assets": [
+          "process_negative_stock_template"
+        ],
+        "asset": "process_negative_stock_template",
+        "deps": []
+      },
+      "route": "rewrite",
+      "rewrite_unit": "Process_Negative_Stock_Template",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U032",
+      "kind": "process_definition",
+      "source": "ReplenishShop/wait for truck (System_DoNothing)",
+      "artifact": "step wait_for_truck of asset replenishshop",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "ReplenishShop",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U033",
+      "kind": "process_definition",
+      "source": "ReplenishShop/calculate replenishment (System_DoNothing)",
+      "artifact": "step calculate_replenishment of asset replenishshop",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "ReplenishShop",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U034",
+      "kind": "process_definition",
+      "source": "ReplenishShop/pick orders (System_DoNothing)",
+      "artifact": "step pick_orders of asset replenishshop",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "ReplenishShop",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U035",
+      "kind": "process_definition",
+      "source": "ReplenishShop/confirmation truck loaded (System_DoNothing)",
+      "artifact": "step confirmation_truck_loaded of asset replenishshop",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {},
+      "route": "rewrite",
+      "rewrite_unit": "ReplenishShop",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U036",
+      "kind": "chain",
+      "source": "ReplenishShop",
+      "artifact": "asset replenishshop (TaskChainAssetComponent)",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "4 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call"
+      ],
+      "expected": {
+        "assets": [
+          "replenishshop"
+        ],
+        "asset": "replenishshop",
+        "deps": []
+      },
+      "route": "rewrite",
+      "rewrite_unit": "ReplenishShop",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    }
+  ],
+  "questions": {
+    "Forecast_Replenishment_Template": [
+      "What does the caller pass for P_AREA, P_REGION? (no value in the export; the Python output takes them as run config at launch)",
+      "Is P_REGION the business key this chain runs for (a date, period, region or plant)? If so it can become a partition, so you can backfill and see which keys ran; if not, leave it as a parameter",
+      "When does this chain run? The export has no submit frame or file event for it (it may be started by a person, another chain or an event)",
+      "What raises event WaitForShop1, WaitForShop2, and should it be cleared after use? Dagster needs the producer (a sensor on a file or asset, or another chain) to model it",
+      "Who owns this chain, and how fresh must its output be (an SLA)? Owners and freshness are added as Dagster metadata once known"
+    ],
+    "Full_FR_Run": [
+      "What does the caller pass for P_AREA, P_REGION? (no value in the export; the Python output takes them as run config at launch)",
+      "Is P_REGION the business key this chain runs for (a date, period, region or plant)? If so it can become a partition, so you can backfill and see which keys ran; if not, leave it as a parameter",
+      "When does this chain run? The export has no submit frame or file event for it (it may be started by a person, another chain or an event)",
+      "What raises event WaitForShop1, WaitForShop2, and should it be cleared after use? Dagster needs the producer (a sensor on a file or asset, or another chain) to model it",
+      "Who owns this chain, and how fresh must its output be (an SLA)? Owners and freshness are added as Dagster metadata once known"
+    ],
+    "Process_Negative_Stock_Template": [
+      "What does the caller pass for P_REGION? (no value in the export; the Python output takes them as run config at launch)",
+      "Is P_REGION the business key this chain runs for (a date, period, region or plant)? If so it can become a partition, so you can backfill and see which keys ran; if not, leave it as a parameter",
+      "When does this chain run? The export has no submit frame or file event for it (it may be started by a person, another chain or an event)",
+      "Who owns this chain, and how fresh must its output be (an SLA)? Owners and freshness are added as Dagster metadata once known"
+    ],
+    "ReplenishShop": [
+      "What does the caller pass for P_AREA, P_REGION? (no value in the export; the Python output takes them as run config at launch)",
+      "Is P_REGION the business key this chain runs for (a date, period, region or plant)? If so it can become a partition, so you can backfill and see which keys ran; if not, leave it as a parameter",
+      "When does this chain run? The export has no submit frame or file event for it (it may be started by a person, another chain or an event)",
+      "Who owns this chain, and how fresh must its output be (an SLA)? Owners and freshness are added as Dagster metadata once known"
+    ]
+  },
+  "rewrite_passed": [
+    "Process_Negative_Stock_Template",
+    "ReplenishShop"
+  ]
+}

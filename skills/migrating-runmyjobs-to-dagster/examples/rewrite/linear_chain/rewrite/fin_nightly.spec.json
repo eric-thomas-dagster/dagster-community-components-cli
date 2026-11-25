@@ -1,0 +1,512 @@
+{
+ "acceptable_differences": [
+  "asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it",
+  "a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above",
+  "queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone",
+  "status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps",
+  "RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so",
+  "'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not"
+ ],
+ "accounting": [
+  {
+   "id": "FIN_NIGHTLY/pull",
+   "kind": "call",
+   "what": "PULL (os)"
+  },
+  {
+   "id": "FIN_NIGHTLY/transform",
+   "kind": "call",
+   "what": "TRANSFORM (python)"
+  },
+  {
+   "id": "FIN_NIGHTLY/publish",
+   "kind": "call",
+   "what": "PUBLISH (sql)"
+  },
+  {
+   "id": "FIN_SCHED",
+   "kind": "schedule",
+   "what": "submit frame, time zone America/New_York"
+  },
+  {
+   "id": "BATCH_QUEUE",
+   "kind": "queue",
+   "what": "queue (pool batch_queue)"
+  },
+  {
+   "id": "FIN_FILE_ARRIVED",
+   "kind": "file_event",
+   "what": "file event on /data/inbound/fin"
+  },
+  {
+   "id": "FIN_NIGHTLY#run_window",
+   "kind": "run_window",
+   "what": "chain runs only inside 22:00-23:59 America/New_York mon,tue; outside it the run is skipped (not failed)"
+  }
+ ],
+ "application": "FIN",
+ "calls": [
+  {
+   "application": "FIN",
+   "call": "pull",
+   "command": "echo pull ${run_date}",
+   "command_normalized": "echo pull <run_date>",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "step pull of asset fin_nightly",
+     "caveat": "",
+     "manifest_id": "U001",
+     "notes": [
+      "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+     ],
+     "status": "converted"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "FIN_NIGHTLY/pull",
+   "max_starts": 2,
+   "outputs": [],
+   "parameters": {
+    "run_date": "today"
+   },
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "batch_queue",
+   "precondition": null,
+   "process_definition": "PULL",
+   "queue": "BATCH_QUEUE",
+   "run_as": "",
+   "run_window": "",
+   "step": "s1",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [
+    3
+   ],
+   "time_zone": "",
+   "timeout_seconds": 600,
+   "type": "os",
+   "upstream": [],
+   "wait_events": []
+  },
+  {
+   "application": "FIN",
+   "call": "transform",
+   "command": "print('transform')",
+   "command_normalized": "print('transform')",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "step transform of asset fin_nightly",
+     "caveat": "",
+     "manifest_id": "U002",
+     "notes": [
+      "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+     ],
+     "status": "converted"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "FIN_NIGHTLY/transform",
+   "max_starts": 2,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "batch_queue",
+   "precondition": null,
+   "process_definition": "TRANSFORM",
+   "queue": "BATCH_QUEUE",
+   "run_as": "",
+   "run_window": "",
+   "step": "s2",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "python",
+   "upstream": [
+    "FIN_NIGHTLY/pull"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "FIN",
+   "call": "publish",
+   "command": "select 1",
+   "command_normalized": "select 1",
+   "command_redacted": 0,
+   "connection": "WAREHOUSE",
+   "converter": [
+    {
+     "artifact": "step publish of asset fin_nightly",
+     "caveat": "",
+     "manifest_id": "U003",
+     "notes": [
+      "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')",
+      "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it",
+      "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database"
+     ],
+     "status": "converted"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "FIN_NIGHTLY/publish",
+   "max_starts": 2,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "batch_queue",
+   "precondition": null,
+   "process_definition": "PUBLISH",
+   "queue": "BATCH_QUEUE",
+   "run_as": "",
+   "run_window": "",
+   "step": "s3",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": 300,
+   "type": "sql",
+   "upstream": [
+    "FIN_NIGHTLY/transform"
+   ],
+   "wait_events": []
+  }
+ ],
+ "connections": [
+  "WAREHOUSE"
+ ],
+ "converter": {
+  "assets": [
+   "fin_nightly"
+  ],
+  "collapsed_to_one_asset": true,
+  "degraded": [
+   "FIN_NIGHTLY"
+  ],
+  "disposition": "degraded",
+  "manifest_units": [
+   "U001",
+   "U002",
+   "U003",
+   "U004",
+   "U008",
+   "U009"
+  ],
+  "reasons": [
+   "3 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call",
+   "per-step timeouts become one chain timeout of 900s (the sum of the steps that have one)",
+   "the sensor starts stopped; its cursor remembers files already seen, so turn it on once the parallel run starts"
+  ],
+  "rows": [
+   {
+    "artifact": "step pull of asset fin_nightly",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U001",
+    "notes": [
+     "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+    ],
+    "source": "FIN_NIGHTLY/pull (PULL)",
+    "status": "converted"
+   },
+   {
+    "artifact": "step transform of asset fin_nightly",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U002",
+    "notes": [
+     "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+    ],
+    "source": "FIN_NIGHTLY/transform (TRANSFORM)",
+    "status": "converted"
+   },
+   {
+    "artifact": "step publish of asset fin_nightly",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U003",
+    "notes": [
+     "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')",
+     "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it",
+     "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database"
+    ],
+    "source": "FIN_NIGHTLY/publish (PUBLISH)",
+    "status": "converted"
+   },
+   {
+    "artifact": "asset fin_nightly (TaskChainAssetComponent)",
+    "caveat": "degraded",
+    "expected": {
+     "asset": "fin_nightly",
+     "assets": [
+      "fin_nightly"
+     ],
+     "deps": [],
+     "job": "fin_nightly_job"
+    },
+    "kind": "chain",
+    "manifest_id": "U004",
+    "notes": [
+     "per-step timeouts become one chain timeout of 900s (the sum of the steps that have one)",
+     "3 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call"
+    ],
+    "source": "FIN_NIGHTLY",
+    "status": "needs review"
+   },
+   {
+    "artifact": "1 schedule(s)",
+    "caveat": "",
+    "expected": {
+     "schedules": [
+      {
+       "cron": "30 22 * * *",
+       "name": "fin_sched"
+      }
+     ]
+    },
+    "kind": "schedule",
+    "manifest_id": "U008",
+    "notes": [],
+    "source": "FIN_SCHED",
+    "status": "converted"
+   },
+   {
+    "artifact": "sensor fin_file_arrived -> job fin_nightly_job_on_fin_file_arrived",
+    "caveat": "",
+    "expected": {
+     "job": "fin_nightly_job_on_fin_file_arrived",
+     "sensor": "fin_file_arrived"
+    },
+    "kind": "file_event",
+    "manifest_id": "U009",
+    "notes": [
+     "the sensor starts stopped; its cursor remembers files already seen, so turn it on once the parallel run starts"
+    ],
+    "source": "FIN_FILE_ARRIVED",
+    "status": "converted"
+   }
+  ],
+  "status": "needs review",
+  "stubbed": []
+ },
+ "description": "Nightly finance publish.",
+ "edges": [
+  [
+   "FIN_NIGHTLY/pull",
+   "FIN_NIGHTLY/transform"
+  ],
+  [
+   "FIN_NIGHTLY/transform",
+   "FIN_NIGHTLY/publish"
+  ]
+ ],
+ "expected": {
+  "commands": [
+   {
+    "call": "FIN_NIGHTLY/pull",
+    "normalized": "echo pull <run_date>",
+    "rendered": "echo pull today",
+    "type": "os"
+   },
+   {
+    "call": "FIN_NIGHTLY/transform",
+    "normalized": "print('transform')",
+    "rendered": "print('transform')",
+    "type": "python"
+   },
+   {
+    "call": "FIN_NIGHTLY/publish",
+    "normalized": "select 1",
+    "rendered": "select 1",
+    "type": "sql"
+   }
+  ],
+  "external_systems": [
+   "sql"
+  ],
+  "file_events": [
+   "FIN_FILE_ARRIVED"
+  ],
+  "notification_targets": [],
+  "order_pairs": [
+   [
+    "FIN_NIGHTLY/pull",
+    "FIN_NIGHTLY/transform"
+   ],
+   [
+    "FIN_NIGHTLY/transform",
+    "FIN_NIGHTLY/publish"
+   ]
+  ],
+  "pools": [
+   "batch_queue"
+  ],
+  "retries": {
+   "FIN_NIGHTLY/publish": 1,
+   "FIN_NIGHTLY/pull": 1,
+   "FIN_NIGHTLY/transform": 1
+  },
+  "schedules": [
+   {
+    "cron": "30 22 * * *",
+    "name": "FIN_SCHED",
+    "time_zone": "America/New_York"
+   }
+  ],
+  "structural_checks": [],
+  "untranslatable_schedule_elements": []
+ },
+ "extractor_notes": [],
+ "file_events": [
+  {
+   "directory": "/data/inbound/fin",
+   "min_age_seconds": 120,
+   "min_size_bytes": 1,
+   "name": "FIN_FILE_ARRIVED",
+   "one_run_per_poll": false,
+   "pattern": "fin_*.csv",
+   "poll_seconds": 60,
+   "recursive": false,
+   "stable": true
+  }
+ ],
+ "flatten_notes": [],
+ "kind": "chain",
+ "manifest_units": [
+  "U001",
+  "U002",
+  "U003",
+  "U004",
+  "U008",
+  "U009"
+ ],
+ "must_preserve": [
+  "the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)",
+  "every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them",
+  "the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)",
+  "the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)",
+  "retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success",
+  "what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)",
+  "notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code"
+ ],
+ "notifications": [],
+ "parameters": [],
+ "preconditions": [],
+ "purpose": [
+  {
+   "inferred": false,
+   "text": "a chain of 3 step(s) with 3 call(s) of type(s): os, python, sql"
+  },
+  {
+   "inferred": false,
+   "text": "its own description reads: 'Nightly finance publish.'"
+  },
+  {
+   "inferred": false,
+   "text": "its final call(s) are FIN_NIGHTLY/publish (calls nothing else waits for)"
+  },
+  {
+   "inferred": true,
+   "text": "it moves or prepares data with scripts, then writes it with SQL, a load-then-transform shape"
+  },
+  {
+   "inferred": false,
+   "text": "it is started by 1 submit frame(s): FIN_SCHED"
+  },
+  {
+   "inferred": false,
+   "text": "it is started by file event(s): FIN_FILE_ARRIVED"
+  }
+ ],
+ "queue_manifest_units": [
+  "U011"
+ ],
+ "queues": [
+  {
+   "declared_in_export": true,
+   "max_concurrency": 3,
+   "name": "BATCH_QUEUE",
+   "pool": "batch_queue",
+   "process_server": "",
+   "shared_with_units": [
+    "FIN_MIXED_RETRY",
+    "FIN_MIXED_RETRY"
+   ],
+   "used_by_calls": [
+    "FIN_NIGHTLY/pull",
+    "FIN_NIGHTLY/transform",
+    "FIN_NIGHTLY/publish"
+   ]
+  }
+ ],
+ "run_window": "22:00-23:59 America/New_York mon,tue",
+ "schedules": [
+  {
+   "converter_schedule_names": [
+    "fin_sched"
+   ],
+   "crons": [
+    "30 22 * * *"
+   ],
+   "elements": [
+    {
+     "converter_notes": [],
+     "cron": "30 22 * * *",
+     "element": {
+      "at": "22:30",
+      "kind": "daily"
+     }
+    }
+   ],
+   "end": "",
+   "name": "FIN_SCHED",
+   "time_zone": "America/New_York",
+   "untranslatable": []
+  }
+ ],
+ "status_handlers": [],
+ "steps": [
+  {
+   "calls": [
+    "FIN_NIGHTLY/pull"
+   ],
+   "name": "s1",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "FIN_NIGHTLY/transform"
+   ],
+   "name": "s2",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "FIN_NIGHTLY/publish"
+   ],
+   "name": "s3",
+   "precondition": null,
+   "status_handlers": []
+  }
+ ],
+ "time_zones": [
+  "America/New_York"
+ ],
+ "unit": "FIN_NIGHTLY",
+ "unit_id": "fin_nightly",
+ "version": 1,
+ "wait_events": []
+}

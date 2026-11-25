@@ -1,0 +1,166 @@
+[
+ {
+  "unit": "ReplenishShop",
+  "dimensions": [
+   {
+    "dimension": "graph order (earlier -> later pairs kept)",
+    "source": "3 pair(s)",
+    "converter": "all kept",
+    "rewrite": "all kept",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "schedules (cron, time zone)",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "pools",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "retries",
+    "source": "per call",
+    "converter": "match",
+    "rewrite": "match",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "commands and SQL present",
+    "source": "4 command(s)",
+    "converter": "all present",
+    "rewrite": [
+     "ReplenishShop/wait for truck",
+     "ReplenishShop/calculate replenishment",
+     "ReplenishShop/pick orders",
+     "ReplenishShop/confirmation truck loaded"
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": false,
+    "verdict": "converter matches the source"
+   },
+   {
+    "dimension": "loud stubs left",
+    "source": "none wanted",
+    "converter": "none",
+    "rewrite": "none",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   }
+  ],
+  "assets": {
+   "converter": [
+    "replenishshop"
+   ],
+   "rewrite": [
+    "calculate_replenishment",
+    "confirmation_truck_loaded",
+    "pick_orders",
+    "wait_for_truck"
+   ]
+  },
+  "checks": {
+   "converter": 0,
+   "rewrite": 0
+  },
+  "not_machine_compared": {
+   "converter_unenforced": [],
+   "rewrite_constructs": {}
+  },
+  "equivalent_on_all_machine_checked_dimensions": false
+ },
+ {
+  "unit": "Process_Negative_Stock_Template",
+  "dimensions": [
+   {
+    "dimension": "graph order (earlier -> later pairs kept)",
+    "source": "1 pair(s)",
+    "converter": "all kept",
+    "rewrite": "all kept",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "schedules (cron, time zone)",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "pools",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "retries",
+    "source": "per call",
+    "converter": "match",
+    "rewrite": "match",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "commands and SQL present",
+    "source": "2 command(s)",
+    "converter": "all present",
+    "rewrite": [
+     "Process_Negative_Stock_Template/count negative stock",
+     "Process_Negative_Stock_Template/create pids"
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": false,
+    "verdict": "converter matches the source"
+   },
+   {
+    "dimension": "loud stubs left",
+    "source": "none wanted",
+    "converter": "none",
+    "rewrite": "none",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   }
+  ],
+  "assets": {
+   "converter": [
+    "process_negative_stock_template"
+   ],
+   "rewrite": [
+    "count_negative_stock",
+    "create_pids"
+   ]
+  },
+  "checks": {
+   "converter": 0,
+   "rewrite": 0
+  },
+  "not_machine_compared": {
+   "converter_unenforced": [],
+   "rewrite_constructs": {}
+  },
+  "equivalent_on_all_machine_checked_dimensions": false
+ }
+]

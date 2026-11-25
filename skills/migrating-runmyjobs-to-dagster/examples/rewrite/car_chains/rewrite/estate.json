@@ -1,0 +1,78 @@
+{
+ "candidate_boundaries": [
+  {
+   "inferred": true,
+   "text": "chain Forecast_Replenishment_Template runs chain(s) Full_FR_Run, Process_Negative_Stock_Template: either one pipeline whose assets are the kids' assets in order (asset dependencies across the units), or the parent as a thin orchestration job over kid pipelines that stay separate"
+  },
+  {
+   "inferred": true,
+   "text": "chain Full_FR_Run runs chain(s) ReplenishShop: either one pipeline whose assets are the kids' assets in order (asset dependencies across the units), or the parent as a thin orchestration job over kid pipelines that stay separate"
+  },
+  {
+   "inferred": true,
+   "text": "definition System_DoNothing is called from Forecast_Replenishment_Template, Full_FR_Run, Process_Negative_Stock_Template, ReplenishShop: one reusable function or component configured per caller, not copied"
+  }
+ ],
+ "chains_called_by": {
+  "Full_FR_Run": [
+   "Forecast_Replenishment_Template"
+  ],
+  "Process_Negative_Stock_Template": [
+   "Forecast_Replenishment_Template"
+  ],
+  "ReplenishShop": [
+   "Full_FR_Run"
+  ]
+ },
+ "chains_calling_chains": {
+  "Forecast_Replenishment_Template": [
+   "Full_FR_Run",
+   "Process_Negative_Stock_Template"
+  ],
+  "Full_FR_Run": [
+   "ReplenishShop"
+  ]
+ },
+ "converter_dispositions": {
+  "Forecast_Replenishment_Template": "degraded",
+  "Full_FR_Run": "degraded",
+  "Process_Negative_Stock_Template": "translated",
+  "ReplenishShop": "translated"
+ },
+ "declared_events": [
+  "WaitForShop1",
+  "WaitForShop2"
+ ],
+ "events_waited_for": {},
+ "inline_wrapper_chains": [],
+ "integrations": [],
+ "queue_units": [],
+ "queues": {},
+ "schedules_by_target": {},
+ "shared_declared_outputs": {},
+ "shared_process_definitions": {
+  "System_DoNothing": [
+   "Forecast_Replenishment_Template",
+   "Full_FR_Run",
+   "Process_Negative_Stock_Template",
+   "ReplenishShop"
+  ]
+ },
+ "top_level_chains": [
+  "Forecast_Replenishment_Template"
+ ],
+ "unit_kinds": {
+  "Forecast_Replenishment_Template": "chain",
+  "Full_FR_Run": "chain",
+  "Process_Negative_Stock_Template": "chain",
+  "ReplenishShop": "chain"
+ },
+ "units": [
+  "Forecast_Replenishment_Template",
+  "Full_FR_Run",
+  "Process_Negative_Stock_Template",
+  "ReplenishShop"
+ ],
+ "unused_queues": [],
+ "version": 1
+}

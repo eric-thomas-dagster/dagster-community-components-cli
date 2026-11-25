@@ -1,0 +1,69 @@
+type: rmj_sample.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "nightly_sales_load__sales"
+  command: "echo extracting sales for today"
+  env_vars: {"RMJ_PARAM_RUN_DATE": "today"}
+  pool: "batch_queue"
+  kinds: ["shell"]
+  retry_policy_max_retries: 2
+  retry_policy_delay_seconds: 60
+  retry_policy_backoff: "linear"
+  group_name: "nightly_sales_load"
+  description: "Pull the previous day's sales files from the landing share. [RunMyJobs source: chain:NIGHTLY_SALES_LOAD/step:extract/call:sales; produces landing.sales_raw]"
+  asset_tags: {"runmyjobs_source": "chain.NIGHTLY_SALES_LOAD.step.extract.call.sales", "runmyjobs_application": "SALES"}
+---
+type: rmj_sample.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "nightly_sales_load__inventory"
+  command: "echo extracting inventory"
+  pool: "batch_queue"
+  kinds: ["shell"]
+  retry_policy_max_retries: 2
+  retry_policy_delay_seconds: 60
+  retry_policy_backoff: "linear"
+  group_name: "nightly_sales_load"
+  description: "[RunMyJobs source: chain:NIGHTLY_SALES_LOAD/step:extract/call:inventory; produces landing.inventory_raw]"
+  asset_tags: {"runmyjobs_source": "chain.NIGHTLY_SALES_LOAD.step.extract.call.inventory", "runmyjobs_application": "SALES"}
+---
+type: rmj_sample.components.RmjSqlAssetComponent
+attributes:
+  asset_key: "nightly_sales_load__sales_fact"
+  connection_env: "RMJ_CONN_WAREHOUSE"
+  sql: "select 1"
+  kinds: ["sql"]
+  pool: "db_queue"
+  group_name: "nightly_sales_load"
+  description: "Merge staged sales into the fact table. [RunMyJobs source: chain:NIGHTLY_SALES_LOAD/step:load/call:sales_fact; produces dw.fact_sales]"
+  deps: ["nightly_sales_load__sales", "nightly_sales_load__inventory"]
+  asset_tags: {"runmyjobs_source": "chain.NIGHTLY_SALES_LOAD.step.load.call.sales_fact", "runmyjobs_application": "SALES"}
+---
+type: rmj_sample.components.RmjSqlAssetComponent
+attributes:
+  asset_key: "nightly_sales_load__inventory_fact"
+  connection_env: "RMJ_CONN_WAREHOUSE"
+  sql: "select 1"
+  kinds: ["sql"]
+  pool: "db_queue"
+  group_name: "nightly_sales_load"
+  description: "[RunMyJobs source: chain:NIGHTLY_SALES_LOAD/step:load/call:inventory_fact; produces dw.fact_inventory]"
+  deps: ["nightly_sales_load__sales", "nightly_sales_load__inventory"]
+  asset_tags: {"runmyjobs_source": "chain.NIGHTLY_SALES_LOAD.step.load.call.inventory_fact", "runmyjobs_application": "SALES"}
+---
+type: rmj_sample.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "nightly_sales_load__notify"
+  command: "echo notifying"
+  kinds: ["shell"]
+  group_name: "nightly_sales_load"
+  description: "[RunMyJobs source: chain:NIGHTLY_SALES_LOAD/step:post/call:notify]"
+  deps: ["nightly_sales_load__sales_fact", "nightly_sales_load__inventory_fact"]
+  asset_tags: {"runmyjobs_source": "chain.NIGHTLY_SALES_LOAD.step.post.call.notify", "runmyjobs_application": "SALES"}
+---
+type: dagster_community_components.CronScheduleComponent
+attributes:
+  schedule_name: "nightly_sales_schedule"
+  cron_expression: "30 2 * * *"
+  asset_keys: ["nightly_sales_load__sales", "nightly_sales_load__inventory", "nightly_sales_load__sales_fact", "nightly_sales_load__inventory_fact", "nightly_sales_load__margin", "nightly_sales_load__notify"]
+  job_name: "nightly_sales_load"
+  execution_timezone: "America/Chicago"
+  default_status: "STOPPED"

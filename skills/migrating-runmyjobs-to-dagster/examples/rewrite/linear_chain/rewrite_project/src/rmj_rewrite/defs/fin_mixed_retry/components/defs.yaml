@@ -1,0 +1,32 @@
+type: dagster_community_components.ShellCommandAssetComponent
+attributes:
+  asset_name: mixed_pull
+  command: "echo pull ${run_date}"
+  env_vars: {run_date: "today"}
+  success_exit_codes: [3]
+  timeout_seconds: 600
+  pool: batch_queue
+  retry_policy_max_retries: 1
+  group_name: fin_mixed_retry
+---
+type: dagster_community_components.SqlAssetComponent
+attributes:
+  asset_key: mixed_alone
+  connection_env: RMJ_CONN_WAREHOUSE
+  sql: "select 2"
+  deps: [mixed_pull]
+  timeout_seconds: 120
+  pool: batch_queue
+  retry_policy_max_retries: 2
+  run_window: "22:00-23:59 America/New_York mon,tue"
+  group_name: fin_mixed_retry
+---
+type: dagster_community_components.FilesystemMonitorSensorComponent
+attributes:
+  sensor_name: fin_file_no_checks
+  directory_path: /data/inbound/other
+  file_pattern: "^.*$"
+  job_name: fin_mixed_retry
+  minimum_interval_seconds: 30
+  batch_into_one_run: true
+  default_status: stopped

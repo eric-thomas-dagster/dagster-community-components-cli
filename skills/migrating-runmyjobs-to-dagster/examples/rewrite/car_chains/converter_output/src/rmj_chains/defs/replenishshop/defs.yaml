@@ -1,0 +1,7 @@
+type: rmj_chains.components.RmjTaskChainAssetComponent
+attributes:
+  asset_key: "replenishshop"
+  steps: [{"id": "wait_for_truck", "type": "command", "command": "echo System_DoNothing: RunMyJobs built-in, does nothing"}, {"id": "calculate_replenishment", "type": "command", "command": "echo System_DoNothing: RunMyJobs built-in, does nothing"}, {"id": "pick_orders", "type": "command", "command": "echo System_DoNothing: RunMyJobs built-in, does nothing"}, {"id": "confirmation_truck_loaded", "type": "command", "command": "echo System_DoNothing: RunMyJobs built-in, does nothing"}]
+  group_name: "replenishshop"
+  description: "Replenish a Shop [RunMyJobs source: chain:ReplenishShop]"
+  asset_tags: {"runmyjobs_source": "chain.ReplenishShop"}

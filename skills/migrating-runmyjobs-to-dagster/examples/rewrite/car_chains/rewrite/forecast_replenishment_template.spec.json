@@ -1,0 +1,1509 @@
+{
+ "acceptable_differences": [
+  "asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it",
+  "a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above",
+  "queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone",
+  "status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps",
+  "RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so",
+  "'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not"
+ ],
+ "accounting": [
+  {
+   "id": "Forecast_Replenishment_Template/initialize",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/post posdm idocs",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/reprocess idocs in error",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/post pids",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/confirmation truck loaded",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/confirmation truck loaded",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/process negative stock/count negative stock",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Forecast_Replenishment_Template/process negative stock/create pids",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  }
+ ],
+ "application": "",
+ "calls": [
+  {
+   "application": "",
+   "call": "initialize",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__initialize",
+     "caveat": "",
+     "manifest_id": "U001",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/initialize",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Initialize",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "post posdm idocs",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__post_posdm_idocs",
+     "caveat": "",
+     "manifest_id": "U002",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/post posdm idocs",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Post POSDM Idocs",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/initialize"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "reprocess idocs in error",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__reprocess_idocs_in_error",
+     "caveat": "",
+     "manifest_id": "U003",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/reprocess idocs in error",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Reprocess Idocs in Error",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/post posdm idocs"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "post pids",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__post_pids",
+     "caveat": "",
+     "manifest_id": "U004",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/post pids",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Post PIDs",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/reprocess idocs in error"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "preparation run",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run",
+     "caveat": "",
+     "manifest_id": "U005",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Preparation Run",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/post pids"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "promotion forecast",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast",
+     "caveat": "",
+     "manifest_id": "U006",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Promotion Forecast",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "wait for truck",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+     "caveat": "",
+     "manifest_id": "U007",
+     "notes": [],
+     "status": "converted"
+    },
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+     "caveat": "",
+     "manifest_id": "U011",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Wait for Truck",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "calculate replenishment",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+     "caveat": "",
+     "manifest_id": "U008",
+     "notes": [],
+     "status": "converted"
+    },
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+     "caveat": "",
+     "manifest_id": "U012",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Calculate Replenishment",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "pick orders",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+     "caveat": "",
+     "manifest_id": "U009",
+     "notes": [],
+     "status": "converted"
+    },
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+     "caveat": "",
+     "manifest_id": "U013",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Pick Orders",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "confirmation truck loaded",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+     "caveat": "",
+     "manifest_id": "U010",
+     "notes": [],
+     "status": "converted"
+    },
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+     "caveat": "",
+     "manifest_id": "U014",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/confirmation truck loaded",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Confirmation Truck loaded",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "wait for truck",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+     "caveat": "",
+     "manifest_id": "U007",
+     "notes": [],
+     "status": "converted"
+    },
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+     "caveat": "",
+     "manifest_id": "U011",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Wait for Truck",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "calculate replenishment",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+     "caveat": "",
+     "manifest_id": "U008",
+     "notes": [],
+     "status": "converted"
+    },
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+     "caveat": "",
+     "manifest_id": "U012",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Calculate Replenishment",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "pick orders",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+     "caveat": "",
+     "manifest_id": "U009",
+     "notes": [],
+     "status": "converted"
+    },
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+     "caveat": "",
+     "manifest_id": "U013",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Pick Orders",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "confirmation truck loaded",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+     "caveat": "",
+     "manifest_id": "U010",
+     "notes": [],
+     "status": "converted"
+    },
+    {
+     "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+     "caveat": "",
+     "manifest_id": "U014",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/confirmation truck loaded",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Confirmation Truck loaded",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "count negative stock",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__process_negative_stock__count_negative_stock",
+     "caveat": "",
+     "manifest_id": "U015",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/process negative stock/count negative stock",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Count Negative Stock",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/post pids"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "create pids",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "forecast_replenishment_template__process_negative_stock__create_pids",
+     "caveat": "",
+     "manifest_id": "U016",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Forecast_Replenishment_Template/process negative stock/create pids",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Create PIDs",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Forecast_Replenishment_Template/process negative stock/count negative stock"
+   ],
+   "wait_events": []
+  }
+ ],
+ "connections": [],
+ "converter": {
+  "assets": [
+   "forecast_replenishment_template__initialize",
+   "forecast_replenishment_template__post_posdm_idocs",
+   "forecast_replenishment_template__reprocess_idocs_in_error",
+   "forecast_replenishment_template__post_pids",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+   "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+   "forecast_replenishment_template__process_negative_stock__count_negative_stock",
+   "forecast_replenishment_template__process_negative_stock__create_pids"
+  ],
+  "collapsed_to_one_asset": false,
+  "degraded": [
+   "Forecast_Replenishment_Template"
+  ],
+  "disposition": "degraded",
+  "manifest_units": [
+   "U001",
+   "U002",
+   "U003",
+   "U004",
+   "U005",
+   "U006",
+   "U007",
+   "U008",
+   "U009",
+   "U010",
+   "U011",
+   "U012",
+   "U013",
+   "U014",
+   "U015",
+   "U016",
+   "U017"
+  ],
+  "reasons": [
+   "kept as one asset per call: step 'Nightly Processing' runs 2 calls in parallel, which one chain asset cannot express",
+   "step 'Nightly Processing' calls chain 'Full_FR_Run': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+   "step 'Nightly Processing' calls chain 'Process_Negative_Stock_Template': its steps are inlined here as assets named forecast_replenishment_template__process_negative_stock__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+   "step 'Replenish the Shops' calls chain 'ReplenishShop': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+   "step 'Replenish the Shops' calls chain 'ReplenishShop': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+   "the call to 'ReplenishShop' waits for event(s) WaitForShop1: not enforced (see the first inlined step)",
+   "the call to 'ReplenishShop' waits for event(s) WaitForShop2: not enforced (see the first inlined step)"
+  ],
+  "rows": [
+   {
+    "artifact": "forecast_replenishment_template__initialize",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__initialize",
+     "deps": []
+    },
+    "kind": "process_definition",
+    "manifest_id": "U001",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/initialize (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__post_posdm_idocs",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__post_posdm_idocs",
+     "deps": [
+      "forecast_replenishment_template__initialize"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U002",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/post posdm idocs (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__reprocess_idocs_in_error",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__reprocess_idocs_in_error",
+     "deps": [
+      "forecast_replenishment_template__post_posdm_idocs"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U003",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/reprocess idocs in error (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__post_pids",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__post_pids",
+     "deps": [
+      "forecast_replenishment_template__reprocess_idocs_in_error"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U004",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/post pids (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run",
+     "deps": [
+      "forecast_replenishment_template__post_pids"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U005",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/preparation run (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U006",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/promotion forecast (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U007",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/wait for truck (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U008",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/calculate replenishment (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U009",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/pick orders (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U010",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/confirmation truck loaded (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U011",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/wait for truck (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U012",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/calculate replenishment (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U013",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/pick orders (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+     "deps": [
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U014",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/confirmation truck loaded (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__process_negative_stock__count_negative_stock",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__process_negative_stock__count_negative_stock",
+     "deps": [
+      "forecast_replenishment_template__post_pids"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U015",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/count negative stock (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "forecast_replenishment_template__process_negative_stock__create_pids",
+    "caveat": "",
+    "expected": {
+     "asset": "forecast_replenishment_template__process_negative_stock__create_pids",
+     "deps": [
+      "forecast_replenishment_template__process_negative_stock__count_negative_stock"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U016",
+    "notes": [],
+    "source": "Forecast_Replenishment_Template/create pids (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "job forecast_replenishment_template",
+    "caveat": "degraded",
+    "expected": {
+     "assets": [
+      "forecast_replenishment_template__initialize",
+      "forecast_replenishment_template__post_posdm_idocs",
+      "forecast_replenishment_template__reprocess_idocs_in_error",
+      "forecast_replenishment_template__post_pids",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders",
+      "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded",
+      "forecast_replenishment_template__process_negative_stock__count_negative_stock",
+      "forecast_replenishment_template__process_negative_stock__create_pids"
+     ]
+    },
+    "kind": "chain",
+    "manifest_id": "U017",
+    "notes": [
+     "kept as one asset per call: step 'Nightly Processing' runs 2 calls in parallel, which one chain asset cannot express",
+     "step 'Nightly Processing' calls chain 'Full_FR_Run': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+     "step 'Replenish the Shops' calls chain 'ReplenishShop': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+     "the call to 'ReplenishShop' waits for event(s) WaitForShop1: not enforced (see the first inlined step)",
+     "step 'Replenish the Shops' calls chain 'ReplenishShop': its steps are inlined here as assets named forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)",
+     "the call to 'ReplenishShop' waits for event(s) WaitForShop2: not enforced (see the first inlined step)",
+     "step 'Nightly Processing' calls chain 'Process_Negative_Stock_Template': its steps are inlined here as assets named forecast_replenishment_template__process_negative_stock__*; parameter 'P_REGION' (from 'P_REGION') has no value here (the caller supplies it when the chain is submitted)"
+    ],
+    "source": "Forecast_Replenishment_Template",
+    "status": "needs review"
+   }
+  ],
+  "status": "needs review",
+  "stubbed": []
+ },
+ "description": "Forecast and Replenishment Daily Overall Chain",
+ "edges": [
+  [
+   "Forecast_Replenishment_Template/initialize",
+   "Forecast_Replenishment_Template/post posdm idocs"
+  ],
+  [
+   "Forecast_Replenishment_Template/post posdm idocs",
+   "Forecast_Replenishment_Template/reprocess idocs in error"
+  ],
+  [
+   "Forecast_Replenishment_Template/reprocess idocs in error",
+   "Forecast_Replenishment_Template/post pids"
+  ],
+  [
+   "Forecast_Replenishment_Template/post pids",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/confirmation truck loaded"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders"
+  ],
+  [
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders",
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/confirmation truck loaded"
+  ],
+  [
+   "Forecast_Replenishment_Template/post pids",
+   "Forecast_Replenishment_Template/process negative stock/count negative stock"
+  ],
+  [
+   "Forecast_Replenishment_Template/process negative stock/count negative stock",
+   "Forecast_Replenishment_Template/process negative stock/create pids"
+  ]
+ ],
+ "expected": {
+  "commands": [
+   {
+    "call": "Forecast_Replenishment_Template/initialize",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/post posdm idocs",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/reprocess idocs in error",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/post pids",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/confirmation truck loaded",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/confirmation truck loaded",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/process negative stock/count negative stock",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Forecast_Replenishment_Template/process negative stock/create pids",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   }
+  ],
+  "external_systems": [],
+  "file_events": [],
+  "notification_targets": [],
+  "order_pairs": [
+   [
+    "Forecast_Replenishment_Template/initialize",
+    "Forecast_Replenishment_Template/post posdm idocs"
+   ],
+   [
+    "Forecast_Replenishment_Template/post posdm idocs",
+    "Forecast_Replenishment_Template/reprocess idocs in error"
+   ],
+   [
+    "Forecast_Replenishment_Template/reprocess idocs in error",
+    "Forecast_Replenishment_Template/post pids"
+   ],
+   [
+    "Forecast_Replenishment_Template/post pids",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/confirmation truck loaded"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders"
+   ],
+   [
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders",
+    "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/confirmation truck loaded"
+   ],
+   [
+    "Forecast_Replenishment_Template/post pids",
+    "Forecast_Replenishment_Template/process negative stock/count negative stock"
+   ],
+   [
+    "Forecast_Replenishment_Template/process negative stock/count negative stock",
+    "Forecast_Replenishment_Template/process negative stock/create pids"
+   ]
+  ],
+  "pools": [],
+  "retries": {
+   "Forecast_Replenishment_Template/full forecast and replenishment run/preparation run": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/promotion forecast": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/calculate replenishment": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/confirmation truck loaded": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/pick orders": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/wait for truck": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/calculate replenishment": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/confirmation truck loaded": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/pick orders": 0,
+   "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/wait for truck": 0,
+   "Forecast_Replenishment_Template/initialize": 0,
+   "Forecast_Replenishment_Template/post pids": 0,
+   "Forecast_Replenishment_Template/post posdm idocs": 0,
+   "Forecast_Replenishment_Template/process negative stock/count negative stock": 0,
+   "Forecast_Replenishment_Template/process negative stock/create pids": 0,
+   "Forecast_Replenishment_Template/reprocess idocs in error": 0
+  },
+  "schedules": [],
+  "structural_checks": [],
+  "untranslatable_schedule_elements": []
+ },
+ "extractor_notes": [],
+ "file_events": [],
+ "flatten_notes": [
+  "Forecast_Replenishment_Template/full forecast and replenishment run: calls chain Full_FR_Run; its steps are listed below with ids starting `Forecast_Replenishment_Template/full forecast and replenishment run/`",
+  "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1: calls chain ReplenishShop; its steps are listed below with ids starting `Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/`",
+  "Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2: calls chain ReplenishShop; its steps are listed below with ids starting `Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/`",
+  "Forecast_Replenishment_Template/process negative stock: calls chain Process_Negative_Stock_Template; its steps are listed below with ids starting `Forecast_Replenishment_Template/process negative stock/`"
+ ],
+ "kind": "chain",
+ "manifest_units": [
+  "U001",
+  "U002",
+  "U003",
+  "U004",
+  "U005",
+  "U006",
+  "U007",
+  "U008",
+  "U009",
+  "U010",
+  "U011",
+  "U012",
+  "U013",
+  "U014",
+  "U015",
+  "U016",
+  "U017"
+ ],
+ "must_preserve": [
+  "the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)",
+  "every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them",
+  "the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)",
+  "the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)",
+  "retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success",
+  "what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)",
+  "notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code"
+ ],
+ "notifications": [],
+ "parameters": [
+  {
+   "default": "",
+   "direction": "in",
+   "has_default": false,
+   "mandatory": true,
+   "name": "P_REGION",
+   "type": "String"
+  }
+ ],
+ "preconditions": [],
+ "purpose": [
+  {
+   "inferred": false,
+   "text": "a chain of 5 step(s) with 16 call(s) of type(s): os"
+  },
+  {
+   "inferred": false,
+   "text": "its own description reads: 'Forecast and Replenishment Daily Overall Chain'"
+  },
+  {
+   "inferred": false,
+   "text": "its final call(s) are Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 1/confirmation truck loaded, Forecast_Replenishment_Template/full forecast and replenishment run/replenish shop 2/confirmation truck loaded, Forecast_Replenishment_Template/process negative stock/create pids (calls nothing else waits for)"
+  },
+  {
+   "inferred": true,
+   "text": "every call is the RunMyJobs no-op built-in System_DoNothing: the chain is an orchestration skeleton (placeholders for later jobs)"
+  },
+  {
+   "inferred": true,
+   "text": "no submit frame or file event in the export starts it (it may be started by a person, another chain or an event)"
+  }
+ ],
+ "queue_manifest_units": [],
+ "queues": [],
+ "run_window": "",
+ "schedules": [],
+ "status_handlers": [],
+ "steps": [
+  {
+   "calls": [
+    "Forecast_Replenishment_Template/initialize"
+   ],
+   "name": "Initialize",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "Forecast_Replenishment_Template/post posdm idocs"
+   ],
+   "name": "Post POSDM Idocs",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "Forecast_Replenishment_Template/reprocess idocs in error"
+   ],
+   "name": "Reprocess Idocs in Error",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "Forecast_Replenishment_Template/post pids"
+   ],
+   "name": "Post PIDs",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [],
+   "name": "Nightly Processing",
+   "precondition": null,
+   "status_handlers": []
+  }
+ ],
+ "time_zones": [],
+ "unit": "Forecast_Replenishment_Template",
+ "unit_id": "forecast_replenishment_template",
+ "version": 1,
+ "wait_events": []
+}

@@ -1,0 +1,11 @@
+PASS  definitions_load: dg check defs; 6 asset(s), 0 schedule(s), 0 job(s) in the project
+PASS  matches_spec: 4 call(s) mapped to 4 asset(s); 3 order pair(s) kept; schedules none and pools none equal the spec
+PASS  commands_preserved: 4 command(s) present (or marked reimplemented)
+PASS  completeness: every RunMyJobs object is accounted for in the header (4)
+PASS  generated_tests: test_replenishshop_rewrite.py: 10 passed in 5.88s; materialized 4 of 4 asset(s)
+NOT RUN  structural_checks: not run: the model carries no output location that a structural check could use (declared outputs are table or dataset names); command exit status is enforced by the asset failing, and no business check is invented
+PASS  no_stub_left: no loud stub (RMJ-CAVEAT) in the unit's code
+PASS  no_secret_values: none found in 2 file(s)
+PASS  no_invented_apis: every import resolves and every component type is a real class
+manifest: advanced=5, deferred=0, kept_converter=0, waiting=0
+unit ReplenishShop: ACCEPTED (route: rewrite)

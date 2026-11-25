@@ -1,0 +1,107 @@
+[
+ {
+  "unit": "NIGHTLY",
+  "dimensions": [
+   {
+    "dimension": "graph order (earlier -> later pairs kept)",
+    "source": "1 pair(s)",
+    "converter": "all kept",
+    "rewrite": "all kept",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "schedules (cron, time zone)",
+    "source": [
+     [
+      "30 2 * * *",
+      "UTC"
+     ]
+    ],
+    "converter": [
+     [
+      "30 2 * * *",
+      "UTC"
+     ]
+    ],
+    "rewrite": [
+     [
+      "30 2 * * *",
+      "UTC"
+     ]
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "pools",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "retries",
+    "source": "per call",
+    "converter": "match",
+    "rewrite": "match",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "commands and SQL present",
+    "source": "2 command(s)",
+    "converter": "all present",
+    "rewrite": "all present",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "loud stubs left",
+    "source": "none wanted",
+    "converter": "none",
+    "rewrite": "none",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   }
+  ],
+  "assets": {
+   "converter": [
+    "nightly__extract_1",
+    "nightly__load_1"
+   ],
+   "rewrite": [
+    "extract",
+    "load"
+   ]
+  },
+  "checks": {
+   "converter": 0,
+   "rewrite": 0
+  },
+  "not_machine_compared": {
+   "converter_unenforced": [
+    "chain-level restart count is not converted",
+    "step 'load' precondition {'time_window': 'BIZ'} not enforced"
+   ],
+   "rewrite_constructs": {
+    "NIGHTLY#precondition1": {
+     "what": "step load: time window BIZ must be open",
+     "header": "dropped: time window BIZ is not defined in the export, so it cannot be enforced; needs its hours from the owner"
+    },
+    "NIGHTLY#handler1": {
+     "what": "step extract: on status Error: restart_step, max=2",
+     "header": "replaced by retry_policy_max_retries 2 on `extract`"
+    }
+   }
+  },
+  "equivalent_on_all_machine_checked_dimensions": true
+ }
+]

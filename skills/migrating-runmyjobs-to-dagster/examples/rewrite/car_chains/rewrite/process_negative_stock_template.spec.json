@@ -1,0 +1,284 @@
+{
+ "acceptable_differences": [
+  "asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it",
+  "a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above",
+  "queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone",
+  "status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps",
+  "RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so",
+  "'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not"
+ ],
+ "accounting": [
+  {
+   "id": "Process_Negative_Stock_Template/count negative stock",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "Process_Negative_Stock_Template/create pids",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  }
+ ],
+ "application": "",
+ "calls": [
+  {
+   "application": "",
+   "call": "count negative stock",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "step count_negative_stock of asset process_negative_stock_template",
+     "caveat": "",
+     "manifest_id": "U029",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Process_Negative_Stock_Template/count negative stock",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Count Negative Stock",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "create pids",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "step create_pids of asset process_negative_stock_template",
+     "caveat": "",
+     "manifest_id": "U030",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "Process_Negative_Stock_Template/create pids",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Create PIDs",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "Process_Negative_Stock_Template/count negative stock"
+   ],
+   "wait_events": []
+  }
+ ],
+ "connections": [],
+ "converter": {
+  "assets": [
+   "process_negative_stock_template"
+  ],
+  "collapsed_to_one_asset": true,
+  "degraded": [],
+  "disposition": "translated",
+  "manifest_units": [
+   "U029",
+   "U030",
+   "U031"
+  ],
+  "reasons": [
+   "2 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call"
+  ],
+  "rows": [
+   {
+    "artifact": "step count_negative_stock of asset process_negative_stock_template",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U029",
+    "notes": [],
+    "source": "Process_Negative_Stock_Template/count negative stock (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "step create_pids of asset process_negative_stock_template",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U030",
+    "notes": [],
+    "source": "Process_Negative_Stock_Template/create pids (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "asset process_negative_stock_template (TaskChainAssetComponent)",
+    "caveat": "",
+    "expected": {
+     "asset": "process_negative_stock_template",
+     "assets": [
+      "process_negative_stock_template"
+     ],
+     "deps": []
+    },
+    "kind": "chain",
+    "manifest_id": "U031",
+    "notes": [
+     "2 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call"
+    ],
+    "source": "Process_Negative_Stock_Template",
+    "status": "converted"
+   }
+  ],
+  "status": "converted",
+  "stubbed": []
+ },
+ "description": "Process Negative Stock",
+ "edges": [
+  [
+   "Process_Negative_Stock_Template/count negative stock",
+   "Process_Negative_Stock_Template/create pids"
+  ]
+ ],
+ "expected": {
+  "commands": [
+   {
+    "call": "Process_Negative_Stock_Template/count negative stock",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "Process_Negative_Stock_Template/create pids",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   }
+  ],
+  "external_systems": [],
+  "file_events": [],
+  "notification_targets": [],
+  "order_pairs": [
+   [
+    "Process_Negative_Stock_Template/count negative stock",
+    "Process_Negative_Stock_Template/create pids"
+   ]
+  ],
+  "pools": [],
+  "retries": {
+   "Process_Negative_Stock_Template/count negative stock": 0,
+   "Process_Negative_Stock_Template/create pids": 0
+  },
+  "schedules": [],
+  "structural_checks": [],
+  "untranslatable_schedule_elements": []
+ },
+ "extractor_notes": [],
+ "file_events": [],
+ "flatten_notes": [],
+ "kind": "chain",
+ "manifest_units": [
+  "U029",
+  "U030",
+  "U031"
+ ],
+ "must_preserve": [
+  "the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)",
+  "every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them",
+  "the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)",
+  "the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)",
+  "retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success",
+  "what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)",
+  "notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code"
+ ],
+ "notifications": [],
+ "parameters": [
+  {
+   "default": "",
+   "direction": "in",
+   "has_default": false,
+   "mandatory": true,
+   "name": "P_REGION",
+   "type": "String"
+  }
+ ],
+ "preconditions": [],
+ "purpose": [
+  {
+   "inferred": false,
+   "text": "a chain of 2 step(s) with 2 call(s) of type(s): os"
+  },
+  {
+   "inferred": false,
+   "text": "its own description reads: 'Process Negative Stock'"
+  },
+  {
+   "inferred": false,
+   "text": "its final call(s) are Process_Negative_Stock_Template/create pids (calls nothing else waits for)"
+  },
+  {
+   "inferred": true,
+   "text": "every call is the RunMyJobs no-op built-in System_DoNothing: the chain is an orchestration skeleton (placeholders for later jobs)"
+  },
+  {
+   "inferred": true,
+   "text": "no submit frame or file event in the export starts it (it may be started by a person, another chain or an event)"
+  }
+ ],
+ "queue_manifest_units": [],
+ "queues": [],
+ "run_window": "",
+ "schedules": [],
+ "status_handlers": [],
+ "steps": [
+  {
+   "calls": [
+    "Process_Negative_Stock_Template/count negative stock"
+   ],
+   "name": "Count Negative Stock",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "Process_Negative_Stock_Template/create pids"
+   ],
+   "name": "Create PIDs",
+   "precondition": null,
+   "status_handlers": []
+  }
+ ],
+ "time_zones": [],
+ "unit": "Process_Negative_Stock_Template",
+ "unit_id": "process_negative_stock_template",
+ "version": 1,
+ "wait_events": []
+}

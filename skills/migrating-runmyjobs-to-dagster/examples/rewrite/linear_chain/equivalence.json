@@ -1,0 +1,207 @@
+[
+ {
+  "unit": "FIN_NIGHTLY",
+  "dimensions": [
+   {
+    "dimension": "graph order (earlier -> later pairs kept)",
+    "source": "2 pair(s)",
+    "converter": "all kept",
+    "rewrite": "all kept",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "schedules (cron, time zone)",
+    "source": [
+     [
+      "30 22 * * *",
+      "America/New_York"
+     ]
+    ],
+    "converter": [
+     [
+      "30 22 * * *",
+      "America/New_York"
+     ]
+    ],
+    "rewrite": [
+     [
+      "30 22 * * *",
+      "America/New_York"
+     ]
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "pools",
+    "source": [
+     "batch_queue"
+    ],
+    "converter": [
+     "batch_queue"
+    ],
+    "rewrite": [
+     "batch_queue"
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "retries",
+    "source": "per call",
+    "converter": "match",
+    "rewrite": "match",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "commands and SQL present",
+    "source": "3 command(s)",
+    "converter": "all present",
+    "rewrite": "all present",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "file events (a sensor each)",
+    "source": [
+     "FIN_FILE_ARRIVED"
+    ],
+    "converter": "all present",
+    "rewrite": "all present",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "loud stubs left",
+    "source": "none wanted",
+    "converter": "none",
+    "rewrite": "none",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   }
+  ],
+  "assets": {
+   "converter": [
+    "fin_nightly"
+   ],
+   "rewrite": [
+    "fin_publish",
+    "fin_pull",
+    "fin_transform"
+   ]
+  },
+  "checks": {
+   "converter": 0,
+   "rewrite": 0
+  },
+  "not_machine_compared": {
+   "converter_unenforced": [],
+   "rewrite_constructs": {}
+  },
+  "equivalent_on_all_machine_checked_dimensions": true
+ },
+ {
+  "unit": "FIN_MIXED_RETRY",
+  "dimensions": [
+   {
+    "dimension": "graph order (earlier -> later pairs kept)",
+    "source": "1 pair(s)",
+    "converter": "all kept",
+    "rewrite": "all kept",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "schedules (cron, time zone)",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "pools",
+    "source": [
+     "batch_queue"
+    ],
+    "converter": [
+     "batch_queue"
+    ],
+    "rewrite": [
+     "batch_queue"
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "retries",
+    "source": "per call",
+    "converter": "match",
+    "rewrite": "match",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "commands and SQL present",
+    "source": "2 command(s)",
+    "converter": "all present",
+    "rewrite": "all present",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "file events (a sensor each)",
+    "source": [
+     "FIN_FILE_NO_CHECKS"
+    ],
+    "converter": "all present",
+    "rewrite": "all present",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "loud stubs left",
+    "source": "none wanted",
+    "converter": "none",
+    "rewrite": "none",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   }
+  ],
+  "assets": {
+   "converter": [
+    "fin_mixed_retry__alone",
+    "fin_mixed_retry__pull"
+   ],
+   "rewrite": [
+    "mixed_alone",
+    "mixed_pull"
+   ]
+  },
+  "checks": {
+   "converter": 0,
+   "rewrite": 0
+  },
+  "not_machine_compared": {
+   "converter_unenforced": [],
+   "rewrite_constructs": {}
+  },
+  "equivalent_on_all_machine_checked_dimensions": true
+ }
+]

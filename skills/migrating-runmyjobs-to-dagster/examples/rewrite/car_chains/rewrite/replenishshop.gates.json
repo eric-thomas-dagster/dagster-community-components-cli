@@ -1,0 +1,61 @@
+{
+ "unit": "ReplenishShop",
+ "route": "rewrite",
+ "passed": true,
+ "gates": [
+  {
+   "gate": "definitions_load",
+   "passed": true,
+   "ran": true,
+   "detail": "dg check defs; 6 asset(s), 0 schedule(s), 0 job(s) in the project"
+  },
+  {
+   "gate": "matches_spec",
+   "passed": true,
+   "ran": true,
+   "detail": "4 call(s) mapped to 4 asset(s); 3 order pair(s) kept; schedules none and pools none equal the spec"
+  },
+  {
+   "gate": "commands_preserved",
+   "passed": true,
+   "ran": true,
+   "detail": "4 command(s) present (or marked reimplemented)"
+  },
+  {
+   "gate": "completeness",
+   "passed": true,
+   "ran": true,
+   "detail": "every RunMyJobs object is accounted for in the header (4)"
+  },
+  {
+   "gate": "generated_tests",
+   "passed": true,
+   "ran": true,
+   "detail": "test_replenishshop_rewrite.py: 10 passed in 5.88s; materialized 4 of 4 asset(s)"
+  },
+  {
+   "gate": "structural_checks",
+   "passed": true,
+   "ran": false,
+   "detail": "not run: the model carries no output location that a structural check could use (declared outputs are table or dataset names); command exit status is enforced by the asset failing, and no business check is invented"
+  },
+  {
+   "gate": "no_stub_left",
+   "passed": true,
+   "ran": true,
+   "detail": "no loud stub (RMJ-CAVEAT) in the unit's code"
+  },
+  {
+   "gate": "no_secret_values",
+   "passed": true,
+   "ran": true,
+   "detail": "none found in 2 file(s)"
+  },
+  {
+   "gate": "no_invented_apis",
+   "passed": true,
+   "ran": true,
+   "detail": "every import resolves and every component type is a real class"
+  }
+ ]
+}

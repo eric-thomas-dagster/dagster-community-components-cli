@@ -1,0 +1,11 @@
+PASS  definitions_load: dg check defs; 7 asset(s), 3 schedule(s), 2 job(s) in the project
+PASS  matches_spec: 1 call(s) mapped to 1 asset(s); 0 order pair(s) kept; schedules [('*/15 8-17 * * 1,2,3,4,5', 'America/Chicago'), ('0 23 28-31 * *', 'America/Chicago')] and pools none equal the spec
+PASS  commands_preserved: 1 command(s) present (or marked reimplemented)
+PASS  completeness: every RunMyJobs object is accounted for in the header (2)
+PASS  generated_tests: test_purge_temp_rewrite.py: 7 passed in 6.35s; materialized 1 of 1 asset(s)
+NOT RUN  structural_checks: not run: the model carries no output location that a structural check could use (declared outputs are table or dataset names); command exit status is enforced by the asset failing, and no business check is invented
+PASS  no_stub_left: no loud stub (RMJ-CAVEAT) in the unit's code
+PASS  no_secret_values: none found in 5 file(s)
+PASS  no_invented_apis: every import resolves and every component type is a real class
+manifest: advanced=2, deferred=0, kept_converter=0, waiting=0
+unit PURGE_TEMP: ACCEPTED (route: rewrite)

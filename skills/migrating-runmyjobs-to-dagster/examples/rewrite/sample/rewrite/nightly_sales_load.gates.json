@@ -1,0 +1,61 @@
+{
+ "unit": "NIGHTLY_SALES_LOAD",
+ "route": "rewrite",
+ "passed": true,
+ "gates": [
+  {
+   "gate": "definitions_load",
+   "passed": true,
+   "ran": true,
+   "detail": "dg check defs; 7 asset(s), 3 schedule(s), 2 job(s) in the project"
+  },
+  {
+   "gate": "matches_spec",
+   "passed": true,
+   "ran": true,
+   "detail": "6 call(s) mapped to 5 asset(s) (1 to a sensor); 6 order pair(s) kept, 2 not compared (involve a sensor); schedules [('30 2 * * *', 'America/Chicago')] and pools ['batch_queue', 'db_queue'] equal the spec"
+  },
+  {
+   "gate": "commands_preserved",
+   "passed": true,
+   "ran": true,
+   "detail": "6 command(s) present (or marked reimplemented)"
+  },
+  {
+   "gate": "completeness",
+   "passed": true,
+   "ran": true,
+   "detail": "every RunMyJobs object is accounted for in the header (11)"
+  },
+  {
+   "gate": "generated_tests",
+   "passed": true,
+   "ran": true,
+   "detail": "test_nightly_sales_load_rewrite.py: 11 passed in 5.36s; materialized 5 of 5 asset(s)"
+  },
+  {
+   "gate": "structural_checks",
+   "passed": true,
+   "ran": false,
+   "detail": "not run: the model carries no output location that a structural check could use (declared outputs are table or dataset names); command exit status is enforced by the asset failing, and no business check is invented"
+  },
+  {
+   "gate": "no_stub_left",
+   "passed": true,
+   "ran": true,
+   "detail": "no loud stub (RMJ-CAVEAT) in the unit's code"
+  },
+  {
+   "gate": "no_secret_values",
+   "passed": true,
+   "ran": true,
+   "detail": "none found in 5 file(s)"
+  },
+  {
+   "gate": "no_invented_apis",
+   "passed": true,
+   "ran": true,
+   "detail": "every import resolves and every component type is a real class"
+  }
+ ]
+}

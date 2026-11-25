@@ -1,0 +1,175 @@
+{
+  "version": 1,
+  "units": [
+    {
+      "id": "U001",
+      "kind": "process_definition",
+      "source": "NIGHTLY/extract_1 (EXTRACT)",
+      "artifact": "nightly__extract_1",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "nightly__extract_1",
+        "deps": []
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U002",
+      "kind": "process_definition",
+      "source": "NIGHTLY/load_1 (LOAD)",
+      "artifact": "nightly__load_1",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "step 'load' precondition {'time_window': 'BIZ'} not enforced"
+      ],
+      "expected": {
+        "asset": "nightly__load_1",
+        "deps": [
+          "nightly__extract_1"
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U003",
+      "kind": "chain",
+      "source": "NIGHTLY",
+      "artifact": "job nightly",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "chain-level restart count is not converted",
+        "kept as one asset per call: steps have different retry counts (the component retries the whole chain)"
+      ],
+      "expected": {
+        "assets": [
+          "nightly__extract_1",
+          "nightly__load_1"
+        ],
+        "job": "nightly"
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U004",
+      "kind": "schedule",
+      "source": "JG",
+      "artifact": "1 schedule(s)",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "schedules": [
+          {
+            "name": "jg",
+            "cron": "30 2 * * *"
+          }
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U005",
+      "kind": "queue",
+      "source": "Q1",
+      "artifact": "pool q1",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "pending",
+      "evidence": "",
+      "reason": "",
+      "notes": [
+        "configure Dagster pool 'q1' with limit 3"
+      ],
+      "expected": {
+        "pool": "q1",
+        "limit": 3
+      },
+      "route": "converter"
+    }
+  ],
+  "questions": {
+    "NIGHTLY": [
+      "Confirm the schedule against what actually runs today (the Q1 run history is the check)",
+      "Who owns this chain, and how fresh must its output be (an SLA)? Owners and freshness are added as Dagster metadata once known"
+    ]
+  },
+  "rewrite_passed": [
+    "NIGHTLY"
+  ]
+}

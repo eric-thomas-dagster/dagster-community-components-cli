@@ -1,0 +1,11 @@
+PASS  definitions_load: dg check defs; 7 asset(s), 3 schedule(s), 2 job(s) in the project
+PASS  matches_spec: 1 call(s) mapped to 1 asset(s); 0 order pair(s) kept; schedules none and pools none equal the spec
+PASS  commands_preserved: 0 command(s) present (or marked reimplemented)
+PASS  completeness: every RunMyJobs object is accounted for in the header (1)
+PASS  generated_tests: test_legacy_sap_extract_rewrite.py: 6 passed, 1 skipped in 5.25s; materialized 0 of 1 asset(s) (not materialized: external system or no definition (sap))
+NOT RUN  structural_checks: not run: the model carries no output location that a structural check could use (declared outputs are table or dataset names); command exit status is enforced by the asset failing, and no business check is invented
+FAIL  no_stub_left: a loud stub remains at __init__.py:12: the step is not ported, so the unit cannot be complete
+PASS  no_secret_values: none found in 2 file(s)
+PASS  no_invented_apis: every import resolves and every component type is a real class
+manifest: advanced=0, deferred=1, kept_converter=0, waiting=0
+unit LEGACY_SAP_EXTRACT: NOT accepted: the converter's output remains the fallback

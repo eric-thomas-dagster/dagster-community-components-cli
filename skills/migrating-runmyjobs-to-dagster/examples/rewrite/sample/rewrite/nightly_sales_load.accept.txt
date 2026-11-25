@@ -1,0 +1,11 @@
+PASS  definitions_load: dg check defs; 7 asset(s), 3 schedule(s), 2 job(s) in the project
+PASS  matches_spec: 6 call(s) mapped to 5 asset(s) (1 to a sensor); 6 order pair(s) kept, 2 not compared (involve a sensor); schedules [('30 2 * * *', 'America/Chicago')] and pools ['batch_queue', 'db_queue'] equal the spec
+PASS  commands_preserved: 6 command(s) present (or marked reimplemented)
+PASS  completeness: every RunMyJobs object is accounted for in the header (11)
+PASS  generated_tests: test_nightly_sales_load_rewrite.py: 11 passed in 5.36s; materialized 5 of 5 asset(s)
+NOT RUN  structural_checks: not run: the model carries no output location that a structural check could use (declared outputs are table or dataset names); command exit status is enforced by the asset failing, and no business check is invented
+PASS  no_stub_left: no loud stub (RMJ-CAVEAT) in the unit's code
+PASS  no_secret_values: none found in 5 file(s)
+PASS  no_invented_apis: every import resolves and every component type is a real class
+manifest: advanced=10, deferred=0, kept_converter=0, waiting=0
+unit NIGHTLY_SALES_LOAD: ACCEPTED (route: rewrite)

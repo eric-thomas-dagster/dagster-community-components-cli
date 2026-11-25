@@ -1,0 +1,159 @@
+{
+ "acceptable_differences": [
+  "asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it",
+  "a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above",
+  "queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone",
+  "status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps",
+  "RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so",
+  "'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not"
+ ],
+ "accounting": [
+  {
+   "id": "LEGACY_SAP_EXTRACT",
+   "kind": "call",
+   "what": "LEGACY_SAP_EXTRACT (sap)"
+  }
+ ],
+ "application": "OPS",
+ "calls": [
+  {
+   "application": "OPS",
+   "call": "LEGACY_SAP_EXTRACT",
+   "command": "",
+   "command_normalized": "",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "legacy_sap_extract",
+     "caveat": "stub",
+     "manifest_id": "U009",
+     "notes": [
+      "SAP connector job (a RunMyJobs SAP built-in): it needs an SAP integration, in Dagster or through the RunMyJobs connector"
+     ],
+     "status": "unmapped"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "LEGACY_SAP_EXTRACT",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "LEGACY_SAP_EXTRACT",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "sap": {
+    "parameters": {},
+    "target": "LEGACY_SAP_EXTRACT"
+   },
+   "step": "",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "sap",
+   "upstream": [],
+   "wait_events": []
+  }
+ ],
+ "connections": [],
+ "converter": {
+  "assets": [
+   "legacy_sap_extract"
+  ],
+  "collapsed_to_one_asset": false,
+  "degraded": [],
+  "disposition": "stubbed",
+  "manifest_units": [
+   "U009"
+  ],
+  "reasons": [
+   "SAP connector job (a RunMyJobs SAP built-in): it needs an SAP integration, in Dagster or through the RunMyJobs connector"
+  ],
+  "rows": [
+   {
+    "artifact": "legacy_sap_extract",
+    "caveat": "stub",
+    "expected": {
+     "asset": "legacy_sap_extract",
+     "deps": []
+    },
+    "kind": "process_definition",
+    "manifest_id": "U009",
+    "notes": [
+     "SAP connector job (a RunMyJobs SAP built-in): it needs an SAP integration, in Dagster or through the RunMyJobs connector"
+    ],
+    "source": "LEGACY_SAP_EXTRACT",
+    "status": "unmapped"
+   }
+  ],
+  "status": "unmapped",
+  "stubbed": [
+   "LEGACY_SAP_EXTRACT"
+  ]
+ },
+ "description": "",
+ "edges": [],
+ "expected": {
+  "commands": [],
+  "external_systems": [
+   "sap"
+  ],
+  "file_events": [],
+  "notification_targets": [],
+  "order_pairs": [],
+  "pools": [],
+  "retries": {
+   "LEGACY_SAP_EXTRACT": 0
+  },
+  "schedules": [],
+  "structural_checks": [],
+  "untranslatable_schedule_elements": []
+ },
+ "extractor_notes": [],
+ "file_events": [],
+ "flatten_notes": [],
+ "kind": "process_definition",
+ "manifest_units": [
+  "U009"
+ ],
+ "must_preserve": [
+  "the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)",
+  "every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them",
+  "the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)",
+  "the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)",
+  "retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success",
+  "what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)",
+  "notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code"
+ ],
+ "notifications": [],
+ "parameters": [],
+ "preconditions": [],
+ "purpose": [
+  {
+   "inferred": false,
+   "text": "a standalone sap process definition in application OPS"
+  },
+  {
+   "inferred": true,
+   "text": "no submit frame or file event in the export starts it (it may be started by a person, another chain or an event)"
+  }
+ ],
+ "queue_manifest_units": [],
+ "queues": [],
+ "run_window": "",
+ "schedules": [],
+ "status_handlers": [],
+ "steps": [],
+ "time_zones": [],
+ "unit": "LEGACY_SAP_EXTRACT",
+ "unit_id": "legacy_sap_extract",
+ "version": 1,
+ "wait_events": []
+}

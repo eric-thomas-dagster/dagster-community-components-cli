@@ -1,0 +1,89 @@
+# Synthetic sample: a generic nightly retail-style batch. Not from any customer.
+queues:
+  - {name: BATCH_QUEUE, max_concurrency: 4, process_server: PS_PROD}
+  - {name: DB_QUEUE, max_concurrency: 2, process_server: PS_PROD}
+
+process_definitions:
+  - name: EXTRACT_SALES
+    application: SALES
+    type: os
+    description: Pull the previous day's sales files from the landing share.
+    command: "echo extracting sales for ${run_date}"
+    queue: BATCH_QUEUE
+    parameters: [{name: run_date, default: "yesterday"}]
+    outputs: [landing.sales_raw]
+    max_starts: 3
+  - name: EXTRACT_INVENTORY
+    application: SALES
+    type: os
+    command: "echo extracting inventory"
+    queue: BATCH_QUEUE
+    outputs: [landing.inventory_raw]
+  - name: LOAD_SALES_FACT
+    application: SALES
+    type: sql
+    description: Merge staged sales into the fact table.
+    command: "select 1"
+    connection: WAREHOUSE
+    queue: DB_QUEUE
+    outputs: [dw.fact_sales]
+  - name: LOAD_INVENTORY_FACT
+    application: SALES
+    type: sql
+    command: "select 1"
+    connection: WAREHOUSE
+    queue: DB_QUEUE
+    outputs: [dw.fact_inventory]
+  - name: CALC_MARGIN
+    application: SALES
+    type: redwoodscript
+    description: Compute margin using a custom script.
+    command: |
+      Job j = jcsSession.getJobByName("x");
+      jcsOut.println("margin done");
+  - name: NOTIFY_DONE
+    application: SALES
+    type: os
+    command: "echo notifying"
+  - name: PURGE_TEMP
+    application: OPS
+    type: os
+    command: "echo purging"
+    run_as: svc_batch
+  - name: LEGACY_SAP_EXTRACT
+    application: OPS
+    type: sap
+    command: ""
+
+chains:
+  - name: NIGHTLY_SALES_LOAD
+    application: SALES
+    steps:
+      - name: extract
+        calls:
+          - {name: sales, process: EXTRACT_SALES, params: {run_date: "today"}}
+          - {name: inventory, process: EXTRACT_INVENTORY}
+        status_handlers:
+          - {status: Error, action: restart_step, max: 2}
+      - name: load
+        calls:
+          - {name: sales_fact, process: LOAD_SALES_FACT}
+          - {name: inventory_fact, process: LOAD_INVENTORY_FACT}
+      - name: post
+        precondition: {time_window: BUSINESS_HOURS}
+        calls:
+          - {name: margin, process: CALC_MARGIN}
+          - {name: notify, process: NOTIFY_DONE}
+
+schedules:
+  - name: NIGHTLY_SALES_SCHEDULE
+    target: NIGHTLY_SALES_LOAD
+    time_zone: America/Chicago
+    elements:
+      - {kind: daily, at: "02:30"}
+  - name: PURGE_HOURLY
+    target: PURGE_TEMP
+    time_zone: America/Chicago
+    elements:
+      - {kind: interval, every: 15, unit: minutes, window: {start: "08:00", end: "18:00", days: [mon, tue, wed, thu, fri]}}
+      - {kind: monthly, day: last, at: "23:00"}

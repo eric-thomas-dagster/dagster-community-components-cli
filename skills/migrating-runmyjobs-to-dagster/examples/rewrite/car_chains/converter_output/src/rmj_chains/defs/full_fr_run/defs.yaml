@@ -1,0 +1,98 @@
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__preparation_run"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Preparation Run/call:preparation run]"
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Preparation.Run.call.preparation.run"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__promotion_forecast"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Promotion Forecast/call:promotion forecast]"
+  deps: ["full_fr_run__preparation_run"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Promotion.Forecast.call.promotion.foreca"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__replenish_shop_1__wait_for_truck"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Wait for Truck/call:wait for truck]"
+  deps: ["full_fr_run__promotion_forecast"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Wait.for.Truck.call.wait.for.truck"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__replenish_shop_1__calculate_replenishment"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Calculate Replenishment/call:calculate replenishment]"
+  deps: ["full_fr_run__replenish_shop_1__wait_for_truck"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Calculate.Replenishment.call.calculate.r"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__replenish_shop_1__pick_orders"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Pick Orders/call:pick orders]"
+  deps: ["full_fr_run__replenish_shop_1__calculate_replenishment"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Pick.Orders.call.pick.orders"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__replenish_shop_1__confirmation_truck_loaded"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Confirmation Truck loaded/call:confirmation truck loaded]"
+  deps: ["full_fr_run__replenish_shop_1__pick_orders"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Confirmation.Truck.loaded.call.confirmat"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__replenish_shop_2__wait_for_truck"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Wait for Truck/call:wait for truck]"
+  deps: ["full_fr_run__promotion_forecast"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Wait.for.Truck.call.wait.for.truck"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__replenish_shop_2__calculate_replenishment"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Calculate Replenishment/call:calculate replenishment]"
+  deps: ["full_fr_run__replenish_shop_2__wait_for_truck"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Calculate.Replenishment.call.calculate.r"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__replenish_shop_2__pick_orders"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Pick Orders/call:pick orders]"
+  deps: ["full_fr_run__replenish_shop_2__calculate_replenishment"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Pick.Orders.call.pick.orders"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "full_fr_run__replenish_shop_2__confirmation_truck_loaded"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "full_fr_run"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Full_FR_Run/step:Confirmation Truck loaded/call:confirmation truck loaded]"
+  deps: ["full_fr_run__replenish_shop_2__pick_orders"]
+  asset_tags: {"runmyjobs_source": "chain.Full_FR_Run.step.Confirmation.Truck.loaded.call.confirmat"}

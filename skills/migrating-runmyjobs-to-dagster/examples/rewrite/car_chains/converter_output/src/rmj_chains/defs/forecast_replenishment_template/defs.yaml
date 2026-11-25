@@ -1,0 +1,158 @@
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__initialize"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Initialize/call:initialize]"
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Initialize.call.init"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__post_posdm_idocs"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Post POSDM Idocs/call:post posdm idocs]"
+  deps: ["forecast_replenishment_template__initialize"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Post.POSDM.Idocs.cal"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__reprocess_idocs_in_error"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Reprocess Idocs in Error/call:reprocess idocs in error]"
+  deps: ["forecast_replenishment_template__post_posdm_idocs"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Reprocess.Idocs.in.E"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__post_pids"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Post PIDs/call:post pids]"
+  deps: ["forecast_replenishment_template__reprocess_idocs_in_error"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Post.PIDs.call.post."}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Preparation Run/call:preparation run]"
+  deps: ["forecast_replenishment_template__post_pids"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Preparation.Run.call"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Promotion Forecast/call:promotion forecast]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__preparation_run"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Promotion.Forecast.c"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Wait for Truck/call:wait for truck]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Wait.for.Truck.call."}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Calculate Replenishment/call:calculate replenishment]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__wait_for_truck"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Calculate.Replenishm"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Pick Orders/call:pick orders]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__calculate_replenishment"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Pick.Orders.call.pic"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__confirmation_truck_loaded"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Confirmation Truck loaded/call:confirmation truck loaded]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_1__pick_orders"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Confirmation.Truck.l"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Wait for Truck/call:wait for truck]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__promotion_forecast"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Wait.for.Truck.call."}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Calculate Replenishment/call:calculate replenishment]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__wait_for_truck"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Calculate.Replenishm"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Pick Orders/call:pick orders]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__calculate_replenishment"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Pick.Orders.call.pic"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__confirmation_truck_loaded"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Confirmation Truck loaded/call:confirmation truck loaded]"
+  deps: ["forecast_replenishment_template__full_forecast_and_replenishment_run__replenish_shop_2__pick_orders"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Confirmation.Truck.l"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__process_negative_stock__count_negative_stock"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Count Negative Stock/call:count negative stock]"
+  deps: ["forecast_replenishment_template__post_pids"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Count.Negative.Stock"}
+---
+type: rmj_chains.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "forecast_replenishment_template__process_negative_stock__create_pids"
+  command: "echo System_DoNothing: RunMyJobs built-in, does nothing"
+  kinds: ["shell"]
+  group_name: "forecast_replenishment_template"
+  description: "RunMyJobs built-in that does nothing [RunMyJobs source: chain:Forecast_Replenishment_Template/step:Create PIDs/call:create pids]"
+  deps: ["forecast_replenishment_template__process_negative_stock__count_negative_stock"]
+  asset_tags: {"runmyjobs_source": "chain.Forecast_Replenishment_Template.step.Create.PIDs.call.cre"}

@@ -1,0 +1,298 @@
+[
+ {
+  "unit": "NIGHTLY_SALES_LOAD",
+  "dimensions": [
+   {
+    "dimension": "graph order (earlier -> later pairs kept)",
+    "source": "8 pair(s); 2 involve a call the rewrite replaced with a sensor (not compared)",
+    "converter": "all kept",
+    "rewrite": "all kept",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "schedules (cron, time zone)",
+    "source": [
+     [
+      "30 2 * * *",
+      "America/Chicago"
+     ]
+    ],
+    "converter": [
+     [
+      "30 2 * * *",
+      "America/Chicago"
+     ]
+    ],
+    "rewrite": [
+     [
+      "30 2 * * *",
+      "America/Chicago"
+     ]
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "pools",
+    "source": [
+     "batch_queue",
+     "db_queue"
+    ],
+    "converter": [
+     "batch_queue",
+     "db_queue"
+    ],
+    "rewrite": [
+     "batch_queue",
+     "db_queue"
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "retries",
+    "source": "per call",
+    "converter": "match",
+    "rewrite": "match",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "commands and SQL present",
+    "source": "6 command(s)",
+    "converter": "all present",
+    "rewrite": [
+     "NIGHTLY_SALES_LOAD/margin",
+     "NIGHTLY_SALES_LOAD/notify"
+    ],
+    "converter_matches_source": true,
+    "rewrite_matches_source": false,
+    "verdict": "converter matches the source"
+   },
+   {
+    "dimension": "loud stubs left",
+    "source": "none wanted",
+    "converter": [
+     "NIGHTLY_SALES_LOAD/margin (CALC_MARGIN)"
+    ],
+    "rewrite": "none",
+    "converter_matches_source": false,
+    "rewrite_matches_source": true,
+    "verdict": "rewrite matches the source"
+   }
+  ],
+  "assets": {
+   "converter": [
+    "nightly_sales_load__inventory",
+    "nightly_sales_load__inventory_fact",
+    "nightly_sales_load__margin",
+    "nightly_sales_load__notify",
+    "nightly_sales_load__sales",
+    "nightly_sales_load__sales_fact"
+   ],
+   "rewrite": [
+    "fact_inventory",
+    "fact_sales",
+    "inventory_raw",
+    "sales_margin",
+    "sales_raw"
+   ]
+  },
+  "checks": {
+   "converter": 0,
+   "rewrite": 0
+  },
+  "not_machine_compared": {
+   "converter_unenforced": [
+    "step 'post' precondition {'time_window': 'BUSINESS_HOURS'} not enforced"
+   ],
+   "rewrite_constructs": {
+    "NIGHTLY_SALES_LOAD#precondition1": {
+     "what": "step post: time window BUSINESS_HOURS must be open",
+     "header": "dropped: time window BUSINESS_HOURS is not defined in the export, so it cannot be enforced; needs the hours from the owner"
+    },
+    "NIGHTLY_SALES_LOAD#handler1": {
+     "what": "step extract: on status Error: restart_step, max=2",
+     "header": "replaced by retry_policy_max_retries 2 on `sales_raw` and `inventory_raw`"
+    }
+   }
+  },
+  "equivalent_on_all_machine_checked_dimensions": false
+ },
+ {
+  "unit": "PURGE_TEMP",
+  "dimensions": [
+   {
+    "dimension": "graph order (earlier -> later pairs kept)",
+    "source": "0 pair(s)",
+    "converter": "all kept",
+    "rewrite": "all kept",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "schedules (cron, time zone); 1 element(s) have no cron form",
+    "source": "[('*/15 8-17 * * 1,2,3,4,5', 'America/Chicago')] plus 1 not expressible in cron",
+    "converter": [
+     [
+      "*/15 8-17 * * 1,2,3,4,5",
+      "America/Chicago"
+     ],
+     "1 element(s) dropped"
+    ],
+    "rewrite": [
+     [
+      "*/15 8-17 * * 1,2,3,4,5",
+      "America/Chicago"
+     ],
+     [
+      "0 23 28-31 * *",
+      "America/Chicago"
+     ]
+    ],
+    "converter_matches_source": false,
+    "rewrite_matches_source": true,
+    "verdict": "rewrite matches the source"
+   },
+   {
+    "dimension": "pools",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "retries",
+    "source": "per call",
+    "converter": "match",
+    "rewrite": "match",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "commands and SQL present",
+    "source": "1 command(s)",
+    "converter": "all present",
+    "rewrite": "all present",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "loud stubs left",
+    "source": "none wanted",
+    "converter": "none",
+    "rewrite": "none",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   }
+  ],
+  "assets": {
+   "converter": [
+    "purge_temp"
+   ],
+   "rewrite": [
+    "purge_temp"
+   ]
+  },
+  "checks": {
+   "converter": 0,
+   "rewrite": 0
+  },
+  "not_machine_compared": {
+   "converter_unenforced": [],
+   "rewrite_constructs": {}
+  },
+  "equivalent_on_all_machine_checked_dimensions": false
+ },
+ {
+  "unit": "LEGACY_SAP_EXTRACT",
+  "dimensions": [
+   {
+    "dimension": "graph order (earlier -> later pairs kept)",
+    "source": "0 pair(s)",
+    "converter": "all kept",
+    "rewrite": "all kept",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "schedules (cron, time zone)",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "pools",
+    "source": "none",
+    "converter": [],
+    "rewrite": [],
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "retries",
+    "source": "per call",
+    "converter": "match",
+    "rewrite": "match",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "commands and SQL present",
+    "source": "0 command(s)",
+    "converter": "all present",
+    "rewrite": "all present",
+    "converter_matches_source": true,
+    "rewrite_matches_source": true,
+    "verdict": "equivalent"
+   },
+   {
+    "dimension": "loud stubs left",
+    "source": "none wanted",
+    "converter": [
+     "LEGACY_SAP_EXTRACT"
+    ],
+    "rewrite": [
+     "a loud stub remains"
+    ],
+    "converter_matches_source": false,
+    "rewrite_matches_source": false,
+    "verdict": "equivalent (both differ from the source the same way)"
+   }
+  ],
+  "assets": {
+   "converter": [
+    "legacy_sap_extract"
+   ],
+   "rewrite": [
+    "legacy_sap_extract"
+   ]
+  },
+  "checks": {
+   "converter": 0,
+   "rewrite": 0
+  },
+  "not_machine_compared": {
+   "converter_unenforced": [],
+   "rewrite_constructs": {}
+  },
+  "equivalent_on_all_machine_checked_dimensions": true
+ }
+]

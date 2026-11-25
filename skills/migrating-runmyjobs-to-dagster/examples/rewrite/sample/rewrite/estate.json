@@ -1,0 +1,65 @@
+{
+ "candidate_boundaries": [],
+ "chains_called_by": {},
+ "chains_calling_chains": {},
+ "converter_dispositions": {
+  "LEGACY_SAP_EXTRACT": "stubbed",
+  "NIGHTLY_SALES_LOAD": "stubbed",
+  "PURGE_TEMP": "degraded"
+ },
+ "declared_events": [],
+ "events_waited_for": {},
+ "inline_wrapper_chains": [],
+ "integrations": [],
+ "queue_units": [
+  {
+   "manifest_id": "U012",
+   "source": "BATCH_QUEUE"
+  },
+  {
+   "manifest_id": "U013",
+   "source": "DB_QUEUE"
+  }
+ ],
+ "queues": {
+  "BATCH_QUEUE": {
+   "max_concurrency": 4,
+   "pool": "batch_queue",
+   "units": [
+    "NIGHTLY_SALES_LOAD"
+   ]
+  },
+  "DB_QUEUE": {
+   "max_concurrency": 2,
+   "pool": "db_queue",
+   "units": [
+    "NIGHTLY_SALES_LOAD"
+   ]
+  }
+ },
+ "schedules_by_target": {
+  "NIGHTLY_SALES_LOAD": [
+   "NIGHTLY_SALES_SCHEDULE"
+  ],
+  "PURGE_TEMP": [
+   "PURGE_HOURLY"
+  ]
+ },
+ "shared_declared_outputs": {},
+ "shared_process_definitions": {},
+ "top_level_chains": [
+  "NIGHTLY_SALES_LOAD"
+ ],
+ "unit_kinds": {
+  "LEGACY_SAP_EXTRACT": "process_definition",
+  "NIGHTLY_SALES_LOAD": "chain",
+  "PURGE_TEMP": "process_definition"
+ },
+ "units": [
+  "LEGACY_SAP_EXTRACT",
+  "NIGHTLY_SALES_LOAD",
+  "PURGE_TEMP"
+ ],
+ "unused_queues": [],
+ "version": 1
+}

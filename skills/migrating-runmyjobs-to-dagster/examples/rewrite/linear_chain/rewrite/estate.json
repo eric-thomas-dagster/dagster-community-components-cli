@@ -1,0 +1,64 @@
+{
+ "candidate_boundaries": [
+  {
+   "inferred": true,
+   "text": "queue BATCH_QUEUE is used by FIN_MIXED_RETRY, FIN_NIGHTLY: one pool `batch_queue` with one limit shared by all of them (not one pool per unit)"
+  },
+  {
+   "inferred": true,
+   "text": "definition PULL is called from FIN_MIXED_RETRY, FIN_NIGHTLY: one reusable function or component configured per caller, not copied"
+  }
+ ],
+ "chains_called_by": {},
+ "chains_calling_chains": {},
+ "converter_dispositions": {
+  "FIN_MIXED_RETRY": "degraded",
+  "FIN_NIGHTLY": "degraded"
+ },
+ "declared_events": [],
+ "events_waited_for": {},
+ "inline_wrapper_chains": [],
+ "integrations": [],
+ "queue_units": [
+  {
+   "manifest_id": "U011",
+   "source": "BATCH_QUEUE"
+  }
+ ],
+ "queues": {
+  "BATCH_QUEUE": {
+   "max_concurrency": 3,
+   "pool": "batch_queue",
+   "units": [
+    "FIN_MIXED_RETRY",
+    "FIN_NIGHTLY"
+   ]
+  }
+ },
+ "schedules_by_target": {
+  "FIN_NIGHTLY": [
+   "FIN_SCHED"
+  ]
+ },
+ "shared_declared_outputs": {},
+ "shared_process_definitions": {
+  "PULL": [
+   "FIN_MIXED_RETRY",
+   "FIN_NIGHTLY"
+  ]
+ },
+ "top_level_chains": [
+  "FIN_MIXED_RETRY",
+  "FIN_NIGHTLY"
+ ],
+ "unit_kinds": {
+  "FIN_MIXED_RETRY": "chain",
+  "FIN_NIGHTLY": "chain"
+ },
+ "units": [
+  "FIN_MIXED_RETRY",
+  "FIN_NIGHTLY"
+ ],
+ "unused_queues": [],
+ "version": 1
+}

@@ -1,0 +1,104 @@
+# Specification: RunMyJobs chain `Process_Negative_Stock_Template`
+
+Facts read from the extracted model (what RunMyJobs holds) and from the converter's report (what the converter does with this unit today). Statements marked *inferred* are not facts. No secret value is in this file: credential-like parameter values and credential-looking assignments in commands are replaced, and connections are names only.
+
+- application: (none); description: Process Negative Stock; unit id `process_negative_stock_template`
+- time zones named: none; run window (chain or process): none
+
+## What it does (from the facts)
+
+- a chain of 2 step(s) with 2 call(s) of type(s): os
+- its own description reads: 'Process Negative Stock'
+- its final call(s) are Process_Negative_Stock_Template/create pids (calls nothing else waits for)
+- every call is the RunMyJobs no-op built-in System_DoNothing: the chain is an orchestration skeleton (placeholders for later jobs) *inferred*
+- no submit frame or file event in the export starts it (it may be started by a person, another chain or an event) *inferred*
+
+## What the converter does with it today
+
+- disposition: **translated** (report status `converted`); collapsed to one asset: True; assets: process_negative_stock_template
+- stubbed (fails with RMJ-CAVEAT until ported): none
+- degraded (translated with a stated difference): none
+  - 2 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call
+- manifest units: U029, U030, U031
+
+## Parameters
+
+- `P_REGION` (in, String): default none; mandatory
+
+## Graph
+
+Steps run in order; calls in one step run in parallel, and every call waits for all calls of the step before.
+
+1. step `Count Negative Stock`: `Process_Negative_Stock_Template/count negative stock`
+2. step `Create PIDs`: `Process_Negative_Stock_Template/create pids`
+- edges (earlier -> later): Process_Negative_Stock_Template/count negative stock -> Process_Negative_Stock_Template/create pids
+
+## Calls
+
+### `Process_Negative_Stock_Template/count negative stock` (os, definition `System_DoNothing`)
+
+- step: Count Negative Stock; upstream: none; application (none)
+- queue: none; Maximum Starts: 1 (retries here = 0, the meaning of Maximum Starts is unconfirmed); timeout: None s; run as: default (not enforceable in Dagster)
+- connection (name): none; success exit codes besides 0: none; run window: none; declared outputs: none
+- resolved parameters: `{}`
+- converter: U029 -> step count_negative_stock of asset process_negative_stock_template [converted]
+- command / SQL / script (verbatim):
+
+```
+echo System_DoNothing: RunMyJobs built-in, does nothing
+```
+
+### `Process_Negative_Stock_Template/create pids` (os, definition `System_DoNothing`)
+
+- step: Create PIDs; upstream: Process_Negative_Stock_Template/count negative stock; application (none)
+- queue: none; Maximum Starts: 1 (retries here = 0, the meaning of Maximum Starts is unconfirmed); timeout: None s; run as: default (not enforceable in Dagster)
+- connection (name): none; success exit codes besides 0: none; run window: none; declared outputs: none
+- resolved parameters: `{}`
+- converter: U030 -> step create_pids of asset process_negative_stock_template [converted]
+- command / SQL / script (verbatim):
+
+```
+echo System_DoNothing: RunMyJobs built-in, does nothing
+```
+
+## Schedules and calendars
+
+- none in the export (the extractor warns when a CAR export holds no submit frames; named calendars are not parsed)
+
+## Queues
+
+- none
+
+## Preconditions, status handlers, events, notifications
+
+- none
+
+## Connections and endpoints (names only)
+
+- none. The converter reads a SQLAlchemy URL from `RMJ_CONN_<NAME>`; SAP and SMTP settings come from `SAP_*` / `SMTP_*` environment variables. Never write a value.
+
+## Behaviours that must be preserved
+
+- the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)
+- every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them
+- the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)
+- the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)
+- retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success
+- what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)
+- notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code
+
+## Differences that are acceptable
+
+- asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it
+- a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above
+- queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone
+- status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps
+- RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so
+- 'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not
+
+## Objects the header docstring must account for
+
+One line per object in the form `<id>: replaced by `<asset key>`` / `folded into `<asset key>`` / `merged into `<asset key>`` / `dropped: <reason>` (a call whose text is not kept verbatim says `reimplemented`).
+
+- `Process_Negative_Stock_Template/count negative stock` (call): System_DoNothing (os)
+- `Process_Negative_Stock_Template/create pids` (call): System_DoNothing (os)

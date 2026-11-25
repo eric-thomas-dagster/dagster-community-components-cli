@@ -1,0 +1,7 @@
+type: rmj_chains.components.RmjTaskChainAssetComponent
+attributes:
+  asset_key: "process_negative_stock_template"
+  steps: [{"id": "count_negative_stock", "type": "command", "command": "echo System_DoNothing: RunMyJobs built-in, does nothing"}, {"id": "create_pids", "type": "command", "command": "echo System_DoNothing: RunMyJobs built-in, does nothing"}]
+  group_name: "process_negative_stock_template"
+  description: "Process Negative Stock [RunMyJobs source: chain:Process_Negative_Stock_Template]"
+  asset_tags: {"runmyjobs_source": "chain.Process_Negative_Stock_Template"}

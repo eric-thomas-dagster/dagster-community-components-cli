@@ -1,0 +1,17 @@
+type: rmj_sample.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "purge_temp"
+  command: "echo purging"
+  kinds: ["shell"]
+  group_name: "ops"
+  description: "[RunMyJobs source: process:PURGE_TEMP]"
+  asset_tags: {"runmyjobs_source": "process.PURGE_TEMP", "runmyjobs_application": "OPS"}
+---
+type: dagster_community_components.CronScheduleComponent
+attributes:
+  schedule_name: "purge_hourly"
+  cron_expression: "*/15 8-17 * * 1,2,3,4,5"
+  asset_keys: ["purge_temp"]
+  job_name: "purge_temp_job"
+  execution_timezone: "America/Chicago"
+  default_status: "STOPPED"

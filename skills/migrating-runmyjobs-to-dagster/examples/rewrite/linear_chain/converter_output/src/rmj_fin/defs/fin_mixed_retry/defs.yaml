@@ -1,0 +1,42 @@
+type: rmj_fin.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "fin_mixed_retry__pull"
+  command: "echo pull today"
+  env_vars: {"RMJ_PARAM_RUN_DATE": "today"}
+  timeout_seconds: 600
+  pool: "batch_queue"
+  kinds: ["shell"]
+  success_exit_codes: [3]
+  retry_policy_max_retries: 1
+  retry_policy_delay_seconds: 60
+  retry_policy_backoff: "linear"
+  group_name: "fin_mixed_retry"
+  description: "[RunMyJobs source: chain:FIN_MIXED_RETRY/step:s1/call:pull]"
+  asset_tags: {"runmyjobs_source": "chain.FIN_MIXED_RETRY.step.s1.call.pull", "runmyjobs_application": "FIN"}
+---
+type: rmj_fin.components.RmjSqlAssetComponent
+attributes:
+  asset_key: "fin_mixed_retry__alone"
+  connection_env: "RMJ_CONN_WAREHOUSE"
+  sql: "select 2"
+  kinds: ["sql"]
+  pool: "batch_queue"
+  timeout_seconds: 120
+  run_window: "22:00-23:59 America/New_York mon,tue"
+  retry_policy_max_retries: 2
+  retry_policy_delay_seconds: 60
+  retry_policy_backoff: "linear"
+  group_name: "fin_mixed_retry"
+  description: "[RunMyJobs source: chain:FIN_MIXED_RETRY/step:s2/call:alone]"
+  deps: ["fin_mixed_retry__pull"]
+  asset_tags: {"runmyjobs_source": "chain.FIN_MIXED_RETRY.step.s2.call.alone", "runmyjobs_application": "FIN"}
+---
+type: dagster_community_components.FilesystemMonitorSensorComponent
+attributes:
+  sensor_name: "fin_file_no_checks"
+  directory_path: "/data/inbound/other"
+  file_pattern: "^.*$"
+  job_name: "fin_mixed_retry_on_fin_file_no_checks"
+  minimum_interval_seconds: 30
+  batch_into_one_run: true
+  default_status: "stopped"

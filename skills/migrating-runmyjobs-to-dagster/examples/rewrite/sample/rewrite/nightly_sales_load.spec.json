@@ -1,0 +1,827 @@
+{
+ "acceptable_differences": [
+  "asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it",
+  "a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above",
+  "queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone",
+  "status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps",
+  "RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so",
+  "'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not"
+ ],
+ "accounting": [
+  {
+   "id": "NIGHTLY_SALES_LOAD/sales",
+   "kind": "call",
+   "what": "EXTRACT_SALES (os)"
+  },
+  {
+   "id": "NIGHTLY_SALES_LOAD/inventory",
+   "kind": "call",
+   "what": "EXTRACT_INVENTORY (os)"
+  },
+  {
+   "id": "NIGHTLY_SALES_LOAD/sales_fact",
+   "kind": "call",
+   "what": "LOAD_SALES_FACT (sql)"
+  },
+  {
+   "id": "NIGHTLY_SALES_LOAD/inventory_fact",
+   "kind": "call",
+   "what": "LOAD_INVENTORY_FACT (sql)"
+  },
+  {
+   "id": "NIGHTLY_SALES_LOAD/margin",
+   "kind": "call",
+   "what": "CALC_MARGIN (redwoodscript)"
+  },
+  {
+   "id": "NIGHTLY_SALES_LOAD/notify",
+   "kind": "call",
+   "what": "NOTIFY_DONE (os)"
+  },
+  {
+   "id": "NIGHTLY_SALES_SCHEDULE",
+   "kind": "schedule",
+   "what": "submit frame, time zone America/Chicago"
+  },
+  {
+   "id": "BATCH_QUEUE",
+   "kind": "queue",
+   "what": "queue (pool batch_queue)"
+  },
+  {
+   "id": "DB_QUEUE",
+   "kind": "queue",
+   "what": "queue (pool db_queue)"
+  },
+  {
+   "id": "NIGHTLY_SALES_LOAD#precondition1",
+   "kind": "precondition",
+   "what": "step post: time window BUSINESS_HOURS must be open"
+  },
+  {
+   "id": "NIGHTLY_SALES_LOAD#handler1",
+   "kind": "status_handler",
+   "what": "step extract: on status Error: restart_step, max=2"
+  }
+ ],
+ "application": "SALES",
+ "calls": [
+  {
+   "application": "SALES",
+   "call": "sales",
+   "command": "echo extracting sales for ${run_date}",
+   "command_normalized": "echo extracting sales for <run_date>",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "nightly_sales_load__sales",
+     "caveat": "",
+     "manifest_id": "U001",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "Pull the previous day's sales files from the landing share.",
+   "extraction_notes": [],
+   "id": "NIGHTLY_SALES_LOAD/sales",
+   "max_starts": 3,
+   "outputs": [
+    "landing.sales_raw"
+   ],
+   "parameters": {
+    "run_date": "today"
+   },
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "batch_queue",
+   "precondition": null,
+   "process_definition": "EXTRACT_SALES",
+   "queue": "BATCH_QUEUE",
+   "run_as": "",
+   "run_window": "",
+   "step": "extract",
+   "step_precondition": null,
+   "step_status_handlers": [
+    {
+     "action": "restart_step",
+     "max": 2,
+     "status": "Error"
+    }
+   ],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [],
+   "wait_events": []
+  },
+  {
+   "application": "SALES",
+   "call": "inventory",
+   "command": "echo extracting inventory",
+   "command_normalized": "echo extracting inventory",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "nightly_sales_load__inventory",
+     "caveat": "",
+     "manifest_id": "U002",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "NIGHTLY_SALES_LOAD/inventory",
+   "max_starts": 1,
+   "outputs": [
+    "landing.inventory_raw"
+   ],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "batch_queue",
+   "precondition": null,
+   "process_definition": "EXTRACT_INVENTORY",
+   "queue": "BATCH_QUEUE",
+   "run_as": "",
+   "run_window": "",
+   "step": "extract",
+   "step_precondition": null,
+   "step_status_handlers": [
+    {
+     "action": "restart_step",
+     "max": 2,
+     "status": "Error"
+    }
+   ],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [],
+   "wait_events": []
+  },
+  {
+   "application": "SALES",
+   "call": "sales_fact",
+   "command": "select 1",
+   "command_normalized": "select 1",
+   "command_redacted": 0,
+   "connection": "WAREHOUSE",
+   "converter": [
+    {
+     "artifact": "nightly_sales_load__sales_fact",
+     "caveat": "",
+     "manifest_id": "U003",
+     "notes": [
+      "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')"
+     ],
+     "status": "converted"
+    }
+   ],
+   "description": "Merge staged sales into the fact table.",
+   "extraction_notes": [],
+   "id": "NIGHTLY_SALES_LOAD/sales_fact",
+   "max_starts": 1,
+   "outputs": [
+    "dw.fact_sales"
+   ],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "db_queue",
+   "precondition": null,
+   "process_definition": "LOAD_SALES_FACT",
+   "queue": "DB_QUEUE",
+   "run_as": "",
+   "run_window": "",
+   "step": "load",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "sql",
+   "upstream": [
+    "NIGHTLY_SALES_LOAD/sales",
+    "NIGHTLY_SALES_LOAD/inventory"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "SALES",
+   "call": "inventory_fact",
+   "command": "select 1",
+   "command_normalized": "select 1",
+   "command_redacted": 0,
+   "connection": "WAREHOUSE",
+   "converter": [
+    {
+     "artifact": "nightly_sales_load__inventory_fact",
+     "caveat": "",
+     "manifest_id": "U004",
+     "notes": [
+      "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')"
+     ],
+     "status": "converted"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "NIGHTLY_SALES_LOAD/inventory_fact",
+   "max_starts": 1,
+   "outputs": [
+    "dw.fact_inventory"
+   ],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "db_queue",
+   "precondition": null,
+   "process_definition": "LOAD_INVENTORY_FACT",
+   "queue": "DB_QUEUE",
+   "run_as": "",
+   "run_window": "",
+   "step": "load",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "sql",
+   "upstream": [
+    "NIGHTLY_SALES_LOAD/sales",
+    "NIGHTLY_SALES_LOAD/inventory"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "SALES",
+   "call": "margin",
+   "command": "Job j = jcsSession.getJobByName(\"x\");\njcsOut.println(\"margin done\");\n",
+   "command_normalized": "Job j = jcsSession.getJobByName(\"x\"); jcsOut.println(\"margin done\");",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "nightly_sales_load__margin",
+     "caveat": "stub",
+     "manifest_id": "U005",
+     "notes": [
+      "step 'post' precondition {'time_window': 'BUSINESS_HOURS'} not enforced",
+      "RedwoodScript is not auto-translated; port the source (kept in the asset body) by hand or with the planned LLM pass"
+     ],
+     "status": "needs review"
+    }
+   ],
+   "description": "Compute margin using a custom script.",
+   "extraction_notes": [],
+   "id": "NIGHTLY_SALES_LOAD/margin",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "CALC_MARGIN",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "post",
+   "step_precondition": {
+    "time_window": "BUSINESS_HOURS"
+   },
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "redwoodscript",
+   "upstream": [
+    "NIGHTLY_SALES_LOAD/sales_fact",
+    "NIGHTLY_SALES_LOAD/inventory_fact"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "SALES",
+   "call": "notify",
+   "command": "echo notifying",
+   "command_normalized": "echo notifying",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "nightly_sales_load__notify",
+     "caveat": "degraded",
+     "manifest_id": "U006",
+     "notes": [
+      "step 'post' precondition {'time_window': 'BUSINESS_HOURS'} not enforced"
+     ],
+     "status": "needs review"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "NIGHTLY_SALES_LOAD/notify",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "NOTIFY_DONE",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "post",
+   "step_precondition": {
+    "time_window": "BUSINESS_HOURS"
+   },
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "NIGHTLY_SALES_LOAD/sales_fact",
+    "NIGHTLY_SALES_LOAD/inventory_fact"
+   ],
+   "wait_events": []
+  }
+ ],
+ "connections": [
+  "WAREHOUSE"
+ ],
+ "converter": {
+  "assets": [
+   "nightly_sales_load__sales",
+   "nightly_sales_load__inventory",
+   "nightly_sales_load__sales_fact",
+   "nightly_sales_load__inventory_fact",
+   "nightly_sales_load__margin",
+   "nightly_sales_load__notify"
+  ],
+  "collapsed_to_one_asset": false,
+  "degraded": [
+   "NIGHTLY_SALES_LOAD/notify (NOTIFY_DONE)",
+   "NIGHTLY_SALES_LOAD"
+  ],
+  "disposition": "stubbed",
+  "manifest_units": [
+   "U001",
+   "U002",
+   "U003",
+   "U004",
+   "U005",
+   "U006",
+   "U007",
+   "U010"
+  ],
+  "reasons": [
+   "RedwoodScript is not auto-translated; port the source (kept in the asset body) by hand or with the planned LLM pass",
+   "kept as one asset per call: step 'extract' runs 2 calls in parallel, which one chain asset cannot express",
+   "step 'post' precondition {'time_window': 'BUSINESS_HOURS'} not enforced"
+  ],
+  "rows": [
+   {
+    "artifact": "nightly_sales_load__sales",
+    "caveat": "",
+    "expected": {
+     "asset": "nightly_sales_load__sales",
+     "deps": []
+    },
+    "kind": "process_definition",
+    "manifest_id": "U001",
+    "notes": [],
+    "source": "NIGHTLY_SALES_LOAD/sales (EXTRACT_SALES)",
+    "status": "converted"
+   },
+   {
+    "artifact": "nightly_sales_load__inventory",
+    "caveat": "",
+    "expected": {
+     "asset": "nightly_sales_load__inventory",
+     "deps": []
+    },
+    "kind": "process_definition",
+    "manifest_id": "U002",
+    "notes": [],
+    "source": "NIGHTLY_SALES_LOAD/inventory (EXTRACT_INVENTORY)",
+    "status": "converted"
+   },
+   {
+    "artifact": "nightly_sales_load__sales_fact",
+    "caveat": "",
+    "expected": {
+     "asset": "nightly_sales_load__sales_fact",
+     "deps": [
+      "nightly_sales_load__sales",
+      "nightly_sales_load__inventory"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U003",
+    "notes": [
+     "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')"
+    ],
+    "source": "NIGHTLY_SALES_LOAD/sales_fact (LOAD_SALES_FACT)",
+    "status": "converted"
+   },
+   {
+    "artifact": "nightly_sales_load__inventory_fact",
+    "caveat": "",
+    "expected": {
+     "asset": "nightly_sales_load__inventory_fact",
+     "deps": [
+      "nightly_sales_load__sales",
+      "nightly_sales_load__inventory"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U004",
+    "notes": [
+     "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')"
+    ],
+    "source": "NIGHTLY_SALES_LOAD/inventory_fact (LOAD_INVENTORY_FACT)",
+    "status": "converted"
+   },
+   {
+    "artifact": "nightly_sales_load__margin",
+    "caveat": "stub",
+    "expected": {
+     "asset": "nightly_sales_load__margin",
+     "deps": [
+      "nightly_sales_load__sales_fact",
+      "nightly_sales_load__inventory_fact"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U005",
+    "notes": [
+     "step 'post' precondition {'time_window': 'BUSINESS_HOURS'} not enforced",
+     "RedwoodScript is not auto-translated; port the source (kept in the asset body) by hand or with the planned LLM pass"
+    ],
+    "source": "NIGHTLY_SALES_LOAD/margin (CALC_MARGIN)",
+    "status": "needs review"
+   },
+   {
+    "artifact": "nightly_sales_load__notify",
+    "caveat": "degraded",
+    "expected": {
+     "asset": "nightly_sales_load__notify",
+     "deps": [
+      "nightly_sales_load__sales_fact",
+      "nightly_sales_load__inventory_fact"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U006",
+    "notes": [
+     "step 'post' precondition {'time_window': 'BUSINESS_HOURS'} not enforced"
+    ],
+    "source": "NIGHTLY_SALES_LOAD/notify (NOTIFY_DONE)",
+    "status": "needs review"
+   },
+   {
+    "artifact": "job nightly_sales_load",
+    "caveat": "degraded",
+    "expected": {
+     "assets": [
+      "nightly_sales_load__sales",
+      "nightly_sales_load__inventory",
+      "nightly_sales_load__sales_fact",
+      "nightly_sales_load__inventory_fact",
+      "nightly_sales_load__margin",
+      "nightly_sales_load__notify"
+     ],
+     "job": "nightly_sales_load"
+    },
+    "kind": "chain",
+    "manifest_id": "U007",
+    "notes": [
+     "kept as one asset per call: step 'extract' runs 2 calls in parallel, which one chain asset cannot express"
+    ],
+    "source": "NIGHTLY_SALES_LOAD",
+    "status": "needs review"
+   },
+   {
+    "artifact": "1 schedule(s)",
+    "caveat": "",
+    "expected": {
+     "schedules": [
+      {
+       "cron": "30 2 * * *",
+       "name": "nightly_sales_schedule"
+      }
+     ]
+    },
+    "kind": "schedule",
+    "manifest_id": "U010",
+    "notes": [],
+    "source": "NIGHTLY_SALES_SCHEDULE",
+    "status": "converted"
+   }
+  ],
+  "status": "needs review",
+  "stubbed": [
+   "NIGHTLY_SALES_LOAD/margin (CALC_MARGIN)"
+  ]
+ },
+ "description": "",
+ "edges": [
+  [
+   "NIGHTLY_SALES_LOAD/sales",
+   "NIGHTLY_SALES_LOAD/sales_fact"
+  ],
+  [
+   "NIGHTLY_SALES_LOAD/inventory",
+   "NIGHTLY_SALES_LOAD/sales_fact"
+  ],
+  [
+   "NIGHTLY_SALES_LOAD/sales",
+   "NIGHTLY_SALES_LOAD/inventory_fact"
+  ],
+  [
+   "NIGHTLY_SALES_LOAD/inventory",
+   "NIGHTLY_SALES_LOAD/inventory_fact"
+  ],
+  [
+   "NIGHTLY_SALES_LOAD/sales_fact",
+   "NIGHTLY_SALES_LOAD/margin"
+  ],
+  [
+   "NIGHTLY_SALES_LOAD/inventory_fact",
+   "NIGHTLY_SALES_LOAD/margin"
+  ],
+  [
+   "NIGHTLY_SALES_LOAD/sales_fact",
+   "NIGHTLY_SALES_LOAD/notify"
+  ],
+  [
+   "NIGHTLY_SALES_LOAD/inventory_fact",
+   "NIGHTLY_SALES_LOAD/notify"
+  ]
+ ],
+ "expected": {
+  "commands": [
+   {
+    "call": "NIGHTLY_SALES_LOAD/sales",
+    "normalized": "echo extracting sales for <run_date>",
+    "rendered": "echo extracting sales for today",
+    "type": "os"
+   },
+   {
+    "call": "NIGHTLY_SALES_LOAD/inventory",
+    "normalized": "echo extracting inventory",
+    "rendered": "echo extracting inventory",
+    "type": "os"
+   },
+   {
+    "call": "NIGHTLY_SALES_LOAD/sales_fact",
+    "normalized": "select 1",
+    "rendered": "select 1",
+    "type": "sql"
+   },
+   {
+    "call": "NIGHTLY_SALES_LOAD/inventory_fact",
+    "normalized": "select 1",
+    "rendered": "select 1",
+    "type": "sql"
+   },
+   {
+    "call": "NIGHTLY_SALES_LOAD/margin",
+    "normalized": "Job j = jcsSession.getJobByName(\"x\"); jcsOut.println(\"margin done\");",
+    "rendered": "Job j = jcsSession.getJobByName(\"x\"); jcsOut.println(\"margin done\");",
+    "type": "redwoodscript"
+   },
+   {
+    "call": "NIGHTLY_SALES_LOAD/notify",
+    "normalized": "echo notifying",
+    "rendered": "echo notifying",
+    "type": "os"
+   }
+  ],
+  "external_systems": [
+   "sql"
+  ],
+  "file_events": [],
+  "notification_targets": [],
+  "order_pairs": [
+   [
+    "NIGHTLY_SALES_LOAD/sales",
+    "NIGHTLY_SALES_LOAD/sales_fact"
+   ],
+   [
+    "NIGHTLY_SALES_LOAD/inventory",
+    "NIGHTLY_SALES_LOAD/sales_fact"
+   ],
+   [
+    "NIGHTLY_SALES_LOAD/sales",
+    "NIGHTLY_SALES_LOAD/inventory_fact"
+   ],
+   [
+    "NIGHTLY_SALES_LOAD/inventory",
+    "NIGHTLY_SALES_LOAD/inventory_fact"
+   ],
+   [
+    "NIGHTLY_SALES_LOAD/sales_fact",
+    "NIGHTLY_SALES_LOAD/margin"
+   ],
+   [
+    "NIGHTLY_SALES_LOAD/inventory_fact",
+    "NIGHTLY_SALES_LOAD/margin"
+   ],
+   [
+    "NIGHTLY_SALES_LOAD/sales_fact",
+    "NIGHTLY_SALES_LOAD/notify"
+   ],
+   [
+    "NIGHTLY_SALES_LOAD/inventory_fact",
+    "NIGHTLY_SALES_LOAD/notify"
+   ]
+  ],
+  "pools": [
+   "batch_queue",
+   "db_queue"
+  ],
+  "retries": {
+   "NIGHTLY_SALES_LOAD/inventory": 2,
+   "NIGHTLY_SALES_LOAD/inventory_fact": 0,
+   "NIGHTLY_SALES_LOAD/margin": 0,
+   "NIGHTLY_SALES_LOAD/notify": 0,
+   "NIGHTLY_SALES_LOAD/sales": 2,
+   "NIGHTLY_SALES_LOAD/sales_fact": 0
+  },
+  "schedules": [
+   {
+    "cron": "30 2 * * *",
+    "name": "NIGHTLY_SALES_SCHEDULE",
+    "time_zone": "America/Chicago"
+   }
+  ],
+  "structural_checks": [],
+  "untranslatable_schedule_elements": []
+ },
+ "extractor_notes": [],
+ "file_events": [],
+ "flatten_notes": [],
+ "kind": "chain",
+ "manifest_units": [
+  "U001",
+  "U002",
+  "U003",
+  "U004",
+  "U005",
+  "U006",
+  "U007",
+  "U010"
+ ],
+ "must_preserve": [
+  "the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)",
+  "every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them",
+  "the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)",
+  "the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)",
+  "retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success",
+  "what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)",
+  "notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code"
+ ],
+ "notifications": [],
+ "parameters": [],
+ "preconditions": [
+  {
+   "text": "time window BUSINESS_HOURS must be open",
+   "where": "step post"
+  }
+ ],
+ "purpose": [
+  {
+   "inferred": false,
+   "text": "a chain of 3 step(s) with 6 call(s) of type(s): os, redwoodscript, sql"
+  },
+  {
+   "inferred": false,
+   "text": "its final call(s) are NIGHTLY_SALES_LOAD/margin, NIGHTLY_SALES_LOAD/notify (calls nothing else waits for)"
+  },
+  {
+   "inferred": false,
+   "text": "declared outputs of its processes: dw.fact_inventory, dw.fact_sales, landing.inventory_raw, landing.sales_raw"
+  },
+  {
+   "inferred": true,
+   "text": "it moves or prepares data with scripts, then writes it with SQL, a load-then-transform shape"
+  },
+  {
+   "inferred": false,
+   "text": "it is started by 1 submit frame(s): NIGHTLY_SALES_SCHEDULE"
+  }
+ ],
+ "queue_manifest_units": [
+  "U012",
+  "U013"
+ ],
+ "queues": [
+  {
+   "declared_in_export": true,
+   "max_concurrency": 4,
+   "name": "BATCH_QUEUE",
+   "pool": "batch_queue",
+   "process_server": "PS_PROD",
+   "shared_with_units": [],
+   "used_by_calls": [
+    "NIGHTLY_SALES_LOAD/sales",
+    "NIGHTLY_SALES_LOAD/inventory"
+   ]
+  },
+  {
+   "declared_in_export": true,
+   "max_concurrency": 2,
+   "name": "DB_QUEUE",
+   "pool": "db_queue",
+   "process_server": "PS_PROD",
+   "shared_with_units": [],
+   "used_by_calls": [
+    "NIGHTLY_SALES_LOAD/sales_fact",
+    "NIGHTLY_SALES_LOAD/inventory_fact"
+   ]
+  }
+ ],
+ "run_window": "",
+ "schedules": [
+  {
+   "converter_schedule_names": [
+    "nightly_sales_schedule"
+   ],
+   "crons": [
+    "30 2 * * *"
+   ],
+   "elements": [
+    {
+     "converter_notes": [],
+     "cron": "30 2 * * *",
+     "element": {
+      "at": "02:30",
+      "kind": "daily"
+     }
+    }
+   ],
+   "end": "",
+   "name": "NIGHTLY_SALES_SCHEDULE",
+   "time_zone": "America/Chicago",
+   "untranslatable": []
+  }
+ ],
+ "status_handlers": [
+  {
+   "raw": {
+    "action": "restart_step",
+    "max": 2,
+    "status": "Error"
+   },
+   "text": "on status Error: restart_step, max=2",
+   "where": "step extract"
+  }
+ ],
+ "steps": [
+  {
+   "calls": [
+    "NIGHTLY_SALES_LOAD/sales",
+    "NIGHTLY_SALES_LOAD/inventory"
+   ],
+   "name": "extract",
+   "precondition": null,
+   "status_handlers": [
+    {
+     "action": "restart_step",
+     "max": 2,
+     "status": "Error"
+    }
+   ]
+  },
+  {
+   "calls": [
+    "NIGHTLY_SALES_LOAD/sales_fact",
+    "NIGHTLY_SALES_LOAD/inventory_fact"
+   ],
+   "name": "load",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "NIGHTLY_SALES_LOAD/margin",
+    "NIGHTLY_SALES_LOAD/notify"
+   ],
+   "name": "post",
+   "precondition": {
+    "time_window": "BUSINESS_HOURS"
+   },
+   "status_handlers": []
+  }
+ ],
+ "time_zones": [
+  "America/Chicago"
+ ],
+ "unit": "NIGHTLY_SALES_LOAD",
+ "unit_id": "nightly_sales_load",
+ "version": 1,
+ "wait_events": []
+}

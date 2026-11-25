@@ -1,0 +1,454 @@
+{
+ "acceptable_differences": [
+  "asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it",
+  "a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above",
+  "queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone",
+  "status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps",
+  "RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so",
+  "'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not"
+ ],
+ "accounting": [
+  {
+   "id": "ReplenishShop/wait for truck",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "ReplenishShop/calculate replenishment",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "ReplenishShop/pick orders",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  },
+  {
+   "id": "ReplenishShop/confirmation truck loaded",
+   "kind": "call",
+   "what": "System_DoNothing (os)"
+  }
+ ],
+ "application": "",
+ "calls": [
+  {
+   "application": "",
+   "call": "wait for truck",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "step wait_for_truck of asset replenishshop",
+     "caveat": "",
+     "manifest_id": "U032",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "ReplenishShop/wait for truck",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Wait for Truck",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "calculate replenishment",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "step calculate_replenishment of asset replenishshop",
+     "caveat": "",
+     "manifest_id": "U033",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "ReplenishShop/calculate replenishment",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Calculate Replenishment",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "ReplenishShop/wait for truck"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "pick orders",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "step pick_orders of asset replenishshop",
+     "caveat": "",
+     "manifest_id": "U034",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "ReplenishShop/pick orders",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Pick Orders",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "ReplenishShop/calculate replenishment"
+   ],
+   "wait_events": []
+  },
+  {
+   "application": "",
+   "call": "confirmation truck loaded",
+   "command": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "step confirmation_truck_loaded of asset replenishshop",
+     "caveat": "",
+     "manifest_id": "U035",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "RunMyJobs built-in that does nothing",
+   "extraction_notes": [],
+   "id": "ReplenishShop/confirmation truck loaded",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "System_DoNothing",
+   "queue": "",
+   "run_as": "",
+   "run_window": "",
+   "step": "Confirmation Truck loaded",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [
+    "ReplenishShop/pick orders"
+   ],
+   "wait_events": []
+  }
+ ],
+ "connections": [],
+ "converter": {
+  "assets": [
+   "replenishshop"
+  ],
+  "collapsed_to_one_asset": true,
+  "degraded": [],
+  "disposition": "translated",
+  "manifest_units": [
+   "U032",
+   "U033",
+   "U034",
+   "U035",
+   "U036"
+  ],
+  "reasons": [
+   "4 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call"
+  ],
+  "rows": [
+   {
+    "artifact": "step wait_for_truck of asset replenishshop",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U032",
+    "notes": [],
+    "source": "ReplenishShop/wait for truck (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "step calculate_replenishment of asset replenishshop",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U033",
+    "notes": [],
+    "source": "ReplenishShop/calculate replenishment (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "step pick_orders of asset replenishshop",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U034",
+    "notes": [],
+    "source": "ReplenishShop/pick orders (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "step confirmation_truck_loaded of asset replenishshop",
+    "caveat": "",
+    "expected": {},
+    "kind": "process_definition",
+    "manifest_id": "U035",
+    "notes": [],
+    "source": "ReplenishShop/confirmation truck loaded (System_DoNothing)",
+    "status": "converted"
+   },
+   {
+    "artifact": "asset replenishshop (TaskChainAssetComponent)",
+    "caveat": "",
+    "expected": {
+     "asset": "replenishshop",
+     "assets": [
+      "replenishshop"
+     ],
+     "deps": []
+    },
+    "kind": "chain",
+    "manifest_id": "U036",
+    "notes": [
+     "4 steps run in order as one asset and stop at the first failure; use chains=assets for one asset per call"
+    ],
+    "source": "ReplenishShop",
+    "status": "converted"
+   }
+  ],
+  "status": "converted",
+  "stubbed": []
+ },
+ "description": "Replenish a Shop",
+ "edges": [
+  [
+   "ReplenishShop/wait for truck",
+   "ReplenishShop/calculate replenishment"
+  ],
+  [
+   "ReplenishShop/calculate replenishment",
+   "ReplenishShop/pick orders"
+  ],
+  [
+   "ReplenishShop/pick orders",
+   "ReplenishShop/confirmation truck loaded"
+  ]
+ ],
+ "expected": {
+  "commands": [
+   {
+    "call": "ReplenishShop/wait for truck",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "ReplenishShop/calculate replenishment",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "ReplenishShop/pick orders",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   },
+   {
+    "call": "ReplenishShop/confirmation truck loaded",
+    "normalized": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "rendered": "echo System_DoNothing: RunMyJobs built-in, does nothing",
+    "type": "os"
+   }
+  ],
+  "external_systems": [],
+  "file_events": [],
+  "notification_targets": [],
+  "order_pairs": [
+   [
+    "ReplenishShop/wait for truck",
+    "ReplenishShop/calculate replenishment"
+   ],
+   [
+    "ReplenishShop/calculate replenishment",
+    "ReplenishShop/pick orders"
+   ],
+   [
+    "ReplenishShop/pick orders",
+    "ReplenishShop/confirmation truck loaded"
+   ]
+  ],
+  "pools": [],
+  "retries": {
+   "ReplenishShop/calculate replenishment": 0,
+   "ReplenishShop/confirmation truck loaded": 0,
+   "ReplenishShop/pick orders": 0,
+   "ReplenishShop/wait for truck": 0
+  },
+  "schedules": [],
+  "structural_checks": [],
+  "untranslatable_schedule_elements": []
+ },
+ "extractor_notes": [],
+ "file_events": [],
+ "flatten_notes": [],
+ "kind": "chain",
+ "manifest_units": [
+  "U032",
+  "U033",
+  "U034",
+  "U035",
+  "U036"
+ ],
+ "must_preserve": [
+  "the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)",
+  "every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them",
+  "the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)",
+  "the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)",
+  "retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success",
+  "what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)",
+  "notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code"
+ ],
+ "notifications": [],
+ "parameters": [
+  {
+   "default": "",
+   "direction": "in",
+   "has_default": false,
+   "mandatory": true,
+   "name": "P_REGION",
+   "type": "String"
+  },
+  {
+   "default": "",
+   "direction": "in",
+   "has_default": false,
+   "mandatory": true,
+   "name": "P_AREA",
+   "type": "String"
+  }
+ ],
+ "preconditions": [],
+ "purpose": [
+  {
+   "inferred": false,
+   "text": "a chain of 4 step(s) with 4 call(s) of type(s): os"
+  },
+  {
+   "inferred": false,
+   "text": "its own description reads: 'Replenish a Shop'"
+  },
+  {
+   "inferred": false,
+   "text": "its final call(s) are ReplenishShop/confirmation truck loaded (calls nothing else waits for)"
+  },
+  {
+   "inferred": true,
+   "text": "every call is the RunMyJobs no-op built-in System_DoNothing: the chain is an orchestration skeleton (placeholders for later jobs)"
+  },
+  {
+   "inferred": true,
+   "text": "no submit frame or file event in the export starts it (it may be started by a person, another chain or an event)"
+  }
+ ],
+ "queue_manifest_units": [],
+ "queues": [],
+ "run_window": "",
+ "schedules": [],
+ "status_handlers": [],
+ "steps": [
+  {
+   "calls": [
+    "ReplenishShop/wait for truck"
+   ],
+   "name": "Wait for Truck",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "ReplenishShop/calculate replenishment"
+   ],
+   "name": "Calculate Replenishment",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "ReplenishShop/pick orders"
+   ],
+   "name": "Pick Orders",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "ReplenishShop/confirmation truck loaded"
+   ],
+   "name": "Confirmation Truck loaded",
+   "precondition": null,
+   "status_handlers": []
+  }
+ ],
+ "time_zones": [],
+ "unit": "ReplenishShop",
+ "unit_id": "replenishshop",
+ "version": 1,
+ "wait_events": []
+}

@@ -1,0 +1,369 @@
+{
+ "acceptable_differences": [
+  "asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it",
+  "a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above",
+  "queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone",
+  "status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps",
+  "RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so",
+  "'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not"
+ ],
+ "accounting": [
+  {
+   "id": "FIN_MIXED_RETRY/pull",
+   "kind": "call",
+   "what": "PULL (os)"
+  },
+  {
+   "id": "FIN_MIXED_RETRY/alone",
+   "kind": "call",
+   "what": "PUBLISH_ALONE (sql)"
+  },
+  {
+   "id": "BATCH_QUEUE",
+   "kind": "queue",
+   "what": "queue (pool batch_queue)"
+  },
+  {
+   "id": "FIN_FILE_NO_CHECKS",
+   "kind": "file_event",
+   "what": "file event on /data/inbound/other"
+  },
+  {
+   "id": "FIN_MIXED_RETRY/alone#run_window",
+   "kind": "run_window",
+   "what": "call runs only inside 22:00-23:59 America/New_York mon,tue; outside it the run is skipped (not failed)"
+  }
+ ],
+ "application": "",
+ "calls": [
+  {
+   "application": "FIN",
+   "call": "pull",
+   "command": "echo pull ${run_date}",
+   "command_normalized": "echo pull <run_date>",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "fin_mixed_retry__pull",
+     "caveat": "",
+     "manifest_id": "U005",
+     "notes": [
+      "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+     ],
+     "status": "converted"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "FIN_MIXED_RETRY/pull",
+   "max_starts": 2,
+   "outputs": [],
+   "parameters": {
+    "run_date": "today"
+   },
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "batch_queue",
+   "precondition": null,
+   "process_definition": "PULL",
+   "queue": "BATCH_QUEUE",
+   "run_as": "",
+   "run_window": "",
+   "step": "s1",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [
+    3
+   ],
+   "time_zone": "",
+   "timeout_seconds": 600,
+   "type": "os",
+   "upstream": [],
+   "wait_events": []
+  },
+  {
+   "application": "FIN",
+   "call": "alone",
+   "command": "select 2",
+   "command_normalized": "select 2",
+   "command_redacted": 0,
+   "connection": "WAREHOUSE",
+   "converter": [
+    {
+     "artifact": "fin_mixed_retry__alone",
+     "caveat": "",
+     "manifest_id": "U006",
+     "notes": [
+      "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')",
+      "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+     ],
+     "status": "converted"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "FIN_MIXED_RETRY/alone",
+   "max_starts": 3,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "batch_queue",
+   "precondition": null,
+   "process_definition": "PUBLISH_ALONE",
+   "queue": "BATCH_QUEUE",
+   "run_as": "",
+   "run_window": "22:00-23:59 America/New_York mon,tue",
+   "step": "s2",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": 120,
+   "type": "sql",
+   "upstream": [
+    "FIN_MIXED_RETRY/pull"
+   ],
+   "wait_events": []
+  }
+ ],
+ "connections": [
+  "WAREHOUSE"
+ ],
+ "converter": {
+  "assets": [
+   "fin_mixed_retry__pull",
+   "fin_mixed_retry__alone"
+  ],
+  "collapsed_to_one_asset": false,
+  "degraded": [
+   "FIN_FILE_NO_CHECKS"
+  ],
+  "disposition": "degraded",
+  "manifest_units": [
+   "U005",
+   "U006",
+   "U007",
+   "U010"
+  ],
+  "reasons": [
+   "kept as one asset per call: steps have different retry counts (the component retries the whole chain)",
+   "no minimum size, age or stability check: a file still being written can start the job (RunMyJobs files events usually have one; check the source)",
+   "the sensor starts stopped; its cursor remembers files already seen, so turn it on once the parallel run starts"
+  ],
+  "rows": [
+   {
+    "artifact": "fin_mixed_retry__pull",
+    "caveat": "",
+    "expected": {
+     "asset": "fin_mixed_retry__pull",
+     "deps": []
+    },
+    "kind": "process_definition",
+    "manifest_id": "U005",
+    "notes": [
+     "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+    ],
+    "source": "FIN_MIXED_RETRY/pull (PULL)",
+    "status": "converted"
+   },
+   {
+    "artifact": "fin_mixed_retry__alone",
+    "caveat": "",
+    "expected": {
+     "asset": "fin_mixed_retry__alone",
+     "deps": [
+      "fin_mixed_retry__pull"
+     ]
+    },
+    "kind": "process_definition",
+    "manifest_id": "U006",
+    "notes": [
+     "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')",
+     "'Maximum Starts' interpreted as total attempts; verify against how the source team uses it"
+    ],
+    "source": "FIN_MIXED_RETRY/alone (PUBLISH_ALONE)",
+    "status": "converted"
+   },
+   {
+    "artifact": "job fin_mixed_retry",
+    "caveat": "",
+    "expected": {
+     "assets": [
+      "fin_mixed_retry__pull",
+      "fin_mixed_retry__alone"
+     ]
+    },
+    "kind": "chain",
+    "manifest_id": "U007",
+    "notes": [
+     "kept as one asset per call: steps have different retry counts (the component retries the whole chain)"
+    ],
+    "source": "FIN_MIXED_RETRY",
+    "status": "converted"
+   },
+   {
+    "artifact": "sensor fin_file_no_checks -> job fin_mixed_retry_on_fin_file_no_checks",
+    "caveat": "degraded",
+    "expected": {
+     "job": "fin_mixed_retry_on_fin_file_no_checks",
+     "sensor": "fin_file_no_checks"
+    },
+    "kind": "file_event",
+    "manifest_id": "U010",
+    "notes": [
+     "no minimum size, age or stability check: a file still being written can start the job (RunMyJobs files events usually have one; check the source)",
+     "the sensor starts stopped; its cursor remembers files already seen, so turn it on once the parallel run starts"
+    ],
+    "source": "FIN_FILE_NO_CHECKS",
+    "status": "needs review"
+   }
+  ],
+  "status": "converted",
+  "stubbed": []
+ },
+ "description": "",
+ "edges": [
+  [
+   "FIN_MIXED_RETRY/pull",
+   "FIN_MIXED_RETRY/alone"
+  ]
+ ],
+ "expected": {
+  "commands": [
+   {
+    "call": "FIN_MIXED_RETRY/pull",
+    "normalized": "echo pull <run_date>",
+    "rendered": "echo pull today",
+    "type": "os"
+   },
+   {
+    "call": "FIN_MIXED_RETRY/alone",
+    "normalized": "select 2",
+    "rendered": "select 2",
+    "type": "sql"
+   }
+  ],
+  "external_systems": [
+   "sql"
+  ],
+  "file_events": [
+   "FIN_FILE_NO_CHECKS"
+  ],
+  "notification_targets": [],
+  "order_pairs": [
+   [
+    "FIN_MIXED_RETRY/pull",
+    "FIN_MIXED_RETRY/alone"
+   ]
+  ],
+  "pools": [
+   "batch_queue"
+  ],
+  "retries": {
+   "FIN_MIXED_RETRY/alone": 2,
+   "FIN_MIXED_RETRY/pull": 1
+  },
+  "schedules": [],
+  "structural_checks": [],
+  "untranslatable_schedule_elements": []
+ },
+ "extractor_notes": [],
+ "file_events": [
+  {
+   "directory": "/data/inbound/other",
+   "min_age_seconds": null,
+   "min_size_bytes": null,
+   "name": "FIN_FILE_NO_CHECKS",
+   "one_run_per_poll": true,
+   "pattern": "*",
+   "poll_seconds": 30,
+   "recursive": false,
+   "stable": false
+  }
+ ],
+ "flatten_notes": [],
+ "kind": "chain",
+ "manifest_units": [
+  "U005",
+  "U006",
+  "U007",
+  "U010"
+ ],
+ "must_preserve": [
+  "the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)",
+  "every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them",
+  "the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)",
+  "the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)",
+  "retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success",
+  "what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)",
+  "notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code"
+ ],
+ "notifications": [],
+ "parameters": [],
+ "preconditions": [],
+ "purpose": [
+  {
+   "inferred": false,
+   "text": "a chain of 2 step(s) with 2 call(s) of type(s): os, sql"
+  },
+  {
+   "inferred": false,
+   "text": "its final call(s) are FIN_MIXED_RETRY/alone (calls nothing else waits for)"
+  },
+  {
+   "inferred": true,
+   "text": "it moves or prepares data with scripts, then writes it with SQL, a load-then-transform shape"
+  },
+  {
+   "inferred": false,
+   "text": "it is started by file event(s): FIN_FILE_NO_CHECKS"
+  }
+ ],
+ "queue_manifest_units": [
+  "U011"
+ ],
+ "queues": [
+  {
+   "declared_in_export": true,
+   "max_concurrency": 3,
+   "name": "BATCH_QUEUE",
+   "pool": "batch_queue",
+   "process_server": "",
+   "shared_with_units": [
+    "FIN_NIGHTLY",
+    "FIN_NIGHTLY",
+    "FIN_NIGHTLY"
+   ],
+   "used_by_calls": [
+    "FIN_MIXED_RETRY/pull",
+    "FIN_MIXED_RETRY/alone"
+   ]
+  }
+ ],
+ "run_window": "",
+ "schedules": [],
+ "status_handlers": [],
+ "steps": [
+  {
+   "calls": [
+    "FIN_MIXED_RETRY/pull"
+   ],
+   "name": "s1",
+   "precondition": null,
+   "status_handlers": []
+  },
+  {
+   "calls": [
+    "FIN_MIXED_RETRY/alone"
+   ],
+   "name": "s2",
+   "precondition": null,
+   "status_handlers": []
+  }
+ ],
+ "time_zones": [],
+ "unit": "FIN_MIXED_RETRY",
+ "unit_id": "fin_mixed_retry",
+ "version": 1,
+ "wait_events": []
+}

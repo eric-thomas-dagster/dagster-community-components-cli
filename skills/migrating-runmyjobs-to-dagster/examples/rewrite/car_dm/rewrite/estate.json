@@ -1,0 +1,39 @@
+{
+ "candidate_boundaries": [],
+ "chains_called_by": {},
+ "chains_calling_chains": {},
+ "converter_dispositions": {
+  "NIGHTLY": "degraded"
+ },
+ "declared_events": [],
+ "events_waited_for": {},
+ "inline_wrapper_chains": [],
+ "integrations": [],
+ "queue_units": [
+  {
+   "manifest_id": "U005",
+   "source": "Q1"
+  }
+ ],
+ "queues": {},
+ "schedules_by_target": {
+  "NIGHTLY": [
+   "JG"
+  ]
+ },
+ "shared_declared_outputs": {},
+ "shared_process_definitions": {},
+ "top_level_chains": [
+  "NIGHTLY"
+ ],
+ "unit_kinds": {
+  "NIGHTLY": "chain"
+ },
+ "units": [
+  "NIGHTLY"
+ ],
+ "unused_queues": [
+  "Q1"
+ ],
+ "version": 1
+}

@@ -1,0 +1,30 @@
+type: rmj_dm.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "nightly__extract_1"
+  command: "echo hi"
+  kinds: ["shell"]
+  retry_policy_max_retries: 2
+  retry_policy_delay_seconds: 60
+  retry_policy_backoff: "linear"
+  group_name: "nightly"
+  description: "[RunMyJobs source: chain:NIGHTLY/step:extract/call:extract_1]"
+  asset_tags: {"runmyjobs_source": "chain.NIGHTLY.step.extract.call.extract_1"}
+---
+type: rmj_dm.components.RmjShellCommandAssetComponent
+attributes:
+  asset_name: "nightly__load_1"
+  command: "echo load"
+  kinds: ["shell"]
+  group_name: "nightly"
+  description: "[RunMyJobs source: chain:NIGHTLY/step:load/call:load_1]"
+  deps: ["nightly__extract_1"]
+  asset_tags: {"runmyjobs_source": "chain.NIGHTLY.step.load.call.load_1"}
+---
+type: dagster_community_components.CronScheduleComponent
+attributes:
+  schedule_name: "jg"
+  cron_expression: "30 2 * * *"
+  asset_keys: ["nightly__extract_1", "nightly__load_1"]
+  job_name: "nightly"
+  execution_timezone: "UTC"
+  default_status: "STOPPED"

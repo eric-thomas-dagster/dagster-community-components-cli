@@ -1,0 +1,34 @@
+type: rmj_fin.components.RmjTaskChainAssetComponent
+attributes:
+  asset_key: "fin_nightly"
+  steps: [{"id": "pull", "type": "command", "command": "echo pull today", "env_vars": {"RMJ_PARAM_RUN_DATE": "today"}, "success_exit_codes": [3]}, {"id": "transform", "type": "command", "command": "python src/rmj_fin/scripts/fin_nightly__transform.py"}, {"id": "publish", "type": "sql", "connection_env": "RMJ_CONN_WAREHOUSE", "sql": "select 1"}]
+  group_name: "fin_nightly"
+  description: "Nightly finance publish. [RunMyJobs source: chain:FIN_NIGHTLY]"
+  run_window: "22:00-23:59 America/New_York mon,tue"
+  pool: "batch_queue"
+  timeout_seconds: 900
+  asset_tags: {"runmyjobs_source": "chain.FIN_NIGHTLY", "runmyjobs_application": "FIN"}
+  retry_policy_max_retries: 1
+  retry_policy_delay_seconds: 60
+  retry_policy_backoff: "linear"
+---
+type: dagster_community_components.CronScheduleComponent
+attributes:
+  schedule_name: "fin_sched"
+  cron_expression: "30 22 * * *"
+  asset_keys: ["fin_nightly"]
+  job_name: "fin_nightly_job"
+  execution_timezone: "America/New_York"
+  default_status: "STOPPED"
+---
+type: dagster_community_components.FilesystemMonitorSensorComponent
+attributes:
+  sensor_name: "fin_file_arrived"
+  directory_path: "/data/inbound/fin"
+  file_pattern: "^fin_.*\\.csv$"
+  job_name: "fin_nightly_job_on_fin_file_arrived"
+  minimum_interval_seconds: 60
+  default_status: "stopped"
+  min_age_seconds: 120
+  min_size_bytes: 1
+  require_stable_size: true

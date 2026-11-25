@@ -1,0 +1,82 @@
+queues:
+- name: Q1
+  max_concurrency: 3
+  process_server: ''
+process_definitions:
+- name: EXTRACT
+  type: os
+  application: ''
+  description: ''
+  command: echo hi
+  parameters: []
+  queue: ''
+  run_as: ''
+  max_starts: 1
+  timeout_seconds: null
+  time_zone: ''
+  connection: ''
+  outputs: []
+  extraction_notes:
+  - 'source: p1.xml'
+  success_exit_codes: []
+  run_window: ''
+- name: LOAD
+  type: os
+  application: ''
+  description: ''
+  command: echo load
+  parameters: []
+  queue: ''
+  run_as: ''
+  max_starts: 1
+  timeout_seconds: null
+  time_zone: ''
+  connection: ''
+  outputs: []
+  extraction_notes:
+  - 'source: p2.xml'
+  success_exit_codes: []
+  run_window: ''
+chains:
+- name: NIGHTLY
+  application: ''
+  description: ''
+  steps:
+  - name: extract
+    calls:
+    - name: extract_1
+      process: EXTRACT
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition: null
+    status_handlers:
+    - status: Error
+      action: restart_step
+      max: 2
+  - name: load
+    calls:
+    - name: load_1
+      process: LOAD
+      params: {}
+      param_refs: {}
+      wait_events: []
+      precondition: null
+    precondition:
+      time_window: BIZ
+    status_handlers: []
+  precondition: null
+  parameters: []
+  inline: false
+  notes:
+  - chain-level restart count is not converted
+  run_window: ''
+schedules:
+- name: JG
+  target: NIGHTLY
+  elements:
+  - kind: daily
+    at: 02:30
+  time_zone: UTC
+  end: ''

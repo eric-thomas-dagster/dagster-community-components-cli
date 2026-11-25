@@ -1,0 +1,488 @@
+{
+  "version": 1,
+  "units": [
+    {
+      "id": "U001",
+      "kind": "process_definition",
+      "source": "NIGHTLY_SALES_LOAD/sales (EXTRACT_SALES)",
+      "artifact": "nightly_sales_load__sales",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "nightly_sales_load__sales",
+        "deps": []
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY_SALES_LOAD",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U002",
+      "kind": "process_definition",
+      "source": "NIGHTLY_SALES_LOAD/inventory (EXTRACT_INVENTORY)",
+      "artifact": "nightly_sales_load__inventory",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "nightly_sales_load__inventory",
+        "deps": []
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY_SALES_LOAD",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U003",
+      "kind": "process_definition",
+      "source": "NIGHTLY_SALES_LOAD/sales_fact (LOAD_SALES_FACT)",
+      "artifact": "nightly_sales_load__sales_fact",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')"
+      ],
+      "expected": {
+        "asset": "nightly_sales_load__sales_fact",
+        "deps": [
+          "nightly_sales_load__sales",
+          "nightly_sales_load__inventory"
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY_SALES_LOAD",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U004",
+      "kind": "process_definition",
+      "source": "NIGHTLY_SALES_LOAD/inventory_fact (LOAD_INVENTORY_FACT)",
+      "artifact": "nightly_sales_load__inventory_fact",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "SQL step: set env var RMJ_CONN_WAREHOUSE to a SQLAlchemy URL for the target database (components output: define a resource named 'warehouse')"
+      ],
+      "expected": {
+        "asset": "nightly_sales_load__inventory_fact",
+        "deps": [
+          "nightly_sales_load__sales",
+          "nightly_sales_load__inventory"
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY_SALES_LOAD",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U005",
+      "kind": "process_definition",
+      "source": "NIGHTLY_SALES_LOAD/margin (CALC_MARGIN)",
+      "artifact": "nightly_sales_load__margin",
+      "classification": "JUDG",
+      "caveat": "stub",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "step 'post' precondition {'time_window': 'BUSINESS_HOURS'} not enforced",
+        "RedwoodScript is not auto-translated; port the source (kept in the asset body) by hand or with the planned LLM pass"
+      ],
+      "expected": {
+        "asset": "nightly_sales_load__margin",
+        "deps": [
+          "nightly_sales_load__sales_fact",
+          "nightly_sales_load__inventory_fact"
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY_SALES_LOAD",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U006",
+      "kind": "process_definition",
+      "source": "NIGHTLY_SALES_LOAD/notify (NOTIFY_DONE)",
+      "artifact": "nightly_sales_load__notify",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "step 'post' precondition {'time_window': 'BUSINESS_HOURS'} not enforced"
+      ],
+      "expected": {
+        "asset": "nightly_sales_load__notify",
+        "deps": [
+          "nightly_sales_load__sales_fact",
+          "nightly_sales_load__inventory_fact"
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY_SALES_LOAD",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U007",
+      "kind": "chain",
+      "source": "NIGHTLY_SALES_LOAD",
+      "artifact": "job nightly_sales_load",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "kept as one asset per call: step 'extract' runs 2 calls in parallel, which one chain asset cannot express"
+      ],
+      "expected": {
+        "assets": [
+          "nightly_sales_load__sales",
+          "nightly_sales_load__inventory",
+          "nightly_sales_load__sales_fact",
+          "nightly_sales_load__inventory_fact",
+          "nightly_sales_load__margin",
+          "nightly_sales_load__notify"
+        ],
+        "job": "nightly_sales_load"
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY_SALES_LOAD",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U008",
+      "kind": "process_definition",
+      "source": "PURGE_TEMP",
+      "artifact": "purge_temp",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "asset": "purge_temp",
+        "deps": []
+      },
+      "route": "rewrite",
+      "rewrite_unit": "PURGE_TEMP",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U009",
+      "kind": "process_definition",
+      "source": "LEGACY_SAP_EXTRACT",
+      "artifact": "legacy_sap_extract",
+      "classification": "NONE",
+      "caveat": "stub",
+      "status": "deferred",
+      "evidence": "",
+      "reason": "rewrite failed its gates (the converter output remains the fallback): no_stub_left: a loud stub remains at __init__.py:12: the step is not ported, so the unit cannot be complete",
+      "notes": [
+        "SAP connector job (a RunMyJobs SAP built-in): it needs an SAP integration, in Dagster or through the RunMyJobs connector"
+      ],
+      "expected": {
+        "asset": "legacy_sap_extract",
+        "deps": []
+      },
+      "route": "rewrite",
+      "rewrite_unit": "LEGACY_SAP_EXTRACT",
+      "gates": {
+        "passed": false,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "FAIL",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U010",
+      "kind": "schedule",
+      "source": "NIGHTLY_SALES_SCHEDULE",
+      "artifact": "1 schedule(s)",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [],
+      "expected": {
+        "schedules": [
+          {
+            "name": "nightly_sales_schedule",
+            "cron": "30 2 * * *"
+          }
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "NIGHTLY_SALES_LOAD",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U011",
+      "kind": "schedule",
+      "source": "PURGE_HOURLY",
+      "artifact": "1 schedule(s)",
+      "classification": "JUDG",
+      "caveat": "degraded",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, matches_spec, commands_preserved, completeness, generated_tests, structural_checks, no_stub_left, no_secret_values, no_invented_apis)",
+      "reason": "",
+      "notes": [
+        "time window 08:00-18:00 mapped to hour range 8-17 (hour granularity)",
+        "'last day of month' has no cron equivalent; needs a custom schedule function",
+        "multiple submit-frame elements become one Dagster schedule each (union of cycles)"
+      ],
+      "expected": {
+        "schedules": [
+          {
+            "name": "purge_hourly",
+            "cron": "*/15 8-17 * * 1,2,3,4,5"
+          }
+        ]
+      },
+      "route": "rewrite",
+      "rewrite_unit": "PURGE_TEMP",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": "pass",
+          "matches_spec": "pass",
+          "commands_preserved": "pass",
+          "completeness": "pass",
+          "generated_tests": "pass",
+          "structural_checks": "not run",
+          "no_stub_left": "pass",
+          "no_secret_values": "pass",
+          "no_invented_apis": "pass"
+        }
+      }
+    },
+    {
+      "id": "U012",
+      "kind": "queue",
+      "source": "BATCH_QUEUE",
+      "artifact": "pool batch_queue",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: every unit using this queue passed its gates (NIGHTLY_SALES_LOAD); pool and limit are in the header",
+      "reason": "",
+      "notes": [
+        "configure Dagster pool 'batch_queue' with limit 4"
+      ],
+      "expected": {
+        "pool": "batch_queue",
+        "limit": 4
+      },
+      "route": "rewrite",
+      "rewrite_units": [
+        "NIGHTLY_SALES_LOAD"
+      ],
+      "gates_by_unit": {
+        "NIGHTLY_SALES_LOAD": {
+          "passed": true,
+          "gates": {
+            "definitions_load": "pass",
+            "matches_spec": "pass",
+            "commands_preserved": "pass",
+            "completeness": "pass",
+            "generated_tests": "pass",
+            "structural_checks": "not run",
+            "no_stub_left": "pass",
+            "no_secret_values": "pass",
+            "no_invented_apis": "pass"
+          }
+        }
+      }
+    },
+    {
+      "id": "U013",
+      "kind": "queue",
+      "source": "DB_QUEUE",
+      "artifact": "pool db_queue",
+      "classification": "MECH",
+      "caveat": "",
+      "status": "complete",
+      "evidence": "rewrite route: every unit using this queue passed its gates (NIGHTLY_SALES_LOAD); pool and limit are in the header",
+      "reason": "",
+      "notes": [
+        "configure Dagster pool 'db_queue' with limit 2"
+      ],
+      "expected": {
+        "pool": "db_queue",
+        "limit": 2
+      },
+      "route": "rewrite",
+      "rewrite_units": [
+        "NIGHTLY_SALES_LOAD"
+      ],
+      "gates_by_unit": {
+        "NIGHTLY_SALES_LOAD": {
+          "passed": true,
+          "gates": {
+            "definitions_load": "pass",
+            "matches_spec": "pass",
+            "commands_preserved": "pass",
+            "completeness": "pass",
+            "generated_tests": "pass",
+            "structural_checks": "not run",
+            "no_stub_left": "pass",
+            "no_secret_values": "pass",
+            "no_invented_apis": "pass"
+          }
+        }
+      }
+    }
+  ],
+  "questions": {
+    "NIGHTLY_SALES_LOAD": [
+      "Confirm the schedule against what actually runs today (the Q1 run history is the check)",
+      "Which database does each SQL connection point to (WAREHOUSE), and how are its credentials supplied?",
+      "Who owns this chain, and how fresh must its output be (an SLA)? Owners and freshness are added as Dagster metadata once known"
+    ]
+  },
+  "rewrite_passed": [
+    "NIGHTLY_SALES_LOAD",
+    "PURGE_TEMP"
+  ]
+}

@@ -1,0 +1,254 @@
+{
+ "acceptable_differences": [
+  "asset boundaries and names: one asset per data product or job outcome is fine; steps that only prepare an output may fold into the asset that uses it",
+  "a chain may become asset dependencies, a task-chain component, or one asset; it must keep the order above",
+  "queues become Dagster pools (the limit is configured on the instance, not in code); schedules become Dagster schedules with an explicit time zone",
+  "status handlers, preconditions and notifications may become hooks, sensors, asset checks, automation conditions or alerts instead of steps",
+  "RunMyJobs-only constructs with no Dagster counterpart (run_as user, process server, priority) may be dropped if the header docstring says so",
+  "'last day of month' and minute-level time windows have no exact cron form: a schedule function or an in-asset window check is acceptable, a silent change is not"
+ ],
+ "accounting": [
+  {
+   "id": "PURGE_TEMP",
+   "kind": "call",
+   "what": "PURGE_TEMP (os)"
+  },
+  {
+   "id": "PURGE_HOURLY",
+   "kind": "schedule",
+   "what": "submit frame, time zone America/Chicago"
+  }
+ ],
+ "application": "OPS",
+ "calls": [
+  {
+   "application": "OPS",
+   "call": "PURGE_TEMP",
+   "command": "echo purging",
+   "command_normalized": "echo purging",
+   "command_redacted": 0,
+   "connection": "",
+   "converter": [
+    {
+     "artifact": "purge_temp",
+     "caveat": "",
+     "manifest_id": "U008",
+     "notes": [],
+     "status": "converted"
+    }
+   ],
+   "description": "",
+   "extraction_notes": [],
+   "id": "PURGE_TEMP",
+   "max_starts": 1,
+   "outputs": [],
+   "parameters": {},
+   "parameters_taken_from_caller": [],
+   "pool_name_used_by_converter": "",
+   "precondition": null,
+   "process_definition": "PURGE_TEMP",
+   "queue": "",
+   "run_as": "svc_batch",
+   "run_window": "",
+   "step": "",
+   "step_precondition": null,
+   "step_status_handlers": [],
+   "success_exit_codes": [],
+   "time_zone": "",
+   "timeout_seconds": null,
+   "type": "os",
+   "upstream": [],
+   "wait_events": []
+  }
+ ],
+ "connections": [],
+ "converter": {
+  "assets": [
+   "purge_temp"
+  ],
+  "collapsed_to_one_asset": false,
+  "degraded": [
+   "PURGE_HOURLY"
+  ],
+  "disposition": "degraded",
+  "manifest_units": [
+   "U008",
+   "U011"
+  ],
+  "reasons": [
+   "'last day of month' has no cron equivalent; needs a custom schedule function",
+   "multiple submit-frame elements become one Dagster schedule each (union of cycles)",
+   "time window 08:00-18:00 mapped to hour range 8-17 (hour granularity)"
+  ],
+  "rows": [
+   {
+    "artifact": "purge_temp",
+    "caveat": "",
+    "expected": {
+     "asset": "purge_temp",
+     "deps": []
+    },
+    "kind": "process_definition",
+    "manifest_id": "U008",
+    "notes": [],
+    "source": "PURGE_TEMP",
+    "status": "converted"
+   },
+   {
+    "artifact": "1 schedule(s)",
+    "caveat": "degraded",
+    "expected": {
+     "schedules": [
+      {
+       "cron": "*/15 8-17 * * 1,2,3,4,5",
+       "name": "purge_hourly"
+      }
+     ]
+    },
+    "kind": "schedule",
+    "manifest_id": "U011",
+    "notes": [
+     "time window 08:00-18:00 mapped to hour range 8-17 (hour granularity)",
+     "'last day of month' has no cron equivalent; needs a custom schedule function",
+     "multiple submit-frame elements become one Dagster schedule each (union of cycles)"
+    ],
+    "source": "PURGE_HOURLY",
+    "status": "needs review"
+   }
+  ],
+  "status": "converted",
+  "stubbed": []
+ },
+ "description": "",
+ "edges": [],
+ "expected": {
+  "commands": [
+   {
+    "call": "PURGE_TEMP",
+    "normalized": "echo purging",
+    "rendered": "echo purging",
+    "type": "os"
+   }
+  ],
+  "external_systems": [],
+  "file_events": [],
+  "notification_targets": [],
+  "order_pairs": [],
+  "pools": [],
+  "retries": {
+   "PURGE_TEMP": 0
+  },
+  "schedules": [
+   {
+    "cron": "*/15 8-17 * * 1,2,3,4,5",
+    "name": "PURGE_HOURLY",
+    "time_zone": "America/Chicago"
+   }
+  ],
+  "structural_checks": [],
+  "untranslatable_schedule_elements": [
+   {
+    "at": "23:00",
+    "day": "last",
+    "kind": "monthly"
+   }
+  ]
+ },
+ "extractor_notes": [],
+ "file_events": [],
+ "flatten_notes": [],
+ "kind": "process_definition",
+ "manifest_units": [
+  "U008",
+  "U011"
+ ],
+ "must_preserve": [
+  "the order of steps and which calls may run in parallel (calls in one step run together; every call waits for all calls of the step before)",
+  "every command, SQL statement and script exactly as given (the spec lists them verbatim), and the parameters passed to them",
+  "the schedule: cron meaning, time zone, and any end date (a submit frame with several elements is a union of cycles)",
+  "the concurrency each queue enforces (queue limits are shared across units, see ESTATE.md)",
+  "retries from restart handlers and from Maximum Starts, timeouts, and which exit codes count as success",
+  "what stops the run (a failing step stops the chain) and what continues (a status handler that marks a step completed on error)",
+  "notification targets (who is emailed) and connection names; secrets and credentials come from the environment, never from code"
+ ],
+ "notifications": [],
+ "parameters": [],
+ "preconditions": [],
+ "purpose": [
+  {
+   "inferred": false,
+   "text": "a standalone os process definition in application OPS"
+  },
+  {
+   "inferred": false,
+   "text": "it is started by 1 submit frame(s): PURGE_HOURLY"
+  }
+ ],
+ "queue_manifest_units": [],
+ "queues": [],
+ "run_window": "",
+ "schedules": [
+  {
+   "converter_schedule_names": [
+    "purge_hourly"
+   ],
+   "crons": [
+    "*/15 8-17 * * 1,2,3,4,5"
+   ],
+   "elements": [
+    {
+     "converter_notes": [
+      "time window 08:00-18:00 mapped to hour range 8-17 (hour granularity)"
+     ],
+     "cron": "*/15 8-17 * * 1,2,3,4,5",
+     "element": {
+      "every": 15,
+      "kind": "interval",
+      "unit": "minutes",
+      "window": {
+       "days": [
+        "mon",
+        "tue",
+        "wed",
+        "thu",
+        "fri"
+       ],
+       "end": "18:00",
+       "start": "08:00"
+      }
+     }
+    },
+    {
+     "converter_notes": [
+      "'last day of month' has no cron equivalent; needs a custom schedule function"
+     ],
+     "cron": null,
+     "element": {
+      "at": "23:00",
+      "day": "last",
+      "kind": "monthly"
+     }
+    }
+   ],
+   "end": "",
+   "name": "PURGE_HOURLY",
+   "time_zone": "America/Chicago",
+   "untranslatable": [
+    {
+     "at": "23:00",
+     "day": "last",
+     "kind": "monthly"
+    }
+   ]
+  }
+ ],
+ "status_handlers": [],
+ "steps": [],
+ "time_zones": [
+  "America/Chicago"
+ ],
+ "unit": "PURGE_TEMP",
+ "unit_id": "purge_temp",
+ "version": 1,
+ "wait_events": []
+}
