@@ -517,14 +517,14 @@ def field_filter(run: Run, inst: str, op: str, fields: list[str], *, inputs, out
     run.add(st)
 
 
-def field_flattener(run: Run, inst: str, fields: list[str], sep: str, target: str, remove: bool, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+def field_flattener(run: Run, inst: str, fields: list[str], sep: str, target: str, remove: bool, *, in_place: bool = False, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
     def flat(v, prefix):
         if isinstance(v, dict):
             for k, x in v.items():
                 yield from flat(x, f"{prefix}{sep}{k}" if prefix else str(k))
         elif isinstance(v, list):
             for i, x in enumerate(v):
-                yield from flat(x, f"{prefix}[{i}]")
+                yield from flat(x, f"{prefix}{sep}{i}" if prefix else str(i))      # list elements are numbered with the separator: l.0, l.1 (Data Collector 3.18.1)
         else:
             yield prefix, v
 
@@ -532,6 +532,9 @@ def field_flattener(run: Run, inst: str, fields: list[str], sep: str, target: st
         for f in fields:
             sub = get_path(r.value, f, _MISSING)
             if sub is _MISSING:
+                continue
+            if in_place and f.strip("/") != "":
+                set_path(r.value, f, dict(flat(sub, "")))      # flatten inside the field, in its place: o = {"k": 1, "d.deep": 2}
                 continue
             if f.strip("/") == "":
                 sub = copy.deepcopy(sub)
@@ -876,8 +879,10 @@ def splitter(run: Run, inst: str, path: str, sep: str, targets: list[str], too_m
         if v is _MISSING or v is None:
             raise KeyError(f"field {path} is missing")
         parts = re.split(sep, str(v), maxsplit=len(targets) - 1 if too_many == "TO_LAST_FIELD" else 0)
+        if len(parts) < len(targets):
+            raise ValueError(f"field {path} has {len(parts)} part(s), fewer than the {len(targets)} split fields")      # as Data Collector 3.18.1 does
         for i, t in enumerate(targets):
-            set_path(r.value, t, parts[i] if i < len(parts) else None)
+            set_path(r.value, t, parts[i])
         if not keep_original:
             del_path(r.value, path)
         return r
@@ -1309,17 +1314,20 @@ def geolocation(run: Run, inst: str, db_file: str, conversions, missing: str, *,
 
 
 def field_mask(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
-    """Field Masker: rules = [([paths], MASK_TYPE, regex, groups_to_show)]. Mask character is `x`. FIXED_LENGTH gives ten x's; VARIABLE_LENGTH one x
-    per character; REGEX keeps the listed groups and masks the rest (a value that does not match is masked entirely)."""
-    def mask(v, kind, regex, show):
+    """Field Masker: rules = [([paths], MASK_TYPE, regex, groups_to_show[, custom mask])]. Mask character is `x`. FIXED_LENGTH gives ten x's; VARIABLE_LENGTH one x
+    per character; REGEX keeps the listed groups and masks the rest (a value that does not match is left as it is); CUSTOM: `#` shows the character, any other
+    character is the mask."""
+    def mask(v, kind, regex, show, custom=""):
         v = str(v)
+        if kind == "CUSTOM":
+            return "".join(v[i] if custom[i] == "#" else custom[i] for i in range(min(len(v), len(custom))))
         if kind == "VARIABLE_LENGTH":
             return "x" * len(v)
         if kind == "FIXED_LENGTH":
             return "x" * 10
         m = re.fullmatch(regex, v)
         if not m:
-            return "x" * len(v)
+            return v                                       # a value that does not match is left as it is (Data Collector 3.18.1)
         out = ""
         for i in range(1, (m.re.groups or 0) + 1):
             g = m.group(i) or ""
@@ -1327,11 +1335,13 @@ def field_mask(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ERRO
         return out
 
     def one(r: Record):
-        for paths, kind, regex, show in rules:
+        for rule in rules:
+            paths, kind, regex, show = rule[:4]
+            custom = rule[4] if len(rule) > 4 else ""
             for p in paths:
                 v = get_path(r.value, p, _MISSING)
                 if v is not _MISSING and v is not None:
-                    set_path(r.value, p, mask(v, kind, regex, show))
+                    set_path(r.value, p, mask(v, kind, regex, show, custom))
         return r
     _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
 
@@ -1464,13 +1474,27 @@ def crypto_fields(run: Run, inst: str, mode: str, fields: list[str], *, kms_key_
 _HASHES = {"MD5": "md5", "SHA1": "sha1", "SHA256": "sha256", "SHA512": "sha512"}
 
 
-def field_hasher(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
-    """Field Hasher, hash in place: rules = [([paths], HASH_TYPE)]. The hash is the lower-case hex of the algorithm over the value's UTF-8 string form.
-    Maps and lists are hashed element by element; a missing field is skipped; null stays null."""
+def field_hasher(run: Run, inst: str, rules, *, targets=(), inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Field Hasher. rules = [([paths], HASH_TYPE)] hash in place; targets = [([paths], HASH_TYPE, target_field, header_attribute)] hash the listed fields together into a field or
+    header attribute. The hash is the lower-case hex of the algorithm over the value's native bytes (integers little-endian, strings UTF-8). Maps and lists are hashed element by element."""
     import hashlib
 
+    import struct
+
+    def raw(v) -> bytes:
+        """Data Collector hashes a field's native bytes: integers as 4 (or, past 32 bits, 8) little-endian bytes, doubles as 8, strings as UTF-8 (checked against 3.18.1)."""
+        if isinstance(v, bool):
+            return bytes([1 if v else 0])
+        if isinstance(v, int):
+            return struct.pack("<i", v) if -2**31 <= v < 2**31 else struct.pack("<q", v)
+        if isinstance(v, float):
+            return struct.pack("<d", v)
+        if isinstance(v, (bytes, bytearray)):
+            return bytes(v)
+        return str(v).encode()
+
     def h(t, v):
-        return hashlib.new(_HASHES[t], str(v).encode()).hexdigest()
+        return hashlib.new(_HASHES[t], raw(v)).hexdigest()
 
     def walk(t, v):
         if isinstance(v, dict):
@@ -1485,6 +1509,13 @@ def field_hasher(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ER
                 v = get_path(r.value, p, _MISSING)
                 if v is not _MISSING:
                     set_path(r.value, p, walk(t, v))
+        for paths, t, field, header in targets:
+            joined = b"".join(raw(get_path(r.value, p, "")) for p in paths)
+            hx = hashlib.new(_HASHES[t], joined).hexdigest()
+            if field:
+                set_path(r.value, field, hx)
+            if header:
+                r.attrs[header] = hx
         return r
     _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
 
@@ -1577,14 +1608,16 @@ def http_origin(run: Run, inst: str, url_fn, method: str, auth_fn, fmt: str, hea
 
 # ---- more processors --------------------------------------------------------------------------------------------------------------------------
 def base64_field(run: Run, inst: str, mode: str, src: str, dst: str, url_safe: bool, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
-    """Base64 Field Encoder/Decoder: bytes in, bytes out (a string input is taken as UTF-8)."""
+    """Base64 Field Encoder/Decoder: byte array in, byte array out; a string field is a record error (as in Data Collector)."""
     import base64
 
     def one(r: Record):
         v = get_path(r.value, src, _MISSING)
         if v is _MISSING or v is None:
             raise KeyError(f"field {src} is missing")
-        raw = v.encode() if isinstance(v, str) else bytes(v)
+        if isinstance(v, str):
+            raise TypeError(f"field {src} is a string: Base64 works on byte array fields only")      # Data Collector 3.18.1 sends such a record to error
+        raw = bytes(v)
         enc, dec = (base64.urlsafe_b64encode, base64.urlsafe_b64decode) if url_safe else (base64.b64encode, base64.b64decode)
         set_path(r.value, dst, enc(raw) if mode == "ENCODE" else dec(raw))
         return r
@@ -1617,6 +1650,7 @@ def _pivot(r: Record, list_path, copy_fields, new_path):
     for item in lst:
         n = r.copy() if copy_fields else Record({}, dict(r.attrs))
         if copy_fields and not new_path:
+            del_path(n.value, list_path)           # Data Collector removes the list field and adds the element at the end of the record
             set_path(n.value, list_path, item)
         else:
             set_path(n.value, new_path or list_path, item)

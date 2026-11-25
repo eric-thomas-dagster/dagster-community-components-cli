@@ -67,7 +67,7 @@ def test_small_processors():
     rt.list_pivot(run, "P_01", "/items", True, None, inputs=["m3"], outputs=["m4"])
     rt.dedup(run, "D_01", 100, ["/items"], inputs=["m4"], outputs=["u", "d"])
     uniq, dups = collect(run, "u", "s1"), collect(run, "d", "s2")
-    feed(run, [Record({"a": "hi", "n": None, "keep": 1, "items": [1, 2, 1]})])
+    feed(run, [Record({"a": b"hi", "n": None, "keep": 1, "items": [1, 2, 1]})])      # Base64 takes byte arrays only
     run.execute()
     assert [r.value["items"] for r in uniq] == [1, 2] and [r.value["items"] for r in dups] == [1]
     v = uniq[0].value
@@ -157,7 +157,7 @@ def test_flatten_entire_record():
     got = collect(run)
     feed(run, [Record({"a": {"b": 1, "c": [10, {"d": 2}]}, "e": 3})])
     run.execute()
-    assert got[0].value == {"a.b": 1, "a.c[0]": 10, "a.c[1].d": 2, "e": 3}
+    assert got[0].value == {"a.b": 1, "a.c.0": 10, "a.c.1.d": 2, "e": 3}
 
 
 CONTACTS = ("<contacts><contact><name type='maiden'>NAME1</name><phone>(111)111-1111</phone><phone>(222)222-2222</phone></contact>"

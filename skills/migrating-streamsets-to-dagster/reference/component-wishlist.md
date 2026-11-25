@@ -60,9 +60,11 @@ Use the component where one exists (switch the converter to emit it once compone
 | Redis / Cassandra lookups (not translated) | `redis_reader`, `cassandra_reader`/`cassandra_writer` | candidate when needed |
 | Python-callable stage, R scripts | `python_callable_asset`, `r_script` | n/a |
 
+| 19 | **polars_pipeline gaps found converting real Transformer pipelines**: an `scd` op (slowly changing dimension type 1 and type 2: natural keys, version/current-flag/timestamp managed columns), an inline source (rows or text in the YAML, for raw-data origins), `json`/`ndjson` among the sink kinds (the skill uses `dataframe_to_json` as a second asset today), a sink write mode (append versus overwrite) and directory/partitioned output, join column prefixes/suffixes configurable, Spark-SQL function compatibility in `with_columns`/`filter` (e.g. `monotonically_increasing_id()`), and a declared `pyarrow` dependency for `output_type: pandas` (the component fails with `No module named 'pyarrow'` without it) | Retail Inventory converts; Slowly Changing Dimension (2 of 4 Transformer samples) does not | `components_emit.py` emits `polars_pipeline` + `dataframe_to_json`; SCD pipelines fall back to stubs |
+
 ## Registry components the skill already uses or points customers at (verify each still exists)
 
-Used by generated code: `MongoDBResource` (`resources/mongodb_resource`) and `ElasticsearchResource` (`resources/elasticsearch_resource`), for connections in `mongo_origin`, `es_origin`, `es_target`. Pointed at: 
+Used by generated code: `PolarsPipelineComponent` and `DataframeToJsonComponent` (Transformer pipelines, as YAML); `MongoDBResource` (`resources/mongodb_resource`) and `ElasticsearchResource` (`resources/elasticsearch_resource`), for connections in `mongo_origin`, `es_origin`, `es_target`. Pointed at: 
 
 `StreamSetsWorkspaceComponent` (tier 1), `KafkaToDatabaseAssetComponent` + `kafka_monitor`, `SalesforceIngestionComponent`, `DataframeToDeltaTableComponent`,
 `SlingReplicationAssetComponent`, `S3ToDatabaseAssetComponent` + `s3_monitor`, `data_masking`, `lookup`,

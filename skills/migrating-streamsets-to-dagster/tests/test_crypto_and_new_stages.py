@@ -60,7 +60,8 @@ def test_field_hasher_in_place():
     feed(run, [Record({"a": "x", "b": 7, "m": {"k": "y"}, "c": "keep", "n": None})])
     run.execute()
     v = got[0].value
-    assert v["a"] == hashlib.sha256(b"x").hexdigest() and v["b"] == hashlib.md5(b"7").hexdigest()
+    import struct
+    assert v["a"] == hashlib.sha256(b"x").hexdigest() and v["b"] == hashlib.md5(struct.pack("<i", 7)).hexdigest()      # integers hash as 4 little-endian bytes (Data Collector 3.18.1)
     assert v["m"] == {"k": hashlib.sha256(b"y").hexdigest()} and v["c"] == "keep"
 
 
@@ -72,7 +73,7 @@ def test_field_mask_variants():
     feed(run, [Record({"cc": "4111111111111111", "v": "abc", "f": "zz"}), Record({"cc": "short", "v": "q", "f": "z"})])
     run.execute()
     assert got[0].value == {"cc": "xxxxxxxxxxxx1111", "v": "xxx", "f": "x" * 10}
-    assert got[1].value["cc"] == "xxxxx"                                  # no match: masked entirely
+    assert got[1].value["cc"] == "short"                                  # no match: left as it is (Data Collector 3.18.1)
 
 
 def test_log_parsing_and_file_tail_reads_only_new_lines(tmp_path):

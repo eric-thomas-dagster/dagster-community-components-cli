@@ -5,6 +5,7 @@ import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .components_emit import is_transformer
 from .el import Untranslatable, is_dynamic, translate
 from .model import Estate, Pipeline, Stage, slug
 
@@ -272,14 +273,14 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
 
     if cls == "FieldFlattenerDProcessor":
         if (c.get("config.flattenType") or "") == "ENTIRE_RECORD":
-            n.append("the entire record is flattened to top-level fields named by path (separator from the stage; list elements as name[0]); naming is not verified against a Data Collector")
+            n.append("the entire record is flattened to top-level fields named by path (separator from the stage; list elements as name[0]); names the leaves by path with the separator, list elements as l.0 (checked against Data Collector 3.18.1)")
             return f"rt.field_flattener(run, {I}, ['/'], {c.get('config.nameSeparator') or '.'!r}, '/', True, {lanes}{err}{pre})", n
         if (c.get("config.flattenType") or "") != "SPECIFIC_FIELDS":
             raise _Stub("only ENTIRE_RECORD and SPECIFIC_FIELDS flattening are translated")
         if (c.get("config.collisionFieldAction") or "TO_ERROR") != "TO_ERROR":
             n.append("name-collision handling other than TO_ERROR is not applied")
         return (f"rt.field_flattener(run, {I}, {list(c.get('config.fields') or [])!r}, {c.get('config.nameSeparator') or '.'!r}, "
-                f"{c.get('config.flattenTargetField') or '/'!r}, {bool(c.get('config.removeFlattenedField'))}, {lanes}{err}{pre})"), n
+                f"{c.get('config.flattenTargetField') or '/'!r}, {bool(c.get('config.removeFlattenedField'))}, in_place={bool(c.get('config.flattenInPlace'))}, {lanes}{err}{pre})"), n
 
     if cls == "SelectorDProcessor":
         preds = []
@@ -325,15 +326,18 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         return f"rt.pipeline_finisher(run, {I}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
 
     if cls == "FieldHasherDProcessor":
-        rules = []
-        for r in _rows(c.get("fieldHasherConfigs")):
-            if r.get("hashType") not in ("MD5", "SHA1", "SHA256", "SHA512"):
-                raise _Stub(f"hash type {r.get('hashType')} is not translated (MD5, SHA1, SHA256 and SHA512 are)")
-            rules.append((list(r.get("fieldsToHash") or []), r["hashType"]))
-        if any(k.startswith(("recordHasherConfig", "targetFieldHasherConfigs", "inPlaceFieldHasherConfigs")) and v for k, v in c.items()):
-            raise _Stub("hash to target field / header attribute and whole-record hashing are not translated (hash in place is)")
-        n.append("the hash is lower-case hex over the value's UTF-8 string form; compare one hashed value with your Data Collector's before relying on joins against old hashes")
-        return f"rt.field_hasher(run, {I}, {rules!r}, {lanes}{err}{pre})", n
+        rules = [(list(r.get("sourceFieldsToHash") or []), r["hashType"]) for r in _rows(c.get("hasherConfig.inPlaceFieldHasherConfigs"))]
+        rules += [(list(r.get("fieldsToHash") or []), r["hashType"]) for r in _rows(c.get("fieldHasherConfigs"))]          # the older property name
+        targets = [(list(r.get("sourceFieldsToHash") or []), r["hashType"], r.get("targetField") or "", r.get("headerAttribute") or "")
+                   for r in _rows(c.get("hasherConfig.targetFieldHasherConfigs"))]
+        if any(t == "MURMUR3_128" for _, t in rules) or any(x[1] == "MURMUR3_128" for x in targets):
+            raise _Stub("MURMUR3_128 is not translated (MD5, SHA1, SHA256 and SHA512 are)")
+        if c.get("hasherConfig.recordHasherConfig.hashEntireRecord"):
+            raise _Stub("whole-record hashing is not translated (hash in place and to a target are)")
+        if c.get("hasherConfig.useSeparator"):
+            raise _Stub("a field separator for hashing is not translated")
+        n.append("the hash is lower-case hex over the value's UTF-8 string form (checked against Data Collector 3.18.1 in the parity tests)")
+        return f"rt.field_hasher(run, {I}, {rules!r}, targets={targets!r}, {lanes}{err}{pre})", n
 
     if "crypt" in cls.lower():
         raise _Stub("Encrypt/Decrypt Fields is not translated: its property names are not verified against a real export, and ciphertext written by StreamSets cannot be read "
@@ -427,7 +431,7 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
 
     if cls in ("Base64EncodingDProcessor", "Base64DecodingDProcessor"):
         mode = "ENCODE" if cls.startswith("Base64Enc") else "DECODE"
-        n.append("works on bytes: a string input is taken as UTF-8 and the result is bytes")
+        n.append("works on byte array fields only: a string field is a record error, as in Data Collector")
         return f"rt.base64_field(run, {I}, {mode!r}, {c.get('originFieldPath')!r}, {c.get('resultFieldPath')!r}, {bool(c.get('urlSafe'))}, {lanes}{err}{pre})", n
 
     if cls == "FieldValueReplacerDProcessor":
@@ -496,11 +500,11 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         rules = []
         for r in _rows(c.get("fieldMaskConfigs")):
             k = r.get("maskType")
-            if k not in ("VARIABLE_LENGTH", "FIXED_LENGTH", "REGEX"):
-                raise _Stub(f"mask type {k} is not translated (variable length, fixed length and regex are)")
+            if k not in ("VARIABLE_LENGTH", "FIXED_LENGTH", "REGEX", "CUSTOM"):
+                raise _Stub(f"mask type {k} is not translated")
             show = [int(x) for x in str(r.get("groupsToShow") or "").split(",") if x.strip().isdigit()]
-            rules.append((list(r.get("fields") or []), k, r.get("regex") or "", show))
-        n.append("the mask character is `x` (as StreamSets does) and a value that does not match a regex mask is masked entirely; compare with your Data Collector")
+            rules.append((list(r.get("fields") or []), k, r.get("regex") or "", show, r.get("mask") or ""))
+        n.append("the mask character is `x` and a value that does not match a regex mask is left as it is (both checked against Data Collector 3.18.1 in the parity tests)")
         return f"rt.field_mask(run, {I}, {rules!r}, {lanes}{err}{pre})", n
 
     if cls == "MultiKafkaDSource":
@@ -601,7 +605,7 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
     if cls == "SplitterDProcessor":
         if (c.get("tooManySplitsAction") or "TO_LAST_FIELD") != "TO_LAST_FIELD":
             raise _Stub("too-many-splits action other than TO_LAST_FIELD is not translated")
-        n.append("when the value has fewer parts than target fields, the remaining fields are set to null")
+        n.append("a value with fewer parts than split fields is a record error (as in Data Collector 3.18.1)")
         return (f"rt.splitter(run, {I}, {c.get('fieldPath')!r}, {c.get('separator') or ' '!r}, {list(c.get('fieldPathsForSplits') or [])!r}, 'TO_LAST_FIELD', "
                 f"{(c.get('originalFieldAction') or 'REMOVE') == 'KEEP'}, {lanes}{err}{pre})"), n
 
@@ -761,6 +765,33 @@ def convert(est: Estate, pkg: str = "streamsets_migrated", overrides: dict | Non
         except ValueError as e:
             res.items.append(Item("pipeline", title, "", UNMAPPED, "cycle", [str(e)]))
             continue
+        if is_transformer(p):
+            from .components_emit import Gap, build
+            try:
+                built = build(p, {k: v for k, v in p.constants.items() if k not in p.secret_constants})
+            except (Gap, KeyError, IndexError) as e:
+                built, gap = None, str(e)
+            if built:
+                names = []
+                for aname, docs in built["assets"].items():
+                    for i, d in enumerate(docs):
+                        rel = f"defs/{slug(title)}/{aname}{'' if len(docs) == 1 else '_' + str(i)}/defs.yaml"
+                        res.files[rel] = d
+                    names.append(aname)
+                comp_assets = []
+                for aname, docs in built["assets"].items():
+                    comp_assets.append({"asset": aname, "deps": [aname + "_frame"] if len(docs) > 1 else []})
+                    if len(docs) > 1:
+                        comp_assets.append({"asset": aname + "_frame", "deps": []})
+                res.items.append(Item("pipeline", title, ", ".join(names), REVIEW, "components",
+                                      [f"Transformer pipeline emitted as registry components ({len(built['assets'])} destination(s)): polars_pipeline steps"
+                                       + (" and dataframe_to_json" if any(len(d) > 1 for d in built['assets'].values()) else "")] + built["notes"],
+                                      {"assets": comp_assets}))
+                res.meta.setdefault("pipelines", {})[title] = {"translated": len(p.stages), "stages": len(p.stages), "stubs": [], "caveats": built["notes"], "streaming": [],
+                                                               "secrets": list(p.secret_constants), "constants": list(p.constants), "status": REVIEW, "asset": ", ".join(names),
+                                                               "component_plan": {"ready": True, "gaps": [], "ops": [], "origin": "", "destinations": []}, "components": True}
+                continue
+            res.meta.setdefault("component_gap", {})[title] = gap
         code, name, meta = convert_pipeline(p, res.items, overrides, res.files)
         chunks.append(code)
         metas[title] = {**meta, "asset": name}
@@ -776,7 +807,9 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     pipes = result.meta.get("pipelines", {}).values()
     deps = ['"dagster>=1.11"', '"sqlalchemy>=2"']
-    if any(m["translated"] for m in pipes):
+    if any(m.get("components") for m in pipes):
+        deps += ['"dagster-community-components>=0.10.179"', '"polars"', '"pandas"', '"pyarrow"']
+    if any(m["translated"] for m in pipes if not m.get("components")):
         deps += ['"fsspec"', '"s3fs"', '"pymysql"', '"simple-salesforce"', '"databricks-sqlalchemy"', '"requests"']
         if "rt.js_processor" in result.code:
             deps += ['"quickjs"']
@@ -835,6 +868,7 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
     (root / "defs" / "streamsets.py").write_text(result.code)
     (root / "overrides").mkdir(exist_ok=True)
     for rel, text in result.files.items():
+        (root / rel).parent.mkdir(parents=True, exist_ok=True)
         (root / rel).write_text(text)
     mods = sorted(Path(rel).stem for rel in result.files if rel.startswith("overrides/"))
     (root / "overrides" / "__init__.py").write_text("".join(f"from . import {m}  # noqa: F401\n" for m in mods))

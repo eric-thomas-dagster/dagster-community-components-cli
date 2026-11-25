@@ -20,6 +20,6 @@ Input is Data Collector or Control Hub pipeline JSON (a file, a folder, or a `.z
 
 See `SKILL.md` for the workflow, `reference/mapping.md` for what is translated and what is only assumed, and `reference/corpus-results.md` for results on the public samples (six pipelines; no larger corpus exists).
 
-Tests: `uv run pytest` (103; all six sample pipelines are converted and run end to end, against in-memory S3, SQLite, a fake Salesforce client and local files).
+Tests: `uv run pytest` (add `SDC_PARITY_URL=...` to also run the 14 parity cases against a real Data Collector) (118; all six sample pipelines are converted and run end to end, against in-memory S3, SQLite, a fake Salesforce client and local files).
 
 The six sample pipelines in `tests/fixtures/sdc` are from the public StreamSets `pipeline-library` (Apache License 2.0).

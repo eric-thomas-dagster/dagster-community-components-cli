@@ -46,3 +46,10 @@ Gates on the six samples' generated project: 1 (compiles), 2 (loads), 3 (units m
 `components_plan.py` maps each pipeline's stages onto the ops of `polars_pipeline` / `warehouse_pipeline` and says what has no op yet (it plans; nothing is generated from it).
 **1 of 6** sample pipelines (Salesforce to Delta Lake: a select) and **1 of 27** public ones are fully covered. Ops that map today: select, drop, rename, cast (46 uses on the public pipelines).
 Biggest gaps on the public pipelines: Expression Evaluator needs EL translated to SQL (32 stages), script evaluators (31), vendor/HTTP destinations (20), lookups (8), Field Order (6), geolocation (2).
+
+## Real exports from an IBM StreamSets trial (14 pipelines)
+
+Fourteen sample pipelines exported from a trial Control Hub (10 Data Collector, 4 Transformer; not redistributed). With the first version of the Transformer route: **30 of 81 stages translate** as record-graph stages;
+the Data Collector ones are stopped by CDC origins (Oracle, PostgreSQL, Salesforce subscription), Snowflake and ADLS Gen2 destinations, Avro output, TensorFlow and HDFS; **all four Transformer pipelines had 0 translatable stages** as record graphs
+because their stages are Spark DataFrame operations. With the components route, **Retail Inventory (join, aggregate, repartition) now converts to registry components**; the two Slowly Changing Dimension pipelines and the Scala UDF pipeline do not
+(no `scd` op, raw-data origins, Scala).

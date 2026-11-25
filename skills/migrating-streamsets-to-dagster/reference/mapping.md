@@ -131,6 +131,46 @@ What the converter does:
 - Keys never go in generated code: pass them from the environment (`SDC_SECRET_*`) or KMS.
 - Hashes: only in-place hashing is translated (see the catalog). A pipeline that hashes to join against old hashes must be compared on one value first.
 
+## Verified against a real Data Collector (3.18.1)
+
+`tests/test_sdc_parity.py` feeds the same records through the same stage configuration in a running Data Collector (REST preview) and in the converted runtime. 14 cases pass.
+The first run found **six real differences, all fixed**, and confirmed a number of assumptions:
+
+| Found by running the real engine | Fixed |
+|---|---|
+| Splitter: a value with fewer parts than split fields is a **record error** (not nulls) | yes |
+| Field Flattener names list elements with the separator (`l.0`), not `l[0]`; `flattenInPlace` flattens inside the field (`o = {k, "d.deep"}`) | yes |
+| Field Masker REGEX: a value that does not match is **left as it is** (not masked) | yes |
+| Field Hasher hashes a field's **native bytes**: an integer as 4 little-endian bytes (8 past 32 bits), a double as 8, a string as UTF-8; the property names are the `hasherConfig.*` schema | yes (in place and to a target field/header) |
+| Base64 works on **byte arrays only**: a string field is a record error | yes |
+| List Pivot puts the pivoted field at the **end** of the record | yes |
+| Dedup adds its own `Info[...].hash` header attribute (ignored by the comparison) | noted |
+| Confirmed: Expression Evaluator arithmetic, `/` versus `div`, string concatenation with null, ternary, `substring`, `record:exists`, missing fields, header attributes; `str:matches` and `str:regExCapture` are **whole-string** matches; Field Remover (KEEP/REMOVE, nested paths), Field Renamer, Field Type Converter (numbers, boolean, long), Stream Selector with a default lane, Field Order, Dedup, JSON Parser, Masker (variable, fixed, custom) | n/a |
+
+Data Collector also publishes its own **stage definitions** (`/rest/v1/definitions`, readable without activation): every property name, default and enumeration of every installed stage and the full
+EL function catalog (299 functions). Property names in the translators were checked against it for the stages installed in the 6.4.1 image, which found the Field Hasher schema change. `docs/PARITY.md` has the setup.
+
+## Transformer (Spark) pipelines: registry components
+
+A Transformer pipeline is a DataFrame job, so the converter emits it as `defs.yaml` for the registry's **`polars_pipeline`** (named steps with file sources, `ref` joins, csv/parquet sinks) and **`dataframe_to_json`** (JSON output), one asset per destination carrying only the steps that feed it
+(`components_emit.py`; tested end to end in `tests/test_transformer_components.py`: the generated project is loaded by Dagster, run, and its CSV and JSON output compared).
+
+| Transformer stage | Component op |
+|---|---|
+| File origin (JSON, CSV, Parquet) | `source: {kind: file, path, format}` (JSON is read as JSON Lines, Spark's default) |
+| Join (column list) | `join` with `right: {ref}` (INNER/LEFT_OUTER/RIGHT_OUTER/FULL_OUTER) |
+| SQL Evaluator | `with_columns` expressions (Spark SQL run by Polars' SQL: functions can differ, e.g. `monotonically_increasing_id()` is Spark-only) |
+| Selector | one `filter` step per lane; `default` becomes NOT of the other predicates |
+| Aggregate | `group_by` with `aggregations` (AVG, SUM, COUNT, MIN, MAX) |
+| Sort | `sort` |
+| Repartition | dropped |
+| File destination CSV / Parquet | `sinks: [{kind: csv|parquet, path}]` |
+| File destination JSON | `dataframe_to_json` (JSON Lines) |
+
+Not covered, so the pipeline falls back to the record graph and its Spark stages become stubs: **Slowly Changing Dimension** (no `scd` op), **Scala** evaluator, raw-data origins (no inline source), other file formats, join conditions that are not column lists.
+Differences stated in the report: Spark writes a directory of part files, this writes one file; write mode APPEND is not applied; join column prefixes are not applied; a streaming-mode pipeline runs as a batch.
+`pyspark_pipeline` is the Spark-faithful alternative when Spark semantics matter more than a lightweight run.
+
 ## Verified and not verified
 
 Property names for Base64, Field Value Replacer, List Pivot, Dedup, JSON/Log/XML parsers, Field Merger and Jdbc Lookup (`query`) come from Data Collector's own default-config test pipelines (versions 1.1 to 2.2); defaults prove names, not behaviour, so each behaviour comes from IBM's documentation or is flagged above.
