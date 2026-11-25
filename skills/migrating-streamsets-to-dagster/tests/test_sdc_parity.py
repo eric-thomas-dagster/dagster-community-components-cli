@@ -43,10 +43,17 @@ def ours(sdc, cls, conf, records, outputs=("o2",)):
     cfg = {c["name"]: c.get("defaultValue") for c in sdc.defs()[cls]["configDefinitions"]}
     cfg.update(conf)
     st = Stage("Stage", cls, "x_" + cls, "lib", "processor", ["o1"], list(outputs), [], cfg)
-    call, _notes = emit(Pipeline("p", "p"), st)
+    files: dict = {}
+    call, _notes = emit(Pipeline("p", "p"), st, files)
+    import types
+    scr = types.SimpleNamespace()
+    for rel, src in files.items():                      # JavaScript evaluators come back as transpiled Python modules
+        mod = types.ModuleType(rel)
+        exec(compile(src.replace("from ..jsrt import", "from streamsets_to_dagster.jsrt import"), rel, "exec"), mod.__dict__)
+        setattr(scr, rel.split("/")[-1][:-3], mod)
     run = Run(None, "t", {"C": 1})
     got = {o: [] for o in outputs}
-    ns = {"rt": rt, "fx": fx, "run": run, "C": {}}
+    ns = {"rt": rt, "fx": fx, "run": run, "C": {}, "scr": scr}
     eval(call, ns)
     run.add(rt.Stage("src", gen=lambda: iter([{"o1": [Record(json.loads(json.dumps(r)), {}) for r in records]}]), outputs=["o1"]))
     for o in outputs:
@@ -187,3 +194,110 @@ def test_base64_and_json_parser(sdc):
 
 def test_list_pivot(sdc):
     same(sdc, "ListPivotDProcessor", {"listPath": "/l", "copyFields": True, "newPath": "", "replaceListField": True, "saveOriginalFieldName": False})
+
+
+# ---- stages whose behaviour was only documented (verified on Data Collector 6.4.1) -------------------------------------------------------------
+
+def theirs_svc(sdc, cls, conf, records, service_conf, outputs=("o2",)):
+    raw = "\n".join(json.dumps(r) for r in records)
+    stages = [sdc.stage("RawDataDSource", "Origin", {"rawData": raw, "stopAfterFirstBatch": True}, outputs=["o1"]),
+              sdc.stage(cls, "Stage", conf, inputs=["o1"], outputs=list(outputs), service_conf=service_conf), sdc.stage("NullDTarget", "Trash", inputs=["o2"])]
+    out = sdc.preview(stages)["Stage"]
+    keep = lambda a: {k: v for k, v in a.items() if not k.startswith("Info[")}      # noqa: E731
+    return {lane: [(r["value"], keep(r["attributes"])) for r in recs] for lane, recs in out["output"].items()}, [r["error"] for r in out["errors"]]
+
+
+def test_field_merger_semantics(sdc):
+    recs = [{"a": 1, "b": 2, "m": {"x": 9, "y": 1}, "t": {"x": 1, "z": 5}, "l": [1, 2], "l2": [3]}]
+    for conf in ({"mergeMapping": [{"fromField": "/m", "toField": "/t"}], "overwriteExisting": True},
+                 {"mergeMapping": [{"fromField": "/m", "toField": "/t"}], "overwriteExisting": False},
+                 {"mergeMapping": [{"fromField": "/l", "toField": "/t"}]},
+                 {"mergeMapping": [{"fromField": "/l", "toField": "/l2"}]},
+                 {"mergeMapping": [{"fromField": "/m", "toField": "/m2"}]},
+                 {"mergeMapping": [{"fromField": "/a", "toField": "/new"}]},
+                 {"mergeMapping": [{"fromField": "/l", "toField": "/l2"}, {"fromField": "/m", "toField": "/t"}], "overwriteExisting": True}):
+        same(sdc, "FieldMergerDProcessor", conf, recs)
+
+
+def test_xml_parser_output_shape(sdc):
+    xml = "<root><msg id='1'><t>Hi</t><n>3</n></msg><msg id='2'><t>Yo</t></msg></root>"
+    base = {"configs.fieldPathToParse": "/xml", "configs.parsedFieldPath": "/doc"}
+    same(sdc, "XmlParserDProcessor", base, [{"xml": xml, "keep": 1}])
+    for how in ("FIRST_ONLY", "ALL_AS_LIST", "SPLIT_INTO_MULTIPLE_RECORDS"):
+        same(sdc, "XmlParserDProcessor", {**base, "configs.xmlRecordElement": "msg", "configs.multipleValuesBehavior": how}, [{"xml": xml, "keep": 1}])
+    same(sdc, "XmlParserDProcessor", base, [{"xml": "<r><m id='1'>text</m><m>plain</m><k a='x'/></r>"}])
+
+
+def test_field_replacer_6x_semantics(sdc):
+    if "conf.rules" not in {c["name"] for c in sdc.defs()["FieldReplacerDProcessor"]["configDefinitions"]}:
+        pytest.skip("older Field Replacer schema")
+    recs = [{"a": "x", "n": 3, "e": None, "s": "q"}]
+    for conf in ({"conf.rules": [{"fields": "/a", "setToNull": True}]},
+                 {"conf.rules": [{"fields": "/e", "setToNull": False, "replacement": "filled"}]},
+                 {"conf.rules": [{"fields": "/nope", "setToNull": False, "replacement": "z"}], "conf.nonExistingFieldHandling": "ADD_FIELD"},
+                 {"conf.rules": [{"fields": "/nope", "setToNull": False, "replacement": "z"}], "conf.nonExistingFieldHandling": "CONTINUE"},
+                 {"conf.rules": [{"fields": "/nope", "setToNull": False, "replacement": "z"}], "conf.nonExistingFieldHandling": "TO_ERROR"},
+                 {"conf.rules": [{"fields": "/s", "setToNull": False, "replacement": "${record:value('/n') + 1}"}]},
+                 {"conf.rules": [{"fields": "/n", "setToNull": False, "replacement": "${str:toUpper(record:value('/a'))}"}]}):
+        same(sdc, "FieldReplacerDProcessor", conf, recs)
+
+
+def test_log_parser_field_names(sdc):
+    common = '127.0.0.1 - frank [10/Oct/2000:13:55:36 -0700] "GET /apache_pb.gif HTTP/1.0" 200 2326'
+    combined = common + ' "http://ref.example/" "Mozilla/5.0"'
+    for label, line, svc in (("COMMON", common, {"logParserServiceConfig.logMode": "COMMON_LOG_FORMAT"}), ("COMBINED", combined, {"logParserServiceConfig.logMode": "COMBINED_LOG_FORMAT"}),
+                             ("GROK", common, {"logParserServiceConfig.logMode": "GROK", "logParserServiceConfig.grokPatternList": ["%{COMMONAPACHELOG}"]}),
+                             ("GROKC", combined, {"logParserServiceConfig.logMode": "GROK", "logParserServiceConfig.grokPatternList": ["%{COMBINEDAPACHELOG}"]})):
+        a, aerr = theirs_svc(sdc, "LogParserDProcessor", {"fieldPathToParse": "/text", "parsedFieldPath": "/"}, [{"text": line}], svc)
+        b, berr = ours(sdc, "LogParserDProcessor", {"fieldPathToParse": "/text", "parsedFieldPath": "/", **svc}, [{"text": line}])
+        print("\nLOG", label, "\n  SDC :", json.dumps(a), aerr, "\n  ours:", json.dumps(b), berr)
+        assert {k: sorted(v, key=str) for k, v in a.items()} == {k: sorted(v, key=str) for k, v in b.items()} or json.loads(json.dumps(a, sort_keys=True)) == json.loads(json.dumps(b, sort_keys=True)), label       # Java map order is not meaningful
+
+
+def test_local_lookup(sdc):
+    same(sdc, "LocalLookupDProcessor", {"conf.values": [{"key": "a", "value": "area"}, {"key": "b", "value": "bee"}], "conf.mode": "RECORD",
+                                        "conf.lookups": [{"keyExpr": "${record:value('/a')}", "outputFieldPath": "/word"}]}, [{"a": "a"}, {"a": "zz"}])
+
+
+def script_conf(sdc, cls, script, params=None, mode="BATCH", init=""):
+    return {"script": script, "initScript": init, "destroyScript": "", "processingMode": mode, "scriptRecordType": "NATIVE_OBJECTS",
+            "userParams": [{"key": k, "value": v} for k, v in (params or {}).items()]}
+
+
+JS_CASES = {
+    "copy_and_modify": "for (var i = 0; i < records.length; i++) { records[i].value.t = records[i].value.n * 2; records[i].value.u = records[i].value.a + '!'; output.write(records[i]); }",
+    "types_of_results": "var v = records[0].value; v.i = v.n + 1; v.d = v.f * 2; v.dv = v.n / 2; v.s = String(v.n); v.b = v.n > 3; v.m = Math.floor(v.f); v.p = parseInt('42'); output.write(records[0]);",
+    "new_records_and_attributes": "var r = sdcFunctions.createRecord('x'); r.value = {a: records[0].value.a, n: records[0].value.n}; r.attributes['k'] = 'v'; output.write(r);",
+    "user_params": "records[0].value.p = sdc.userParams['GREETING'] + ' ' + records[0].value.a; output.write(records[0]);",
+    "error_write": "for (var i = 0; i < records.length; i++) { if (records[i].value.n > 3) { error.write(records[i], 'too big'); } else { output.write(records[i]); } }",
+    "nested_and_null": "var v = records[0].value; v.o.k2 = 'x'; v.nul = null; v.l.add(4); output.write(records[0]);",
+    "java_collections": "var v = records[0].value; v.sz = v.l.size(); v.first = v.l.get(0); v.has = v.o.containsKey('k'); v.got = v.o.get('k'); v.o.put('new', 1); v.isEmpty = v.l.isEmpty(); v.keys = v.o.keySet().size(); output.write(records[0]);",
+}
+
+
+@pytest.mark.parametrize("name", sorted(JS_CASES))
+def test_javascript_evaluator_matches(sdc, name):
+    conf = script_conf(sdc, "JavaScriptDProcessor", JS_CASES[name], {"GREETING": "hi"})
+    a, aerr = theirs(sdc, "JavaScriptDProcessor", conf, IN)
+    b, berr = ours(sdc, "JavaScriptDProcessor", conf, IN)
+    assert ordr(a) == ordr(b), f"\nData Collector: {json.dumps(a, default=str)[:700]}\nConverted     : {json.dumps(b, default=str)[:700]}"
+    assert sum(berr.values()) == len(aerr), f"error records: Data Collector {aerr}, converted {berr}"
+
+
+JY_CASES = {
+    "copy_and_modify": "for record in records:\n    record.value['t'] = record.value['n'] * 2\n    output.write(record)\n",
+    "user_params": "for record in records:\n    record.value['p'] = sdc.userParams['GREETING'] + ' ' + record.value['a']\n    output.write(record)\n",
+    "error_write": "for record in records:\n    if record.value['n'] > 3:\n        error.write(record, 'too big')\n    else:\n        output.write(record)\n",
+    "types": "for record in records:\n    v = record.value\n    v['i'] = v['n'] + 1\n    v['d'] = v['f'] * 2\n    v['dv'] = v['n'] / 2\n    v['s'] = str(v['n'])\n    output.write(record)\n",
+}
+
+
+@pytest.mark.parametrize("name", sorted(JY_CASES))
+def test_jython_evaluator_matches(sdc, name):
+    if "JythonDProcessor" not in sdc.defs():
+        pytest.skip("no Jython library installed")
+    conf = script_conf(sdc, "JythonDProcessor", JY_CASES[name], {"GREETING": "hi"})
+    a, aerr = theirs(sdc, "JythonDProcessor", conf, IN)
+    b, berr = ours(sdc, "JythonDProcessor", conf, IN)
+    assert ordr(a) == ordr(b), f"\nData Collector: {json.dumps(a, default=str)[:700]}\nConverted     : {json.dumps(b, default=str)[:700]}"
+    assert sum(berr.values()) == len(aerr), f"error records: Data Collector {aerr}, converted {berr}"

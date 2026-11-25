@@ -85,16 +85,16 @@ def test_log_parsing_and_file_tail_reads_only_new_lines(tmp_path):
     rt.file_tail_origin(run, "T_01", [str(log)], "LOG", "COMMON_LOG_FORMAT", 100, outputs=["out"])
     got = collect(run)
     stats = run.execute()
-    assert got[0].value["remoteHost"] == "127.0.0.1" and got[0].value["status"] == "200" and got[0].attrs["offset"] == "0" and stats["error_records"] == {"T_01": 1}
+    assert got[0].value["clientip"] == "127.0.0.1" and got[0].value["response"] == "200" and got[0].attrs["offset"] == "0" and stats["error_records"] == {"T_01": 1}
     with open(log, "a") as fh:
         fh.write(line.replace("200", "404"))
     run2 = Run(None, "t", {}, run.offsets_out)
     rt.file_tail_origin(run2, "T_01", [str(log)], "LOG", "COMMON_LOG_FORMAT", 100, outputs=["out"])
     got2 = collect(run2)
     run2.execute()
-    assert [r.value["status"] for r in got2] == ["404"]
+    assert [r.value["response"] for r in got2] == ["404"]
     g = rt.parse_log('1.2.3.4 - bob [10/Oct/2000:13:55:36 -0700] "GET /x HTTP/1.1" 200 -', "COMMONAPACHELOG")
-    assert g["clientip"] == "1.2.3.4" and g["verb"] == "GET" and g["httpversion"] == "1.1" and "bytes" not in g
+    assert g["clientip"] == "1.2.3.4" and g["verb"] == "GET" and g["httpversion"] == "1.1" and g["bytes"] is None
 
 
 def test_spooldir_reads_gzipped_logs(tmp_path):

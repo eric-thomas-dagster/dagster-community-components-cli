@@ -84,7 +84,7 @@ Stubs with a pointer to the registry (check `dagster-community-components` befor
 | Groovy / JavaScript evaluators | Rewrite as Python and pass it with `--override`. The script text is kept in the manifest notes |
 | Jython evaluator | Translated (runs under CPython); see the catalog |
 
-Other stage types not translated: Field Merger (IBM's page does not say whether the source fields are removed or how lists merge), XML Parser (its output field naming is not documented), JDBC Tee, HBase and Redis lookups, the Spark processor, Aggregator, Delay, Kafka single-topic consumer, the Encrypt and Decrypt Fields stage (see Encryption). Also not translated: Transformer/Spark stages
+Other stage types not translated: JDBC Tee, HBase and Redis lookups, the Spark processor, Aggregator, Delay, Kafka single-topic consumer, the Encrypt and Decrypt Fields stage (see Encryption). Also not translated: Transformer/Spark stages
 , MongoDB, REST client, Kafka producer, ...) have no translation yet and are reported as stubs.
 
 ## Expression language (EL)
@@ -146,6 +146,12 @@ The first run found **six real differences, all fixed**, and confirmed a number 
 | Base64 works on **byte arrays only**: a string field is a record error | yes |
 | List Pivot puts the pivoted field at the **end** of the record | yes |
 | Dedup adds its own `Info[...].hash` header attribute (ignored by the comparison) | noted |
+| Field Merger: both fields must be maps or both lists (else a record error); the source field is **moved**; lists append after the target's items; maps merge and a clashing key is a record error unless Overwrite is on | yes (new stage translation) |
+| XML Parser output shape: attributes as `attr|name`, text as `value`, children grouped by tag into **lists of maps**; no delimiter gives the document's content; a delimiter with FIRST_ONLY, ALL_AS_LIST or SPLIT_INTO_MULTIPLE_RECORDS | yes (new stage translation) |
+| Field Replacer (6.x, replaces Field Value Replacer): `replacement` is an **expression evaluated per record** with a typed result; ADD_FIELD / CONTINUE / TO_ERROR for a missing field | yes (new stage translation) |
+| Local Lookup: a key with no entry leaves the field **unset** (not null) | yes |
+| Log formats: Common and Combined Log Format use the **grok field names** (`clientip, ident, auth, timestamp, verb, request, httpversion, rawrequest, response, bytes`; combined adds `referrer`, `agent`, quotes included); parsing into `/` **replaces** the record; a group that did not match is null. The 6.x service property names are `logParserServiceConfig.*` (grok patterns in `grokPatternList`) | yes |
+| Scripting stages: `userParams` (script parameters, `sdc.userParams`) exists on Jython, JavaScript and Groovy; in JavaScript (Nashorn) **record lists and maps are Java collections** (`list.add`, `size`, `get`; `map.put`, `get`, `containsKey`) and `list.push` does not exist; in Jython `/` on two integers is **integer division** | yes (all three supported; the Jython division is emulated by rewriting `/`) |
 | Confirmed: Expression Evaluator arithmetic, `/` versus `div`, string concatenation with null, ternary, `substring`, `record:exists`, missing fields, header attributes; `str:matches` and `str:regExCapture` are **whole-string** matches; Field Remover (KEEP/REMOVE, nested paths), Field Renamer, Field Type Converter (numbers, boolean, long), Stream Selector with a default lane, Field Order, Dedup, JSON Parser, Masker (variable, fixed, custom) | n/a |
 
 Data Collector also publishes its own **stage definitions** (`/rest/v1/definitions`, readable without activation): every property name, default and enumeration of every installed stage and the full
@@ -193,5 +199,4 @@ Not verified, so check on a real run before trusting parity:
 - HTTP: `ARRAY_OBJECTS` is taken from a destination's own `jsonMode`; the `MULTIPLE_OBJECTS` form (one object per line) and the response handling are assumed.
 - Transformer (Spark) pipelines load, but none of their stages is translated, and no real Transformer export was available.
 - Control Hub export archives are read (`.zip` of pipeline JSON); the Control Hub job and schedule objects are not parsed.
-- Log formats: the Common/Combined Log Format field names (`/remoteHost /request /status ...`) and the grok names (`/clientip /verb /response /bytes ...`) are the documented/standard ones, not checked against a Data Collector's output.
 - Kafka and Geolocation are tested against a fake client and a generated `.mmdb`, not a broker or MaxMind's database.

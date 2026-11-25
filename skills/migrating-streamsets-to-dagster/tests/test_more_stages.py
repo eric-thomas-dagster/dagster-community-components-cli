@@ -120,7 +120,7 @@ def test_local_lookup_sets_the_field_or_null():
     got = collect(run)
     feed(run, [Record({"k": "a"}), Record({"k": "zz"})])
     run.execute()
-    assert [r.value["word"] for r in got] == ["area", None]
+    assert [r.value.get("word") for r in got] == ["area", None] and "word" not in got[1].value      # a missing key leaves the field unset
 
 
 def test_java_date_patterns_and_el_time_functions():

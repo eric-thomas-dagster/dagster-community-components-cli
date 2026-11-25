@@ -89,7 +89,8 @@ def _log_mode(c: dict) -> str:
     mode = _pick(c, "logMode") or "COMMON_LOG_FORMAT"
     if mode == "GROK":
         import re as _re
-        g = (_pick(c, "grokPattern") or "").strip()
+        gl = _pick(c, "grokPatternList")                      # the 6.x property: a list of patterns
+        g = ((gl[0] if isinstance(gl, list) and gl else None) or _pick(c, "grokPattern") or "").strip()
         m = _re.fullmatch(r"%\{(COMMONAPACHELOG|COMBINEDAPACHELOG)\}", g)
         if not m:
             raise _Stub(f"grok pattern {g!r} is not translated (COMMONAPACHELOG and COMBINEDAPACHELOG are)")
@@ -97,6 +98,12 @@ def _log_mode(c: dict) -> str:
     if mode in ("COMMON_LOG_FORMAT", "COMBINED_LOG_FORMAT"):
         return mode
     raise _Stub(f"log mode {mode} is not translated")
+
+
+def _uparams(c: dict) -> dict:
+    """A scripting stage's `userParams` (script parameters read as sdc.userParams), a list of {key, value} in an export."""
+    up = c.get("userParams") or c.get("scriptConf.params") or []
+    return {str(r["key"]): r.get("value") for r in up if isinstance(r, dict) and r.get("key")} if isinstance(up, list) else dict(up)
 
 
 def _delimited(c: dict) -> tuple[str, bool, str]:
@@ -145,7 +152,7 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         if "sdc.createBatch" in str(c.get("script")):
             raise _Stub("script builds its own batches (origin-style API)")
         return (f"rt.jython_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {str(c.get('destroyScript') or '')!r}, "
-                f"{c.get('processingMode') or 'BATCH'!r}, {lanes}, events={s.events!r}{err}{pre})"), n
+                f"{c.get('processingMode') or 'BATCH'!r}, user_params={_uparams(c)!r}, {lanes}, events={s.events!r}{err}{pre})"), n
     if cls == "JavaScriptDProcessor":
         if (c.get("processingMode") or "BATCH") != "BATCH" or (c.get("scriptRecordType") or "NATIVE_OBJECTS") != "NATIVE_OBJECTS":
             raise _Stub("JavaScript is translated for BATCH mode with NATIVE_OBJECTS records")
@@ -157,11 +164,11 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
                 files[f"scripts/{mod}.py"] = f'"""JavaScript Evaluator {s.instance} of {p.title!r}, transpiled to Python."""\n' + src
                 n.append("translated from JavaScript to Python (scripts/" + mod + ".py): JavaScript semantics (truthiness, +, ==, undefined, string and array methods) come from jsrt; "
                          "records cross as JSON; Java objects do not exist. Review it like code you inherited")
-                return f"rt.script_native(run, {I}, scr.{mod}, {lanes}, events={s.events!r}{err}{pre})", n
+                return f"rt.script_native(run, {I}, scr.{mod}, user_params={_uparams(c)!r}, {lanes}, events={s.events!r}{err}{pre})", n
             except Unsupported as why:
                 n.append(f"not transpilable to Python ({why}): runs in QuickJS instead")
         n.append("the script runs in QuickJS, not Nashorn: records cross as JSON (dates and decimals become strings) and Java objects do not exist; review it")
-        return f"rt.js_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {lanes}, events={s.events!r}{err}{pre})", n
+        return f"rt.js_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, user_params={_uparams(c)!r}, {lanes}, events={s.events!r}{err}{pre})", n
 
     if cls == "JythonDSource":
         if (c.get("scriptConf.scriptRecordType") or "NATIVE_OBJECTS") != "NATIVE_OBJECTS":
@@ -176,7 +183,7 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         lk = [(r.get("keyExpr"), r.get("outputFieldPath")) for r in _rows(c.get("conf.lookups"))]
         if not lk:
             raise _Stub("no lookups configured")
-        n.append("a key with no entry sets the output field to null")
+        n.append("a key with no entry leaves the output field unset (checked against Data Collector 6.4.1)")
         return f"rt.local_lookup(run, {I}, {table!r}, [{', '.join(f'({_el(a)}, {b!r})' for a, b in lk)}], {lanes}{err}{pre})", n
 
     if cls in ("HttpDProcessor", "HttpClientDTarget", "AnodotDTarget"):
@@ -365,7 +372,7 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
             raise _Stub("Groovy with SDC_RECORDS record type is not translated (NATIVE_OBJECTS is)")
         n.append("runs on the real Groovy (JVM): the `groovy` command (a JDK and Apache Groovy) must be on PATH or in SDC_GROOVY; one process per batch; records cross as JSON. "
                  "Not run against a JVM by this project's tests (they use a stand-in executable): run your script's pipeline once and compare")
-        return f"rt.groovy_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {c.get('processingMode') or 'BATCH'!r}, {lanes}, events={s.events!r}{err}{pre})", n
+        return f"rt.groovy_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {c.get('processingMode') or 'BATCH'!r}, user_params={_uparams(c)!r}, {lanes}, events={s.events!r}{err}{pre})", n
 
     if cls == "JdbcLookupDProcessor":
         q = c.get("query")
@@ -436,6 +443,33 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         n.append("namespace URIs are dropped from names (their rendering is not documented); the flattening follows IBM's documented examples (name(0) for repeated siblings, # for attributes)")
         return (f"rt.xml_flatten(run, {I}, {c.get('fromField')!r}, {c.get('recordDelimiter') or None!r}, {c.get('fieldDelimiter') or '.'!r}, {c.get('attrDelimiter') or '#'!r}, "
                 f"{bool(c.get('ignoreAttributes'))}, {bool(c.get('keepOriginalFields'))}, {bool(c.get('newFieldOverwrites'))}, {c.get('outputField') or None!r}, {lanes}{err}{pre})"), n
+
+    if cls == "FieldMergerDProcessor":
+        rows = [(r["fromField"], r["toField"]) for r in _rows(c.get("mergeMapping")) if r.get("fromField") and r.get("toField")]
+        if not rows:
+            raise _Stub("no merge mappings")
+        n.append("behaviour checked against Data Collector 6.4.1: maps or lists only, the source field is moved, lists append, maps merge")
+        return f"rt.field_merger(run, {I}, {rows!r}, {bool(c.get('overwriteExisting'))}, {lanes}{err}{pre})", n
+
+    if cls == "XmlParserDProcessor":
+        el = c.get("configs.xmlRecordElement") or None
+        if c.get("configs.outputFieldAttributes") or c.get("configs.includeFieldXpathAttributes") or c.get("configs.xPathNamespaceContext") or (el and "/" in el):
+            raise _Stub("XML Parser with field attributes, XPath attributes, namespaces or an XPath delimiter is not translated")
+        n.append("output shape checked against Data Collector 6.4.1: attributes as `attr|name`, text as `value`, children as lists of maps")
+        return (f"rt.xml_parser(run, {I}, {c.get('configs.fieldPathToParse')!r}, {c.get('configs.parsedFieldPath') or c.get('configs.fieldPathToParse')!r}, {el!r}, "
+                f"{c.get('configs.multipleValuesBehavior') or 'FIRST_ONLY'!r}, {lanes}{err}{pre})"), n
+
+    if cls == "FieldReplacerDProcessor":
+        rules = []
+        for r in _rows(c.get("conf.rules")):
+            paths = [x.strip() for x in str(r.get("fields") or "").split(",") if x.strip()]
+            if not paths or any("*" in x or "[" in x for x in paths):
+                raise _Stub("Field Replacer with wildcard or indexed field paths is not translated")
+            rules.append(f"({paths!r}, {bool(r.get('setToNull'))}, {_el(r.get('replacement'))})")
+        if not rules:
+            raise _Stub("no replacement rules")
+        n.append("behaviour checked against Data Collector 6.4.1: the replacement is an expression evaluated per record; several comma-separated paths in one rule are not verified")
+        return f"rt.field_replacer(run, {I}, [{', '.join(rules)}], {c.get('conf.nonExistingFieldHandling') or 'ADD_FIELD'!r}, {lanes}{err}{pre})", n
 
     if cls == "FileTailDSource":
         if (c.get("conf.dataFormat") or "") != "LOG":

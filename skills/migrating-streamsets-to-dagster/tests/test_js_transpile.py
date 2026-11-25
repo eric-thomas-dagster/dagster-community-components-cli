@@ -39,6 +39,7 @@ SNIPPETS = {
     "regex_test_and_match": "var s=records[0].value.s; records[0].value.t=[/world/i.test(s), s.match(/o/g), s.match(/(W)(o)/)]; output.write(records[0]);",
     "template_and_compound_assign": "var v=records[0].value; v.n += 4; v.a += 'y'; v.l.push(v.n); v.t = `n=${v.n}, a=${v.a}`; output.write(records[0]);",
     "member_compound_assign": "var o=records[0].value.o; o.count = 1; o.count += 2; o['d'].deep *= 5; output.write(records[0]);",
+    "java_collections_on_record_values": "var v=records[0].value; v.sz=v.l.size(); v.first=v.l.get(0); v.l.add(9); v.has=v.o.containsKey('k'); v.got=v.o.get('k'); v.o.put('n2', 1); v.e=v.l.isEmpty(); output.write(records[0]);",
     "error_write_with_message": "error.write(records[0], 'bad'); ",
     "null_property_read_throws": "var v=records[0].value; try { v.nul.x; v.t='no'; } catch (e) { v.t='caught'; } output.write(records[0]);",
     "undeclared_assignment_inside_function": "function f(x){ tmp = x * 2; return tmp + 1; } records[0].value.t = f(5); output.write(records[0]);",

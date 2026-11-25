@@ -751,18 +751,17 @@ _LOG_PATTERNS = {
     "COMMONAPACHELOG": re.compile("^" + _APACHE + "$"),
     "COMBINEDAPACHELOG": re.compile("^" + _APACHE + r' (?P<referrer>"[^"]*"|\S+) (?P<agent>"[^"]*"|\S+)$'),
 }
-# Common / Combined Log Format modes name their fields differently from the grok patterns
-_CLF = re.compile(r'^(?P<remoteHost>\S+) (?P<logName>\S+) (?P<remoteUser>\S+) \[(?P<requestTime>[^\]]+)\] "(?P<request>[^"]*)" (?P<status>\d+) (?P<bytesSent>\S+)'
-                  r'(?: "(?P<referer>[^"]*)" "(?P<userAgent>[^"]*)")?$')
 
 
 def parse_log(line: str, mode: str):
-    """mode: a grok name (COMMONAPACHELOG, COMBINEDAPACHELOG), or COMMON_LOG_FORMAT / COMBINED_LOG_FORMAT. Unparsable lines raise."""
-    pat = _CLF if mode.endswith("_LOG_FORMAT") else _LOG_PATTERNS[mode]
-    m = pat.match(line.rstrip("\n"))
+    """mode: COMMONAPACHELOG or COMBINEDAPACHELOG (grok), or COMMON_LOG_FORMAT / COMBINED_LOG_FORMAT, which Data Collector 6.4.1 parses into the same field names
+    (clientip, ident, auth, timestamp, verb, request, httpversion, rawrequest, response, bytes; combined adds referrer and agent). A group that did not match is null.
+    Unparsable lines raise."""
+    mode = {"COMMON_LOG_FORMAT": "COMMONAPACHELOG", "COMBINED_LOG_FORMAT": "COMBINEDAPACHELOG"}.get(mode, mode)
+    m = _LOG_PATTERNS[mode].match(line.rstrip("\n"))
     if not m:
         raise ValueError(f"line does not match {mode}: {line[:80]!r}")
-    return {k: v for k, v in m.groupdict().items() if v is not None}
+    return dict(m.groupdict())
 
 
 def _parse(fh, fmt: str, header: bool, delimiter: str, log_mode: str = "", quote: str = '"'):
@@ -900,6 +899,94 @@ def json_parser(run: Run, inst: str, src: str, dst: str, *, inputs, outputs, on_
     _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
 
 
+def field_merger(run: Run, inst: str, mappings, overwrite: bool, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Field Merger (checked against Data Collector 6.4.1): both fields must be maps or both lists, else a record error. The source field is moved. A missing target takes the
+    source; lists append the source's items after the target's; maps merge, and a clashing key is a record error unless overwrite is on."""
+    def one(r: Record):
+        for src, dst in mappings:
+            s = get_path(r.value, src, _MISSING)
+            if s is _MISSING:
+                raise KeyError(f"field {src} does not exist")
+            if not isinstance(s, (dict, list)):
+                raise TypeError("Field merger only supports LIST and MAP types")
+            d = get_path(r.value, dst, _MISSING)
+            del_path(r.value, src)
+            if d is _MISSING:
+                set_path(r.value, dst, s)
+            elif type(d) is not type(s):
+                raise TypeError(f"Cannot merge field of type {type(s).__name__} with field of type {type(d).__name__}")
+            elif isinstance(s, list):
+                d.extend(s)
+            else:
+                if not overwrite and any(k in d for k in s):
+                    raise KeyError(f"Fields '{dst}' cannot be overwritten")
+                d.update(s)
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def _xml_map(el):
+    """An element as Data Collector's XML Parser shapes it (checked against 6.4.1): attributes as `attr|name`, text as `value`, children grouped by tag into lists of such maps."""
+    out: dict = {}
+    for k, v in el.attrib.items():
+        out["attr|" + k.rsplit("}", 1)[-1]] = v
+    kids = list(el)
+    if (el.text or "").strip() and not kids:
+        out["value"] = el.text.strip()
+    for k in kids:
+        out.setdefault(k.tag.rsplit("}", 1)[-1], []).append(_xml_map(k))
+    return out
+
+
+def xml_parser(run: Run, inst: str, src: str, dst: str, element: str | None, multiple: str, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """XML Parser: parses the XML string at `src` into `dst`. Without a delimiter element the document's content becomes one map; with one, FIRST_ONLY keeps the first match,
+    ALL_AS_LIST a list, SPLIT_INTO_MULTIPLE_RECORDS one record per match. Attributes are fields (`attr|name`), not field attributes."""
+    import xml.etree.ElementTree as ET
+    holder: dict = {}
+
+    def one(r: Record):
+        text = get_path(r.value, src, _MISSING)
+        if text is _MISSING or text is None:
+            raise KeyError(f"field {src} is missing")
+        root = ET.fromstring(text if isinstance(text, (str, bytes)) else str(text))
+        if not element:
+            set_path(r.value, dst, _xml_map(root))
+            return r
+        found = [_xml_map(e) for e in root.findall(element)]
+        if not found:
+            raise ValueError(f"no <{element}> element in the document")
+        if multiple == "ALL_AS_LIST":
+            set_path(r.value, dst, found)
+            return r
+        if multiple == "FIRST_ONLY":
+            set_path(r.value, dst, found[0])
+            return r
+        outs = []
+        for f in found:
+            n = r.copy()
+            set_path(n.value, dst, f)
+            outs.append(n)
+        return outs
+    each = _each(holder, run, one)
+    holder["st"] = _stage(run, inst, lambda recs: {outputs[0]: each(recs)}, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def field_replacer(run: Run, inst: str, rules, missing: str, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Field Replacer (6.x, checked against Data Collector 6.4.1): rules = [([paths], set_to_null, replacement_fn)]. The replacement is an expression evaluated per record (a plain
+    string is a literal) and its typed result replaces the field. A field that does not exist: ADD_FIELD creates it, CONTINUE skips it, TO_ERROR is a record error."""
+    def one(r: Record):
+        for paths, null, fn in rules:
+            for p in paths:
+                if get_path(r.value, p, _MISSING) is _MISSING:
+                    if missing == "TO_ERROR":
+                        raise KeyError(f"Rule {p} did not match any fields")
+                    if missing == "CONTINUE" or null:
+                        continue
+                set_path(r.value, p, None if null else fn(r))
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
 # ---- hand-written replacements for stages (scripts, retired Hadoop, custom origins) -----------------------------------------------------------
 class _Lanes:
     def __init__(self, lanes):
@@ -957,16 +1044,46 @@ def override_origin(run: Run, inst: str, produce, *, outputs, events=()):
     run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
 
 
-def jython_processor(run: Run, inst: str, script: str, init: str, destroy: str, mode: str, *, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
+def _py2_division(source: str, name: str):
+    """Jython is Python 2.7, where `/` on two integers is integer (floor) division. Compile the script with `/` and `/=` replaced by a helper that behaves that way
+    (true division when either operand is a float), the one Python 2 behaviour that silently changes numbers. Other Python 2 differences still fail loudly."""
+    import ast
+
+    class T(ast.NodeTransformer):
+        def visit_BinOp(self, node):
+            self.generic_visit(node)
+            if isinstance(node.op, ast.Div):
+                return ast.copy_location(ast.Call(func=ast.Name(id="__py2div__", ctx=ast.Load()), args=[node.left, node.right], keywords=[]), node)
+            return node
+
+        def visit_AugAssign(self, node):
+            self.generic_visit(node)
+            if isinstance(node.op, ast.Div):
+                load = ast.copy_location(ast.Name(id=getattr(node.target, "id", "_"), ctx=ast.Load()), node) if isinstance(node.target, ast.Name) else None
+                if load is not None:
+                    call = ast.Call(func=ast.Name(id="__py2div__", ctx=ast.Load()), args=[load, node.value], keywords=[])
+                    return ast.copy_location(ast.Assign(targets=[node.target], value=call), node)
+            return node
+    tree = T().visit(ast.parse(source, name))
+    ast.fix_missing_locations(tree)
+    return tree
+
+
+def __py2div__(a, b):
+    return a // b if isinstance(a, int) and isinstance(b, int) and not isinstance(a, bool) else a / b
+
+
+def jython_processor(run: Run, inst: str, script: str, init: str, destroy: str, mode: str, *, user_params: dict | None = None, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
     """Jython Evaluator, run unchanged under CPython with the documented scripting objects: sdc.records, sdc.output.write(record[, lane]),
     sdc.error.write(record, msg), sdc.state, sdc.log, and the globals `records`, `output`, `error`, `log`, `state` (and `record` in RECORD mode).
     Python 2 syntax and Java imports fail with the interpreter's own error."""
     state: dict = {}
     holder: dict = {}
-    code = compile(script, f"<{inst} script>", "exec")
+    code = compile(_py2_division(script, f"<{inst} script>"), f"<{inst} script>", "exec")
 
     def namespace(sdc):
-        return {"sdc": sdc, "records": sdc.records, "output": sdc.output, "error": sdc.error, "log": sdc.log, "state": state}
+        sdc.userParams = dict(user_params or {})
+        return {"sdc": sdc, "records": sdc.records, "output": sdc.output, "error": sdc.error, "log": sdc.log, "state": state, "__py2div__": __py2div__}
     if init.strip():
         exec(compile(init, f"<{inst} init>", "exec"), namespace(Sdc(run, [*outputs, *events], state)))
     run.closers.append(lambda: destroy.strip() and exec(compile(destroy, f"<{inst} destroy>", "exec"), namespace(Sdc(run, [*outputs, *events], state))))
@@ -988,10 +1105,12 @@ def jython_processor(run: Run, inst: str, script: str, init: str, destroy: str, 
 
 
 def local_lookup(run: Run, inst: str, table: dict, lookups, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
-    """Local Lookup: lookups = [(key_fn, output_path)]; the static table maps keys to values. A key with no entry sets the field to null."""
+    """Local Lookup: lookups = [(key_fn, output_path)]; the static table maps keys to values. A key with no entry leaves the output field unset."""
     def one(r: Record):
         for key_fn, path in lookups:
-            set_path(r.value, path, table.get(str(key_fn(r))))
+            k = str(key_fn(r))
+            if k in table:                               # a key with no entry leaves the field unset (checked against Data Collector 6.4.1)
+                set_path(r.value, path, table[k])
         return r
     _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
 
@@ -1046,6 +1165,17 @@ def http_target(run: Run, inst: str, url_fn, method: str, headers_fn, auth_fn, j
 
 # ---- JavaScript evaluator (QuickJS) -----------------------------------------------------------------------------------------------------------
 _JS_PRELUDE = """
+(function () {
+  function def(o, n, f) { if (!(n in o)) Object.defineProperty(o, n, {value: f, enumerable: false, writable: true, configurable: true}); }
+  def(Array.prototype, 'add', function (a, b) { if (arguments.length === 2) { this.splice(a, 0, b); return; } this.push(a); return true; });
+  def(Array.prototype, 'size', function () { return this.length; });
+  def(Array.prototype, 'get', function (i) { return this[i]; });
+  def(Array.prototype, 'isEmpty', function () { return this.length === 0; });
+  def(Array.prototype, 'contains', function (x) { return this.indexOf(x) >= 0; });
+  def(Object.prototype, 'put', function (k, v) { var o = this[k]; this[k] = v; return o === undefined ? null : o; });
+  def(Object.prototype, 'containsKey', function (k) { return Object.prototype.hasOwnProperty.call(this, k); });
+  def(Object.prototype, 'keySet', function () { return Object.keys(this); });
+})();
 var __out = [], __err = [];
 var output = {write: function (r) { __out.push(r); }};
 var error = {write: function (r, m) { __err.push([r, String(m)]); }};
@@ -1056,7 +1186,7 @@ var sdcFunctions = {createRecord: function (id) { return {value: null, attribute
 """
 
 
-def js_processor(run: Run, inst: str, script: str, init: str, *, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
+def js_processor(run: Run, inst: str, script: str, init: str, *, user_params: dict | None = None, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
     """JavaScript Evaluator, BATCH mode, run in QuickJS with `records`, `output.write`, `error.write`, `state`, `log` and `sdcFunctions.createRecord`.
     Records cross as JSON (dates and decimals become strings). Nashorn/Java objects (`Java.type`, `new java.*`) do not exist and fail at run time."""
     state: dict = {}
@@ -1068,7 +1198,8 @@ def js_processor(run: Run, inst: str, script: str, init: str, *, inputs, outputs
         payload = [{"value": r.value, "attributes": r.attrs, "sourceId": f"{inst}:{counter[0] + i}"} for i, r in enumerate(recs)]
         counter[0] += len(recs)
         ctx = quickjs.Context()
-        ctx.eval("var state = JSON.parse(%s); var records = JSON.parse(%s);" % (json.dumps(json.dumps(state, default=str)), json.dumps(json.dumps(payload, default=str))) + _JS_PRELUDE)
+        ctx.eval("var state = JSON.parse(%s); var records = JSON.parse(%s);" % (json.dumps(json.dumps(state, default=str)), json.dumps(json.dumps(payload, default=str))) + _JS_PRELUDE
+                 + "sdc.userParams = JSON.parse(%s);" % json.dumps(json.dumps(user_params or {})))
         ctx.eval(src)
         return json.loads(ctx.eval("JSON.stringify({out: __out, err: __err, ev: __ev, state: state})"))
     started = [False]
@@ -1096,7 +1227,7 @@ def js_processor(run: Run, inst: str, script: str, init: str, *, inputs, outputs
     holder["st"] = _stage(run, inst, go, inputs=inputs, outputs=outputs, events=events, on_error=on_error, pre=pre, req=req)
 
 
-def script_native(run: Run, inst: str, module, *, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
+def script_native(run: Run, inst: str, module, *, user_params: dict | None = None, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
     """A JavaScript Evaluator script that was transpiled to Python (`module.init`, `module.run`, with JavaScript semantics from `jsrt`). Same scripting objects and
     the same JSON boundary as `js_processor` (values are normalised through JSON on the way in and out), so the two behave alike; no JavaScript engine is needed."""
     from . import jsrt
@@ -1129,7 +1260,7 @@ def script_native(run: Run, inst: str, module, *, inputs, outputs, events=(), on
 
     class _Sdc:
         def __init__(self, log):
-            self.log, self.events = log, []
+            self.log, self.events, self.userParams = log, [], dict(user_params or {})
 
         def createEvent(self, kind, version=1):
             return jsrt.JSRecord(None, {}, "event", jsrt.tostr(kind))
@@ -1711,6 +1842,7 @@ def log_parser(run: Run, inst: str, src: str, dst: str, log_mode: str, *, inputs
             raise KeyError(f"field {src} is missing")
         parsed = parse_log(str(v), log_mode)
         if dst in ("/", ""):
+            r.value.clear()                  # parsing into the root replaces the record's fields (the original text is gone), as Data Collector does
             r.value.update(parsed)
         else:
             set_path(r.value, dst, parsed)
@@ -1788,14 +1920,14 @@ class Err { List errs = []; void write(r, m = "") { errs << [r, m.toString()] } 
 class Log { void info(m, Object... a) { System.err.println(m) }; void warn(m, Object... a) { System.err.println(m) }; void error(m, Object... a) { System.err.println(m) }
             void debug(m, Object... a) {}; void trace(m, Object... a) {} }
 class Sdc {
-  List records; Out output = new Out(); Err error = new Err(); Map state; Log log = new Log(); List events = []
+  List records; Out output = new Out(); Err error = new Err(); Map state; Log log = new Log(); List events = []; Map userParams = [:]
   def createRecord(String id) { new Rec(sourceId: id, value: [:]) }
   def createMap(boolean listMap) { [:] }
   def createEvent(String type, int version) { new Rec(eventType: type, value: [:], sourceId: "event") }
   void toEvent(e) { events << e }
 }
 def cfg = new JsonSlurper().parse(new File(args[0]))
-def sdc = new Sdc(state: cfg.state ?: [:])
+def sdc = new Sdc(state: cfg.state ?: [:], userParams: cfg.userParams ?: [:])
 def mk = { m -> new Rec(value: m.value, attributes: m.attributes ?: [:], sourceId: m.sourceId) }
 sdc.records = cfg.records.collect(mk)
 def out = { r -> [value: r.value, attributes: r.attributes ?: [:], eventType: r.eventType] }
@@ -1813,7 +1945,7 @@ new File(args[1]).text = JsonOutput.toJson([out: sdc.output.recs.collect(out), e
 '''
 
 
-def groovy_processor(run: Run, inst: str, script: str, init: str, mode: str, *, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
+def groovy_processor(run: Run, inst: str, script: str, init: str, mode: str, *, user_params: dict | None = None, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
     """Groovy Evaluator run by the real Groovy on the JVM: `groovy` on PATH (or SDC_GROOVY) and a JDK (JAVA_HOME). One process per batch; records cross as JSON.
     The scripting objects are `sdc.records/output/error/log/state/createRecord/createEvent/toEvent` and the globals `records output error log state` (and `record`)."""
     import shutil
@@ -1833,7 +1965,7 @@ def groovy_processor(run: Run, inst: str, script: str, init: str, mode: str, *, 
             open(f"{d}/init.groovy", "w").write(run_init)
             open(f"{d}/runner.groovy", "w").write(_GROOVY_RUNNER)
             open(f"{d}/in.json", "w").write(json.dumps({"records": payload, "state": state, "script": f"{d}/s.groovy", "init": f"{d}/init.groovy" if run_init.strip() else None,
-                                                         "perRecord": mode == "RECORD"}, default=str))
+                                                         "perRecord": mode == "RECORD", "userParams": user_params or {}}, default=str))
             p = subprocess.run([exe, f"{d}/runner.groovy", f"{d}/in.json", f"{d}/out.json"], capture_output=True, text=True)
             if p.returncode != 0 or not os.path.exists(f"{d}/out.json"):
                 raise RuntimeError(f"Groovy script failed: {(p.stderr or p.stdout)[-600:]}")

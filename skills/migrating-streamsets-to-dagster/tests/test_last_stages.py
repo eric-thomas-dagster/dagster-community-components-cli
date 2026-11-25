@@ -81,7 +81,7 @@ def test_json_and_log_parsers():
     got = collect(run)
     feed(run, [Record({"raw": '{"a": [1]}', "line": '1.2.3.4 - - [10/Oct/2000:13:55:36 -0700] "GET /x HTTP/1.1" 200 5'})])
     run.execute()
-    assert got[0].value["doc"] == {"a": [1]} and got[0].value["clientip"] == "1.2.3.4" and got[0].value["response"] == "200"
+    assert got[0].value["clientip"] == "1.2.3.4" and got[0].value["response"] == "200" and "doc" not in got[0].value     # parsing into the root replaces the record (Data Collector 6.4.1)
 
 
 FAKE_GROOVY = textwrap.dedent('''\

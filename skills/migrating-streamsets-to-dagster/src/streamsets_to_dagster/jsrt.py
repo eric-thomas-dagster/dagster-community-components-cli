@@ -276,7 +276,7 @@ def get(o, k):
         return getattr(o, k, UNDEF) if isinstance(k, str) else UNDEF
     if isinstance(o, JSRegex):
         return {"source": o.source, "global": o.glob, "flags": o.flags}.get(k, UNDEF)
-    return UNDEF
+    return getattr(o, k, UNDEF) if isinstance(k, str) else UNDEF            # the scripting objects (sdc.userParams, sdc.log, ...)
 
 
 def put(o, k, v):
@@ -465,6 +465,23 @@ def _array_method(l: list, name, a):
         return removed
     if name == "toString":
         return tostr(l)
+    # java.util.List methods: in Data Collector a list field is a Java ArrayList, so scripts call these
+    if name == "add":
+        if len(a) == 2:
+            l.insert(int(num(a[0])), a[1])
+            return UNDEF
+        l.append(a[0])
+        return True
+    if name == "size":
+        return len(l)
+    if name == "get":
+        return l[int(num(a[0]))] if 0 <= num(a[0]) < len(l) else UNDEF
+    if name == "isEmpty":
+        return len(l) == 0
+    if name == "contains":
+        return any(seq(e, a[0]) for e in l)
+    if name == "remove":
+        return l.pop(int(num(a[0])))
     raise JSTypeError(f"{name} is not a function")
 
 
@@ -483,6 +500,25 @@ def call(o, name, args):
     if isinstance(o, dict):
         if name == "hasOwnProperty":
             return tostr(args[0]) in o
+        # java.util.Map methods: in Data Collector a map field is a Java LinkedHashMap
+        if name == "put":
+            old = o.get(tostr(args[0]), None)
+            o[tostr(args[0])] = args[1]
+            return old
+        if name == "get" and name not in o:
+            return o.get(tostr(args[0]), None)
+        if name == "containsKey":
+            return tostr(args[0]) in o
+        if name == "size":
+            return len(o)
+        if name == "isEmpty":
+            return len(o) == 0
+        if name == "keySet":
+            return list(o.keys())
+        if name == "values":
+            return list(o.values())
+        if name == "remove" and name not in o:
+            return o.pop(tostr(args[0]), None)
         if name == "toString":
             return tostr(o)
         f = o.get(name)
