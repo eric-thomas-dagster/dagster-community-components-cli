@@ -77,6 +77,7 @@ def package_of(project: Path) -> str:
 
 
 def env_for(project: Path, extra: dict | None = None) -> dict:
+    project = Path(project).resolve()
     e = dict(os.environ)
     e["PYTHONPATH"] = os.pathsep.join([str(project / "src"), str(project), e.get("PYTHONPATH", "")]).strip(os.pathsep)
     e.update(extra or {})
@@ -84,6 +85,7 @@ def env_for(project: Path, extra: dict | None = None) -> dict:
 
 
 def introspect(project: Path, python: str = sys.executable, pkg: str | None = None) -> tuple[dict | None, str]:
+    project = Path(project).resolve()
     pkg = pkg or package_of(project)
     p = subprocess.run([python, "-c", SCRIPT, pkg], cwd=project, capture_output=True, text=True, env=env_for(project))
     line = next((ln for ln in p.stdout.splitlines() if ln.startswith("RMJ_INTROSPECT=")), None)
@@ -140,7 +142,7 @@ def corpus(files: list[Path]) -> list[str]:
             text = f.read_text()
         except (OSError, UnicodeDecodeError):
             continue
-        out.append(norm_command(text))
+        out.append(norm_command(re.sub(r"(?m)^\s*#\s?", "", text)))      # comments too: a stub keeps the source in them
         if f.suffix == ".py":
             try:
                 for node in ast.walk(ast.parse(text)):
@@ -211,7 +213,8 @@ def parse_accounting(doc: str, ids: list[str]) -> dict[str, dict]:
             v = re.search(VERBS, rest)
             if not v:
                 continue
-            assets = re.findall(r"`([^`]+)`", rest[v.end():])
+            clause = re.split(r"\(|;| - | depends | after | using | with | on job | on schedule ", rest[v.end():])[0]      # only what comes right after the verb: details follow a parenthesis
+            assets = re.findall(r"`([^`]+)`", clause)
             res[oid] = {"verb": v.group(1), "assets": assets, "text": rest, "reimplemented": "reimplemented" in rest}
             break
     return res

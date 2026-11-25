@@ -388,7 +388,7 @@ def accept_cmd(spec_file: str, project: str, pkg: str | None, manifest_file: str
 
     from .rewrite.accept import record, run_gates
     spec = json.loads(Path(spec_file).read_text())
-    results = run_gates(spec, Path(project), python or _sys.executable, pkg, run_commands, not no_sql_materialize, Path(unit_dir) if unit_dir else None)
+    results = run_gates(spec, Path(project), str(Path(python or _sys.executable).absolute()), pkg, run_commands, not no_sql_materialize, Path(unit_dir) if unit_dir else None)
     ok = all(r["passed"] for r in results)
     out = Path(out_file) if out_file else Path(spec_file).with_name(f"{spec['unit_id']}.gates.json")
     out.write_text(json.dumps({"unit": spec["unit"], "route": "rewrite", "passed": ok, "gates": results}, indent=1) + "\n")
@@ -415,7 +415,7 @@ def equivalence_cmd(spec_files: tuple[str, ...], converter_project: str, rewrite
     import sys as _sys
 
     from .rewrite.equivalence import compare, converter_side, render_md, rewrite_side
-    py = python or _sys.executable
+    py = str(Path(python or _sys.executable).absolute())
     results = []
     for sf in spec_files:
         spec = json.loads(Path(sf).read_text())

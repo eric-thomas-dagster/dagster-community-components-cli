@@ -160,8 +160,13 @@ def g_matches(ctx: Ctx) -> dict:
     job_assets = {j["name"]: set(j["assets"]) for j in snap["jobs"]}
     mine = [s for s in snap["schedules"] if job_assets.get(s["job"], set()) & ctx_assets] if ctx_assets else []
     got = sorted((s["cron"], s["timezone"] or "UTC") for s in mine)
-    if got != want:
-        problems.append(f"schedules {got} != spec {want}" + (" (a schedule must target a job that selects this unit's assets)" if want and not got else ""))
+    extra_ok = len(spec["expected"]["untranslatable_schedule_elements"])          # an element with no cron form may be replaced by a schedule function
+    rest = list(got)
+    for w in want:
+        if w in rest:
+            rest.remove(w)
+    if len(rest) != extra_ok or any(w not in got for w in want):
+        problems.append(f"schedules {got} != spec {want}" + (f" plus {extra_ok} for the element(s) with no cron form" if extra_ok else "") + (" (a schedule must target a job that selects this unit's assets)" if want and not got else ""))
     for s in mine:
         if not s["timezone"]:
             problems.append(f"schedule {s['name']} has no explicit execution_timezone")
@@ -241,7 +246,7 @@ def contract(ctx: Ctx) -> dict:
         bad = [why for ok, why in verdicts if not ok]
         mat[k] = {"calls": cids, "run": not bad, "why_not": "; ".join(sorted(set(bad)))}
     return {"unit": spec["unit"], "unit_id": ctx.uid, "pkg": ctx.pkg, "call_assets": call_assets, "call_sensors": call_sensors, "order_pairs": spec["expected"]["order_pairs"],
-            "schedules": spec["expected"]["schedules"], "pools": spec["expected"]["pools"], "retries": spec["expected"]["retries"], "materialize": mat,
+            "schedules": spec["expected"]["schedules"], "extra_schedules": len(spec["expected"]["untranslatable_schedule_elements"]), "pools": spec["expected"]["pools"], "retries": spec["expected"]["retries"], "materialize": mat,
             "connections": sorted({c["connection"] for c in spec["calls"] if c["connection"]}), "structural_checks": spec["expected"]["structural_checks"]}
 
 
@@ -313,7 +318,13 @@ def test_schedules_match_the_source(defs):
     for j in defs.jobs or []:
         covered[j.name] = {{k.to_user_string() for k in defs.resolve_job_def(j.name).asset_layer.selected_asset_keys}}
     got = sorted((s.cron_schedule, s.execution_timezone or "UTC") for s in defs.schedules or [] if covered.get(s.job_name, set()) & unit)
-    assert got == sorted((s["cron"], s["time_zone"]) for s in CONTRACT["schedules"])
+    want = sorted((s["cron"], s["time_zone"]) for s in CONTRACT["schedules"])
+    rest = list(got)
+    for w in want:
+        assert w in rest, (w, got)
+        rest.remove(w)
+    assert len(rest) == CONTRACT["extra_schedules"], (rest, "elements with no cron form: %d" % CONTRACT["extra_schedules"])
+    assert all(tz for _, tz in rest)
 
 
 def test_pools_match_the_queues(defs):
@@ -378,6 +389,8 @@ def g_tests(ctx: Ctx) -> dict:
     skipped = re.findall(r"SKIPPED \[\d+\] [^:]+:\d+: (not materialized: .*)", out)
     ran = [k for k, m in con["materialize"].items() if m["run"]]
     detail = f"{f.name}: {summ[0].strip('= ')}; materialized {len(ran)} of {len(con['materialize'])} asset(s)"
+    if ctx.spec["run_window"] or any(c["run_window"] for c in ctx.spec["calls"]):
+        detail += " [the unit has a run window: outside it the components skip, so a materialization at this time proves it loads and exits cleanly, not that the command ran]"
     if skipped:
         detail += " (not materialized: " + "; ".join(sorted(set(s.replace('not materialized: ', '') for s in skipped))) + ")"
     if r.returncode != 0:

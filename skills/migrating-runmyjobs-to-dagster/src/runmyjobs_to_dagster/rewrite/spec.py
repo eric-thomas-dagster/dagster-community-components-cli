@@ -355,6 +355,13 @@ def build_unit(model: Model, result: Result, manifest: dict, kind: str, name: st
         accounting.append({"id": f"{name}#handler{i + 1}", "kind": "status_handler", "what": f"{h['where']}: {h['text']}"})
     for i, ev in enumerate(events):
         accounting.append({"id": f"{name}#wait{i + 1}", "kind": "wait_event", "what": f"{ev['where']} waits for event {ev['event']}"})
+    if window:
+        accounting.append({"id": f"{name}#run_window", "kind": "run_window", "what": f"{'chain' if chain else 'process'} runs only inside {window}; outside it the run is skipped (not failed)"})
+    for c in calls:
+        if c["run_window"] and c["run_window"] != window:
+            accounting.append({"id": f"{c['id']}#run_window", "kind": "run_window", "what": f"call runs only inside {c['run_window']}; outside it the run is skipped (not failed)"})
+    for i, n in enumerate(notes_from_extractor):
+        accounting.append({"id": f"{name}#note{i + 1}", "kind": "extractor_note", "what": f"the extractor saw but did not convert: {n}"})
     for i, n in enumerate(notifications):
         accounting.append({"id": f"{name}#notify{i + 1}", "kind": "notification", "what": f"email from {n['call']} to {n['to'] or '(set at run time)'}"})
     order_pairs = [[u, c["id"]] for c in calls for u in c["upstream"]]
@@ -446,6 +453,7 @@ def build_estate(model: Model, specs: dict[str, dict], result: Result, manifest:
         "top_level_chains": roots, "queues": {q: {"pool": slug(q), "max_concurrency": model.queues[q].max_concurrency if q in model.queues else None, "units": sorted(us)} for q, us in sorted(qu.items())},
         "shared_process_definitions": shared_defs, "shared_declared_outputs": shared_outputs, "schedules_by_target": {k: sorted(v) for k, v in sorted(sched_by_target.items())},
         "events_waited_for": {k: sorted(set(v)) for k, v in sorted(events_waited.items())}, "declared_events": sorted(model.events),
+        "unused_queues": sorted(q for q in model.queues if q not in qu),
         "candidate_boundaries": candidates,
         "converter_dispositions": {u: s["converter"]["disposition"] for u, s in sorted(specs.items())},
         "integrations": [{"source": it.source, "artifact": it.artifact, "notes": it.notes} for it in result.items if it.kind == "integration"],
@@ -647,6 +655,9 @@ def render_estate_md(e: dict, specs: dict[str, dict]) -> str:
         A(f"- queue `{q}` -> pool `{d['pool']}`, limit {d['max_concurrency'] or 'not declared'}: units {', '.join(d['units'])}")
     if not e["queues"]:
         A("- none")
+    A("")
+    if e["unused_queues"]:
+        A(f"- queues declared in the export that no call uses: {', '.join(e['unused_queues'])}. They belong to no unit, so no rewrite gate completes them: give each a disposition with `status advance` (say where the pool is created) or `status defer` (say why it is not needed)")
     A("")
     A("## Shared definitions and outputs")
     A("")

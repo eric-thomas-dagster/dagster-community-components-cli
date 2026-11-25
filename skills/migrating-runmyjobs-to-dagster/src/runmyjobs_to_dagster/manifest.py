@@ -90,7 +90,8 @@ def render_report(manifest: dict) -> str:
              "| Unit | Kind | Source | Dagster artifact | Class | Status | Notes / evidence / reason |",
              "|---|---|---|---|---|---|---|"]
     for u in manifest["units"]:
-        detail = "; ".join(filter(None, [*u["notes"], u["evidence"] and f"evidence: {u['evidence']}",
+        detail = "; ".join(filter(None, [u.get("route") == "rewrite" and "route: rewrite (gates: " + ", ".join(f"{g} {r}" for g, r in (u.get("gates") or {}).get("gates", {}).items()) + ")",
+                                         *u["notes"], u["evidence"] and f"evidence: {u['evidence']}",
                                          u["reason"] and f"reason: {u['reason']}"]))
         cls = u["classification"] + (f" ({u['caveat']})" if u.get("caveat") else "")
         lines.append(f"| {u['id']} | {u['kind']} | {u['source']} | {u['artifact']} | {cls} | "

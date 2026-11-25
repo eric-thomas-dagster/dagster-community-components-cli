@@ -39,7 +39,7 @@ IDIOMS = """- **One asset per data product or job outcome.** A data product is a
 
 HEADER_RULE = """- The first lines of **every module you write** (and of `src/<pkg>/defs/<unit_slug>/__init__.py` when the unit is components-only YAML) are a docstring that accounts for every object under
   "Objects the header docstring must account for" in the spec: one line per object, `<id>: replaced by `<asset key>`` / `folded into `<asset key>`` / `merged into `<asset key>`` /
-  `dropped: <reason>`, plus `reimplemented` on a call whose command you did not keep verbatim. After that list: the registry components and tiers used, the pool commands, and every behavior you
+  `dropped: <reason>`; name only the replacing asset(s) or sensor(s) in backticks right after the verb and put details after a parenthesis or a semicolon (a later backticked name is read as another replacement); add `reimplemented` on a call whose command you did not keep verbatim. After that list: the registry components and tiers used, the pool commands, and every behavior you
   could not preserve or verify (stated, not hidden). A RunMyJobs object that is not accounted for fails the gate."""
 
 
@@ -94,7 +94,7 @@ a Dagster engineer would build for that behavior. The converter's output is a re
 
 ## 4. Where to write it
 
-- The unit's definitions go under `src/{package}/defs/{uid}/` (a folder with a `defs.yaml` for registry components, `__init__.py`, and any module) or in `src/{package}/defs/{uid}.py`. Define a job named
+- The unit's definitions go under `src/{package}/defs/{uid}/` or in `src/{package}/defs/{uid}.py`. A folder that holds a `defs.yaml` does not load Python modules next to it: put registry-component YAML in `{uid}/components/defs.yaml` and hand-written modules in `{uid}/python/` (with an `__init__.py` in each), and the header docstring in `{uid}/__init__.py`. Define a job named
   `{uid}` over the unit's assets (components output defines jobs through the schedule component; a hand-written module defines it with `dg.define_asset_job`) and the schedule(s) from the spec.
 {HEADER_RULE}
 - Secrets: environment variables and resources only.
