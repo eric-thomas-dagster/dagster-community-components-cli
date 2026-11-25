@@ -1,3 +1,8 @@
+> **0.10.188 is out and this file has not been rewritten against it yet.** It adds `script_evaluator`, `base64_transform`, `field_merger`, `pandas_pipeline`, `postgres_cdc_monitor`,
+> `oracle_cdc_monitor`, `sqlserver_cdc_monitor`, and StreamSets-compatibility changes to `field_encryption`, `data_masking`, `array_exploder`, `json_flatten`, `regex_parser`, `text_to_columns`,
+> `lookup`, `per_row_http_fetcher`, `dataframe_to_kafka`, `salesforce_ingestion` and `polars_pipeline` (inline/sql sources, `route`, `explode`, Java-pattern `to_datetime`, `coalesce`, append/partitioned sinks).
+> Items 1.1-1.10 below may be done: each needs checking against the behavior listed. Not yet verified. Found so far: `polars_pipeline` sinks still take only csv/parquet/avro/table (ndjson/json only for `encrypted_file`).
+
 # What the StreamSets skill still needs from the components session
 
 Checked against `dagster-community-components` **0.10.187**. Everything the earlier tally asked for that now exists is not listed here: HTTP and Kafka sinks, GeoIP lookup and its
@@ -59,6 +64,7 @@ The Transformer (Spark) pipelines convert to `polars_pipeline` steps today (join
 |---|---|---|
 | `streamsets_engine` | **emitted** (`convert --engine-tier1`), loaded in demo mode in tests | whole-pipeline, no dataframe needed |
 | `dataframe_to_http`, `dataframe_to_kafka` | **emitted** for the simple case | a pipeline whose only destination is an HTTP Client (POST/PUT, static URL and headers, NONE/BASIC auth, JSON) or a Kafka Producer (static topic and brokers, JSON) is split in two assets: the record graph returns a DataFrame and the component sends it. Tested end to end against a local web server. Anything dynamic stays in the graph |
+| `polars_pipeline` for Data Collector pipelines | **opt-in** `convert --dataframe-route` (`sdc_frame.py`) | linear pipeline: raw-data or Directory origin with a header, Field Remover/Renamer/Type Converter(basic)/Dedup/replace-if-null, Local FS CSV or JSON destination. Run for real in tests; NOT compared with a real Data Collector (error records, header attributes, rolling) |
 | `geoip_lookup`, `mysql_cdc_monitor`, `scd_type_*` | not emitted | Geolocation is a mid-pipeline processor (splitting there is a bigger change); the CDC sensor needs a CDC apply asset; no Transformer export or definition has SCD or the Transformer Kafka/HTTP destinations, so their property names are unverified |
 
 ## 2. Decision for the components session

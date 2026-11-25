@@ -28,6 +28,8 @@ StreamSets pipelines are *record streams*: a pipeline is usually a continuously 
 
 When a Data Collector pipeline's only destination is an HTTP Client or Kafka Producer with static settings, tier 2 emits **two assets**: the converted record graph (returns a DataFrame) and the registry `DataframeToHttpComponent` / `DataframeToKafkaComponent` that sends it (own retries, batching, auth). Gate 4 does not run that sink asset in dry mode (it would really send); `sink_components.json` lists it.
 
+`convert --dataframe-route` (opt-in) emits one registry `polars_pipeline` for linear pipelines whose every stage it can express (see the wishlist, section 1b); anything else stays a record graph. It is not compared with a real Data Collector.
+
 ## Hard rules
 
 1. **Stubs must be loud, never quiet.** Every stage is translated, translated with a stated caveat, or a stub. A stub keeps its place in the graph, and a pipeline that holds one **fails before it reads any data** with `SDC-CAVEAT: <stage>: <reason>`. A body that succeeds while skipping a stage is never acceptable.

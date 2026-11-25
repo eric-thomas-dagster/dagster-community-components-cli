@@ -33,7 +33,8 @@ def _load(path: str):
               help="Replace a stage with hand-written Python (`process(records, sdc)`; an origin: `produce(sdc)`). Repeatable.")
 @click.option("--engine-tier1", "engine_action", type=click.Choice(["noop", "start"]), default=None,
               help="Also emit a StreamSetsEngineComponent that keeps every Data Collector pipeline on its engine: noop = observe only, start = materializing starts the pipeline.")
-def convert_cmd(export_dir: str, out_dir: str | None, pkg: str, overrides: tuple[str, ...], engine_action: str | None) -> None:
+@click.option("--dataframe-route", is_flag=True, help="Emit a polars_pipeline instead of the record graph for linear pipelines whose stages it can express (not compared with a real Data Collector).")
+def convert_cmd(export_dir: str, out_dir: str | None, pkg: str, overrides: tuple[str, ...], engine_action: str | None, dataframe_route: bool) -> None:
     """Convert the pipeline JSON under EXPORT_DIR into a Dagster project plus MIGRATION.md."""
     ov = {}
     for spec in overrides:
@@ -43,7 +44,7 @@ def convert_cmd(export_dir: str, out_dir: str | None, pkg: str, overrides: tuple
             raise click.ClickException(f"--override expects 'PIPELINE/STAGE=file.py', got {spec!r}")
         ov[(title, inst)] = Path(path).read_text()
     try:
-        result = convert(_load(export_dir), pkg=pkg, overrides=ov, engine_action=engine_action)
+        result = convert(_load(export_dir), pkg=pkg, overrides=ov, engine_action=engine_action, dataframe_route=dataframe_route)
     except ValueError as e:
         raise click.ClickException(str(e))
     out = Path(out_dir or pkg)
