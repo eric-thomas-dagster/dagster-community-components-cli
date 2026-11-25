@@ -57,6 +57,16 @@ Translated (stage class = last `_` segment of `stageName`):
 | `ElasticSearchDTarget` (transport-protocol stage) | Bulk index over HTTP through the registry resource, **so `SDC_ES_URL` must point at the HTTP endpoint** (the stage used port 9300); no document type. |
 | `MongoDBDSource` | Documents with the offset field greater than the stored offset, in order; OBJECTID (initial offset date becomes an ObjectId), STRING and DATE offsets. The connection string is removed from the export: `SDC_SECRET_<STAGE>_CONNECTION_STRING`. Connection through the registry's `MongoDBResource`. Tested against mongomock. |
 | `HttpClientDSource` | Polling mode, no pagination, JSON or DELIMITED; one request per run (schedule at the polling interval). |
+| `GroovyDProcessor` | Runs on the **real Groovy (JVM)**: the `groovy` command (JDK + Apache Groovy) on PATH or in `SDC_GROOVY`; one process per batch; records cross as JSON; `sdc.records/output/error/log/state/createRecord/createEvent/toEvent` and the globals `records output error log state` (`record` in RECORD mode). **Not yet run against a JVM**: the tests use a stand-in executable for the wiring, and `test_the_real_groovy_script_from_the_aws_sample_matches_the_hand_ported_one` runs the export's own script and compares it with the Python port as soon as `groovy` is available. |
+| `JdbcLookupDProcessor` | Per-record query (EL substituted into the SQL text, as StreamSets does); FIRST_ONLY / SPLIT_INTO_MULTIPLE_RECORDS / ALL_AS_LIST; PASS_RECORD_ON / SEND_TO_ERROR; column mappings `columnName` -> `field` (none: every column to a same-named field). **The mapping property names are not verified** (no export with mappings was found). No cache. |
+| `DevSimulatorDSource` | Delimited files replayed once, unpaced, routed to lanes by discriminator value, event timestamp = run start + relative delay. Dev stage. |
+| `Base64EncodingDProcessor`, `Base64DecodingDProcessor` | Bytes in, bytes out (a string input is UTF-8); URL-safe option. |
+| `FieldValueReplacerDProcessor` | Replace-if-null only (`fieldsToReplaceIfNull`); the value is set as written. Replace-with-null and conditional replacement are stubs. |
+| `ListPivotDProcessor` | One record per list element; copy other fields; target path. "Save original field name" is not handled. |
+| `DeDupDProcessor` | All fields or specified fields; duplicates to the second output; record-count window **for one run** (nothing carried across runs); time window not applied. |
+| `JsonParserDProcessor`, `LogParserDProcessor` | JSON string field to a map; Apache Common/Combined/grok log line to a map (`/` merges into the record). |
+| `XMLFlatteningDProcessor` | As IBM documents it, including its examples (tested against them): path names joined by the field delimiter, `#` for attributes, `name(0)` for repeated siblings, one record per delimiter element. Namespace URIs are dropped. |
+| `FieldFlattenerDProcessor` (ENTIRE_RECORD) | Every leaf to a top-level field named by its path (`a.b`, `c[0]`); naming not verified against a Data Collector. |
 | `LocalFileSystemDTarget` | DELIMITED, JSON (one object per line), TEXT. One file per directory per run (`<prefix>_<uuid>`); no rolling, compression or late-record handling. |
 | `DatabricksDeltaLakeDTarget` | SQL writes through SQLAlchemy (`databricks-sqlalchemy`; the URL is derived from the JDBC URL, or set `SDC_SQLALCHEMY_URL_<STAGE>`). Auto-creates the table from the first record, adds columns when drift is on, and in CDC mode applies `sdc.operation.type` by key as delete-then-insert. **StreamSets stages files and runs COPY INTO / MERGE**; this is slow for bulk loads. A CDC stage with no key columns is a stub. |
 
@@ -74,7 +84,7 @@ Stubs with a pointer to the registry (check `dagster-community-components` befor
 | Groovy / JavaScript evaluators | Rewrite as Python and pass it with `--override`. The script text is kept in the manifest notes |
 | Jython evaluator | Translated (runs under CPython); see the catalog |
 
-Other stage types seen in real exports and not translated: JDBC Lookup (the lookup's column-mapping property names are not verified), Groovy, the dev-only Simulator, Kafka single-topic consumer, the Encrypt and Decrypt Fields stage (see Encryption). Also not translated: Transformer/Spark stages
+Other stage types not translated: Field Merger (IBM's page does not say whether the source fields are removed or how lists merge), XML Parser (its output field naming is not documented), JDBC Tee, HBase and Redis lookups, the Spark processor, Aggregator, Delay, Kafka single-topic consumer, the Encrypt and Decrypt Fields stage (see Encryption). Also not translated: Transformer/Spark stages
 , MongoDB, REST client, Kafka producer, ...) have no translation yet and are reported as stubs.
 
 ## Expression language (EL)
@@ -84,6 +94,17 @@ concat replace replaceAll contains startsWith endsWith matches regExCapture inde
 `time:now`, `file:` (`fileName parentPath pathElement removeExtension`), `f:` (Field Mapper context), `uuid`, `YYYY() MM() DD() hh() mm() ss()`,
 runtime parameters by name, `SECONDS MINUTES HOURS DAYS`, the operators `== != < > <= >= && || ! ? : + - * / %` and `eq ne lt gt le ge and or not empty div mod`.
 Any other function raises Untranslatable and the stage becomes a stub.
+
+## Scripting: JavaScript, Jython and Groovy
+
+| Evaluator | Runs on | What differs from StreamSets |
+|---|---|---|
+| JavaScript | QuickJS (in process, `pip install quickjs`; ES2020) | StreamSets uses Nashorn (ES5.1 on the JVM). Records cross as JSON, so dates, decimals and bytes arrive as strings; Java objects (`Java.type`, `new java.*`) do not exist. 19 of the 25 sampled scripts ran on a trivial record; none of them used Java interop. |
+| Jython | CPython (in process) | Python 2 syntax and Java imports fail. |
+| Groovy | the JVM: the `groovy` command | Real Groovy, so the language matches; a JDK and Apache Groovy must be installed where the code location runs; one process per batch. Records cross as JSON. |
+
+All three get the scripting objects (`records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions` / `sdc.createRecord`) and keep `state` across batches within a run.
+A registry script-evaluator component (ask #15) would own this runtime instead of each generated project carrying it.
 
 ## Encryption, decryption and hashing
 
@@ -105,6 +126,8 @@ What the converter does:
 - Hashes: only in-place hashing is translated (see the catalog). A pipeline that hashes to join against old hashes must be compared on one value first.
 
 ## Verified and not verified
+
+Property names for Base64, Field Value Replacer, List Pivot, Dedup, JSON/Log/XML parsers, Field Merger and Jdbc Lookup (`query`) come from Data Collector's own default-config test pipelines (versions 1.1 to 2.2); defaults prove names, not behaviour, so each behaviour comes from IBM's documentation or is flagged above.
 
 Verified against the six real Data Collector exports in `tests/fixtures/sdc` (schemaVersion 6): the envelope (`pipelineConfig`, `stages`,
 `inputLanes/outputLanes/eventLanes`, `configuration` as name/value pairs, `services[].configuration` for data formats, `constants`, `badRecordsHandling`),

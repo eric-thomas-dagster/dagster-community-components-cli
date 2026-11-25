@@ -1,6 +1,4 @@
-"""Runtime for generated StreamSets migrations (copied into each generated project as `runtime.py`,
-alongside `record_pipeline.py` -- the framework-agnostic stage/lane/batch/offset/error-policy
-engine this module builds StreamSets-specific stage factories on top of).
+"""Runtime for generated StreamSets migrations (copied into each generated project as `runtime.py`).
 
 StreamSets moves *records* (a value tree plus string attributes) through a graph of stages in batches. This module keeps that model so a
 translated pipeline behaves the way the original stage graph does: origins emit batches (and events), processors and destinations consume
@@ -14,45 +12,18 @@ Environment:
 """
 from __future__ import annotations
 
+import copy
 import datetime as _dt
 import fnmatch
 import json
 import os
 import re
 import uuid as _uuid
-
-from .record_pipeline import (
-    ErrorPolicy,
-    Record,
-    Run as _BaseRun,
-    Stage,
-    UnimplementedStageError,
-    del_path,
-    each as _each,
-    get_path,
-    set_path,
-    truthy as fx_truthy,
-)
+from dataclasses import dataclass, field
 
 
-class SdcCaveat(UnimplementedStageError):
+class SdcCaveat(Exception):
     """A stage that was not translated: raised when the stage receives data, so a gap can never pass as success."""
-
-
-class Run(_BaseRun):
-    """The generic engine's `Run`, wired to this module's StreamSets-specific conventions: dry-run
-    from `SDC_DRY_RUN`, untranslated stages raise `SdcCaveat` with the `SDC-CAVEAT:` prefix every
-    caller (cli.py, validate.py, generated code) greps for, and `fx.PIPELINE` for EL functions
-    (`pipeline_id()`/`pipeline_title()`) that reference the running pipeline by name."""
-
-    def __init__(self, context, name: str, C: dict, offsets: dict | None = None, pid: str = ""):
-        super().__init__(context, name, C, offsets, pid, dry=dry_run(), unimplemented_error=SdcCaveat, unimplemented_prefix="SDC-CAVEAT: ")
-        fx.PIPELINE = {"id": pid or name, "title": name}
-
-
-def stub(run: Run, inst: str, why: str, *, inputs=(), outputs=(), events=(), is_origin=False, pre=()):
-    """A stage that was not translated. It keeps its place in the graph, and the run fails before reading anything, naming the reason."""
-    run.stub(inst, why, inputs=inputs, outputs=outputs, events=events, is_origin=is_origin, pre=pre)
 
 
 def load_offsets(context, asset_key) -> dict:
@@ -84,6 +55,83 @@ def constants(defaults: dict, secrets: list[str]) -> dict:
             v = ""      # resolved lazily: a stage that needs it fails with a clear message when it connects
         out[k] = v or ""
     return out
+
+
+@dataclass
+class Record:
+    value: dict = field(default_factory=dict)
+    attrs: dict = field(default_factory=dict)
+    event: str | None = None
+
+    @property
+    def attributes(self) -> dict:                 # name used by StreamSets scripts
+        return self.attrs
+
+    def copy(self) -> "Record":
+        import copy
+        return Record(copy.deepcopy(self.value), dict(self.attrs), self.event)
+
+
+# ---- field paths: "/a/b", "/a[0]/b", "/" ------------------------------------------------------------------------------------------------------
+def _parts(path: str) -> list:
+    out = []
+    for seg in [x for x in path.strip().split("/") if x != ""]:
+        seg = seg.strip("'\"")
+        m = re.match(r"^(.*?)((?:\[\d+\])+)$", seg)
+        if m and m.group(1):
+            out.append(m.group(1))
+            out += [int(i) for i in re.findall(r"\[(\d+)\]", m.group(2))]
+        else:
+            out.append(seg)
+    return out
+
+
+def get_path(value, path: str, default=None):
+    cur = value
+    for p in _parts(path):
+        try:
+            cur = cur[p]
+        except (KeyError, IndexError, TypeError):
+            return default
+    return cur
+
+
+def set_path(value: dict, path: str, v) -> None:
+    ps = _parts(path)
+    if not ps:
+        if isinstance(v, dict):
+            value.clear()
+            value.update(v)
+        return
+    cur = value
+    for p in ps[:-1]:
+        cur = cur.setdefault(p, {}) if isinstance(cur, dict) else cur[p]
+    if isinstance(cur, dict):
+        cur[ps[-1]] = v
+    else:
+        cur[ps[-1]] = v
+
+
+def del_path(value: dict, path: str) -> bool:
+    ps = _parts(path)
+    if not ps:
+        value.clear()
+        return True
+    cur = value
+    for p in ps[:-1]:
+        try:
+            cur = cur[p]
+        except (KeyError, IndexError, TypeError):
+            return False
+    try:
+        del cur[ps[-1]]
+        return True
+    except (KeyError, IndexError, TypeError):
+        return False
+
+
+def _truthy(x) -> bool:
+    return bool(x) if not isinstance(x, str) else x.lower() == "true"
 
 
 class fx:
@@ -197,6 +245,15 @@ class fx:
     ss = staticmethod(lambda: f"{_dt.datetime.now(_dt.timezone.utc):%S}")
     uuid = staticmethod(lambda: str(_uuid.uuid4()))
     PIPELINE: dict = {"id": "", "title": ""}
+
+    @staticmethod
+    def runtime_conf(name):
+        """`runtime:conf('x')` reads Data Collector's configuration; here the environment variable SDC_RUNTIME_CONF_<X>."""
+        key = "SDC_RUNTIME_CONF_" + re.sub(r"[^A-Za-z0-9]", "_", str(name)).upper()
+        if key not in os.environ:
+            raise KeyError(f"set {key} (runtime:conf({name!r}))")
+        return os.environ[key]
+
     pipeline_id = staticmethod(lambda: fx.PIPELINE["id"])
     pipeline_title = staticmethod(lambda: fx.PIPELINE["title"])
 
@@ -287,7 +344,140 @@ def parse_date(s, java: str):
     return _dt.datetime.strptime(str(s).strip(), _strptime_format(java))
 
 
+# ---- engine --------------------------------------------------------------------------------------------------------------------------------
+class Stage:
+    """A node: `fn(records) -> {lane: [records]}` for processors/targets; origins set `gen` instead."""
+
+    def __init__(self, instance, fn=None, gen=None, inputs=(), outputs=(), events=(), on_error="TO_ERROR", pre=(), req=()):
+        self.instance, self.fn, self.gen, self.req = instance, fn, gen, list(req)
+        self.inputs, self.outputs, self.events = list(inputs), list(outputs), list(events)
+        self.on_error, self.pre = on_error, list(pre)
+
+
+class Run:
+    def __init__(self, context, name: str, C: dict, offsets: dict | None = None, pid: str = ""):
+        self.ctx, self.name, self.C = context, name, C
+        fx.PIPELINE = {"id": pid or name, "title": name}
+        self.offsets_in, self.offsets_out = dict(offsets or {}), dict(offsets or {})
+        self.stages: list[Stage] = []
+        self.counts = {"records_in": {}, "records_out": {}, "errors": {}}
+        self.dry = dry_run()
+        self.stubs: list[tuple[str, str]] = []
+        self.closers: list = []
+        self.on_success: list = []
+
+    def add(self, stage: Stage) -> None:
+        self.stages.append(stage)
+
+    def log(self, msg: str) -> None:
+        (self.ctx.log.info if self.ctx is not None else print)(msg)
+
+    def _precond(self, st: Stage, recs: list[Record]) -> list[Record]:
+        if not st.pre and not st.req:
+            return recs
+        keep = []
+        for r in recs:
+            if st.req and any(get_path(r.value, f, _MISSING) is _MISSING for f in st.req):
+                self._err(st, r, "required field missing")
+            elif all(fx_truthy(p(r)) for p in st.pre):
+                keep.append(r)
+            else:
+                self._err(st, r, "stageRecordPreconditions not met", drop_ok=True)
+        return keep
+
+    def _err(self, st: Stage, rec: Record, why: str, drop_ok: bool = False) -> None:
+        self.counts["errors"][st.instance] = self.counts["errors"].get(st.instance, 0) + 1
+        if st.on_error == "STOP_PIPELINE":
+            raise RuntimeError(f"{st.instance}: {why}")
+
+    def _deliver(self, lanes: dict, pending: dict) -> None:
+        for lane, recs in lanes.items():
+            if recs:
+                pending.setdefault(lane, []).extend(recs)
+
+    def _push(self, st_index: int, pending: dict, order: list[Stage]) -> None:
+        for st in order[st_index:]:
+            if st.gen is not None:
+                continue
+            recs = [r for ln in st.inputs for r in pending.pop(ln, [])]
+            if not recs:
+                continue
+            recs = self._precond(st, recs)
+            if not recs:
+                continue
+            self.counts["records_in"][st.instance] = self.counts["records_in"].get(st.instance, 0) + len(recs)
+            out = st.fn(recs) or {}
+            for ln, rs in out.items():
+                self.counts["records_out"][st.instance] = self.counts["records_out"].get(st.instance, 0) + len(rs)
+            self._deliver(out, pending)
+
+    def execute(self) -> dict:
+        try:
+            stats = self._execute()
+            for hook in self.on_success:          # e.g. commit Kafka offsets, only once the whole run succeeded
+                hook()
+            return stats
+        finally:
+            for c in self.closers:
+                c()
+
+    def _execute(self) -> dict:
+        if self.stubs:
+            # A stage that was not translated means this graph is not the original pipeline: fail before touching any data, never "succeed".
+            raise SdcCaveat("SDC-CAVEAT: " + "; ".join(f"{i}: {why}" for i, why in self.stubs))
+        order = _topo(self.stages)
+        origins = [s for s in order if s.gen is not None]
+        for o in origins:
+            pending: dict = {}
+            for lanes in o.gen():
+                self.counts["records_out"][o.instance] = self.counts["records_out"].get(o.instance, 0) + sum(len(v) for ln, v in lanes.items() if ln in o.outputs)
+                self._deliver(lanes, pending)
+                self._push(0, pending, order)
+            # origin exhausted: the batch pipeline's "no-more-data" event
+            if o.events:
+                self._deliver({o.events[0]: [Record({}, {"sdc.event.type": "no-more-data"}, "no-more-data")]}, pending)
+                self._push(0, pending, order)
+        return {"records_in": self.counts["records_in"], "records_out": self.counts["records_out"], "error_records": self.counts["errors"]}
+
+
+def fx_truthy(x) -> bool:
+    return _truthy(x)
+
+
+def _topo(stages: list[Stage]) -> list[Stage]:
+    prod = {ln: s.instance for s in stages for ln in [*s.outputs, *s.events]}
+    by = {s.instance: s for s in stages}
+    out, seen = [], set()
+
+    def visit(s: Stage):
+        if s.instance in seen:
+            return
+        seen.add(s.instance)
+        for ln in s.inputs:
+            if ln in prod:
+                visit(by[prod[ln]])
+        out.append(s)
+    for s in stages:
+        visit(s)
+    return out
+
+
 # ---- stage factories ------------------------------------------------------------------------------------------------------------------------
+def _each(st_holder: dict, run: Run, fn):
+    """Apply fn(record)->record|list|None to every record, routing a failure per the stage's error policy."""
+    def go(recs):
+        out = []
+        for r in recs:
+            try:
+                res = fn(r)
+            except Exception as e:                    # noqa: BLE001 - a bad record follows stageOnRecordError
+                run._err(st_holder["st"], r, f"{type(e).__name__}: {e}")
+                continue
+            if res is None:
+                continue
+            out.extend(res if isinstance(res, list) else [res])
+        return out
+    return go
 
 
 def expression(run: Run, inst: str, fields, headers, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
@@ -332,6 +522,9 @@ def field_flattener(run: Run, inst: str, fields: list[str], sep: str, target: st
         if isinstance(v, dict):
             for k, x in v.items():
                 yield from flat(x, f"{prefix}{sep}{k}" if prefix else str(k))
+        elif isinstance(v, list):
+            for i, x in enumerate(v):
+                yield from flat(x, f"{prefix}[{i}]")
         else:
             yield prefix, v
 
@@ -340,11 +533,16 @@ def field_flattener(run: Run, inst: str, fields: list[str], sep: str, target: st
             sub = get_path(r.value, f, _MISSING)
             if sub is _MISSING:
                 continue
+            if f.strip("/") == "":
+                sub = copy.deepcopy(sub)
             if remove:
                 del_path(r.value, f)
             base = "" if target in ("", "/") else f.strip("/").replace("/", sep)      # flattening to the root drops the parent's name (mapping.md: unverified)
             for k, x in flat(sub, base):
-                set_path(r.value, (target.rstrip("/") + "/" + k) if target not in ("", "/") else "/" + k, x)
+                if target in ("", "/"):
+                    r.value[k] = x                       # keys such as `a.c[0]` are names, not paths
+                else:
+                    set_path(r.value, target.rstrip("/") + "/" + k, x)
         return r
     holder: dict = {}
     each = _each(holder, run, one)
@@ -411,6 +609,12 @@ def null_target(run: Run, inst: str, *, inputs, on_error="TO_ERROR", pre=(), req
 def pipeline_finisher(run: Run, inst: str, *, inputs, on_error="TO_ERROR", pre=(), req=()):
     """Pipeline Finisher: in a batch run the pipeline ends when the origins are exhausted, so receiving the record changes nothing here."""
     run.add(Stage(inst, lambda recs: {}, inputs=inputs, on_error=on_error, pre=pre, req=req))
+
+
+def stub(run: Run, inst: str, why: str, *, inputs, outputs=(), events=(), is_origin=False, pre=()):
+    """A stage that was not translated. It keeps its place in the graph, and the run fails before reading anything, naming the reason."""
+    run.stubs.append((inst, why))
+    run.add(Stage(inst, (lambda recs: {}), gen=(lambda: iter(())) if is_origin else None, inputs=inputs, outputs=outputs, events=events, pre=pre))
 
 
 # ---- JDBC ------------------------------------------------------------------------------------------------------------------------------------
@@ -558,7 +762,7 @@ def parse_log(line: str, mode: str):
     return {k: v for k, v in m.groupdict().items() if v is not None}
 
 
-def _parse(fh, fmt: str, header: bool, delimiter: str, log_mode: str = ""):
+def _parse(fh, fmt: str, header: bool, delimiter: str, log_mode: str = "", quote: str = '"'):
     import csv
     if fmt == "LOG":
         for line in fh:
@@ -566,7 +770,7 @@ def _parse(fh, fmt: str, header: bool, delimiter: str, log_mode: str = ""):
                 yield parse_log(line, log_mode)
         return
     if fmt == "DELIMITED":
-        rd = csv.reader(fh, delimiter=delimiter)
+        rd = csv.reader(fh, delimiter=delimiter, quotechar=quote)
         cols = None
         for i, row in enumerate(rd):
             if not row:
@@ -1291,6 +1495,284 @@ def http_origin(run: Run, inst: str, url_fn, method: str, auth_fn, fmt: str, hea
             resp.json() if isinstance(resp.json(), list) else [resp.json()])
         yield {outputs[0]: [Record(x if isinstance(x, dict) else {"value": x}) for x in rows]}
     run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
+# ---- more processors --------------------------------------------------------------------------------------------------------------------------
+def base64_field(run: Run, inst: str, mode: str, src: str, dst: str, url_safe: bool, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Base64 Field Encoder/Decoder: bytes in, bytes out (a string input is taken as UTF-8)."""
+    import base64
+
+    def one(r: Record):
+        v = get_path(r.value, src, _MISSING)
+        if v is _MISSING or v is None:
+            raise KeyError(f"field {src} is missing")
+        raw = v.encode() if isinstance(v, str) else bytes(v)
+        enc, dec = (base64.urlsafe_b64encode, base64.urlsafe_b64decode) if url_safe else (base64.b64encode, base64.b64decode)
+        set_path(r.value, dst, enc(raw) if mode == "ENCODE" else dec(raw))
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def replace_if_null(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Field Replacer (Value Replacer), replace-if-null: rules = [([paths], new value)]. The new value is set as written (a string)."""
+    def one(r: Record):
+        for paths, new in rules:
+            for p in paths:
+                if get_path(r.value, p, _MISSING) is None:
+                    set_path(r.value, p, new)
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def list_pivot(run: Run, inst: str, list_path: str, copy_fields: bool, new_path: str | None, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Field Pivoter: one record per element of the list at `list_path`; the element goes to `new_path` (or replaces the list), other fields copied if asked."""
+    holder: dict = {}
+    each = _each(holder, run, lambda r: _pivot(r, list_path, copy_fields, new_path))
+    holder["st"] = _stage(run, inst, lambda recs: {outputs[0]: each(recs)}, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def _pivot(r: Record, list_path, copy_fields, new_path):
+    lst = get_path(r.value, list_path, _MISSING)
+    if not isinstance(lst, list):
+        raise TypeError(f"field {list_path} is not a list")
+    out = []
+    for item in lst:
+        n = r.copy() if copy_fields else Record({}, dict(r.attrs))
+        if copy_fields and not new_path:
+            set_path(n.value, list_path, item)
+        else:
+            set_path(n.value, new_path or list_path, item)
+        out.append(n)
+    return out
+
+
+def dedup(run: Run, inst: str, window: int, compare: list[str] | None, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Record Deduplicator: the first record with a given content (all fields, or the compared fields) goes to the first output; repeats within the last
+    `window` records go to the second output (dropped if there is none). The window lives for one run: nothing is remembered across runs."""
+    seen: dict = {}
+
+    def go(recs):
+        uniq, dup = [], []
+        for r in recs:
+            key = json.dumps(r.value if compare is None else [get_path(r.value, f) for f in compare], sort_keys=True, default=str)
+            if key in seen:
+                dup.append(r)
+            else:
+                seen[key] = True
+                uniq.append(r)
+                if len(seen) > window:
+                    seen.pop(next(iter(seen)))
+        out = {outputs[0]: uniq}
+        if len(outputs) > 1:
+            out[outputs[1]] = dup
+        return out
+    _stage(run, inst, go, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def log_parser(run: Run, inst: str, src: str, dst: str, log_mode: str, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Log Parser: parses the string at `src` as Apache Common/Combined Log Format (or the two grok patterns) into a map at `dst` (`/` merges into the record)."""
+    def one(r: Record):
+        v = get_path(r.value, src, _MISSING)
+        if v is _MISSING or v is None:
+            raise KeyError(f"field {src} is missing")
+        parsed = parse_log(str(v), log_mode)
+        if dst in ("/", ""):
+            r.value.update(parsed)
+        else:
+            set_path(r.value, dst, parsed)
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def jdbc_lookup(run: Run, inst: str, url_fn, query_fn, mappings, multiple: str, missing: str, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """JDBC Lookup: runs `query_fn(record)` (EL substituted into the SQL text, as StreamSets does) and writes columns to fields. mappings = [(column, field)];
+    none means every column to a field of the same name. multiple: FIRST_ONLY | SPLIT_INTO_MULTIPLE_RECORDS | ALL_AS_LIST. missing: PASS_RECORD_ON | SEND_TO_ERROR."""
+    import sqlalchemy as sa
+    holder: dict = {}
+    eng: list = []
+
+    def lookup(r: Record):
+        if run.dry:
+            run.log(f"[dry run] {inst}: would run the lookup query")
+            return [r]
+        if not eng:
+            eng.append(_engine(url_fn()))
+        with eng[0].connect() as conn:
+            rows = [dict(x) for x in conn.execute(sa.text(query_fn(r))).mappings().all()]
+        if not rows:
+            if missing == "SEND_TO_ERROR":
+                raise LookupError("no rows returned by the lookup query")
+            return [r]
+        cols = mappings or [(c, "/" + c) for c in rows[0]]
+        if multiple == "FIRST_ONLY":
+            rows = rows[:1]
+        if multiple == "SPLIT_INTO_MULTIPLE_RECORDS":
+            out = []
+            for row in rows:
+                n = r.copy()
+                for c, f in cols:
+                    set_path(n.value, f, row.get(c))
+                out.append(n)
+            return out
+        for c, f in cols:
+            set_path(r.value, f, [row.get(c) for row in rows] if multiple == "ALL_AS_LIST" else rows[0].get(c))
+        return [r]
+    each = _each(holder, run, lookup)
+    holder["st"] = _stage(run, inst, lambda recs: {outputs[0]: each(recs)}, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def dev_simulator_origin(run: Run, inst: str, directory: str, pattern: str, routes: list, disc_field: str, ts_field: str, ts_out: str, *, delimiter: str, quote: str,
+                         outputs, events=()):
+    """Dev Simulator origin: replays delimited files (with a header) as records. Each record is routed to the lane whose discriminator value it carries, and
+    an event timestamp (run start + the record's relative delay, in ms) is written to `ts_out`. Nothing is paced: the speed-up setting is ignored."""
+    def gen():
+        if run.dry:
+            run.log(f"[dry run] {inst}: would replay {directory}/{pattern}")
+            return
+        import glob
+        anchor = int(_dt.datetime.now(_dt.timezone.utc).timestamp() * 1000)
+        for p in sorted(glob.glob(os.path.join(directory, pattern))):
+            lanes: dict = {}
+            with open(p, newline="") as fh:
+                for row in _parse(fh, "DELIMITED", True, delimiter, quote=quote):
+                    if ts_out and ts_field:
+                        row[ts_out.strip("/")] = anchor + int(float(row.get(ts_field.strip("/"), 0) or 0))
+                    lane = next((ln for val, ln in routes if str(row.get(disc_field.strip("/"))) == val), routes[0][1] if len(routes) == 1 else None)
+                    if lane is not None:
+                        lanes.setdefault(lane, []).append(Record(row))
+            if lanes:
+                yield lanes
+    run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
+# ---- Groovy (runs on the JVM) -----------------------------------------------------------------------------------------------------------------
+_GROOVY_RUNNER = r'''
+import groovy.json.*
+class Rec { def value; Map attributes = [:]; String sourceId; String eventType }
+class Out { List recs = []; void write(r) { recs << r } }
+class Err { List errs = []; void write(r, m = "") { errs << [r, m.toString()] } }
+class Log { void info(m, Object... a) { System.err.println(m) }; void warn(m, Object... a) { System.err.println(m) }; void error(m, Object... a) { System.err.println(m) }
+            void debug(m, Object... a) {}; void trace(m, Object... a) {} }
+class Sdc {
+  List records; Out output = new Out(); Err error = new Err(); Map state; Log log = new Log(); List events = []
+  def createRecord(String id) { new Rec(sourceId: id, value: [:]) }
+  def createMap(boolean listMap) { [:] }
+  def createEvent(String type, int version) { new Rec(eventType: type, value: [:], sourceId: "event") }
+  void toEvent(e) { events << e }
+}
+def cfg = new JsonSlurper().parse(new File(args[0]))
+def sdc = new Sdc(state: cfg.state ?: [:])
+def mk = { m -> new Rec(value: m.value, attributes: m.attributes ?: [:], sourceId: m.sourceId) }
+sdc.records = cfg.records.collect(mk)
+def out = { r -> [value: r.value, attributes: r.attributes ?: [:], eventType: r.eventType] }
+def run = { String file, boolean perRecord ->
+  def src = new File(file).text
+  if (perRecord) {
+    sdc.records.each { rec -> new GroovyShell(new Binding([sdc: sdc, records: sdc.records, output: sdc.output, error: sdc.error, log: sdc.log, state: sdc.state, record: rec])).evaluate(src) }
+  } else {
+    new GroovyShell(new Binding([sdc: sdc, records: sdc.records, output: sdc.output, error: sdc.error, log: sdc.log, state: sdc.state])).evaluate(src)
+  }
+}
+if (cfg.init) { def saved = sdc.records; sdc.records = []; run(cfg.init, false); sdc.records = saved }
+run(cfg.script, cfg.perRecord as boolean)
+new File(args[1]).text = JsonOutput.toJson([out: sdc.output.recs.collect(out), err: sdc.error.errs.collect { [out(it[0]), it[1]] }, ev: sdc.events.collect(out), state: sdc.state])
+'''
+
+
+def groovy_processor(run: Run, inst: str, script: str, init: str, mode: str, *, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
+    """Groovy Evaluator run by the real Groovy on the JVM: `groovy` on PATH (or SDC_GROOVY) and a JDK (JAVA_HOME). One process per batch; records cross as JSON.
+    The scripting objects are `sdc.records/output/error/log/state/createRecord/createEvent/toEvent` and the globals `records output error log state` (and `record`)."""
+    import shutil
+    import subprocess
+    import tempfile
+    state: dict = {}
+    holder: dict = {}
+    started = [False]
+
+    def call(recs, src, run_init=""):
+        exe = os.environ.get("SDC_GROOVY") or shutil.which("groovy")
+        if not exe:
+            raise SdcCaveat(f"SDC-CAVEAT: {inst}: the Groovy evaluator needs the `groovy` command (a JDK and Apache Groovy): put it on PATH or set SDC_GROOVY")
+        with tempfile.TemporaryDirectory() as d:
+            payload = [{"value": r.value, "attributes": r.attrs, "sourceId": f"{inst}:{i}"} for i, r in enumerate(recs)]
+            open(f"{d}/s.groovy", "w").write(src)
+            open(f"{d}/init.groovy", "w").write(run_init)
+            open(f"{d}/runner.groovy", "w").write(_GROOVY_RUNNER)
+            open(f"{d}/in.json", "w").write(json.dumps({"records": payload, "state": state, "script": f"{d}/s.groovy", "init": f"{d}/init.groovy" if run_init.strip() else None,
+                                                         "perRecord": mode == "RECORD"}, default=str))
+            p = subprocess.run([exe, f"{d}/runner.groovy", f"{d}/in.json", f"{d}/out.json"], capture_output=True, text=True)
+            if p.returncode != 0 or not os.path.exists(f"{d}/out.json"):
+                raise RuntimeError(f"Groovy script failed: {(p.stderr or p.stdout)[-600:]}")
+            return json.load(open(f"{d}/out.json"))
+
+    def go(recs):
+        res = call(recs, script, init if not started[0] else "")
+        started[0] = True
+        state.clear()
+        state.update(res["state"] or {})
+        out = [Record(x["value"] if isinstance(x["value"], dict) else {}, {k: str(v) for k, v in (x.get("attributes") or {}).items()}) for x in res["out"]]
+        for item, msg in res["err"]:
+            run._err(holder["st"], Record(item["value"] if isinstance(item["value"], dict) else {}), msg)
+        lanes = {outputs[0]: out} if outputs else {}
+        if events and res["ev"]:
+            lanes[events[0]] = [Record(e["value"] or {}, {}, e.get("eventType")) for e in res["ev"]]
+        return lanes
+    holder["st"] = _stage(run, inst, go, inputs=inputs, outputs=outputs, events=events, on_error=on_error, pre=pre, req=req)
+
+
+def xml_flatten(run: Run, inst: str, src: str, delimiter: str | None, field_delim: str, attr_delim: str, ignore_attrs: bool, keep_original: bool, overwrite: bool,
+                out_field: str | None, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """XML Flattener, as documented: element paths joined with `field_delim`, attributes with `attr_delim`, repeated sibling elements indexed `name(0)`,
+    one record per `delimiter` element (rooted at that element) or one record for the document. Namespaces are dropped from names."""
+    import xml.etree.ElementTree as ET
+
+    def local(tag):
+        return tag.rsplit("}", 1)[-1]
+
+    def flat(el, prefix, out):
+        if not ignore_attrs:
+            for k, v in el.attrib.items():
+                out[f"{prefix}{attr_delim}{local(k)}"] = v
+        kids = list(el)
+        if not kids:
+            if (el.text or "").strip():
+                out[prefix] = el.text.strip()
+            return
+        counts: dict = {}
+        for k in kids:
+            counts[local(k.tag)] = counts.get(local(k.tag), 0) + 1
+        seen: dict = {}
+        for k in kids:
+            t = local(k.tag)
+            i = seen.get(t, 0)
+            seen[t] = i + 1
+            flat(k, f"{prefix}{field_delim}{t}" + (f"({i})" if counts[t] > 1 else ""), out)
+
+    def one(r: Record):
+        text = get_path(r.value, src, _MISSING)
+        if text is _MISSING or text is None:
+            raise KeyError(f"field {src} is missing")
+        root = ET.fromstring(text if isinstance(text, (str, bytes)) else str(text))
+        docs = [(local(el.tag), el) for el in root.findall(f".//{delimiter}")] if delimiter else [(local(root.tag), root)]
+        if delimiter and not docs:
+            raise ValueError(f"no <{delimiter}> element in the document")
+        out_recs = []
+        for name, el in docs:
+            flatmap: dict = {}
+            flat(el, name, flatmap)
+            n = r.copy() if keep_original else Record({}, dict(r.attrs))
+            if out_field:
+                set_path(n.value, out_field, flatmap)
+            else:
+                for k, v in flatmap.items():
+                    if k in n.value and not overwrite:
+                        raise KeyError(f"field {k} already exists")
+                    n.value[k] = v
+            out_recs.append(n)
+        return out_recs
+    holder: dict = {}
+    each = _each(holder, run, one)
+    holder["st"] = _stage(run, inst, lambda recs: {outputs[0]: each(recs)}, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
 
 
 # ---- more origins and destinations -----------------------------------------------------------------------------------------------------------

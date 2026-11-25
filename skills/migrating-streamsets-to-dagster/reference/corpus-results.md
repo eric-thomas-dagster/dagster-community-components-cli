@@ -26,10 +26,15 @@ names and to test shapes the six samples lack. They are not redistributed. Their
 | JavaScript, HTTP and vendor HTTP destination, Jython origin, Local Lookup, date conversion, `time:` functions | 174 of 196 (89%) | 19 of 27 |
 | File Tail, LOG format, SDC_JSON, Geolocation, Field Mask, Kafka consumer and producer, raw data | 187 of 196 (95%) | 4 of 27 |
 | Elasticsearch, MongoDB (through the registry's resources), HTTP origin, older Geolocation schema | 192 of 196 (98%) | 1 of 27 |
+| JDBC lookup, Groovy (JVM), Dev Simulator, Base64, Field Value Replacer, pivot, dedup, parsers, XML flattener | 194 of 196 (99%) | 0 of 27 (all 27 have no stubs; 2 JDBC lookups are templates with no query configured and are refused) |
 
 Translated is not correct: a script stage that translates still has to be reviewed (the 25 JavaScript scripts run in QuickJS; 19 ran on a trivial record, 6 raised).
-What is left (4 stages): two JDBC lookups, a Groovy evaluator and a dev-only simulator. The vendor's 14 pipelines inflate the JavaScript and HTTP counts: a different customer's mix will differ.
-The 98% counts stages the converter produces code for. Kafka, Geolocation, Elasticsearch, MongoDB, HTTP and the scripting stages were run only against fakes, in-memory databases, local servers and trivial
-records, never against the real systems; the Encrypt/Decrypt stage did not appear in any sample and is deliberately not translated.
+What is left (2 stages): two JDBC lookups whose query is empty, i.e. template stages nobody configured; they stay stubs on purpose.
+The vendor's 14 pipelines inflate the JavaScript and HTTP counts: a different customer's mix will differ.
+The 99% counts stages the converter produces code for. Kafka, Geolocation, Elasticsearch, MongoDB, HTTP, Groovy and the scripting stages were run only against fakes, in-memory databases, local servers
+and trivial records, never against the real systems (the Groovy evaluator not yet against a JVM); the Encrypt/Decrypt stage did not appear in any sample and is deliberately not translated.
+
+A further 17 pipelines are Data Collector's own default-config test pipelines (versions 1.1 to 2.2, every stage with its defaults). Converting them is a robustness check, not a coverage number:
+all 17 convert without error and every unconfigured or untranslatable stage becomes a stub with its reason.
 
 Gates on the six samples' generated project: 1 (compiles), 2 (loads), 3 (units match) pass; gate 4 dry run: 1 ok, 5 fail on a stub as designed, 0 unexpected.

@@ -28,7 +28,7 @@ FUNCS = {
     "mm": "minute", "ss": "ss", "emptyMap": "empty_map", "emptyList": "empty_list",
     "time:dateTimeToMilliseconds": "date_time_to_ms", "time:createDateFromStringTZ": "create_date_from_string_tz",
     "time:createDateFromString": "create_date_from_string", "time:extractStringFromDate": "extract_string_from_date",
-    "time:millisecondsToDateTime": "ms_to_date_time", "time:dateTimeZoneOffset": "date_time_zone_offset", "pipeline:id": "pipeline_id", "pipeline:title": "pipeline_title", "pipeline:name": "pipeline_id",
+    "time:millisecondsToDateTime": "ms_to_date_time", "time:dateTimeZoneOffset": "date_time_zone_offset", "pipeline:id": "pipeline_id", "runtime:conf": "runtime_conf", "pipeline:title": "pipeline_title", "pipeline:name": "pipeline_id",
 }
 _TIME_UNITS = {"SECONDS": 1, "MINUTES": 60, "HOURS": 3600, "DAYS": 86400}
 _KEYWORDS = {"true": "True", "false": "False", "null": "None"}

@@ -22,13 +22,12 @@ STREAMING_ORIGINS = {
 }
 # origins that poll forever in StreamSets but can be read as one batch of what exists when the run starts
 BATCHED_CONTINUOUS = {"ElasticsearchDSource": "Elasticsearch", "MongoDBDSource": "MongoDB", "HttpClientDSource": "HTTP client (polling)", "SpoolDirDSource": "Directory", "JythonDSource": "Jython scripting", "FileTailDSource": "File tail", "MultiKafkaDSource": "Kafka consumer"}
-SCRIPTS = {"GroovyDProcessor": "Groovy", "GroovyDSource": "Groovy", "JavaScriptDSource": "JavaScript"}
+SCRIPTS = {"GroovyDSource": "Groovy", "JavaScriptDSource": "JavaScript"}
 SUGGEST = {
     "HdfsDTarget": "write to object storage (fsspec) or load the warehouse directly; Hadoop is usually being retired in the same move",
     "HiveMetadataDProcessor": "Hive drift handling belongs to the warehouse load; replace it with a schema-sync step",
     "HiveMetastoreDTarget": "see HiveMetadataDProcessor", "HiveQueryDExecutor": "run the query through the warehouse resource",
     "KafkaDSource": "use the registry's KafkaToDatabaseAssetComponent with kafka_monitor, or keep the stream in StreamSets",
-    "JdbcLookupDProcessor": "use the registry's lookup transform, or a join in the warehouse",
 }
 
 
@@ -261,8 +260,11 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         return f"rt.field_filter(run, {I}, {op!r}, {list(c.get('fields') or [])!r}, {lanes}{err}{pre})", n
 
     if cls == "FieldFlattenerDProcessor":
+        if (c.get("config.flattenType") or "") == "ENTIRE_RECORD":
+            n.append("the entire record is flattened to top-level fields named by path (separator from the stage; list elements as name[0]); naming is not verified against a Data Collector")
+            return f"rt.field_flattener(run, {I}, ['/'], {c.get('config.nameSeparator') or '.'!r}, '/', True, {lanes}{err}{pre})", n
         if (c.get("config.flattenType") or "") != "SPECIFIC_FIELDS":
-            raise _Stub("flattening the entire record is not translated (specific fields are)")
+            raise _Stub("only ENTIRE_RECORD and SPECIFIC_FIELDS flattening are translated")
         if (c.get("config.collisionFieldAction") or "TO_ERROR") != "TO_ERROR":
             n.append("name-collision handling other than TO_ERROR is not applied")
         return (f"rt.field_flattener(run, {I}, {list(c.get('config.fields') or [])!r}, {c.get('config.nameSeparator') or '.'!r}, "
@@ -374,6 +376,79 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         fmt = c.get("conf.dataFormat") or "JSON"
         return (f"rt.http_origin(run, {I}, {_el(c.get('conf.resourceUrl'))}, {method!r}, {afn}, {fmt!r}, {(_pick(c, 'csvHeader') or 'NO_HEADER') != 'NO_HEADER'}, "
                 f"{(_pick(c, 'csvCustomDelimiter') or ',')!r}, outputs={s.outputs!r}, events={s.events!r})"), n
+
+    if cls == "GroovyDProcessor":
+        if (c.get("scriptRecordType") or "NATIVE_OBJECTS") != "NATIVE_OBJECTS":
+            raise _Stub("Groovy with SDC_RECORDS record type is not translated (NATIVE_OBJECTS is)")
+        n.append("runs on the real Groovy (JVM): the `groovy` command (a JDK and Apache Groovy) must be on PATH or in SDC_GROOVY; one process per batch; records cross as JSON. "
+                 "Not run against a JVM by this project's tests (they use a stand-in executable): run your script's pipeline once and compare")
+        return f"rt.groovy_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {c.get('processingMode') or 'BATCH'!r}, {lanes}, events={s.events!r}{err}{pre})", n
+
+    if cls == "JdbcLookupDProcessor":
+        q = c.get("query")
+        if not q:
+            raise _Stub("no lookup query")
+        rows = _rows(c.get("columnMappings"))
+        maps = []
+        for r in rows:
+            if r.get("columnName") or r.get("field"):
+                if not (r.get("columnName") and r.get("field")):
+                    raise _Stub("a column mapping without both a column and a field is not translated")
+                maps.append((r["columnName"], r["field"]))
+        multi = c.get("multipleValuesBehavior") or "FIRST_ONLY"
+        miss = c.get("missingValuesBehavior") or "PASS_RECORD_ON"
+        if multi not in ("FIRST_ONLY", "SPLIT_INTO_MULTIPLE_RECORDS", "ALL_AS_LIST") or miss not in ("PASS_RECORD_ON", "SEND_TO_ERROR"):
+            raise _Stub(f"lookup behaviors {multi}/{miss} are not translated")
+        n.append("the column mapping property names (columnName, field) and the all-columns default are not verified against an export that has mappings; compare one looked-up record with your Data Collector's")
+        n.append("record values are substituted into the SQL text, exactly as StreamSets does: the query is only as safe as its inputs. A cache setting is not applied")
+        return f"rt.jdbc_lookup(run, {I}, {_url(s, 'hikariConfigBean')}, {_el(q)}, {maps!r}, {multi!r}, {miss!r}, {lanes}{err}{pre})", n
+
+    if cls == "DevSimulatorDSource":
+        if (c.get("basicConfig.inputDataFormat") or "") != "AS_DELIMITED":
+            raise _Stub("Dev Simulator is translated for delimited input")
+        routes = [(str(r.get("discriminatorValue")), r.get("outputLane")) for r in _rows(c.get("multiTypeConfig.messageTypes"))]
+        if not routes:
+            raise _Stub("no message types configured")
+        n.append("replays the files once and unpaced (the speed-up setting is ignored); the event timestamp is the run's start plus the record's relative delay")
+        return (f"rt.dev_simulator_origin(run, {I}, ({translate(c.get('basicConfig.filesDirectory') or '')}), {c.get('basicConfig.fileNamePattern') or '*'!r}, {routes!r}, "
+                f"{c.get('multiTypeConfig.discriminatorField') or ''!r}, {c.get('eventTimeConfig.timestampField') or ''!r}, {c.get('eventTimeConfig.eventTimestampOutputField') or ''!r}, "
+                f"delimiter={(c.get('csvConfig.csvCustomDelimiter') or ',')!r}, quote={(c.get('csvConfig.csvCustomQuote') or chr(34))!r}, outputs={s.outputs!r}, events={s.events!r})"), n
+
+    if cls in ("Base64EncodingDProcessor", "Base64DecodingDProcessor"):
+        mode = "ENCODE" if cls.startswith("Base64Enc") else "DECODE"
+        n.append("works on bytes: a string input is taken as UTF-8 and the result is bytes")
+        return f"rt.base64_field(run, {I}, {mode!r}, {c.get('originFieldPath')!r}, {c.get('resultFieldPath')!r}, {bool(c.get('urlSafe'))}, {lanes}{err}{pre})", n
+
+    if cls == "FieldValueReplacerDProcessor":
+        if c.get("fieldsToNull") or c.get("fieldsToConditionallyReplace"):
+            raise _Stub("replace-with-null and conditional replacement are not translated (replace if null is)")
+        rules = [(list(r.get("fields") or []), r.get("newValue")) for r in _rows(c.get("fieldsToReplaceIfNull")) if r.get("fields")]
+        if not rules:
+            raise _Stub("no replacement rules")
+        n.append("the replacement value is set as written (a string), not converted to the field's type")
+        return f"rt.replace_if_null(run, {I}, {rules!r}, {lanes}{err}{pre})", n
+
+    if cls == "ListPivotDProcessor":
+        n.append("the original field name is not saved (no such property was seen in an export)")
+        return f"rt.list_pivot(run, {I}, {c.get('listPath')!r}, {bool(c.get('copyFields'))}, {c.get('newPath')!r}, {lanes}{err}{pre})", n
+
+    if cls == "DeDupDProcessor":
+        if int(c.get("timeWindowSecs") or 0):
+            n.append("the time window is not applied (only the record-count window)")
+        n.append("remembers records for one run only; nothing carries over to the next run")
+        cmp = list(c.get("fieldsToCompare") or []) if c.get("compareFields") == "SPECIFIED_FIELDS" else None
+        return f"rt.dedup(run, {I}, {int(c.get('recordCountWindow') or 1000000)}, {cmp!r}, {lanes}{err}{pre})", n
+
+    if cls == "JsonParserDProcessor":
+        return f"rt.json_parser(run, {I}, {c.get('fieldPathToParse')!r}, {c.get('parsedFieldPath') or c.get('fieldPathToParse')!r}, {lanes}{err}{pre})", n
+
+    if cls == "LogParserDProcessor":
+        return f"rt.log_parser(run, {I}, {c.get('fieldPathToParse')!r}, {c.get('parsedFieldPath') or '/'!r}, {_log_mode(c)!r}, {lanes}{err}{pre})", n
+
+    if cls == "XMLFlatteningDProcessor":
+        n.append("namespace URIs are dropped from names (their rendering is not documented); the flattening follows IBM's documented examples (name(0) for repeated siblings, # for attributes)")
+        return (f"rt.xml_flatten(run, {I}, {c.get('fromField')!r}, {c.get('recordDelimiter') or None!r}, {c.get('fieldDelimiter') or '.'!r}, {c.get('attrDelimiter') or '#'!r}, "
+                f"{bool(c.get('ignoreAttributes'))}, {bool(c.get('keepOriginalFields'))}, {bool(c.get('newFieldOverwrites'))}, {c.get('outputField') or None!r}, {lanes}{err}{pre})"), n
 
     if cls == "FileTailDSource":
         if (c.get("conf.dataFormat") or "") != "LOG":
@@ -599,8 +674,8 @@ def convert_pipeline(p: Pipeline, items: list[Item], overrides: dict | None = No
             for t in notes:
                 caveats.append(f"{s.instance}: {t}")
             lines.append(f"    {call}")
-        except (_Stub, Untranslatable) as e:
-            why = str(e)
+        except (_Stub, Untranslatable, KeyError, TypeError, ValueError, IndexError) as e:
+            why = str(e) if isinstance(e, (_Stub, Untranslatable)) else f"the stage's configuration is incomplete or unexpected ({type(e).__name__}: {e})"
             stubs.append((s, why))
             lines.append(f"    {_stub_call(s, why)}")
             detail = [f"{s.stage_name}"]
@@ -678,7 +753,6 @@ def convert(est: Estate, pkg: str = "streamsets_migrated", overrides: dict | Non
 
 
 def write_project(result: Result, out_dir: Path, pkg: str) -> None:
-    from . import record_pipeline as _rp
     from . import runtime as _rt
     from .manifest import render_report
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -725,7 +799,6 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
         '''))
     (root / "__init__.py").write_text("")
     (root / "defs" / "__init__.py").write_text("")
-    (root / "record_pipeline.py").write_text(Path(_rp.__file__).read_text())
     (root / "runtime.py").write_text(Path(_rt.__file__).read_text())
     (root / "definitions.py").write_text(textwrap.dedent('''\
         from pathlib import Path

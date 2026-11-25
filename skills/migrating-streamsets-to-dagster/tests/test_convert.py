@@ -32,14 +32,19 @@ def test_streaming_cdc_pipeline_is_unmapped_with_a_question(result):
     assert any("continuous origin" in q for q in result.questions["MySQL CDC to Delta Lake"])
 
 
-def test_scripts_are_stubs_that_carry_the_script_text(result):
-    stub = next(i for i in result.items if i.kind == "stage" and "GroovyEvaluator_01" in i.source)
+def test_scripts_that_are_stubs_carry_the_script_text(tmp_path):
+    cfg = {"pipelineConfig": {"pipelineId": "s", "title": "scripts", "configuration": [], "stages": [
+        {"instanceName": "Src_01", "stageName": "x_origin_GroovyDSource", "library": "groovy-lib", "inputLanes": [], "outputLanes": ["l1"], "eventLanes": [],
+         "configuration": [{"name": "script", "value": "sdc.output.write(sdc.createRecord('x'))"}]},
+        {"instanceName": "N_01", "stageName": "x_dest_NullDTarget", "library": "basic", "inputLanes": ["l1"], "outputLanes": [], "eventLanes": [], "configuration": []}]}}
+    (tmp_path / "p.json").write_text(json.dumps(cfg))
+    stub = next(i for i in convert(load(tmp_path)).items if i.kind == "stage")
     assert stub.status == UNMAPPED and "script:" in " ".join(stub.notes) and "sdc.output.write" in " ".join(stub.notes)
 
 
 def test_every_untranslated_stage_has_its_own_unit(result):
     stubs = [i for i in result.items if i.kind == "stage"]
-    assert len(stubs) == 6
+    assert len(stubs) == 5
     assert sum(len(m["stubs"]) for m in result.meta["pipelines"].values()) == len(stubs)
 
 

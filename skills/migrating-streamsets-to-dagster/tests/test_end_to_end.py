@@ -56,19 +56,20 @@ def test_disbursed_pipeline_moves_the_data_and_retires_older_rows(project, tmp_p
 
 def test_a_pipeline_with_an_untranslated_stage_fails_loudly_before_reading(tmp_path, fix, monkeypatch):
     est = load(fix)
-    est.pipelines = {k: v for k, v in est.pipelines.items() if k == "AWS Marketplace Data"}      # holds a Groovy evaluator
+    est.pipelines = {k: v for k, v in est.pipelines.items() if k == "Drift Synchronization for Hive"}      # holds four Hive/HDFS stubs
     out = tmp_path / "p2"
     write_project(convert(est, "ss_stub"), out, "ss_stub")
     sys.path.insert(0, str(out / "src"))
     try:
         mod = importlib.import_module("ss_stub.defs.streamsets")
-        monkeypatch.setattr(fsspec, "filesystem", lambda *a, **k: pytest.fail("must not read any data"))
-        res = dg.materialize([mod.ss_aws_marketplace_data], raise_on_error=False)
+        import sqlalchemy
+        monkeypatch.setattr(sqlalchemy, "create_engine", lambda *a, **k: pytest.fail("must not read any data"))
+        res = dg.materialize([mod.ss_drift_synchronization_for_hive], raise_on_error=False)
         assert not res.success
         err = [e for e in res.all_events if e.is_failure][0].event_specific_data.error
         while err.cause:
             err = err.cause
-        assert "SDC-CAVEAT" in err.message and "GroovyEvaluator_01" in err.message
+        assert "SDC-CAVEAT" in err.message and "HiveMetadata_01" in err.message
     finally:
         sys.path.remove(str(out / "src"))
         for m in [m for m in sys.modules if m.startswith("ss_stub")]:
