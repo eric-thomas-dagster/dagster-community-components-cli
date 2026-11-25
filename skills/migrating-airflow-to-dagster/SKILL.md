@@ -1,6 +1,6 @@
 ---
 name: migrating-airflow-to-dagster
-description: Guide for migrating Apache Airflow DAGs to Dagster. Use when the user mentions migrating, converting, porting or moving off Airflow (or MWAA, Cloud Composer, Astronomer) to Dagster, wants to assess such a migration, or asks what an Airflow construct maps to in Dagster. Covers DAGs, schedules, TaskFlow tasks, operators, sensors, datasets/assets, pools, XCom, dynamic task mapping and dag-factory, with a converter that writes Dagster code for them. Connections become resources only for the operators the converter handles, Variables are read from `AIRFLOW_VAR_*` environment variables, and Cosmos DAGs are inventoried and mapped in guidance but not converted by code. Load dagster-expert alongside this skill for Dagster specifics.
+description: Guide for migrating Apache Airflow DAGs to Dagster. Use when the user mentions migrating, converting, porting or moving off Airflow (or MWAA, Cloud Composer, Astronomer) to Dagster, wants to assess such a migration, or asks what an Airflow construct maps to in Dagster. Covers DAGs, schedules, TaskFlow tasks, operators, sensors, datasets/assets, pools, XCom, dynamic task mapping and dag-factory, with a converter that writes Dagster code for them. Connections become resources only for the operators the converter handles, Variables are read from `AIRFLOW_VAR_*` environment variables, and Astronomer Cosmos DAGs (`DbtDag`, `DbtTaskGroup`, the dbt operators) convert to Dagster's dbt component. Also writes a wave plan before conversion and a per-DAG cutover checklist after it, and has concrete notes for Airlift and for hosted Airflow (MWAA, Composer, Astro). Load dagster-expert alongside this skill for Dagster specifics.
 ---
 
 # Airflow to Dagster migration
@@ -15,11 +15,11 @@ There are three ways in, and one project often uses more than one. See `referenc
 
 | Tier | What it is | Use when |
 |---|---|---|
-| 1. Observe | Dagster reads Airflow's run history (Airlift peer/observe) and shows DAGs and tasks as assets | You want visibility now with zero change to Airflow |
-| 2. Bridge | Existing DAG code keeps running, orchestrated by Dagster (Airlift proxying, or the script-orchestrator component) | You need to move scheduling off Airflow before rewriting the code |
+| 1. Observe | Dagster reads Airflow's run history (Airlift peer/observe) and shows DAGs and tasks as assets | You want visibility now with zero change to Airflow (Airflow 2.x only: see `reference/airlift.md`) |
+| 2. Bridge | Existing DAG code keeps running, orchestrated by Dagster (Airlift proxying, `reference/airlift.md`, or the script-orchestrator component) | You need to move scheduling off Airflow before rewriting the code |
 | 3. Native | DAGs are rewritten as Dagster assets, components, schedules and sensors | You want the asset model, lineage, and to retire the Airflow code |
 
-The scanner, manifest and gates below are for tier 3 and for deciding what stays in tiers 1-2.
+The scanner, manifest and gates below are for tier 3 and for deciding what stays in tiers 1-2. **Airflow 3 source:** `dagster-airlift` 0.29.31 cannot read an Airflow 3 REST API (`/api/v2`), so tier 3 with the converter is the route; the extractor runs the DAG files and does not use the REST API (`reference/airlift.md`).
 
 ## Companion skills
 
@@ -63,7 +63,7 @@ The `migrating-airflow-2-to-3` skill is only needed when the source is Airflow 2
 
 ### Phase 0: Preflight
 
-Load `dagster-expert` (and the Airflow skill if the user has one). Confirm the Airflow version (2.x or 3.x), how DAGs are defined (plain Python, TaskFlow, dag-factory YAML, Cosmos), where they run (self-managed, MWAA, Composer, Astro), the target Dagster setup (project layout, Dagster+ or open source), and repo access. Baseline the Airflow test suite; record pre-existing failures so they are not blamed on the migration.
+Load `dagster-expert` (and the Airflow skill if the user has one). Confirm the Airflow version (2.x or 3.x), how DAGs are defined (plain Python, TaskFlow, dag-factory YAML, Cosmos), where they run (self-managed, MWAA, Composer, Astro: `reference/hosted-airflow.md` says how to get the DAG files, the Airflow version, the packages and the Connection and Variable names from each), the target Dagster setup (project layout, Dagster+ or open source), and repo access. Baseline the Airflow test suite; record pre-existing failures so they are not blamed on the migration.
 
 ### Phase 1: Inventory (read-only)
 
@@ -82,13 +82,21 @@ python3 scripts/reconcile.py manifest.json truth.json
 
 `reconcile.py` adds a pending JUDG unit for every DAG or task only Airflow knows about, so nothing is omitted silently, and it lists static DAGs Airflow did not produce (usually files that failed to import; `truth.json` records the import errors). Confirm or change each suggested class using `reference/mapping.md`. A construct with no row in the mapping is itself a finding: record it, do not guess.
 
+### Phase 1.25: Plan in waves
+
+```
+python3 scripts/plan.py manifest.json [--ir ir.json] [--report report.json] --out-dir plan
+```
+
+Writes `plan.md` and `plan.json`: per DAG a pattern (dbt, ELT, Python ETL, SQL, containers/Spark, sensor-driven, ops), a complexity bucket from this skill's own MECH / JUDG / REDESIGN classes, a path (native rewrite, observe/bridge with airlift, defer), a wave (1 = mechanical with high lineage value such as dbt and ELT; the last wave = redesign-heavy), a coarse effort with the formula printed in the file, and a suggested pilot set for Phase 3. Deterministic, and **every number is a heuristic**: use it to order the work and start the scope conversation, not as a quote. Run it again with `--ir` and `--report` once the converter has run; a DAG converted with no stub drops to review-only effort. See `examples/migration_plan/`.
+
 ### Phase 1.5: Go/no-go
 
 Before translating, answer what this team gives up and whether each loss has an acceptable answer. Typical items: breadth of provider operators (mitigation: registry components, official integrations, Pipes), XCom-based data passing (mitigation: explicit storage or IO managers), dynamic task mapping (dynamic partitions or a graph), Airflow plugins and custom UI, and team familiarity. Outcomes: migrate, migrate with conditions (the common case; record the conditions), or not yet (name the unmitigated losses). A guide that cannot say "not yet" cannot be trusted when it says "go".
 
 ### Phase 2: Plan
 
-- Choose the tier per DAG (see `reference/tiers.md`).
+- Choose the tier per DAG (see `reference/tiers.md`); the wave plan from `scripts/plan.py` (Phase 1.25) is the first cut, to be confirmed or changed per DAG.
 - Decide asset granularity: one Dagster asset per data product the DAG produces, not per task. Tasks that only prepare, wait or notify usually fold into an asset, a sensor or an automation condition.
 - Write each unit's `target` into the manifest: assets, deps, jobs, schedules (`validate_defs.py` documents the shape). A unit with no target is reported as UNPLANNED.
 - Decide the platform mapping (Phase 5) up front: Variables and Connections to env vars, secrets and resources.
@@ -99,7 +107,7 @@ Migrate two or three representative DAGs end to end through the gates before fan
 
 ### Phase 4: Migrate, domain by domain
 
-**Convert the mechanical units by code, first.** Run `airflow_ir.py` then `convert_ir.py` (see `reference/conversion.md`): every DAG built from Python, Bash, S3, Snowflake, EmptyOperator and the provider operators listed in `reference/conversion.md` (HTTP, SQL, Kubernetes pods, email, Slack webhook, dbt Cloud, Airbyte, Fivetran, Databricks) tasks, cron or asset-triggered, converts without hand work (the provider mappings that were not run against a live service carry an UNVERIFIED caveat: confirm them in the side-by-side run), and each unconverted DAG comes with the reason and the integration or component that fits. Run the parity harness on the converted DAGs (`examples/runtime_conversion/`): loading proves nothing about behavior. Then hand-convert what the report defers, using the other references.
+**Convert the mechanical units by code, first.** Run `airflow_ir.py` then `convert_ir.py` (see `reference/conversion.md`): every DAG built from Python, Bash, S3, Snowflake, EmptyOperator and the provider operators listed in `reference/conversion.md` (HTTP, SQL, Kubernetes pods, email, Slack webhook, dbt Cloud, Airbyte, Fivetran, Databricks) tasks, cron or asset-triggered, converts without hand work (the provider mappings that were not run against a live service carry an UNVERIFIED caveat: confirm them in the side-by-side run), and each unconverted DAG comes with the reason and the integration or component that fits. Cosmos DAGs (`DbtDag`, `DbtTaskGroup`, `DbtRunLocalOperator` and the others) convert to one `dagster_dbt.DbtProjectComponent` per group, with per-model assets, asset checks and the surrounding tasks kept as asset dependencies; the dbt project itself is copied by you (the report says where). Container execution modes stay loud stubs. Extracting the IR needs `astronomer-cosmos` and a dbt that can render the project in the extraction environment (`reference/conversion.md`, "Astronomer Cosmos"). Run the parity harness on the converted DAGs (`examples/runtime_conversion/`): loading proves nothing about behavior. Then hand-convert what the report defers, using the other references.
 
 
 Per unit: `pending` → translate → `dg check defs` → validate → `complete`, or `deferred` with a reason. Use `dagster-expert` for project layout (`dg scaffold defs`), components and automation. Prefer registry components for provider operators.
@@ -119,6 +127,12 @@ Variables to environment variables or secrets (`dg plus create env`, never in th
 ### Phase 6: Side by side, then cutover
 
 Run Dagster alongside Airflow on the same logical window with the Dagster schedule off or targeting a non-production sink. Compare outputs (row counts and checksums), durations and failure behavior. Cut over per domain in a change window: pause the Airflow DAG, enable the Dagster schedule or automation; rollback is the reverse. Keep Airflow's run history readable afterward; it does not migrate.
+
+```
+python3 scripts/cutover.py manifest.json report.json --ir ir.json [--parity-state parity_state/] --out-dir cutover
+```
+
+Writes `cutover-<dag_id>.md` for each converted DAG (pause plan, catchup and backfill decision, secrets and connections by name, schedule and timezone check, limits to apply, what was NOT converted and needs a manual replacement, freshness, parity evidence, on-call handoff, rollback, decommission) and prints the commands for a person to run. **It never pauses, starts, stops or deletes anything.** Do not cut over a DAG with an open blocker or an unreplaced alert (`reference/cutover-checklist.md`).
 
 ### Phase 7: Report
 
@@ -141,6 +155,10 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | A worked factory conversion (six factories to one component) | `examples/s3_to_snowflake_factories/MIGRATION.md` |
 | A completed worked conversion | `examples/three_dags/MIGRATION.md` |
 | Observe, bridge, native; Airlift and the script-orchestrator component | `reference/tiers.md` |
+| Airlift in detail: the component YAML, task mappings, proxying and rollback, authentication for MWAA, Composer and Astro, the Airflow 3 limitation, what was verified | `reference/airlift.md` |
+| MWAA, Cloud Composer, Astro: DAG files, Airflow version, packages, REST API access, Connection and Variable names, limits | `reference/hosted-airflow.md` |
+| The cutover checklist and what each section is for | `reference/cutover-checklist.md` |
+| A worked wave plan and cutover checklists | `examples/migration_plan/` |
 
 ## Scripts
 
@@ -150,6 +168,9 @@ Run Dagster alongside Airflow on the same logical window with the Dagster schedu
 | `scripts/airflow_ir.py` | Extract every DAG as Airflow built it (expanded loops, factories, resolved arguments, callable source) into an IR (executes DAG code; sandbox only) |
 | `scripts/convert_ir.py` | Generate Dagster code for the mechanical constructs; defer everything else with the reason |
 | `scripts/convert_ir.py --output components` | The same conversion, writing registry components (YAML) for DAGs whose tasks all have one (see `reference/conversion.md`) |
+| `scripts/plan.py` | Wave plan from the manifest (and IR and report): pattern, complexity, path, wave, coarse effort, pilot; heuristic and deterministic |
+| `scripts/cosmos_ops.py` | The Cosmos mapping `convert_ir.py` uses (dbt component, dbt steps, profiles) |
+| `scripts/cutover.py` | One cutover checklist per converted DAG; writes markdown and prints commands, acts on nothing |
 | `scripts/apply_conversion.py` | Record the converter's outcome in the manifest (plans and deferrals) |
 | `scripts/airflow_truth.py` | Dump Airflow's own DAG and task lists (executes DAG code; sandbox only) |
 | `scripts/reconcile.py` | Merge that runtime view into the manifest so nothing is omitted |
