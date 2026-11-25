@@ -227,3 +227,11 @@ def loop_inc(*, loop):
 
 def loop_until(*, loop):
     return loop.result >= 2
+
+
+GOT = []
+
+
+def capture(x):
+    GOT.append(x)
+    return x

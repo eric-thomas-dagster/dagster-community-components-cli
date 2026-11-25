@@ -110,7 +110,7 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d["tasks"][0].update(trigger_rule="custom_rule"), "trigger_rule custom_rule"),
     (lambda d: d["tasks"][0].update(is_mapped=True), "dynamic task mapping"),
     (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ var.value.x }}"}), "does not provide"),
-    (lambda d: d["tasks"][0].update(type="KubernetesPodOperator"), "operator KubernetesPodOperator"),
+    (lambda d: d["tasks"][0].update(type="BigQueryInsertJobOperator"), "operator BigQueryInsertJobOperator"),
     (lambda d: d["timetable"].update(kind="asset_triggered", assets=["a", "b"], asset_logic="mixed"), "mixes AND and OR"),
     (lambda d: d["timetable"].update(kind="other"), "schedule type"),
     (lambda d: d.update(catchup=True), "catchup"),
@@ -204,10 +204,10 @@ def test_snowflake_copy_and_sql_map_to_snowflake_run():
     assert "['select 1; select 2;'], split=True)" in code and s["snowflake_resources"] == ["snowflake_default"]
 
 
-def test_sql_on_a_non_snowflake_connection_or_with_unsupported_jinja_is_deferred():
+def test_sql_on_a_non_snowflake_connection_is_a_generic_sql_step_and_unsupported_jinja_is_deferred():
     q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select 1", "conn_id": "postgres_default"})
-    with pytest.raises(C.Defer, match="only Snowflake connections"):
-        convert(dag([q], kind="manual"))
+    code, s = convert(dag([q], kind="manual"))
+    assert "sql_run(context, 'postgres_default', ['select 1']" in code and s["provider_connections"] == {"postgres_default": "sql"}
     q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select '{{ var.value.x }}'", "conn_id": "snowflake_default"})
     with pytest.raises(C.Defer, match="does not provide"):
         convert(dag([q], kind="manual"))
@@ -271,13 +271,14 @@ def test_apply_conversion_plans_converted_dags_and_defers_the_rest():
 
 def test_report_ranks_operators_with_integration_hints(tmp_path):
     ir = {"airflow_version": "x", "dags": [dag([task("a", "BashOperator", template_fields={"bash_command": "true"}),
-                                                  task("b", "KubernetesPodOperator")], kind="manual")]}
+                                                  task("b", "KubernetesPodOperator"), task("c", "BigQueryInsertJobOperator")], kind="manual")]}
     (tmp_path / "ir.json").write_text(json.dumps(ir))
     subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
                     "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
     ops = json.loads((tmp_path / "r.json").read_text())["operators"]
     assert ops["BashOperator"]["mapped_by_converter"] and ops["BashOperator"]["registry"] == ["shell_command_asset"]
-    assert not ops["KubernetesPodOperator"]["mapped_by_converter"] and "k8s_job_asset" in ops["KubernetesPodOperator"]["registry"]
+    assert ops["KubernetesPodOperator"]["mapped_by_converter"] and "k8s_job_asset" in ops["KubernetesPodOperator"]["registry"]
+    assert not ops["BigQueryInsertJobOperator"]["mapped_by_converter"] and ops["BigQueryInsertJobOperator"]["registry"] == ["google_bigquery"]
 
 
 def test_bash_execution_timeout_is_enforced_as_a_failure():

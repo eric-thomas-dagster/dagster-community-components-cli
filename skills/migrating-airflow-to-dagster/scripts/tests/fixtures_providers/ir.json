@@ -1,0 +1,1045 @@
+{
+ "airflow_version": "2.10.5",
+ "dags": [
+  {
+   "dag_id": "providers",
+   "file": "providers_dag.py",
+   "description": null,
+   "tags": [],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-01-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "CronDataIntervalTimetable",
+    "cron": "0 6 * * *",
+    "timezone": "UTC",
+    "summary": "0 6 * * *",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10b0d89e0>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10b0d89e0>",
+    "kind": "cron_data_interval"
+   },
+   "default_args": {},
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "tasks": [
+    {
+     "task_id": "wait_for_api",
+     "type": "HttpSensor",
+     "module": "airflow.providers.http.sensors.http",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "fetch"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": {
+      "poke_interval": 30.0,
+      "timeout": 600.0,
+      "mode": "poke",
+      "soft_fail": false,
+      "exponential_backoff": false,
+      "silent_fail": false,
+      "never_fail": false
+     },
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "endpoint": "health",
+      "request_params": {},
+      "headers": {}
+     },
+     "args": {
+      "deferrable": false,
+      "endpoint": "health",
+      "extra_options": {},
+      "headers": {},
+      "http_conn_id": "partner_api",
+      "method": "GET",
+      "request_kwargs": {},
+      "request_params": {},
+      "response_check": null,
+      "response_error_codes_allowlist": [
+       "404"
+      ],
+      "tcp_keep_alive": true,
+      "tcp_keep_alive_count": 20,
+      "tcp_keep_alive_idle": 120,
+      "tcp_keep_alive_interval": 30
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "fetch",
+     "type": "HttpOperator",
+     "module": "airflow.providers.http.operators.http",
+     "group": null,
+     "upstream": [
+      "wait_for_api"
+     ],
+     "downstream": [
+      "load"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "endpoint": "v1/items/{{ ds }}",
+      "data": {
+       "limit": "10"
+      },
+      "headers": {
+       "Accept": "application/json"
+      }
+     },
+     "args": {
+      "auth_type": null,
+      "data": {
+       "limit": "10"
+      },
+      "deferrable": false,
+      "endpoint": "v1/items/{{ ds }}",
+      "extra_options": {
+       "timeout": 20
+      },
+      "headers": {
+       "Accept": "application/json"
+      },
+      "http_conn_id": "partner_api",
+      "log_response": true,
+      "method": "GET",
+      "pagination_function": null,
+      "request_kwargs": {},
+      "response_check": null,
+      "response_filter": null,
+      "retry_args": null,
+      "tcp_keep_alive": true,
+      "tcp_keep_alive_count": 20,
+      "tcp_keep_alive_idle": 120,
+      "tcp_keep_alive_interval": 30
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "load",
+     "type": "SQLExecuteQueryOperator",
+     "module": "airflow.providers.common.sql.operators.sql",
+     "group": null,
+     "upstream": [
+      "fetch"
+     ],
+     "downstream": [
+      "airbyte",
+      "bq",
+      "crunch",
+      "dbt",
+      "ssh"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "sql": [
+       "delete from t where d = %(d)s",
+       "insert into t select 1"
+      ],
+      "parameters": {
+       "d": "2024-01-01"
+      },
+      "conn_id": "warehouse_pg",
+      "database": null,
+      "hook_params": {}
+     },
+     "args": {
+      "autocommit": true,
+      "conn_id": "warehouse_pg",
+      "database": null,
+      "parameters": {
+       "d": "2024-01-01"
+      },
+      "return_last": true,
+      "show_return_value_in_logs": false,
+      "split_statements": null,
+      "sql": [
+       "delete from t where d = %(d)s",
+       "insert into t select 1"
+      ]
+     },
+     "callable_args": {
+      "handler": "airflow.providers.common.sql.hooks.sql.fetch_all_handler"
+     }
+    },
+    {
+     "task_id": "crunch",
+     "type": "KubernetesPodOperator",
+     "module": "airflow.providers.cncf.kubernetes.operators.pod",
+     "group": null,
+     "upstream": [
+      "load"
+     ],
+     "downstream": [
+      "mail"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": false,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "image": "registry.example.com/crunch:1.2",
+      "cmds": [
+       "python",
+       "-m",
+       "crunch"
+      ],
+      "annotations": {},
+      "arguments": [
+       "--day",
+       "{{ ds }}"
+      ],
+      "env_vars": [
+       {
+        "repr": "{'name': 'MODE', 'value': 'full', 'value_from': None}"
+       }
+      ],
+      "labels": {},
+      "config_file": null,
+      "pod_template_file": null,
+      "pod_template_dict": null,
+      "namespace": "batch",
+      "container_resources": null,
+      "volumes": [],
+      "volume_mounts": [],
+      "cluster_context": null,
+      "env_from": [],
+      "node_selector": {},
+      "kubernetes_conn_id": "kubernetes_default"
+     },
+     "args": {
+      "active_deadline_seconds": null,
+      "affinity": {},
+      "annotations": {},
+      "arguments": [
+       "--day",
+       "{{ ds }}"
+      ],
+      "base_container_name": "base",
+      "callbacks": null,
+      "cluster_context": null,
+      "cmds": [
+       "python",
+       "-m",
+       "crunch"
+      ],
+      "config_file": null,
+      "container_logs": "base",
+      "container_resources": null,
+      "container_security_context": null,
+      "deferrable": false,
+      "dns_config": null,
+      "dnspolicy": null,
+      "env_from": [],
+      "env_vars": [
+       {
+        "repr": "{'name': 'MODE', 'value': 'full', 'value_from': None}"
+       }
+      ],
+      "full_pod_spec": null,
+      "get_logs": true,
+      "host_aliases": null,
+      "hostname": null,
+      "hostnetwork": false,
+      "image": "registry.example.com/crunch:1.2",
+      "image_pull_policy": null,
+      "image_pull_secrets": [],
+      "in_cluster": true,
+      "init_container_logs": null,
+      "init_containers": [],
+      "kubernetes_conn_id": "kubernetes_default",
+      "labels": {},
+      "log_events_on_failure": false,
+      "log_pod_spec_on_failure": true,
+      "logging_interval": null,
+      "name": "crunch",
+      "namespace": "batch",
+      "node_selector": {},
+      "on_finish_action": "delete_pod",
+      "pod_runtime_info_envs": [],
+      "pod_template_dict": null,
+      "pod_template_file": null,
+      "poll_interval": 2,
+      "ports": [],
+      "priority_class_name": null,
+      "random_name_suffix": true,
+      "reattach_on_restart": true,
+      "schedulername": null,
+      "secrets": [],
+      "security_context": {},
+      "service_account_name": "crunch-sa",
+      "skip_on_exit_code": [],
+      "startup_check_interval_seconds": 5,
+      "startup_timeout_seconds": 120,
+      "subdomain": null,
+      "termination_grace_period": null,
+      "termination_message_policy": "File",
+      "tolerations": [],
+      "volume_mounts": [],
+      "volumes": []
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "mail",
+     "type": "EmailOperator",
+     "module": "airflow.providers.smtp.operators.smtp",
+     "group": null,
+     "upstream": [
+      "crunch"
+     ],
+     "downstream": [
+      "slack"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "to": [
+       "a@example.com"
+      ],
+      "from_email": null,
+      "subject": "done {{ ds }}",
+      "html_content": "<b>ok</b>",
+      "files": [],
+      "cc": null,
+      "bcc": null
+     },
+     "args": {
+      "bcc": null,
+      "cc": null,
+      "conn_id": "smtp_default",
+      "custom_headers": null,
+      "files": [],
+      "from_email": null,
+      "html_content": "<b>ok</b>",
+      "mime_charset": "utf-8",
+      "mime_subtype": "mixed",
+      "subject": "done {{ ds }}",
+      "to": [
+       "a@example.com"
+      ]
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "slack",
+     "type": "SlackWebhookOperator",
+     "module": "airflow.providers.slack.operators.slack_webhook",
+     "group": null,
+     "upstream": [
+      "mail"
+     ],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "message": "load finished",
+      "attachments": null,
+      "blocks": null,
+      "channel": "#data",
+      "username": null,
+      "proxy": null
+     },
+     "args": {
+      "attachments": null,
+      "blocks": null,
+      "channel": "#data",
+      "icon_emoji": null,
+      "icon_url": null,
+      "message": "load finished",
+      "proxy": null,
+      "retry_handlers": null,
+      "slack_webhook_conn_id": "slack_alerts",
+      "timeout": null,
+      "username": null
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "dbt",
+     "type": "DbtCloudRunJobOperator",
+     "module": "airflow.providers.dbt.cloud.operators.dbt",
+     "group": null,
+     "upstream": [
+      "load"
+     ],
+     "downstream": [
+      "dbr_now"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "dbt_cloud_conn_id": "dbt_cloud_default",
+      "job_id": 1234,
+      "account_id": null,
+      "trigger_reason": "airflow",
+      "steps_override": [
+       "dbt build"
+      ],
+      "schema_override": null,
+      "additional_run_config": {}
+     },
+     "args": {
+      "account_id": null,
+      "additional_run_config": {},
+      "check_interval": 15,
+      "dbt_cloud_conn_id": "dbt_cloud_default",
+      "deferrable": false,
+      "job_id": 1234,
+      "retry_from_failure": false,
+      "reuse_existing_run": false,
+      "schema_override": null,
+      "steps_override": [
+       "dbt build"
+      ],
+      "timeout": 3600,
+      "trigger_reason": "airflow",
+      "wait_for_termination": true
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "airbyte",
+     "type": "AirbyteTriggerSyncOperator",
+     "module": "airflow.providers.airbyte.operators.airbyte",
+     "group": null,
+     "upstream": [
+      "load"
+     ],
+     "downstream": [
+      "dbr_now"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "connection_id": "0a1b2c3d-0000-0000-0000-000000000000"
+     },
+     "args": {
+      "airbyte_conn_id": "airbyte_default",
+      "api_version": "v1",
+      "asynchronous": false,
+      "connection_id": "0a1b2c3d-0000-0000-0000-000000000000",
+      "deferrable": false,
+      "timeout": 1800,
+      "wait_seconds": 10
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "dbr_now",
+     "type": "DatabricksRunNowOperator",
+     "module": "airflow.providers.databricks.operators.databricks",
+     "group": null,
+     "upstream": [
+      "airbyte",
+      "dbt"
+     ],
+     "downstream": [
+      "dbr_submit"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "json": {
+       "job_id": "77",
+       "notebook_params": {
+        "day": "{{ ds }}"
+       }
+      },
+      "databricks_conn_id": "databricks_default"
+     },
+     "args": {
+      "cancel_previous_runs": false,
+      "databricks_conn_id": "databricks_default",
+      "databricks_repair_reason_new_settings": {},
+      "databricks_retry_args": null,
+      "databricks_retry_delay": 1,
+      "databricks_retry_limit": 3,
+      "deferrable": false,
+      "json": {
+       "job_id": "77",
+       "notebook_params": {
+        "day": "{{ ds }}"
+       }
+      },
+      "polling_period_seconds": 30,
+      "repair_run": false,
+      "wait_for_termination": true
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "dbr_submit",
+     "type": "DatabricksSubmitRunOperator",
+     "module": "airflow.providers.databricks.operators.databricks",
+     "group": null,
+     "upstream": [
+      "dbr_now"
+     ],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "json": {
+       "notebook_task": {
+        "notebook_path": "/Shared/adhoc"
+       },
+       "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "i3.xlarge",
+        "num_workers": 1
+       },
+       "run_name": "adhoc"
+      },
+      "databricks_conn_id": "databricks_default"
+     },
+     "args": {
+      "databricks_conn_id": "databricks_default",
+      "databricks_retry_args": null,
+      "databricks_retry_delay": 1,
+      "databricks_retry_limit": 3,
+      "deferrable": false,
+      "json": {
+       "notebook_task": {
+        "notebook_path": "/Shared/adhoc"
+       },
+       "new_cluster": {
+        "spark_version": "14.3.x-scala2.12",
+        "node_type_id": "i3.xlarge",
+        "num_workers": 1
+       },
+       "run_name": "adhoc"
+      },
+      "polling_period_seconds": 30,
+      "wait_for_termination": true
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "bq",
+     "type": "BigQueryInsertJobOperator",
+     "module": "airflow.providers.google.cloud.operators.bigquery",
+     "group": null,
+     "upstream": [
+      "load"
+     ],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "configuration": {
+       "query": {
+        "query": "select 1",
+        "useLegacySql": false
+       }
+      },
+      "job_id": null,
+      "impersonation_chain": null,
+      "project_id": null
+     },
+     "args": {
+      "cancel_on_kill": true,
+      "configuration": {
+       "query": {
+        "query": "select 1",
+        "useLegacySql": false
+       }
+      },
+      "deferrable": false,
+      "force_rerun": true,
+      "gcp_conn_id": "google_cloud_default",
+      "impersonation_chain": null,
+      "job_id": null,
+      "location": "US",
+      "poll_interval": 4.0,
+      "project_id": null,
+      "reattach_states": [],
+      "result_timeout": null
+     },
+     "callable_args": {
+      "result_retry": "google.api_core.retry.retry_unary.Retry"
+     }
+    },
+    {
+     "task_id": "ssh",
+     "type": "SSHOperator",
+     "module": "airflow.providers.ssh.operators.ssh",
+     "group": null,
+     "upstream": [
+      "load"
+     ],
+     "downstream": [
+      "dock"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "command": "echo hi",
+      "environment": null,
+      "remote_host": null
+     },
+     "args": {
+      "banner_timeout": 30.0,
+      "cmd_timeout": null,
+      "command": "echo hi",
+      "conn_timeout": null,
+      "environment": null,
+      "get_pty": false,
+      "remote_host": null,
+      "skip_on_exit_code": [],
+      "ssh_conn_id": "edge_host",
+      "ssh_hook": {
+       "repr": "<airflow.providers.ssh.hooks.ssh.SSHHook object at 0x13ba37e30>"
+      }
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "dock",
+     "type": "DockerOperator",
+     "module": "airflow.providers.docker.operators.docker",
+     "group": null,
+     "upstream": [
+      "ssh"
+     ],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "image": "alpine:3",
+      "command": "echo hi",
+      "environment": {},
+      "env_file": null,
+      "container_name": null
+     },
+     "args": {
+      "api_version": null,
+      "auto_remove": "never",
+      "cap_add": null,
+      "command": "echo hi",
+      "container_name": null,
+      "cpus": 1.0,
+      "device_requests": null,
+      "dns": null,
+      "dns_search": null,
+      "docker_conn_id": null,
+      "docker_url": "unix://var/run/docker.sock",
+      "entrypoint": null,
+      "env_file": null,
+      "environment": {},
+      "extra_hosts": null,
+      "force_pull": false,
+      "host_tmp_dir": null,
+      "hostname": null,
+      "image": "alpine:3",
+      "ipc_mode": null,
+      "log_opts_max_file": null,
+      "log_opts_max_size": null,
+      "mem_limit": null,
+      "mount_tmp_dir": true,
+      "mounts": [],
+      "network_mode": null,
+      "port_bindings": {},
+      "privileged": false,
+      "retrieve_output": false,
+      "retrieve_output_path": null,
+      "shm_size": null,
+      "skip_on_exit_code": [],
+      "timeout": 60,
+      "tls_ca_cert": null,
+      "tls_client_cert": null,
+      "tls_client_key": null,
+      "tls_hostname": null,
+      "tls_ssl_version": null,
+      "tls_verify": true,
+      "tmp_dir": "/tmp/airflow",
+      "tty": false,
+      "ulimits": [],
+      "user": null,
+      "working_dir": null,
+      "xcom_all": false
+     },
+     "callable_args": {}
+    }
+   ]
+  }
+ ],
+ "import_errors": {}
+}

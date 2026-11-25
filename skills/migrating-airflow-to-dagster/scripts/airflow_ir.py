@@ -328,8 +328,13 @@ def _task_ir(task: Any) -> dict[str, Any]:
     try:
         own = set(inspect.signature(type(task).__init__).parameters) - _BASE_PARAMS - {"self", "args", "kwargs"}
         t["args"] = {n: _jsonable(getattr(task, n)) for n in sorted(own) if hasattr(task, n) and not callable(getattr(task, n, None))}
+        # constructor arguments that hold a function (response_check=, response_filter=, a SQL handler, ...): `args` leaves them out, so name them here
+        # and the converter can refuse an operator whose behavior depends on one instead of silently dropping it
+        t["callable_args"] = {n: f"{getattr(getattr(task, n), '__module__', '')}.{getattr(getattr(task, n), '__qualname__', type(getattr(task, n)).__name__)}"
+                              for n in sorted(own) if getattr(task, n, None) is not None and callable(getattr(task, n, None))}
     except (TypeError, ValueError):
         t["args"] = {}
+        t["callable_args"] = {}
     # SQL (or other) template files named by a templated field: read them now, from the DAG's template search path
     files: dict[str, str] = {}
     exts = tuple(getattr(task, "template_ext", ()) or ())

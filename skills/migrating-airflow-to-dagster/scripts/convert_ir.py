@@ -44,6 +44,8 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import provider_ops as P
+
 CONTEXT_PARAMS = {"ds", "ds_nodash", "ts", "ti", "task_instance", "dag_run", "logical_date", "data_interval_start",
                   "data_interval_end", "context", "execution_date", "params", "prev_ds", "next_ds", "run_id", "conf", "dag", "task"}
 # Airflow's task context. SUPPORTED are rebuilt from run tags by the generated runtime; the others defer.
@@ -80,13 +82,15 @@ BRANCH = {"BranchPythonOperator", "_BranchPythonDecoratedOperator"} | ISOLATED_B
 SHORT = {"ShortCircuitOperator", "_ShortCircuitDecoratedOperator"}
 TRIGGER = {"TriggerDagRunOperator"}          # launches another converted DAG's job and waits for it (wait_for_completion=True)
 SENSOR_CALL = {"PythonSensor", "DecoratedSensorOperator"}                                # sensors that poll a callable
-SENSORS = SENSOR_CALL | {"BashSensor", "FileSensor", "TimeSensor", "TimeDeltaSensor"}   # converted as a polling step (Airflow's default `poke` behavior)
+SENSORS = SENSOR_CALL | {"BashSensor", "FileSensor", "TimeSensor", "TimeDeltaSensor", "HttpSensor"}   # converted as a polling step (Airflow's default `poke` behavior)
 CLOCK_BRANCH = {"BranchDateTimeOperator", "BranchDayOfWeekOperator"}      # branch on the clock or the logical date: no callable
 GATE_RULES = {"all_success", "all_failed", "all_done", "one_success", "one_failed", "one_done", "none_failed", "none_failed_min_one_success",
               "none_skipped", "all_skipped", "all_done_min_one_success", "always", "all_done_setup_success"}
 PLAIN_RULES = {"all_success", "none_failed", "none_failed_min_one_success"}               # behave like all_success when a failure stops the run anyway
 S3_OPS = {"S3ListOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "LocalFilesystemToS3Operator", "S3CreateObjectOperator"}
 SNOWFLAKE_OPS = {"CopyFromExternalStageToSnowflakeOperator", "SnowflakeOperator", "SQLExecuteQueryOperator"}
+PROV = P.TYPES                  # provider operators translated by provider_ops.py (HTTP, SQL on other databases, Kubernetes pods, email, Slack, dbt Cloud, Airbyte, Fivetran, Databricks)
+PROV_STEPS = PROV - {"HttpSensor"}          # the ones that run as a step of their own (the sensor is a polling step)
 
 
 class Defer(Exception):
@@ -385,7 +389,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
 # --------------------------------------------------------------------------------------------------------------------
 def is_custom(t: dict[str, Any]) -> bool:
     """A user-defined operator (an `execute` method on a BaseOperator subclass in the project, not a provider's) that nothing else here maps."""
-    known = ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | TRIGGER | S3_OPS | SNOWFLAKE_OPS | {"ExternalTaskSensor"}
+    known = ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | TRIGGER | S3_OPS | SNOWFLAKE_OPS | PROV | {"ExternalTaskSensor"}
     return bool(t.get("operator_class")) and t["type"] not in known and not t.get("is_mapped")
 
 
@@ -563,6 +567,9 @@ def task_templates(t: dict[str, Any]) -> Any:
     ty, tf = t["type"], t["template_fields"]
     if ty in TRIGGER:
         return [tf.get("conf"), tf.get("trigger_dag_id")]
+    h = P.handler_for(t)
+    if h:
+        return h.fields(t)
     if t.get("operator_class"):
         return [t.get("args")]
     if ty == "BashSensor":
@@ -647,9 +654,19 @@ HINTS: dict[str, dict[str, Any]] = {
     "CopyFromExternalStageToSnowflakeOperator": {"official": "dagster-snowflake SnowflakeResource", "registry": ["snowflake_resource"], "gap": "no COPY INTO asset"},
     "SnowflakeOperator": {"official": "dagster-snowflake SnowflakeResource", "registry": ["snowflake_resource", "snowflake_stored_procedure_call_asset"], "gap": "no run-SQL-statements asset (multi-statement split, USE overrides)"},
     "SQLExecuteQueryOperator": {"official": "dagster-snowflake SnowflakeResource (Snowflake connections)", "registry": ["snowflake_resource"], "gap": "no run-SQL-statements asset"},
-    "KubernetesPodOperator": {"official": "dagster-k8s PipesK8sClient", "registry": ["k8s_job_asset"], "gap": ""},
-    "SimpleHttpOperator": {"registry": ["http_resource", "http_poll_sensor"], "gap": "no request-as-an-asset component"},
-    "HttpOperator": {"registry": ["http_resource", "http_poll_sensor"], "gap": "no request-as-an-asset component"},
+    "KubernetesPodOperator": {"official": "dagster-k8s execute_k8s_job (PipesK8sClient needs a container that speaks the Pipes protocol)", "registry": ["k8s_job_asset"],
+                              "gap": "k8s_job_asset has no args, labels, node selector or kubeconfig fields; the converter calls execute_k8s_job itself"},
+    "SimpleHttpOperator": {"registry": ["http_external_asset", "http_webhook_job", "http_resource"], "gap": "no component returns the response body as the asset value; the converter calls requests itself"},
+    "HttpOperator": {"registry": ["http_external_asset", "http_webhook_job", "http_resource"], "gap": "no component returns the response body as the asset value; the converter calls requests itself"},
+    "HttpSensor": {"registry": ["http_poll_sensor"], "gap": "http_poll_sensor starts a run when a response changes; it does not hold a pipeline step open until an endpoint answers"},
+    "EmailOperator": {"registry": ["smtp_send_asset"], "gap": "smtp_send_asset sends one email per row of an upstream DataFrame; there is no component that sends one message with a fixed body"},
+    "SlackWebhookOperator": {"registry": ["slack_notification_job", "slack_message_send"], "gap": "slack_notification_job is a job, not a step in a DAG; slack_message_send needs an upstream DataFrame"},
+    "DbtCloudRunJobOperator": {"official": "dagster-dbt DbtCloudClientResource", "registry": ["dbt_cloud_trigger_job"], "gap": "dbt_cloud_trigger_job is a job, not a step in a DAG"},
+    "AirbyteTriggerSyncOperator": {"official": "dagster-airbyte AirbyteResource", "registry": ["airbyte_sync_trigger_job"], "gap": "airbyte_sync_trigger_job is a job, not a step in a DAG"},
+    "FivetranOperator": {"official": "dagster-fivetran FivetranResource", "registry": ["fivetran_sync_trigger_job"], "gap": "fivetran_sync_trigger_job is a job, not a step in a DAG, and does not wait"},
+    "DatabricksRunNowOperator": {"official": "dagster-databricks DatabricksClientResource", "registry": ["databricks_asset_bundle"], "gap": "no component runs an existing job by id"},
+    "DatabricksSubmitRunOperator": {"official": "dagster-databricks DatabricksClientResource", "registry": ["databricks_asset_bundle"], "gap": "no component submits a one-off run from a JSON body"},
+    "SqlQuery": {"registry": ["sql_asset"], "gap": "sql_asset (connection_env) runs the statements but returns no rows"},
     "TriggerDagRunOperator": {"registry": ["asset_to_job_trigger_sensor"], "gap": "usually an asset dependency or automation condition instead"},
     "ExternalTaskSensor": {"registry": [], "gap": "usually an asset dependency; no sensor component for a task state in another job"},
     "TimeSensor": {"registry": [], "gap": "no time-of-day wait component; usually a schedule"},
@@ -672,20 +689,12 @@ OPERATOR_COMPONENTS: dict[str, str] = {
     "GlueJobOperator": "aws_glue",
     "BigQueryInsertJobOperator": "google_bigquery",
     "DataflowTemplatedJobStartOperator": "google_dataflow",
-    "DatabricksSubmitRunOperator": "databricks_asset_bundle, databricks_resource",
-    "DatabricksRunNowOperator": "databricks_asset_bundle, databricks_resource",
-    "DbtCloudRunJobOperator": "dbt_cloud_trigger_job",
-    "AirbyteTriggerSyncOperator": "airbyte_sync_trigger_job",
-    "FivetranOperator": "fivetran_sync_trigger_job",
     "AzureDataFactoryRunPipelineOperator": "azure_data_factory",
     "SQLColumnCheckOperator": "enhanced_data_quality_checks (null_check, uniqueness_check, range_check as asset checks)",
-    "SlackWebhookOperator": "slack_notification_job",
     "SlackAPIPostOperator": "slack_notification_job",
-    "EmailOperator": "no email component; use a Dagster alert",
     "S3CreateObjectOperator": "s3_create_object_asset",
     "LoopGateOperator": "loop_gate_asset (Airflow 3.4 task-group loops: body callable, until callable, max_iterations)",
     "S3ListPrefixesOperator": "s3_list_keys_asset (common_prefixes metadata)",
-    "KubernetesPodOperator": "k8s_job_asset",
 }
 
 
@@ -937,7 +946,7 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
         return None, []
     why: list[str] = []
     for tid, t in tasks.items():
-        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | S3_OPS | SNOWFLAKE_OPS and not is_custom(t):
+        if t["type"] not in ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | S3_OPS | SNOWFLAKE_OPS | PROV and not is_custom(t):
             why.append(f"{tid}: a {t['type']} inside a DAG with mapped tasks (only Python and shell tasks are converted there)")
     mp: dict[str, Any] = {}
     for tid, t in mapped.items():
@@ -1059,7 +1068,7 @@ def sla_wrap(body: str, t: dict[str, Any], key: str) -> str:
 
 
 COMPONENT_TASKS = {"BashOperator", "EmptyOperator", "DummyOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "S3ListOperator",
-                   "LocalFilesystemToS3Operator", "S3CreateObjectOperator"} | {"PythonOperator", "_PythonDecoratedOperator"}
+                   "LocalFilesystemToS3Operator", "S3CreateObjectOperator"} | {"PythonOperator", "_PythonDecoratedOperator"} | {"SqlQuery", "BashSensor", "TimeSensor"}
 
 
 def _plain(v: Any) -> bool:
@@ -1079,12 +1088,15 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     Returns ({relative path: content}, summary overrides). One component per task in a `defs.yaml` (documents separated by `---`), a schedule
     component for the cron, and a module with the copied callables for Python tasks."""
     if summary.get("mapping") or summary.get("partitions") or summary.get("triggers") or summary.get("pools") or summary.get("max_active_runs") \
-            or summary.get("run_timeout_s") or summary.get("caveats") or summary.get("uses_context") or summary.get("snowflake_resources"):
+            or summary.get("run_timeout_s") or summary.get("caveats") or summary.get("uses_context") or summary.get("snowflake_resources") \
+            or any(k != "sql" for k in (summary.get("provider_connections") or {}).values()):
         return None
+    dag = normalise_provider_tasks(dag)
     tasks = {t["task_id"]: t for t in dag["tasks"]}
     dag_id, name = dag["dag_id"], safe(dag["dag_id"])
     if any(t["type"] not in COMPONENT_TASKS or t.get("is_mapped") or t["trigger_rule"] != "all_success" or t["outlets"] or t["inlets"] or t.get("sla_s")
            or t.get("is_setup") or t.get("is_teardown") or t.get("callback_fns") or t.get("callbacks") or t.get("pool")
+           or (t.get("sensor") or {}).get("soft_fail")
            for t in tasks.values()):
         return None
     real = [t for t in tasks.values() if t["type"] not in ELIDED]
@@ -1180,6 +1192,35 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
                     return None
                 attrs.update(local_path=tf.get("filename"), bucket=tf.get("dest_bucket"), key=tf.get("dest_key"), replace=bool(tf.get("replace")))
                 doc("S3UploadFileAssetComponent", attrs)
+        elif ty == "SqlQuery":                                   # sql_asset reads a SQLAlchemy URL from the environment (connection_env), as the Python form does
+            a_ = P._a(t)
+            sql = P.sql_text(t)
+            stmts = [sql] if isinstance(sql, str) else sql
+            if P.handler_for(t).check(t)[0] or not isinstance(stmts, list) or not _plain([stmts, a_.get("parameters")]) or a_.get("split_statements") \
+                    or isinstance(a_.get("parameters"), list) or (a_.get("autocommit") and len(stmts) > 1):
+                return None                                      # (the component runs everything in one transaction, returns no rows and does not split)
+            attrs.pop("asset_name")
+            attrs.update(asset_key=aname[tid], connection_env=f"{P.envname(P.sql_conn(t))}_URL", sql_statements=stmts, parameters=a_.get("parameters") or None)
+            doc("SqlAssetComponent", attrs)
+        elif ty in ("BashSensor", "TimeSensor"):                 # wait_until_asset
+            sn = t.get("sensor") or {}
+            attrs.update(poll_seconds=sn.get("poke_interval"), timeout_seconds=sn.get("timeout"))
+            if ty == "BashSensor":
+                cmd = (t.get("template_fields") or {}).get("bash_command")
+                if not isinstance(cmd, str) or not _plain(cmd) or (t.get("template_fields") or {}).get("env") or (a.get("retry_exit_code") is None):
+                    return None                                  # without retry_exit_code Airflow keeps polling on any failure; the component fails at once
+                attrs.update(condition="shell_exit_zero", command=cmd, retry_exit_code=a["retry_exit_code"])
+            else:
+                import datetime as _d
+                import zoneinfo
+                tzn = summary.get("timezone") or "UTC"
+                if not sn.get("target_datetime"):
+                    return None
+                at = _d.datetime.fromisoformat(sn["target_datetime"]).astimezone(zoneinfo.ZoneInfo(tzn)).time()
+                if at.second or at.microsecond:
+                    return None                                  # time_of_day has minute precision
+                attrs.update(condition="time_of_day", time_of_day=at.strftime("%H:%M"), timezone=tzn)
+            doc("WaitUntilAssetComponent", attrs)
         else:
             return None
     if summary.get("schedule"):
@@ -1260,8 +1301,28 @@ def expand_loops(dag: dict[str, Any]) -> dict[str, Any]:
     return {**dag, "tasks": tasks}
 
 
+def normalise_provider_tasks(dag: dict[str, Any]) -> dict[str, Any]:
+    """Give provider operators that share a handler one type: SimpleHttpOperator is HttpOperator, and SQL operators on a connection that is not Snowflake
+    (SQLExecuteQueryOperator, PostgresOperator, MySqlOperator, ...) are `SqlQuery`. The type the DAG used stays in `orig_type` for messages."""
+    out = []
+    for t in dag["tasks"]:
+        ty = t["type"]
+        new = None
+        if ty in P.ALIASES:
+            new = P.ALIASES[ty]
+        elif ty in P.SQL_OPS and not (ty == "SQLExecuteQueryOperator" and "snowflake" in P.sql_conn({**t, "type": ty}).lower()):
+            new = "SqlQuery"
+        out.append({**t, "type": new, "orig_type": ty} if new else t)
+    return {**dag, "tasks": out}
+
+
+def tname(t: dict[str, Any]) -> str:
+    return t.get("orig_type") or t["type"]
+
+
 def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tuple[str, dict[str, Any]]:
     """(module source, summary). Raises Defer if any part of the DAG cannot be converted."""
+    dag = normalise_provider_tasks(dag)
     reasons: list[str] = []
     caveats: list[dict[str, str]] = []                         # kind "stub": a task written as a marked stub; "degraded": translated with a known difference
     catchup_note = ""
@@ -1287,13 +1348,20 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         dag = {**dag, "tasks": [({**t, "type": "EmptyOperator"} if t["task_id"] in ext_ids else t) for t in dag["tasks"]]}
     dag = expand_loops(dag)
     if CAVEATS != "off":                                     # tasks the converter cannot translate become marked stubs; the DAG keeps its shape
-        soft_known = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | SENSORS | TRIGGER | BRANCH | SHORT | CLOCK_BRANCH
+        soft_known = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | SENSORS | TRIGGER | BRANCH | SHORT | CLOCK_BRANCH
 
         def soft_reason(t: dict[str, Any]) -> str | None:
             if t["type"] in TRIGGER:
                 tgt = (t.get("args") or {}).get("trigger_dag_id")
                 if isinstance(tgt, str) and "{{" not in tgt and tgt not in ALL_DAG_IDS:
                     return f"TriggerDagRunOperator target DAG {tgt!r} is not among the converted DAGs"
+            h = P.handler_for(t)
+            if h:                                              # a provider operator: its own refusals, then the template check below
+                if t.get("is_mapped"):
+                    return f"mapped {tname(t)} is not converted (only mapped S3 and Snowflake operators are)"
+                stubs, _ = h.check(t)
+                if stubs:
+                    return f"{tname(t)}: " + "; ".join(stubs)
             if t["type"] not in soft_known and not is_custom(t):
                 hint = OPERATOR_COMPONENTS.get(t["type"])
                 return f"operator {t['type']} has no conversion yet" + (f" (registry: {hint})" if hint else "")
@@ -1481,6 +1549,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             soften(f"{tid}: execution_timeout on a non-shell task is not enforced (a Python callable cannot be interrupted safely)", tid)
         if len(t["outlets"]) > 1:
             reasons.append(f"{tid}: {len(t['outlets'])} outlets")
+        h_ = P.handler_for(t)
+        if h_ and not t.get("_caveat"):
+            if t.get("is_mapped"):
+                reasons.append(f"{tid}: mapped {tname(t)} is not converted")
+            else:
+                stubs_, deg_ = h_.check(t)
+                reasons += [f"{tid}: {tname(t)}: {x}" for x in stubs_]
+                for x in deg_:
+                    soften(f"{tid}: {tname(t)}: {x}", tid)
         if ty in TRIGGER:
             a = t.get("args") or {}
             for k in ("reset_dag_run", "trigger_run_id", "logical_date", "skip_when_already_exists", "fail_when_dag_is_paused"):
@@ -1500,7 +1577,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 reasons.append(f"{tid}: TimeDeltaSensor delta not found")
             if sn.get("soft_fail") and not (mplan and mplan["mode"] == "graph"):
                 reasons.append(f"{tid}: a sensor with soft_fail (skip handling needs the graph form)")
-        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | SENSORS | TRIGGER and not is_custom(t) and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT | CLOCK_BRANCH):
+        if ty not in ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | SENSORS | TRIGGER and not is_custom(t) and not (mplan and mplan["mode"] == "graph" and ty in BRANCH | SHORT | CLOCK_BRANCH):
             reasons.append(f"{tid}: operator {ty}")
         _, jprob = jinja_vars(task_templates(t))
         if jprob:
@@ -1684,6 +1761,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     dag_params = dag.get("params") or {}
     graph_outs: list[str] = []
 
+    prov_conns: dict[str, str] = {}                              # connection id -> kind of the provider operators that use it (listed in the report)
+    prov_reqs: set[str] = set()
+
+    def prov_for(t: dict[str, Any], params: dict[str, str], ctxn: str | None) -> "P.Prov":
+        """The body of a provider operator (see provider_ops.py), with its connection and the packages it needs recorded."""
+        pv = P.handler_for(t).build(t, lambda v: expr(v, params, ctxn))
+        if pv.conn:
+            prov_conns[pv.conn] = pv.kind
+        prov_reqs.update(P.REQUIREMENTS.get(pv.kind, []))
+        return pv
+
     def custom_body(t: dict[str, Any], ctx_line: str, pyname_support: bool = True) -> str:
         """A user-defined operator: its copied class, created with the operator's own arguments, then execute(context)."""
         code, sup, _ = resolved[t["task_id"]]
@@ -1700,6 +1788,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         setup = ""
         if ty in SENSOR_CALL:
             check = call_inner
+        elif ty in P.SENSOR_TYPES:                                     # HttpSensor
+            check = prov_for(t, params, ctxn).stmt
         elif ty == "BashSensor":
             check = f"bash_sensor({expr(tf.get('bash_command'), params, ctxn)}, {tf.get('env')!r}, {a.get('retry_exit_code')!r})"
         elif ty == "FileSensor":
@@ -1841,6 +1931,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 sf_resources.add(conn)
                 deco.append(f"required_resource_keys={{{conn!r}}}")
                 body = ctx_line + f"    {stmt}\n    return None"
+            elif ty in PROV_STEPS:
+                pv = prov_for(t, params, ctxn)
+                if pv.resource:
+                    deco.append(f"required_resource_keys={{{pv.conn!r}}}")
+                body = ctx_line + "".join(f"    {ln}\n" for ln in pv.stmt.split("\n")) + ("" if pv.stmt.startswith("return") else "    return None")
             elif ty in ELIDED:
                 body = "    return None"
             elif ty in CLOCK_BRANCH:
@@ -2135,6 +2230,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             else:
                 body = ctx_line + (f"    return {inner}" if not ret_none else f"    {inner}")
                 deco.append("kinds={'python'}")
+        elif ty in PROV_STEPS:
+            pv = prov_for(t, params, ctxn)
+            if pv.resource:
+                deco.append(f"required_resource_keys={{{pv.conn!r}}}")
+            deco.append(f"kinds={{{pv.kinds_tag!r}}}")
+            stmt = pv.stmt
+            if ret_none and stmt.startswith("return "):         # nothing reads the value: do not store it
+                stmt = stmt[len("return "):]
+            body = ctx_line + "".join(f"    {ln}\n" for ln in stmt.split("\n")).rstrip("\n")
+            pre = ""
+            ret_none = not stmt.startswith("return")
         elif ty in SNOWFLAKE_OPS:
             stmt, conn = snowflake_call(t, ctxn)
             sf_resources.add(conn)
@@ -2267,8 +2373,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         produced[k] = dag_id
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
-                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "catalog_keys": [list(v) for v in rt_outlets.values()], "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
-                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "provider_connections": dict(sorted(prov_conns.items())), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "catalog_keys": [list(v) for v in rt_outlets.values()], "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
+                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | prov_reqs | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
@@ -3411,6 +3517,9 @@ exec(ITEM_SRC)           # item_key is also used at conversion time, so the conv
 RUNTIME += ITEM_SRC + GATE_SRC
 
 
+RUNTIME += P.PROVIDER_RUNTIME
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ir", type=Path)
@@ -3463,6 +3572,7 @@ def main(argv: list[str] | None = None) -> int:
     produced: dict[str, str] = {}
     resources: set[str] = set()
     sf_resources: set[str] = set()
+    prov_conns: dict[str, str] = {}
     external: set[str] = set()
     for dag in ir["dags"]:
         name = safe(dag["dag_id"])
@@ -3485,6 +3595,7 @@ def main(argv: list[str] | None = None) -> int:
             report["dags"][dag["dag_id"]] = {"status": "converted", **summary}
             resources |= set(summary["resources"])
             sf_resources |= set(summary["snowflake_resources"])
+            prov_conns.update(summary.get("provider_connections") or {})
             external |= set(summary["external"])
         except Defer as e:
             report["dags"][dag["dag_id"]] = {"status": "deferred", "reason": str(e)}
@@ -3494,17 +3605,23 @@ def main(argv: list[str] | None = None) -> int:
             report["dags"][dag["dag_id"]] = {"status": "deferred", "reason": f"CONVERTER ERROR {type(e).__name__}: {e}"}
     owned = {"/".join(k) for v in report["dags"].values() if v["status"] == "converted" for k in [*v["keys"], *v.get("catalog_keys", [])]}
     ext = sorted(e for e in external if e not in owned)
-    if resources or sf_resources:
+    lib_res = {c: k for c, k in prov_conns.items() if k in P.RESOURCE_KINDS}
+    if resources or sf_resources or lib_res:
         lines = ['"""Airflow connections become resources under the same key (credentials from the environment)."""',
                  "import dagster as dg"]
         if resources:
             lines.append("from dagster_aws.s3 import S3Resource")
         if sf_resources:
             lines.append("from dagster_snowflake import SnowflakeResource")
+        lines += sorted({P.RESOURCE_KINDS[k]["import"] for k in lib_res.values()})
         entries = [f"{r!r}: S3Resource()" for r in sorted(resources)] + [
             f"{r!r}: SnowflakeResource(account=dg.EnvVar('SNOWFLAKE_ACCOUNT'), user=dg.EnvVar('SNOWFLAKE_USER'), password=dg.EnvVar('SNOWFLAKE_PASSWORD'))"
-            for r in sorted(sf_resources)]
+            for r in sorted(sf_resources)] + [f"{c!r}: {P.RESOURCE_KINDS[k]['ctor'](c)}" for c, k in sorted(lib_res.items())]
         (a.out_dir / "resources.py").write_text("\n".join(lines) + "\n\n\n@dg.definitions\ndef resources() -> dg.Definitions:\n    return dg.Definitions(resources={" + ", ".join(entries) + "})\n")
+    if prov_conns:                                   # what each provider connection needs, by name only: no value is ever copied
+        report["connections"] = {c: {"kind": k, "environment": (P.RESOURCE_KINDS[k]["env"](c) if k in P.RESOURCE_KINDS else P.ENV_KINDS[k](c)),
+                                     "read_by": "resource in resources.py" if k in P.RESOURCE_KINDS else "the step, when it runs"}
+                                 for c, k in sorted(prov_conns.items()) if k in P.RESOURCE_KINDS or k in P.ENV_KINDS}
     if ext:
         (a.out_dir / "sources.py").write_text(
             '"""Assets that converted DAGs read or are triggered by but that no converted DAG produces."""\n'
@@ -3527,9 +3644,9 @@ def main(argv: list[str] | None = None) -> int:
     reqs = sorted({r for v in report["dags"].values() if v["status"] == "converted" for r in v["requirements"]})
     if reqs:
         (a.out_dir.parent / "converted_requirements.txt").write_text("\n".join(reqs) + "\n")
-    supported = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS
+    supported = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | P.SQL_OPS | set(P.ALIASES)
     ops = Counter(t["type"] for d in ir["dags"] for t in d["tasks"])
-    report["operators"] = {ty: {"tasks": n, "mapped_by_converter": ty in supported, **(HINTS.get(ty) or {})} for ty, n in ops.most_common()}
+    report["operators"] = {ty: {"tasks": n, "mapped_by_converter": ty in supported, **(HINTS.get(ty) or ({"registry": [OPERATOR_COMPONENTS[ty]]} if ty in OPERATOR_COMPONENTS else {}))} for ty, n in ops.most_common()}
     a.report.write_text(json.dumps(report, indent=1) + "\n")
     c = Counter(v["status"] for v in report["dags"].values())
     print(f"{c['converted']} converted, {c['deferred']} deferred of {len(report['dags'])} DAGs; resources {sorted(resources | sf_resources)}; external assets {len(ext)}")
