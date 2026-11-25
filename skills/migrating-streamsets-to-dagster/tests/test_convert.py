@@ -39,7 +39,7 @@ def test_scripts_are_stubs_that_carry_the_script_text(result):
 
 def test_every_untranslated_stage_has_its_own_unit(result):
     stubs = [i for i in result.items if i.kind == "stage"]
-    assert len(stubs) == 10
+    assert len(stubs) == 6
     assert sum(len(m["stubs"]) for m in result.meta["pipelines"].values()) == len(stubs)
 
 

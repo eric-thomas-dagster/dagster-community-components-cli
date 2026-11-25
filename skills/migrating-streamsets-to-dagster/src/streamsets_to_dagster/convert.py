@@ -17,17 +17,17 @@ STREAMING_ORIGINS = {
     "KafkaMultiDSource": "Kafka multi-topic consumer", "KinesisDSource": "Kinesis consumer", "JmsDSource": "JMS consumer",
     "MqttClientDSource": "MQTT subscriber", "RabbitDSource": "RabbitMQ consumer", "PulsarDSource": "Pulsar consumer",
     "HttpServerDSource": "HTTP server", "WebSocketServerDSource": "WebSocket server", "RestServiceDSource": "REST service",
-    "FileTailDSource": "File tail", "SpoolDirDSource": "Directory (spooling)", "GoogleCloudPubSubDSource": "Google Pub/Sub",
-    "SalesforceDSource": "Salesforce streaming", "TcpServerDSource": "TCP server", "UDPDSource": "UDP source", "CoapServerDSource": "CoAP server",
+    "FileTailDSource": "File tail", "GoogleCloudPubSubDSource": "Google Pub/Sub",
+    "TcpServerDSource": "TCP server", "UDPDSource": "UDP source", "CoapServerDSource": "CoAP server",
 }
+# origins that poll forever in StreamSets but can be read as one batch of what exists when the run starts
+BATCHED_CONTINUOUS = {"SpoolDirDSource": "Directory"}
 SCRIPTS = {"GroovyDProcessor": "Groovy", "JythonDProcessor": "Jython", "JavaScriptDProcessor": "JavaScript",
            "GroovyDSource": "Groovy", "JythonDSource": "Jython", "JavaScriptDSource": "JavaScript"}
 SUGGEST = {
-    "DatabricksDeltaLakeDTarget": "load the data with the registry's DataframeToDeltaTableComponent or a Databricks SQL step (reference/mapping.md)",
     "HdfsDTarget": "write to object storage (fsspec) or load the warehouse directly; Hadoop is usually being retired in the same move",
     "HiveMetadataDProcessor": "Hive drift handling belongs to the warehouse load; replace it with a schema-sync step",
     "HiveMetastoreDTarget": "see HiveMetadataDProcessor", "HiveQueryDExecutor": "run the query through the warehouse resource",
-    "ForceDSource": "use the registry's SalesforceIngestionComponent (dlt's verified Salesforce source)",
     "KafkaDSource": "use the registry's KafkaToDatabaseAssetComponent with kafka_monitor, or keep the stream in StreamSets",
 }
 
@@ -49,6 +49,7 @@ class Result:
     items: list[Item] = field(default_factory=list)
     questions: dict = field(default_factory=dict)
     meta: dict = field(default_factory=dict)
+    files: dict = field(default_factory=dict)        # path under src/<pkg>/ -> text (hand-written stage replacements)
 
 
 class _Stub(Exception):
@@ -69,9 +70,30 @@ def _lanes(s: Stage) -> str:
 
 
 def _pre(s: Stage) -> str:
-    if not s.preconditions:
-        return ""
-    return ", pre=[" + ", ".join(_el(p) for p in s.preconditions) + "]"
+    out = ""
+    if s.preconditions:
+        out += ", pre=[" + ", ".join(_el(p) for p in s.preconditions) + "]"
+    req = [x for x in (s.conf.get("stageRequiredFields") or []) if isinstance(x, str)]
+    return out + (f", req={req!r}" if req else "")
+
+
+def _pick(c: dict, suffix: str, default=None):
+    """A property whose name ends with `suffix` (data-format settings sit under different prefixes per stage and version)."""
+    for k, v in c.items():
+        if k == suffix or k.endswith("." + suffix):
+            return v
+    return default
+
+
+def _delimited(c: dict) -> tuple[str, bool, str]:
+    fmt = _pick(c, "dataFormat") or "DELIMITED"
+    if fmt not in ("DELIMITED", "JSON"):
+        raise _Stub(f"data format {fmt} is not translated (DELIMITED and JSON are)")
+    ff = _pick(c, "csvFileFormat") or "CSV"
+    delim = {"CSV": ",", "TDF": "\t", "CUSTOM": _pick(c, "csvCustomDelimiter") or ","}.get(ff)
+    if delim is None:
+        raise _Stub(f"CSV file format {ff} is not translated")
+    return fmt, (_pick(c, "csvHeader") or "NO_HEADER") == "WITH_HEADER", delim
 
 
 def _err(s: Stage) -> str:
@@ -100,6 +122,14 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
     if cls in STREAMING_ORIGINS:
         raise _Stub(f"{STREAMING_ORIGINS[cls]} is a continuous origin; a Dagster run is a batch. Keep it running (tier 1) or pick a micro-batch design"
                     + (f"; {SUGGEST[cls]}" if cls in SUGGEST else ""))
+    if cls == "JythonDProcessor":
+        if (c.get("scriptRecordType") or "NATIVE_OBJECTS") != "NATIVE_OBJECTS":
+            raise _Stub("Jython with SDC_RECORDS record type is not translated (NATIVE_OBJECTS is)")
+        n.append("the script runs unchanged under CPython, not Jython: Python 2 syntax, Java imports and Jython-only calls fail at run time; review it")
+        if "sdc.createBatch" in str(c.get("script")):
+            raise _Stub("script builds its own batches (origin-style API)")
+        return (f"rt.jython_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {str(c.get('destroyScript') or '')!r}, "
+                f"{c.get('processingMode') or 'BATCH'!r}, {lanes}, events={s.events!r}{err}{pre})"), n
     if cls in SCRIPTS:
         raise _Stub(f"{SCRIPTS[cls]} script evaluator: the script is not translated (script is in the manifest notes)")
     if cls in SUGGEST:
@@ -208,6 +238,121 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         n.append("a batch run ends when its origins are exhausted; the finisher's precondition is not evaluated against a stop")
         return f"rt.pipeline_finisher(run, {I}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
 
+    if cls == "SpoolDirDSource":
+        if (c.get("conf.pathMatcherMode") or "GLOB") != "GLOB":
+            raise _Stub("path matcher mode other than GLOB is not translated")
+        fmt, header, delim = _delimited(c)
+        n.append("a Directory origin polls forever in StreamSets; here one run reads the files present when it starts. Schedule the asset (or add a file sensor) to pick up new files")
+        if (c.get("conf.postProcessing") or "NONE") != "NONE":
+            n.append("post-processing (archive/delete after reading) is not performed")
+        n.append("files already read are skipped on later runs (last file's order key is stored as asset metadata)")
+        ev = f", events={s.events!r}" if s.events else ", events=[]"
+        return (f"rt.spooldir_origin(run, {I}, {c.get('conf.spoolDir')!r}, {c.get('conf.filePattern') or '*'!r}, {fmt!r}, header={header}, "
+                f"delimiter={delim!r}, outputs={s.outputs!r}{ev}, batch={int(c.get('conf.batchSize') or 1000)}, "
+                f"order={'TIMESTAMP' if c.get('conf.useLastModified') == 'TIMESTAMP' else 'LEXICOGRAPHICAL'!r})"), n
+
+    if cls == "ForceDSource":
+        if not c.get("forceConfig.queryExistingData"):
+            raise _Stub("a Salesforce subscription (push topic / CDC) is continuous; only query mode is translated")
+        if (c.get("forceConfig.repeatQuery") or "NO_REPEAT") != "NO_REPEAT":
+            raise _Stub(f"repeat mode {c.get('forceConfig.repeatQuery')} keeps querying forever; only NO_REPEAT is translated")
+        soql = c.get("forceConfig.soqlQuery")
+        if not soql:
+            raise _Stub("no SOQL query")
+        n.append("the Bulk API setting is not applied: rows are read with the REST query API (slow for very large objects)")
+        if c.get("forceConfig.queryAll"):
+            n.append("'query all' (deleted records) is not applied")
+        domain = "test" if "test.salesforce" in str(c.get("forceConfig.authEndpoint") or "") else "login"
+        user, pw = c.get("forceConfig.username"), c.get("forceConfig.password")
+        ev = f", events={s.events!r}" if s.events else ""
+        return (f"rt.salesforce_origin(run, {I}, lambda: (({translate(user)}), ({translate(pw)}), '', {domain!r}), lambda: {soql!r}, "
+                f"{c.get('forceConfig.offsetColumn') or ''!r}, {str(c.get('forceConfig.initialOffset') or '')!r}, "
+                f"{int(c.get('forceConfig.basicConfig.maxBatchSize') or 1000)}, outputs={s.outputs!r}{ev})"), n
+
+    if cls == "FieldTypeConverterDProcessor":
+        if (c.get("convertBy") or "BY_FIELD") != "BY_FIELD":
+            raise _Stub("converting by type is not translated (by field is)")
+        rules = []
+        for r in _rows(c.get("fieldTypeConverterConfigs")):
+            t = r.get("targetType")
+            if t not in ("BOOLEAN", "BYTE", "SHORT", "INTEGER", "LONG", "FLOAT", "DOUBLE", "DECIMAL", "STRING"):
+                raise _Stub(f"target type {t} is not translated (numbers, boolean, string and decimal are; dates are not)")
+            for f in r.get("fields") or []:
+                if "*" in f and f != "/*" or "[" in f:
+                    raise _Stub(f"field pattern {f!r} is not translated (exact paths and /* are)")
+            rules.append((list(r.get("fields") or []), t))
+        n.append("locale, scale and rounding settings are not applied")
+        return f"rt.field_type_converter(run, {I}, {rules!r}, {lanes}{err}{pre})", n
+
+    if cls == "FieldRenamerDProcessor":
+        import re as _re
+        m = []
+        for r in _rows(c.get("renameMapping")):
+            a, b = r.get("fromFieldExpression", ""), r.get("toFieldExpression", "")
+            if not _re.fullmatch(r"/[A-Za-z0-9_ /.\-]+", a) or is_dynamic(b):
+                raise _Stub(f"rename {a!r} -> {b!r} uses a regular expression or an expression (literal paths are translated)")
+            m.append((a, b))
+        miss = c.get("errorHandler.nonExistingFromFieldHandling") or "TO_ERROR"
+        ex = c.get("errorHandler.existingToFieldHandling") or "TO_ERROR"
+        if miss not in ("TO_ERROR", "CONTINUE") or ex not in ("TO_ERROR", "REPLACE") or (c.get("errorHandler.multipleFromFieldsMatching") or "TO_ERROR") != "TO_ERROR":
+            raise _Stub(f"error handling {miss}/{ex} is not translated")
+        return f"rt.field_renamer(run, {I}, {m!r}, {miss!r}, {ex!r}, {lanes}{err}{pre})", n
+
+    if cls == "FieldOrderDProcessor":
+        if (c.get("config.outputType") or "LIST_MAP") != "LIST_MAP" or (c.get("config.missingFieldAction") or "TO_ERROR") not in ("TO_ERROR",) \
+                or (c.get("config.extraFieldAction") or "TO_ERROR") not in ("TO_ERROR", "DISCARD"):
+            raise _Stub("Field Order options other than LIST_MAP / TO_ERROR missing / TO_ERROR or DISCARD extra are not translated")
+        return (f"rt.field_order(run, {I}, {list(c.get('config.fields') or [])!r}, 'TO_ERROR', {c.get('config.extraFieldAction') or 'TO_ERROR'!r}, "
+                f"{lanes}{err}{pre})"), n
+
+    if cls == "SplitterDProcessor":
+        if (c.get("tooManySplitsAction") or "TO_LAST_FIELD") != "TO_LAST_FIELD":
+            raise _Stub("too-many-splits action other than TO_LAST_FIELD is not translated")
+        n.append("when the value has fewer parts than target fields, the remaining fields are set to null")
+        return (f"rt.splitter(run, {I}, {c.get('fieldPath')!r}, {c.get('separator') or ' '!r}, {list(c.get('fieldPathsForSplits') or [])!r}, 'TO_LAST_FIELD', "
+                f"{(c.get('originalFieldAction') or 'REMOVE') == 'KEEP'}, {lanes}{err}{pre})"), n
+
+    if cls == "DataParserDProcessor":
+        if (c.get("dataFormat") or "JSON") != "JSON" or (c.get("configs.multipleValuesBehavior") or "FIRST_ONLY") != "FIRST_ONLY":
+            raise _Stub("Data Parser is translated for JSON with first-value-only")
+        return f"rt.json_parser(run, {I}, {c.get('configs.fieldPathToParse')!r}, {c.get('configs.parsedFieldPath') or c.get('configs.fieldPathToParse')!r}, {lanes}{err}{pre})", n
+
+    if cls == "LocalFileSystemDTarget":
+        fmt = c.get("configs.dataFormat") or "TEXT"
+        if fmt not in ("DELIMITED", "JSON", "TEXT"):
+            raise _Stub(f"data format {fmt} is not translated (DELIMITED, JSON and TEXT are)")
+        if (c.get("configs.compression") or "NONE") != "NONE" or (c.get("configs.fileType") or "TEXT") != "TEXT":
+            raise _Stub("compressed output and sequence files are not translated")
+        ff = _pick(c, "csvFileFormat") or "CSV"
+        delim = {"CSV": ",", "TDF": "\t", "CUSTOM": _pick(c, "csvCustomDelimiter") or ","}.get(ff, ",")
+        n.append("file rolling (size/time) and late-record handling are not applied: one file per directory per run")
+        return (f"rt.local_fs_target(run, {I}, {_el(c.get('configs.dirPathTemplate'))}, {c.get('configs.uniquePrefix') or 'sdc'!r}, {fmt!r}, "
+                f"header={(_pick(c, 'csvHeader') or 'NO_HEADER') == 'WITH_HEADER'}, delimiter={delim!r}, text_path={_pick(c, 'textFieldPath') or '/text'!r}, "
+                f"{_lanes(s).split(', outputs')[0]}{err}{pre})"), n
+
+    if cls == "DatabricksDeltaLakeDTarget":
+        d = c.get("config.destinationConfig.connectionString")
+        if not d:
+            raise _Stub("no connection string")
+        cdc = bool(c.get("config.data.cdcData"))
+        beans = _rows(c.get("config.data.tableKeyBeans"))
+        keyed = [b for b in beans if b.get("keyColumns")]
+        if cdc and not keyed:
+            raise _Stub("CDC mode without key columns")
+        keys = "None"
+        if cdc:
+            keys = "lambda full: dict([" + ", ".join(f"(({translate(b.get('table', ''))}), {list(b['keyColumns'])!r})" for b in keyed) + "]).get(full, [])"
+            if any(b.get("table", "").endswith(".table_name") or "key_column_name" in b["keyColumns"] for b in keyed):
+                n.append("the table key bean still holds the template placeholder (table_name / key_column_name): set the real key columns or every CDC record is refused")
+        n.append("StreamSets stages files and runs COPY INTO; here records are written with SQL statements (fine for modest volumes, slow for bulk loads)")
+        n.append("null-value defaults, newline replacement and space trimming are not applied")
+        if cdc:
+            n.append("CDC operations are applied by key as delete then insert (the stage uses MERGE INTO)")
+        tok = c.get("config.destinationConfig.password")
+        return (f"rt.delta_target(run, {I}, lambda: rt.delta_url({I}, ({translate(d)}), ({translate(tok) if tok else repr('')})), {_el(c.get('config.destinationConfig.table'))}, "
+                f"auto_create={bool(c.get('config.destinationConfig.tableAutoCreate'))}, drift={bool(c.get('config.data.dataDriftEnabled'))}, keys_fn={keys}, cdc={cdc}, "
+                f"{_lanes(s).split(', outputs')[0]}{err}{pre})"), n
+
     raise _Stub(f"stage type {cls} ({s.library}) has no translation yet")
 
 
@@ -216,12 +361,29 @@ def _stub_call(s: Stage, why: str) -> str:
             f"is_origin={s.role == 'origin'})")
 
 
-def convert_pipeline(p: Pipeline, items: list[Item]) -> tuple[str, str, dict]:
+def _override_call(s: Stage, mod: str) -> str:
+    if s.role == "origin":
+        return f"rt.override_origin(run, {s.instance!r}, {mod}.produce, outputs={s.outputs!r}, events={s.events!r})"
+    return (f"rt.override(run, {s.instance!r}, {mod}.process, inputs={s.inputs!r}, outputs={s.outputs!r}, events={s.events!r}"
+            f"{_err(s)}{_pre(s)})")
+
+
+def convert_pipeline(p: Pipeline, items: list[Item], overrides: dict | None = None, files: dict | None = None) -> tuple[str, str, dict]:
     """(asset source, asset name, meta)"""
     name = "ss_" + slug(p.title)
-    lines, stubs, caveats, translated = [], [], [], 0
+    lines, stubs, caveats, translated, replaced = [], [], [], 0, 0
     order = p.topo()
     for s in order:
+        src = (overrides or {}).get((p.title, s.instance))
+        if src is not None:
+            mod = f"ov_{slug(p.title)}_{slug(s.instance)}"
+            files[f"overrides/{mod}.py"] = src
+            lines.append(f"    {_override_call(s, 'ovr.' + mod)}")
+            replaced += 1
+            items.append(Item("stage", f"{p.title} / {s.instance} ({s.cls})", name, REVIEW, "hand-written",
+                              [f"replaced by hand-written code (overrides/{mod}.py); review it against the original stage's behavior"]))
+            caveats.append(f"{s.instance}: replaced by hand-written code (overrides/{mod}.py)")
+            continue
         try:
             call, notes = emit(p, s)
             translated += 1
@@ -237,7 +399,8 @@ def convert_pipeline(p: Pipeline, items: list[Item]) -> tuple[str, str, dict]:
                 detail.append("script: " + str(s.conf.get("script") or "")[:1500].replace("\n", " ⏎ "))
             items.append(Item("stage", f"{p.title} / {s.instance} ({s.cls})", name, UNMAPPED, "stub", [why, *detail], {}))
     origin = [s for s in order if s.role == "origin"]
-    streaming = [STREAMING_ORIGINS[s.cls] for s in origin if s.cls in STREAMING_ORIGINS]
+    streaming = [STREAMING_ORIGINS[s.cls] for s in origin if s.cls in STREAMING_ORIGINS and (p.title, s.instance) not in (overrides or {})]
+    streaming += [BATCHED_CONTINUOUS[s.cls] + " origin (polls forever in StreamSets, read as one batch here)" for s in origin if s.cls in BATCHED_CONTINUOUS]
     if p.execution_mode and p.execution_mode not in ("STANDALONE", "CLUSTER_BATCH", "BATCH"):
         caveats.append(f"execution mode {p.execution_mode} is not reproduced (a Dagster run is one batch process)")
     if p.error_stage and p.error_stage not in ("ToErrorNullDTarget", "DiscardDTarget"):
@@ -253,7 +416,7 @@ def convert_pipeline(p: Pipeline, items: list[Item]) -> tuple[str, str, dict]:
     head = textwrap.dedent(f'''\
         # StreamSets pipeline: {p.title!r} (id {p.id}, {p.execution_mode or "no execution mode"}); source: {p.source}
         # Runtime parameters (the pipeline's constants). Override any with SDC_PARAM_<NAME>; credential parameters come from SDC_SECRET_<NAME>.
-        C_{name} = rt.constants({consts!r}, {secrets!r})
+        C_{name} = ({consts!r}, {secrets!r})
         ''')
     stage_count = len(order)
     body = "\n".join(lines) or "    pass"
@@ -261,7 +424,7 @@ def convert_pipeline(p: Pipeline, items: list[Item]) -> tuple[str, str, dict]:
     code = (head + f"""
 @dg.asset(name={name!r}, group_name="streamsets", kinds={{"python"}}, description={desc!r})
 def {name}(context: dg.AssetExecutionContext):
-    C = C_{name}
+    C = rt.constants(*C_{name})
     run = rt.Run(context, {p.title!r}, C, rt.load_offsets(context, dg.AssetKey({name!r})))
 """ + body + """
     stats = run.execute()
@@ -272,7 +435,7 @@ def {name}(context: dg.AssetExecutionContext):
         status = REVIEW
     if not origin or any(s.role == "origin" for s, _ in stubs):
         status = UNMAPPED
-    notes = [f"{translated}/{stage_count} stages translated"]
+    notes = [f"{translated}/{stage_count} stages translated" + (f", {replaced} replaced by hand-written code" if replaced else "")]
     if streaming:
         notes.append("continuous origin: " + ", ".join(streaming))
     items.insert(next((i for i, x in enumerate(items) if x.kind == "stage" and x.artifact == name), len(items)),
@@ -282,9 +445,13 @@ def {name}(context: dg.AssetExecutionContext):
                         "streaming": streaming, "secrets": secrets, "constants": list(consts), "status": status}
 
 
-def convert(est: Estate, pkg: str = "streamsets_migrated") -> Result:
+def convert(est: Estate, pkg: str = "streamsets_migrated", overrides: dict | None = None) -> Result:
+    """overrides: {(pipeline title, stage instance): python source} replacing a stage with hand-written code (`process(records, sdc)`; origins: `produce(sdc)`)."""
     from .questions import build_questions
     res = Result()
+    for (t, i) in overrides or {}:
+        if t not in est.pipelines or est.pipelines[t].stage(i) is None:
+            raise ValueError(f"override target {t!r} / {i!r} does not exist in the export")
     chunks, metas = [], {}
     for title, p in est.pipelines.items():
         try:
@@ -292,10 +459,10 @@ def convert(est: Estate, pkg: str = "streamsets_migrated") -> Result:
         except ValueError as e:
             res.items.append(Item("pipeline", title, "", UNMAPPED, "cycle", [str(e)]))
             continue
-        code, name, meta = convert_pipeline(p, res.items)
+        code, name, meta = convert_pipeline(p, res.items, overrides, res.files)
         chunks.append(code)
         metas[title] = {**meta, "asset": name}
-    res.code = '"""Generated by streamsets-to-dagster. One asset per StreamSets pipeline."""\nimport dagster as dg\n\nfrom .. import runtime as rt\nfrom ..runtime import fx  # noqa: F401  (used by translated expressions)\n\n\n' + "\n\n".join(chunks)
+    res.code = '"""Generated by streamsets-to-dagster. One asset per StreamSets pipeline."""\nimport dagster as dg\n\nfrom .. import overrides as ovr  # noqa: F401  (hand-written stage replacements)\nfrom .. import runtime as rt\nfrom ..runtime import fx  # noqa: F401  (used by translated expressions)\n\n\n' + "\n\n".join(chunks)
     res.meta = {"pipelines": metas}
     res.questions = build_questions(est, res)
     return res
@@ -308,7 +475,7 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
     pipes = result.meta.get("pipelines", {}).values()
     deps = ['"dagster>=1.11"', '"sqlalchemy>=2"']
     if any(m["translated"] for m in pipes):
-        deps += ['"fsspec"', '"s3fs"', '"pymysql"']
+        deps += ['"fsspec"', '"s3fs"', '"pymysql"', '"simple-salesforce"', '"databricks-sqlalchemy"']
     root = out_dir / "src" / pkg
     (root / "defs").mkdir(parents=True, exist_ok=True)
     (out_dir / "pyproject.toml").write_text(textwrap.dedent(f'''\
@@ -348,5 +515,10 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
             return load_from_defs_folder(path_within_project=Path(__file__).parent)
         '''))
     (root / "defs" / "streamsets.py").write_text(result.code)
+    (root / "overrides").mkdir(exist_ok=True)
+    for rel, text in result.files.items():
+        (root / rel).write_text(text)
+    mods = sorted(Path(rel).stem for rel in result.files)
+    (root / "overrides" / "__init__.py").write_text("".join(f"from . import {m}  # noqa: F401\n" for m in mods))
     from .manifest import build_manifest
     (out_dir / "MIGRATION.md").write_text(render_report(build_manifest(result)))

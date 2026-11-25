@@ -33,6 +33,16 @@ Translated (stage class = last `_` segment of `stageName`):
 | `JdbcDTarget` | INSERT; fields are matched to columns by name and unmatched fields are dropped. CDC change-log formats and UPDATE/DELETE are stubs. |
 | `NullDTarget`, `ToErrorNullDTarget`, `TrashDTarget` | Discard. |
 | `PipelineFinisherDExecutor` | A batch run ends when origins are exhausted. |
+| `SpoolDirDSource` (Directory) | GLOB, DELIMITED/JSON. **Polls forever in StreamSets**; one run reads the files present at the start. Last file's order key is stored as an offset. Archive/delete post-processing is not performed. |
+| `ForceDSource` (Salesforce) | Query mode (`queryExistingData`, NO_REPEAT). `${OFFSET}` in the SOQL is replaced by the stored offset and the query repeats until it returns nothing; the last `offsetColumn` value is stored. REST query API (Bulk API setting not applied); needs `simple-salesforce`. Subscriptions are stubs. |
+| `FieldTypeConverterDProcessor` | By field; BOOLEAN, BYTE, SHORT, INTEGER, LONG, FLOAT, DOUBLE, DECIMAL, STRING; exact paths and `/*`. Date/time targets are stubs. Locale, scale and rounding are not applied. |
+| `FieldRenamerDProcessor` | Literal paths; TO_ERROR/CONTINUE for a missing source, TO_ERROR/REPLACE for an existing target. Regular-expression sources are stubs. |
+| `FieldOrderDProcessor` | LIST_MAP, TO_ERROR for missing, TO_ERROR/DISCARD for extra fields. |
+| `SplitterDProcessor` | Separator is a regular expression; TO_LAST_FIELD; keep or remove the original. |
+| `DataParserDProcessor` | JSON string field, first value only. |
+| `JythonDProcessor` | BATCH and RECORD modes, NATIVE_OBJECTS, init/destroy scripts. **Runs unchanged under CPython**, with `sdc.records`, `sdc.output.write(record[, lane])`, `sdc.error.write`, `sdc.state`, `sdc.log` and the globals `records output error log state record`. Python 2 syntax, Java imports and Jython-only calls fail at run time with the interpreter's error. |
+| `LocalFileSystemDTarget` | DELIMITED, JSON (one object per line), TEXT. One file per directory per run (`<prefix>_<uuid>`); no rolling, compression or late-record handling. |
+| `DatabricksDeltaLakeDTarget` | SQL writes through SQLAlchemy (`databricks-sqlalchemy`; the URL is derived from the JDBC URL, or set `SDC_SQLALCHEMY_URL_<STAGE>`). Auto-creates the table from the first record, adds columns when drift is on, and in CDC mode applies `sdc.operation.type` by key as delete-then-insert. **StreamSets stages files and runs COPY INTO / MERGE**; this is slow for bulk loads. A CDC stage with no key columns is a stub. |
 
 Stubs with a pointer to the registry (check `dagster-community-components` before hand-building):
 
@@ -44,9 +54,12 @@ Stubs with a pointer to the registry (check `dagster-community-components` befor
 | Table-to-table replication (multitable origin to a warehouse) | `SlingReplicationAssetComponent` (bring a Sling replication YAML) |
 | `AmazonS3DSource` to a table | `S3ToDatabaseAssetComponent` with `s3_monitor` |
 | `HdfsDTarget`, Hive stages | Object storage or the warehouse; no Hadoop in the target |
-| Groovy / Jython / JavaScript evaluators | Rewrite as Python. The script text is kept in the manifest notes |
+| Groovy / JavaScript evaluators | Rewrite as Python and pass it with `--override`. The script text is kept in the manifest notes |
+| Jython evaluator | Translated (runs under CPython); see the catalog |
 
-Other stage types (Transformer/Spark stages, MongoDB, REST client, Kafka producer, ...) have no translation yet and are reported as stubs.
+Other stage types seen in real exports and not translated: HTTP Client (processor and destination), Local Lookup, JDBC Lookup, Geolocation, Kafka producer,
+Jython origin, vendor destinations (Anodot, ...), MongoDB, Elasticsearch, Field Mask, SDC_JSON data format. Also not translated: Transformer/Spark stages
+, MongoDB, REST client, Kafka producer, ...) have no translation yet and are reported as stubs.
 
 ## Expression language (EL)
 
@@ -68,5 +81,9 @@ Not verified, so check on a real run before trusting parity:
 - The S3 origin's `Name` header is taken to be the object key including the prefix (the sample pipelines' regexes only work if it is).
 - That a batch origin's `no-more-data` event arrives after the last batch; and that event-lane records reach a stage only after the origin's last batch of that file.
 - Error handling: `TO_ERROR` records are counted (asset metadata `error_records`) but not written anywhere; `STOP_PIPELINE` raises.
+- Field Flattener with a root target (`/`) names the flattened fields without the parent's name (`/Data/id` becomes `/id`); with another target it prefixes the parent. The CDC-to-Delta sample only makes sense that way, but it is inferred from the pipeline, not from documentation.
+- The MySQL binary-log origin's record shape (`/Table /Type /Data /OldData`, header `sdc.operation.type`) in `tests/overrides/cdc_feed.py` is assumed from the sample pipeline's field names. No binlog reader is translated.
+- The Delta Lake stage's behaviour beyond the SQL-write translation (null defaults, newline replacement, trimming, COPY INTO atomicity) is not reproduced.
+- Jython scripts run under CPython; whether a given script behaves the same is a per-script review.
 - Transformer (Spark) pipelines load, but none of their stages is translated, and no real Transformer export was available.
 - Control Hub export archives are read (`.zip` of pipeline JSON); the Control Hub job and schedule objects are not parsed.

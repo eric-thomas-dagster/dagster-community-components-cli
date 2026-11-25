@@ -25,7 +25,7 @@ FUNCS = {
     "time:now": "time_now", "file:fileName": "file_name", "file:parentPath": "file_parent_path", "file:pathElement": "file_path_element",
     "file:removeExtension": "file_remove_extension", "f:name": "f_name", "f:value": "f_value", "f:path": "f_path", "f:type": "f_type",
     "f:index": "f_index", "f:parentPath": "f_parent_path", "uuid": "uuid", "YYYY": "yyyy", "MM": "mm", "DD": "dd", "hh": "hh",
-    "mm": "minute", "ss": "ss",
+    "mm": "minute", "ss": "ss", "emptyMap": "empty_map", "emptyList": "empty_list",
 }
 _TIME_UNITS = {"SECONDS": 1, "MINUTES": 60, "HOURS": 3600, "DAYS": 86400}
 _KEYWORDS = {"true": "True", "false": "False", "null": "None"}

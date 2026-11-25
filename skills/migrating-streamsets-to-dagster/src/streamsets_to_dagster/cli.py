@@ -29,9 +29,21 @@ def _load(path: str):
 @click.argument("export_dir", type=click.Path(exists=True))
 @click.option("--out-dir", default=None, help="Output project directory (default: ./<pkg>)")
 @click.option("--pkg", default="streamsets_migrated", help="Python package name for the generated project")
-def convert_cmd(export_dir: str, out_dir: str | None, pkg: str) -> None:
+@click.option("--override", "overrides", multiple=True, metavar="'PIPELINE/STAGE=file.py'",
+              help="Replace a stage with hand-written Python (`process(records, sdc)`; an origin: `produce(sdc)`). Repeatable.")
+def convert_cmd(export_dir: str, out_dir: str | None, pkg: str, overrides: tuple[str, ...]) -> None:
     """Convert the pipeline JSON under EXPORT_DIR into a Dagster project plus MIGRATION.md."""
-    result = convert(_load(export_dir), pkg=pkg)
+    ov = {}
+    for spec in overrides:
+        target, _, path = spec.rpartition("=")
+        title, _, inst = target.rpartition("/")
+        if not (title and inst and path):
+            raise click.ClickException(f"--override expects 'PIPELINE/STAGE=file.py', got {spec!r}")
+        ov[(title, inst)] = Path(path).read_text()
+    try:
+        result = convert(_load(export_dir), pkg=pkg, overrides=ov)
+    except ValueError as e:
+        raise click.ClickException(str(e))
     out = Path(out_dir or pkg)
     write_project(result, out, pkg)
     mf.save(mf.build_manifest(result), out / "migration_manifest.json")

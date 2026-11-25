@@ -32,7 +32,8 @@ StreamSets pipelines are *record streams*: a pipeline is usually a continuously 
 3. **Never copy a secret.** The loader drops credential-named runtime parameters and literal credential values in stage properties (an export's `constants` often hold real passwords). Generated code reads `SDC_SECRET_<NAME>`. If a secret appears in output, that is a loader bug: fix the class.
 4. **Do not invent StreamSets semantics.** `reference/mapping.md` lists what is verified and what is assumed. Anything outside it is checked against IBM's documentation or a real export first, and the finding is recorded.
 5. **Fix classes, not instances.** If the same pattern fails repeatedly, fix the converter, regenerate, re-validate.
-6. **State losses plainly.** Offsets, error destinations, event handlers, batch sizes and execution mode are listed as behavior changes in the report.
+6. **Hand-written code is labelled.** A stage replaced with `--override` is a REVIEW unit, not a translation. Write it with a test; the original script or stage config stays in the manifest.
+6a. **State losses plainly.** Offsets, error destinations, event handlers, batch sizes and execution mode are listed as behavior changes in the report.
 7. **Prefer registry components.** When a stage recurs and the registry has a component for it (Salesforce, Kafka, Delta, Sling replication, S3 to database), use it instead of growing generated code (`reference/mapping.md`, `reference/component-wishlist.md`).
 
 ## Workflow
@@ -60,7 +61,7 @@ streamsets-to-dagster convert path/to/export --out-dir out --pkg my_migrated
 cd out && uv sync
 ```
 
-Generated: `src/<pkg>/defs/streamsets.py` (one asset per pipeline), `runtime.py`, `MIGRATION.md`, `migration_manifest.json`. Nothing is scheduled: StreamSets pipelines carry no schedule.
+Add `--override "PIPELINE/STAGE=file.py"` (repeatable) for stages you rewrote by hand (`reference/mapping.md`). Generated: `src/<pkg>/defs/streamsets.py` (one asset per pipeline), `runtime.py`, `MIGRATION.md`, `migration_manifest.json`. Nothing is scheduled: StreamSets pipelines carry no schedule.
 
 ### Phase 3: Validate
 
@@ -81,7 +82,7 @@ streamsets-to-dagster status summary out/migration_manifest.json
 ## Do not
 
 - Do not say a pipeline is migrated because the project loads. Gates 1-4 prove structure; only a parallel run proves behavior.
-- Do not translate a script evaluator by guessing; read the script (it is in the manifest notes) and rewrite it with a test.
+- Do not translate a Groovy or JavaScript evaluator by guessing; read the script (it is in the manifest notes), rewrite it in Python with a test, and pass it with `--override`. A Jython evaluator runs as written under CPython: still read it.
 - Do not run a continuous pipeline as a scheduled batch without the customer's decision on lag and ordering.
 
 ## Reference
