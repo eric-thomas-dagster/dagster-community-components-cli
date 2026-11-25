@@ -35,7 +35,8 @@ Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirm
 |---|---|---|---|
 | `BashOperator`, `@task.bash` | Asset running the command (Pipes subprocess or a registry component) | MECH | |
 | `PythonOperator`, `@task` | Asset or op running the same function | MECH | JUDG if the function reads XCom, context or `ti` |
-| Cosmos `DbtDag` / `DbtTaskGroup` | `dagster-dbt` assets or the dbt project component | JUDG | Per-model assets replace the Cosmos tasks |
+| Cosmos `DbtDag` / `DbtTaskGroup` | `dagster_dbt.DbtProjectComponent` (`defs.yaml`); `convert_ir.py` writes it (see `reference/conversion.md`, "Astronomer Cosmos") | MECH for local and virtualenv execution, REDESIGN for container modes (loud stubs) | Per-model assets and asset checks replace the Cosmos tasks; `test_behavior=after_all` runs tests per model (stated) |
+| Cosmos `DbtRunLocalOperator`, `DbtBuildLocalOperator`, `DbtSeedLocalOperator`, `DbtTestLocalOperator`, `DbtSnapshotLocalOperator` used on their own | one asset per operator running the same dbt command (`DbtCliResource`) | MECH | no model-level lineage (the operator only holds a `select`) |
 | `KubernetesPodOperator` | `convert_ir.py` calls `dagster-k8s` `execute_k8s_job` for the supported arguments (see `reference/conversion.md`). `PipesK8sClient` is the choice only for a container that speaks the Pipes protocol | MECH for the supported arguments, JUDG otherwise | Unverified against a live cluster; a succeeded Job is not deleted |
 | SQL and provider operators (Snowflake, BigQuery, S3, Spark, Databricks, ...) | Official `dagster-<vendor>` integration or a registry component. `convert_ir.py` converts HTTP, SQL on other databases, email, the Slack webhook, dbt Cloud, Airbyte, Fivetran and Databricks run operators (see `reference/conversion.md`) | MECH for those, JUDG otherwise | Search `dagster-component search "<vendor> <action>" --json` first for the rest |
 | Sensors (`S3KeySensor`, `ExternalTaskSensor`, ...) | A sensor that holds the pipeline step open converts to a polling step (`convert_ir.py`: Airflow's default `poke` behavior, check, give up after `timeout` or skip with `soft_fail`, sleep `poke_interval`) for `PythonSensor`, `@task.sensor`, `BashSensor`, `FileSensor`, `TimeSensor` and `TimeDeltaSensor`. A Dagster sensor (or declarative automation) instead starts the run when the condition holds, so it changes the pipeline shape. `DateTimeSensor`, `exponential_backoff`, `silent_fail` and `never_fail` are deferred. `ExternalTaskSensor` is a different case: see its own row | MECH for the polling step, JUDG otherwise | A polling step holds a run open for as long as Airflow's sensor held a task slot |
@@ -73,7 +74,7 @@ Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirm
 | Source | Handling |
 |---|---|
 | dag-factory YAML | The scanner reads the YAML; migrate the generated DAGs' tasks as above. Consider a Dagster component when the same shape repeats many times. |
-| Cosmos | See the dbt rows above. |
+| Cosmos | See the Cosmos rows above and `reference/conversion.md`. `ProfileConfig` becomes an `env_var()` based `profiles.yml` (names only); a profiles file is never copied. |
 | Jinja-heavy or programmatically generated DAGs | The static scanner may miss them; run the project's DAG parse once (`airflow dags list` in a sandbox) and compare counts with the manifest. |
 
 ## Scanner accuracy and limits

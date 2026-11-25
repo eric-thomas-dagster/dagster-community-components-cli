@@ -30,6 +30,8 @@ Loops, factories, dag-factory YAML, Blueprints and dynamic DAG generation only e
 | schedule: one asset, or any of several | `AutomationCondition.eager()` |
 | schedule: all of several assets | per-asset `asset_matches(...newly_updated()).since_last_handled()` on the DAG's root tasks (verified: fires only after every upstream updated, not on a repeat update of one) |
 | task groups, retries, retry delay, pool | key prefix, `RetryPolicy`, `pool` |
+| Astronomer Cosmos `DbtDag`, `DbtTaskGroup` | one `dagster_dbt.DbtProjectComponent` (`defs.yaml`): an asset per dbt model, seed and snapshot, dbt tests as asset checks; see "Astronomer Cosmos" below |
+| Cosmos per-task operators (`DbtRunLocalOperator`, `DbtBuildLocalOperator`, `DbtSeedLocalOperator`, `DbtSnapshotLocalOperator`, `DbtTestLocalOperator`, and the Virtualenv variants) | one asset per operator that runs the same dbt command through `dagster_dbt.DbtCliResource` |
 
 Connections become resources under the same key (`resources.py`); third-party imports the copied code needs are listed in `converted_requirements.txt`; assets a converted DAG reads but no converted DAG produces become `sources.py`.
 
@@ -73,6 +75,40 @@ These used to become stubs. They are now translated by `scripts/provider_ops.py`
 | dbt Cloud, Airbyte, Fivetran, Databricks | converted DAG run with a recording fake in place of the client; every call checked against the real library's method signature | the vendor services; the response shapes the code reads (`id` of a dbt Cloud run, `job_details["job"]["id"]` of Airbyte, `run_id` of Databricks) come from the libraries' source and the vendors' API docs |
 
 Each mapping that was not run against its real service carries a `degraded` caveat that says so (`UNVERIFIED against a live ...`), so it shows in the report, and with `--caveats off` it defers the DAG.
+
+## Astronomer Cosmos (`DbtDag`, `DbtTaskGroup`, the dbt operators)
+
+Cosmos renders a dbt project as Airflow tasks, so the IR holds one task per model (`<model>.run`, `<model>.test`) and per seed. `airflow_ir.py` records the Cosmos settings of each task (`cosmos` block) and, per DAG, each `DbtDag` / `DbtTaskGroup` with its `ProjectConfig`, `RenderConfig` and `ExecutionConfig` values and the dbt nodes it rendered (`cosmos_groups`). The extraction environment needs `astronomer-cosmos` and whatever Cosmos needs to render the project: dbt itself when `load_method` is `dbt_ls` or `automatic` (the default `InvocationMode.DBT_RUNNER` needs dbt-core in the same environment as Airflow; `SUBPROCESS` needs a dbt executable), or a `manifest.json` for `load_method=dbt_manifest`. `cosmos_ops.py` then does the mapping; `convert_ir.py` wires the result into the DAG.
+
+| Cosmos | Becomes | Stated difference |
+|---|---|---|
+| `DbtDag`, `DbtTaskGroup` (local or virtualenv execution) | **one** `dagster_dbt.DbtProjectComponent` in `defs/<dag>_dbt[_<group>]/defs.yaml`. Every model, seed and snapshot is an asset with its dbt lineage; every dbt test is an asset check. Model-level lineage is better than Cosmos's (Cosmos only had tasks) | the component runs one `dbt build` for the whole selection instead of one Airflow task per model; the graph of a run in Dagster is one step per run, with per-model results in the run and asset views |
+| `RenderConfig.select`, `exclude`, `selector` | the component's `select`, `exclude`, `selector` (lists are space-joined, which dbt reads as a union) | passed to dbt as written; Cosmos's own task selection and dbt's should agree, but check that `dg list defs` shows the same node count as the extracted DAG (the report lists the keys) |
+| `test_behavior` `after_each` (the default), `build` | `cli_args: [build]` (each model's tests run right after it, the same ordering) | none |
+| `test_behavior=after_all` | `cli_args: [build]` | **degraded caveat**: tests now run right after each model, so a failing test stops the models downstream of it, which `after_all` did not |
+| `test_behavior=none` | `build` with `resource_type:test` added to `exclude` | none |
+| `ProjectConfig.dbt_vars`, operator `vars` | `--vars {...}` in `cli_args` | |
+| operator `full_refresh`, `warn_error`, `quiet`, `fail_fast`, `no_version_check`, `dbt_cmd_flags`, `dbt_cmd_global_flags`, `indirect_selection` | the same flags in `cli_args` (global flags are passed after the command, which dbt accepts) | |
+| `ProjectConfig.dbt_project_path` | `project.project_dir`, relative to the component: `../../<--dbt-dir>/<project directory name>` | the converter does **not** copy the dbt project: the report's `dbt.projects` says where it came from and where it must go |
+| `ProfileConfig(profiles_yml_filepath=...)` inside the dbt project | used as it is (dbt finds `profiles.yml` in the project directory) | the file is **not read**: check it for inline credentials |
+| `ProfileConfig(profiles_yml_filepath=...)` outside the project | not copied (it may hold credentials); the component points at `dbt_profiles/<profile>/` and a degraded caveat tells you to put a `profiles.yml` there that reads secrets with `env_var()` | |
+| `ProfileConfig(profile_mapping=...)` | a generated `dbt_profiles/<profile>/profiles.yml` whose every connection field is `{{ env_var('<CONN>_<FIELD>') }}`; non-secret `profile_args` (schema, threads) are written, secret-looking ones also become environment variables. Names only in `report.json` under `dbt.projects.<name>.environment`; no connection value is read | the fields come from the mapping's class (`airflow_param_mapping`), not from Airflow's connection-parsing code: check them against the dbt adapter's documentation |
+| `ProjectConfig.env_vars`, operator `env` | the variable **names** in the report; values are never copied. Set them in the Dagster deployment | |
+| operator `retries` | not applied (degraded caveat): the component has no per-step retry policy; use run retries | |
+| operator `pool` | `op.pool` of the component when all tasks share one pool (also listed in `concurrency_limits.yaml`) | several pools: none applied (caveat) |
+| operator `callback`, task callbacks | not converted (degraded caveat) | |
+| `emit_datasets` | not converted (note): the dbt assets have their own keys; a DAG scheduled on the Cosmos datasets needs an automation condition on them | |
+| `seed_rendering_behavior`, `source_rendering_behavior` other than the defaults | degraded caveat (seeds always built; source freshness not run) | |
+| tasks before or after the group | stay as ordinary assets. A task **after** the group depends on the group's sink dbt assets; a task **before** it becomes an extra dependency of the group's root dbt assets (written in `post_processing`: Dagster replaces an asset's `deps` there, so each root lists its dbt parents again) | the dependency is on assets, not tasks |
+| two Cosmos groups (or two DAGs) over the same dbt nodes | the second is keyed under `by_<dag>[_<group>]/` (one producer per asset), with a caveat | |
+| Cosmos per-task operator on its own (`DbtRunLocalOperator`, ...) | one asset `<dag>/<task>` running `dbt <command> --select ...` through `DbtCliResource` | **degraded caveat**: the operator holds only a `select` string, never the nodes it ran, so there is no model-level lineage; use `DbtDag` / `DbtTaskGroup` (or build a dbt component by hand) for that |
+| `DbtTestLocalOperator` on its own | the same step running `dbt test` | its results are not asset checks of the models |
+| Kubernetes, Docker, Azure, GCP Cloud Run, AWS EKS, Watcher and async execution modes | **loud stub per task** naming the mode and image | dbt runs in the Dagster process here, not in that container |
+| `RenderConfig.node_converters`, `DbtRunOperationLocalOperator`, docs, `ls`, `deps`, `source`, `compile`, `clone` operators | loud stub (or a deferral with `--caveats off`) | no dbt component form |
+
+The group becomes assets only when Cosmos's own rendering is faithful to dbt's graph. A DAG that combines a Cosmos group with dynamic mapping, branching, partitions or an asset schedule is deferred (not converted yet).
+
+**How it was checked.** `tests/fixtures_cosmos/ir.json` is a real IR: `airflow_ir.py` run on `tests/fixtures_cosmos/dags/cosmos_shop.py` with Airflow 2.10.5 and astronomer-cosmos 1.15.1 (a `DbtDag`, a `DbtTaskGroup` between a Python task and a Bash task, and four per-task operators over a small dbt project). The tests convert it, load the result with `dagster.components.load_defs` (the dbt component refreshes its manifest with a real `dbt parse`), compare every asset's dependencies, and execute the jobs: `dbt seed`, `run`, `build --vars` and `test` run through the generated steps, and `dbt build` through the component, against DuckDB, with the three dbt tests of the `DbtDag` passing as asset checks (six checks are defined across the two groups). **Documentation only, not run:** other warehouses and dbt adapters, `profile_mapping` classes (the generated `profiles.yml` was checked for structure and for the absence of values, not against Snowflake, BigQuery or any real connection), `dbt deps` / packages, `load_method=dbt_manifest` and `custom` extraction, Cosmos 1.x versions other than 1.15.1, Airflow 3 with Cosmos, the virtualenv execution mode, Cosmos source rendering, and a real Airflow schedule.
 
 ## Settings that map or degrade
 
@@ -151,6 +187,7 @@ Prefer an official `dagster-*` integration or a registry component over hand-wri
 | HTTP operators and sensor | none | `http_resource`, `http_external_asset`, `http_poll_sensor`, `http_webhook_job` | `requests` (no component returns a response body or holds a step open) |
 | SQL on other databases | none | `sql_asset` (`connection_env`) | SQLAlchemy call; the component with `--output components` when the DAG has nothing the component cannot carry |
 | Email, Slack webhook | none | `smtp_send_asset`, `slack_message_send`, `slack_notification_job` | `smtplib`, `requests` (the components need a DataFrame or are jobs) |
+| Cosmos `DbtDag`, `DbtTaskGroup` | `dagster-dbt` `DbtProjectComponent` (official; the registry's `EnrichedDbtProjectComponent` is a drop-in superset) | `EnrichedDbtProjectComponent`, `DbtRunJobComponent` | the official component as `defs.yaml`; see "Astronomer Cosmos" |
 | dbt Cloud, Airbyte, Fivetran, Databricks | `dagster-dbt`, `dagster-airbyte`, `dagster-fivetran`, `dagster-databricks` | `dbt_cloud_trigger_job`, `airbyte_sync_trigger_job`, `fivetran_sync_trigger_job`, `databricks_asset_bundle` | integration resource calls (the registry jobs are jobs, not steps in a DAG) |
 | `TriggerDagRunOperator` | none | `asset_to_job_trigger_sensor`, `trigger_job_asset` | the runtime's own launch (an asset dependency or automation condition is usually better) |
 | `PythonVirtualenvOperator`, `ExternalPythonOperator` | Dagster Pipes (`PipesSubprocessClient`) | none | `af_isolated` in the runtime |
