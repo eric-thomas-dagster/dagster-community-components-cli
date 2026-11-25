@@ -40,3 +40,9 @@ A further 17 pipelines are Data Collector's own default-config test pipelines (v
 all 17 convert without error and every unconfigured or untranslatable stage becomes a stub with its reason.
 
 Gates on the six samples' generated project: 1 (compiles), 2 (loads), 3 (units match) pass; gate 4 dry run: 1 ok, 5 fail on a stub as designed, 0 unexpected.
+
+## Could registry pipeline components run these pipelines?
+
+`components_plan.py` maps each pipeline's stages onto the ops of `polars_pipeline` / `warehouse_pipeline` and says what has no op yet (it plans; nothing is generated from it).
+**1 of 6** sample pipelines (Salesforce to Delta Lake: a select) and **1 of 27** public ones are fully covered. Ops that map today: select, drop, rename, cast (46 uses on the public pipelines).
+Biggest gaps on the public pipelines: Expression Evaluator needs EL translated to SQL (32 stages), script evaluators (31), vendor/HTTP destinations (20), lookups (8), Field Order (6), geolocation (2).

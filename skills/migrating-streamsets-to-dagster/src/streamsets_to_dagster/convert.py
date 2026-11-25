@@ -733,10 +733,17 @@ def {name}(context: dg.AssetExecutionContext):
     notes = [f"{translated}/{stage_count} stages translated" + (f", {replaced} replaced by hand-written code" if replaced else "")]
     if streaming:
         notes.append("continuous origin: " + ", ".join(streaming))
+    from .components_plan import plan as _plan
+    cp = _plan(p)
+    if cp["ready"]:
+        caveats_cp = f"registry components could run this pipeline: origin {cp['origin']}; polars_pipeline/warehouse_pipeline ops {[o['op'] for o in cp['ops']]}; " + "; ".join(cp["destinations"])
+    else:
+        caveats_cp = ("registry components cover part of this pipeline: " + (f"origin {cp['origin']}; " if cp["origin"] else "") + (f"ops {[o['op'] for o in cp['ops']]}; " if cp["ops"] else "")
+                      + "not covered: " + "; ".join(cp["gaps"][:6]) + ("; ..." if len(cp["gaps"]) > 6 else ""))
     items.insert(next((i for i, x in enumerate(items) if x.kind == "stage" and x.artifact == name), len(items)),
-                 Item("pipeline", p.title, name, status, "stubs" if stubs else ("caveats" if caveats else ""), notes + caveats,
+                 Item("pipeline", p.title, name, status, "stubs" if stubs else ("caveats" if caveats else ""), notes + caveats + [caveats_cp],
                       {"asset": name, "deps": []}))
-    return code, name, {"translated": translated, "stages": stage_count, "stubs": [(s.instance, w) for s, w in stubs], "caveats": caveats,
+    return code, name, {"component_plan": cp, "translated": translated, "stages": stage_count, "stubs": [(s.instance, w) for s, w in stubs], "caveats": caveats,
                         "streaming": streaming, "secrets": secrets, "constants": list(consts), "status": status}
 
 
