@@ -1,6 +1,6 @@
 # dagster-community-components-cli
 
-CLI to **search**, **install**, and **manage** [Dagster community components](https://dagster-component-ui.vercel.app/) in your project.
+CLI to **search**, **install**, and **manage** [Dagster components](https://dagster-component-ui.vercel.app/) in your project.
 
 ```text
 $ dagster-component add s3_parquet_io_manager
@@ -145,7 +145,7 @@ Source repo for the components themselves:
 
 ## Status
 
-This is a community / prototype project — not officially supported by Dagster Labs. Components are best-effort and provided as templates to copy and adapt into your project. Issues and PRs welcome.
+This is an independent prototype project, maintained by one person — not officially supported by Dagster Labs. Components are best-effort and provided as templates to copy and adapt into your project. Issues and PRs welcome.
 
 ## License
 

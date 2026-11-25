@@ -5,7 +5,7 @@ build-backend = "hatchling.build"
 [project]
 name = "dagster-community-components-cli"
 version = "0.8.16"
-description = "CLI to search, install, and manage Dagster community components."
+description = "CLI to search, install, and manage Dagster components."
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }

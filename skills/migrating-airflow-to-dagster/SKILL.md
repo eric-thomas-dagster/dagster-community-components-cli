@@ -38,7 +38,7 @@ This skill covers the migration method. It does not duplicate Dagster or Airflow
 | Gates (`dg check defs`, `dg list defs --json`, `dg launch`) | `references/cli/check.md`, `references/cli/list-defs.md`, `references/cli/launch.md` |
 | Components for repeated DAG shapes (dag-factory) | `references/components/` |
 
-For the long tail of operators with no official integration, search the community registry (`dagster-component search "<term>" --json`) before writing anything.
+For the long tail of operators with no official integration, search the component registry (`dagster-component search "<term>" --json`) before writing anything.
 
 **An Airflow skill (optional, source side).** Astronomer publishes Apache-2.0 skills in `astronomer/agents` (https://github.com/astronomer/agents). The `airflow` skill drives a live instance through an `af` CLI. It is a third-party dependency: use it when present, and fall back to the static scan and a person when it is not. It earns its place in these steps:
 

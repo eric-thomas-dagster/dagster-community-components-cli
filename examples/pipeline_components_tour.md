@@ -90,7 +90,7 @@ If you want the raw component READMEs â€” full op menu, schema, escape hatches â
 
 ## Browsable component registry
 
-Beyond the pipeline-component family, the community registry has **~1,460 components** covering ingestion / transforms / IO managers / sensors / sinks / resources / integrations for the long tail of vendors and workflows:
+Beyond the pipeline-component family, the registry has **~1,460 components** covering ingestion / transforms / IO managers / sensors / sinks / resources / integrations for the long tail of vendors and workflows:
 
 **Registry UI:** https://dagster-component-ui.vercel.app/
 

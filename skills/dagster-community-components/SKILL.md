@@ -1,11 +1,11 @@
 ---
 name: dagster-community-components
-description: Guide for discovering, evaluating, and using Dagster Community Components (DCC) — a ~1,461-component registry of community-maintained Dagster components at https://dagster-component-ui.vercel.app, sourced from eric-thomas-dagster/dagster-component-templates. Use whenever writing a Dagster demo, pipeline, or project from scratch; whenever deciding whether to hand-write an asset/resource/sensor/IO-manager or reuse an existing component; whenever asked what component exists for a vendor, pattern, or capability (Snowflake, Salesforce, Kafka, reverse-ETL, agentic pipelines, dbt, replication, ML scoring, etc.); and whenever generating a defs.yaml or example.yaml for a community component. Covers the `dagster-component` CLI (search/info/schema/add/update/list/remove/init/analyze-schedules/sync-deps), the real (and inconsistently-populated) manifest schema, validation tiers, and how to read a component's auto-generated Fields section instead of guessing config. Load dagster-expert alongside this skill for core Dagster APIs, the `dg` CLI, and project scaffolding.
+description: Guide for discovering, evaluating, and using Dagster Community Components (DCC) — a ~1,461-component Dagster component registry at https://dagster-component-ui.vercel.app, sourced from eric-thomas-dagster/dagster-component-templates and maintained by one person. Use whenever writing a Dagster demo, pipeline, or project from scratch; whenever deciding whether to hand-write an asset/resource/sensor/IO-manager or reuse an existing component; whenever asked what component exists for a vendor, pattern, or capability (Snowflake, Salesforce, Kafka, reverse-ETL, agentic pipelines, dbt, replication, ML scoring, etc.); and whenever generating a defs.yaml or example.yaml for a registry component. Covers the `dagster-component` CLI (search/info/schema/add/update/list/remove/init/analyze-schedules/sync-deps), the real (and inconsistently-populated) manifest schema, validation tiers, and how to read a component's auto-generated Fields section instead of guessing config. Load dagster-expert alongside this skill for core Dagster APIs, the `dg` CLI, and project scaffolding.
 ---
 
 # Dagster Community Components (DCC)
 
-A community-maintained catalog of ~1,461 Dagster components — opinionated, higher-level building blocks (ingestion with baked-in schedules and destinations, vendor workspace importers, sensor patterns, reverse-ETL sinks, ML scoring, agentic pipelines, and more) that install into a project as a folder of `component.py` + `schema.json` + `example.yaml`, or as a `dagster-community-components` PyPI package type. Most of what gets built with Dagster today — demos included — starts from one of these rather than from scratch.
+A ~1,461-component catalog of opinionated, higher-level Dagster building blocks (ingestion with baked-in schedules and destinations, vendor workspace importers, sensor patterns, reverse-ETL sinks, ML scoring, agentic pipelines, and more) that install into a project as a folder of `component.py` + `schema.json` + `example.yaml`, or as a `dagster-community-components` PyPI package type. Maintained by one person, not a crowd of contributors. Most of what gets built with Dagster today — demos included — starts from one of these rather than from scratch.
 
 **This skill covers the catalog and its CLI.** It does not duplicate core Dagster knowledge (the asset/component model, the `dg` CLI, project scaffolding) — load `dagster-expert` alongside it for that.
 
@@ -14,10 +14,10 @@ A community-maintained catalog of ~1,461 Dagster components — opinionated, hig
 1. **Never invent a component id, config field, or CLI flag.** Every claim below about field names, defaults, or behavior came from reading real source (this skill, `dagster-component schema <id>`, or a component's own README) — do the same before writing YAML. A guessed field name is worse than no recommendation.
 2. **Search before concluding nothing exists.** The registry is large and growing; a specific-sounding ask ("reverse-ETL into Airtable", "upsert into HubSpot") often already has a component. Search by capability and vendor, not just by category — see `reference/catalog.md` for why category strings alone aren't reliable.
 3. **Fetch `schema.json` before writing `defs.yaml`.** A component's hand-written `## Configuration` section in its README can be stale or abbreviated. The auto-generated `## Fields` block (and `schema.json` itself) is the ground truth — see `reference/writing-yaml.md`.
-4. **Community component first, official integration as fallback.** See the decision table below.
+4. **Registry component first, official integration as fallback.** See the decision table below.
 5. **Don't invent `dagster-component` CLI usage.** Read `reference/cli.md` — several commands are easy to guess wrong (e.g. `dagster-component list` defaults to *installed* components, not the registry; `--available` lists the registry).
 
-## Community component vs. official integration vs. hand-written code
+## Registry component vs. official integration vs. hand-written code
 
 | Situation | Use |
 |---|---|
