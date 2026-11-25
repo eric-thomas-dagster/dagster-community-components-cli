@@ -64,14 +64,14 @@ def test_real_airflow_ir_converts_loads_and_reports_each_operator(tmp_path):
     rep, mod = _convert_and_load(tmp_path, ir, "pkg_real_ir")
     caveats = {(c["task"], c["kind"]) for c in rep["caveats"]}
     stubs = {t for t, k in caveats if k == "stub"}
-    assert stubs == {"bq", "ssh", "dock"}                             # no conversion yet: loud stubs, named in the report
-    assert {t for t, k in caveats if k == "degraded"} >= {"crunch", "dbt", "airbyte", "dbr_now", "dbr_submit"}
-    assert sorted(rep["requirements"]) == ["croniter", "dagster-airbyte", "dagster-databricks", "dagster-dbt", "dagster-k8s", "requests", "sqlalchemy"]
+    assert stubs == set()                                             # BigQuery query jobs, SSH and Docker now convert (provider_ops_more.py); anything they cannot carry is a loud stub
+    assert {t for t, k in caveats if k == "degraded"} >= {"crunch", "dbt", "airbyte", "dbr_now", "dbr_submit", "bq", "ssh", "dock"}
+    assert sorted(rep["requirements"]) == ["croniter", "dagster-airbyte", "dagster-databricks", "dagster-dbt", "dagster-gcp", "dagster-k8s", "dagster-ssh", "docker", "requests", "sqlalchemy"]
     full = json.loads((tmp_path / "r.json").read_text())
-    assert set(full["connections"]) == {"partner_api", "warehouse_pg", "smtp_default", "slack_alerts", "dbt_cloud_default", "airbyte_default", "databricks_default"}
+    assert set(full["connections"]) == {"partner_api", "warehouse_pg", "smtp_default", "slack_alerts", "dbt_cloud_default", "airbyte_default", "databricks_default", "google_cloud_default", "edge_host"}
     assert "PARTNER_API_BASE_URL" in full["connections"]["partner_api"]["environment"]
     assert full["operators"]["HttpOperator"]["mapped_by_converter"] and full["operators"]["KubernetesPodOperator"]["mapped_by_converter"]
-    assert not full["operators"]["SSHOperator"]["mapped_by_converter"]
+    assert full["operators"]["SSHOperator"]["mapped_by_converter"] and full["operators"]["DockerOperator"]["mapped_by_converter"]
     res = tmp_path / "pkg_real_ir" / "defs" / "resources.py"
     text = res.read_text()
     assert "DbtCloudClientResource(auth_token=dg.EnvVar('DBT_CLOUD_DEFAULT_API_TOKEN')" in text and "disable_schedule_on_trigger=False" in text

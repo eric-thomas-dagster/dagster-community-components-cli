@@ -49,6 +49,9 @@ import connections as CN
 import cosmos_ops as K
 import gen_tests as G
 import provider_ops as P
+import provider_ops_more
+
+provider_ops_more.register()          # more provider operators: Slack API, S3 key sensor, GCS, SSH, Docker, Lambda, BigQuery query jobs, Spark submit
 
 CONTEXT_PARAMS = {"ds", "ds_nodash", "ts", "ti", "task_instance", "dag_run", "logical_date", "data_interval_start",
                   "data_interval_end", "context", "execution_date", "params", "prev_ds", "next_ds", "run_id", "conf", "dag", "task"}
@@ -86,16 +89,16 @@ BRANCH = {"BranchPythonOperator", "_BranchPythonDecoratedOperator"} | ISOLATED_B
 SHORT = {"ShortCircuitOperator", "_ShortCircuitDecoratedOperator"}
 TRIGGER = {"TriggerDagRunOperator"}          # launches another converted DAG's job and waits for it (wait_for_completion=True)
 SENSOR_CALL = {"PythonSensor", "DecoratedSensorOperator"}                                # sensors that poll a callable
-SENSORS = SENSOR_CALL | {"BashSensor", "FileSensor", "TimeSensor", "TimeDeltaSensor", "HttpSensor"}   # converted as a polling step (Airflow's default `poke` behavior)
+SENSORS = SENSOR_CALL | {"BashSensor", "FileSensor", "TimeSensor", "TimeDeltaSensor", "HttpSensor"} | P.SENSOR_TYPES   # converted as a polling step (Airflow's default `poke` behavior)
 CLOCK_BRANCH = {"BranchDateTimeOperator", "BranchDayOfWeekOperator"}      # branch on the clock or the logical date: no callable
 GATE_RULES = {"all_success", "all_failed", "all_done", "one_success", "one_failed", "one_done", "none_failed", "none_failed_min_one_success",
               "none_skipped", "all_skipped", "all_done_min_one_success", "always", "all_done_setup_success"}
 PLAIN_RULES = {"all_success", "none_failed", "none_failed_min_one_success"}               # behave like all_success when a failure stops the run anyway
-S3_OPS = {"S3ListOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "LocalFilesystemToS3Operator", "S3CreateObjectOperator"}
+S3_OPS = {"S3ListOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "LocalFilesystemToS3Operator", "S3CreateObjectOperator", "S3ListPrefixesOperator", "S3CreateBucketOperator", "S3DeleteBucketOperator"}
 SNOWFLAKE_OPS = {"CopyFromExternalStageToSnowflakeOperator", "SnowflakeOperator", "SQLExecuteQueryOperator"}
 PROV = P.TYPES                  # provider operators translated by provider_ops.py (HTTP, SQL on other databases, Kubernetes pods, email, Slack, dbt Cloud, Airbyte, Fivetran, Databricks)
 COSMOS_STEP = {"CosmosDbtStep"}      # a per-task Cosmos operator, run through dagster_dbt.DbtCliResource (cosmos_ops.py)
-PROV_STEPS = PROV - {"HttpSensor"}          # the ones that run as a step of their own (the sensor is a polling step)
+PROV_STEPS = PROV - P.SENSOR_TYPES          # the ones that run as a step of their own (the sensor is a polling step)
 
 
 class Defer(Exception):
@@ -540,6 +543,9 @@ def has_jinja(x: Any) -> bool:
 
 S3_FIELDS = {
     "S3ListOperator": ("bucket", "prefix", "delimiter", "aws_conn_id", "apply_wildcard"),
+    "S3ListPrefixesOperator": ("bucket", "prefix", "delimiter", "aws_conn_id"),
+    "S3CreateBucketOperator": ("bucket_name", "region_name", "aws_conn_id"),
+    "S3DeleteBucketOperator": ("bucket_name", "force_delete", "aws_conn_id"),
     "S3CopyObjectOperator": ("source_bucket_key", "dest_bucket_key", "source_bucket_name", "dest_bucket_name", "source_version_id",
                              "acl_policy", "meta_data_directive", "kms_key_id", "kms_encryption_type", "aws_conn_id"),
     "S3DeleteObjectsOperator": ("bucket", "keys", "prefix", "from_datetime", "to_datetime", "aws_conn_id"),
@@ -629,6 +635,12 @@ def s3_call(t: dict[str, Any], params: dict[str, str], ctx: str | None = None) -
         if f.get("apply_wildcard"):
             raise Defer(f"{t['task_id']}: S3ListOperator apply_wildcard")
         return f"return s3_list_keys(client, {g('bucket')}, {g('prefix')}, {g('delimiter')})", conn
+    if ty == "S3CreateBucketOperator":
+        return f"s3_create_bucket(client, {g('bucket_name')}, {g('region_name')})", conn
+    if ty == "S3DeleteBucketOperator":
+        return f"s3_delete_bucket(client, {g('bucket_name')}, {bool(f.get('force_delete'))!r})", conn
+    if ty == "S3ListPrefixesOperator":
+        return f"return s3_list_prefixes(client, {g('bucket')}, {g('prefix')}, {g('delimiter')})", conn
     if ty == "S3CopyObjectOperator":
         for k in ("acl_policy", "meta_data_directive", "kms_key_id", "kms_encryption_type", "source_version_id"):
             if f.get(k):
@@ -1074,8 +1086,9 @@ def sla_wrap(body: str, t: dict[str, Any], key: str) -> str:
     return f"    try:\n{inner}\n    finally:\n        af_sla_check(context, {float(t['sla_s'])!r}, {key!r})"
 
 
+REGISTRY_FORM_OPS = {"LambdaInvokeFunctionOperator", "SSHOperator", "DockerOperator", "BigQueryInsertJobOperator"}      # registry components: lambda_invoke_asset, ssh_asset, docker_container_asset, bigquery_query_asset
 COMPONENT_TASKS = {"BashOperator", "EmptyOperator", "DummyOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "S3ListOperator",
-                   "LocalFilesystemToS3Operator", "S3CreateObjectOperator"} | {"PythonOperator", "_PythonDecoratedOperator"} | {"SqlQuery", "BashSensor", "TimeSensor"}
+                   "LocalFilesystemToS3Operator", "S3CreateObjectOperator"} | {"PythonOperator", "_PythonDecoratedOperator"} | {"SqlQuery", "BashSensor", "TimeSensor"} | REGISTRY_FORM_OPS
 
 
 def _plain(v: Any) -> bool:
@@ -1095,8 +1108,8 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     Returns ({relative path: content}, summary overrides). One component per task in a `defs.yaml` (documents separated by `---`), a schedule
     component for the cron, and a module with the copied callables for Python tasks."""
     if summary.get("mapping") or summary.get("partitions") or summary.get("triggers") or summary.get("pools") or summary.get("max_active_runs") \
-            or summary.get("run_timeout_s") or summary.get("caveats") or summary.get("uses_context") or summary.get("snowflake_resources") \
-            or any(k != "sql" for k in (summary.get("provider_connections") or {}).values()):
+            or summary.get("run_timeout_s") or any(c.get("task") not in {t_["task_id"] for t_ in dag["tasks"] if t_["type"] in REGISTRY_FORM_OPS} for c in summary.get("caveats") or []) or summary.get("uses_context") or summary.get("snowflake_resources") \
+            or any(k not in ("sql", "ssh", "bigquery") for k in (summary.get("provider_connections") or {}).values()):
         return None
     dag = normalise_provider_tasks(dag)
     tasks = {t["task_id"]: t for t in dag["tasks"]}
@@ -1209,6 +1222,34 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
             attrs.pop("asset_name")
             attrs.update(asset_key=aname[tid], connection_env=f"{P.envname(P.sql_conn(t))}_URL", sql_statements=stmts, parameters=a_.get("parameters") or None)
             doc("SqlAssetComponent", attrs)
+        elif ty in ("LambdaInvokeFunctionOperator", "SSHOperator", "DockerOperator", "BigQueryInsertJobOperator"):    # registry components: lambda_invoke_asset, ssh_asset, docker_container_asset, bigquery_query_asset
+            a_ = P._a(t)
+            if P.handler_for(t).check(t)[0] or not _plain(a_):
+                return None
+            if ty == "LambdaInvokeFunctionOperator":
+                if not a_.get("region_name") or isinstance(a_.get("payload"), str):
+                    return None                                  # the component requires a region and takes a JSON object
+                attrs.update(function_name=a_["function_name"], region_name=a_["region_name"], payload=a_.get("payload") or None, invocation_type=a_.get("invocation_type") or None,
+                             qualifier=a_.get("qualifier") or None, include_logs=True if a_.get("log_type") == "Tail" else None, fail_on_function_error=True)
+                doc("LambdaInvokeAssetComponent", attrs)
+            elif ty == "SSHOperator":
+                if not isinstance(a_.get("command"), str):
+                    return None
+                c_ = P.envname(a_.get("ssh_conn_id") or "ssh_default")
+                attrs.update(host_env_var=f"{c_}_HOST", username_env_var=f"{c_}_USER", password_env_var=f"{c_}_PASSWORD", commands=[a_["command"]],
+                             timeout_seconds=int(a_["cmd_timeout"]) if a_.get("cmd_timeout") else None, fail_on_non_zero=True)
+                doc("SSHAssetComponent", attrs)
+            elif ty == "DockerOperator":
+                import shlex
+                if any(a_.get(k) for k in ("user", "working_dir", "entrypoint", "tty", "force_pull", "auto_remove")) or not isinstance(a_.get("image"), str):
+                    return None
+                cmd_ = a_.get("command")
+                attrs.update(image=a_["image"], command=(shlex.split(cmd_) if isinstance(cmd_, str) else cmd_) or None, env_vars=a_.get("environment") or None, network=a_.get("network_mode") or None)
+                doc("DockerContainerAssetComponent", attrs)
+            else:
+                q_ = (a_.get("configuration") or {}).get("query") or {}
+                attrs.update(query=q_.get("query"), use_legacy_sql=bool(q_.get("useLegacySql", True)), project_id=a_.get("project_id") or None, location=a_.get("location") or None)
+                doc("BigQueryQueryAssetComponent", attrs)
         elif ty in ("BashSensor", "TimeSensor"):                 # wait_until_asset
             sn = t.get("sensor") or {}
             attrs.update(poll_seconds=sn.get("poke_interval"), timeout_seconds=sn.get("timeout"))
@@ -1236,7 +1277,11 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     files = {f"defs/{name}/defs.yaml": "\n---\n".join(docs) + "\n"}
     if len(callables) > 2:
         files[f"callables/{name}.py"] = "\n".join([callables[0], "", *[s_ for s_, _ in sorted(support.items(), key=lambda kv: kv[1])], "", *callables[1:]])
-    overrides = {"keys": [[aname[t["task_id"]]] for t in real], "task_keys": {t["task_id"]: aname[t["task_id"]] for t in real}, "output": "components",
+    tiers = {"LambdaInvokeFunctionOperator": ("lambda_invoke_asset", "code"), "SSHOperator": ("ssh_asset", "code"), "DockerOperator": ("docker_container_asset", "live"),
+             "BigQueryInsertJobOperator": ("bigquery_query_asset", "live")}            # validation.level in the dagster-community-components 0.10.188 manifest
+    comp_caveats = [{"task": t["task_id"], "kind": "degraded", "reason": f"registry component {tiers[t['type']][0]} has validation tier `{tiers[t['type']][1]}` (`code` = code-reviewed, not run against a live system): "
+                     "check it against your environment"} for t in real if t["type"] in tiers and tiers[t["type"]][1] != "live"]
+    overrides = {"caveats": comp_caveats, "keys": [[aname[t["task_id"]]] for t in real], "task_keys": {t["task_id"]: aname[t["task_id"]] for t in real}, "output": "components",
                  "external": [], "notes": [*summary.get("notes", []), "registry components: one per task (asset keys are `<dag>__<task>`, single-part); "
                  "retries and timeouts are component settings" + ("; the DAG has no schedule so no job is defined" if not summary.get("schedule") else "")]}
     return files, overrides
@@ -1900,6 +1945,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if is_custom(t):
                 body = custom_body(t, ctx_line)
             elif ty in SENSORS - SENSOR_CALL:
+                if ty in P.SENSOR_TYPES and prov_for(t, params, ctxn).resource:
+                    deco.append(f"required_resource_keys={{{prov_for(t, params, ctxn).conn!r}}}")
                 body = ctx_line + sensor_body(t, params, ctxn)
             elif ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
                 code, sup, meta = resolved[tid]
@@ -2287,6 +2334,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             pre = ""
             ret_none = tid not in consumed and not RETURN_ALL
         elif ty in SENSORS - SENSOR_CALL:
+            if ty in P.SENSOR_TYPES and prov_for(t, params, ctxn).resource:
+                deco.append(f"required_resource_keys={{{prov_for(t, params, ctxn).conn!r}}}")
             body = ctx_line + sensor_body(t, params, ctxn)
             deco.append("kinds={'sensor'}")
             pre = ""
@@ -3869,8 +3918,9 @@ def main(argv: list[str] | None = None) -> int:
         if sf_resources:
             lines.append("from dagster_snowflake import SnowflakeResource")
         lines += sorted({P.RESOURCE_KINDS[k]["import"] for k in lib_res.values()})
-        entries = [f"{r!r}: {CN.resource_entry('aws', r)}" for r in sorted(resources)] + [
-            f"{r!r}: {CN.resource_entry('snowflake', r)}" for r in sorted(sf_resources)] + [f"{c!r}: {CN.resource_entry(k, c)}" for c, k in sorted(lib_res.items())]
+        by_conn = {**{c: CN.resource_entry("aws", c) for c in resources}, **{c: CN.resource_entry("snowflake", c) for c in sf_resources},
+                   **{c: P.RESOURCE_KINDS[k]["ctor"](c) for c, k in lib_res.items()}}
+        entries = [f"{c!r}: {ctor}" for c, ctor in sorted(by_conn.items())]
         (a.out_dir / "resources.py").write_text("\n".join(lines) + "\n\n\n@dg.definitions\ndef resources() -> dg.Definitions:\n    return dg.Definitions(resources={" + ", ".join(entries) + "})\n")
     if resources or sf_resources:                   # the S3 and Snowflake connections' variable names, from the same table connections_to_resources.py uses
         report.setdefault("connections", {})

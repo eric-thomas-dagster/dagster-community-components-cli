@@ -110,7 +110,7 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d["tasks"][0].update(trigger_rule="custom_rule"), "trigger_rule custom_rule"),
     (lambda d: d["tasks"][0].update(is_mapped=True), "dynamic task mapping"),
     (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ var.value.x }}"}), "does not provide"),
-    (lambda d: d["tasks"][0].update(type="BigQueryInsertJobOperator"), "operator BigQueryInsertJobOperator"),
+    (lambda d: d["tasks"][0].update(type="DataprocSubmitJobOperator"), "operator DataprocSubmitJobOperator"),
     (lambda d: d["timetable"].update(kind="asset_triggered", assets=["a", "b"], asset_logic="mixed"), "mixes AND and OR"),
     (lambda d: d["timetable"].update(kind="other"), "schedule type"),
     (lambda d: d.update(catchup=True), "catchup"),
@@ -271,14 +271,14 @@ def test_apply_conversion_plans_converted_dags_and_defers_the_rest():
 
 def test_report_ranks_operators_with_integration_hints(tmp_path):
     ir = {"airflow_version": "x", "dags": [dag([task("a", "BashOperator", template_fields={"bash_command": "true"}),
-                                                  task("b", "KubernetesPodOperator"), task("c", "BigQueryInsertJobOperator")], kind="manual")]}
+                                                  task("b", "KubernetesPodOperator"), task("c", "GlueJobOperator")], kind="manual")]}
     (tmp_path / "ir.json").write_text(json.dumps(ir))
     subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
                     "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
     ops = json.loads((tmp_path / "r.json").read_text())["operators"]
     assert ops["BashOperator"]["mapped_by_converter"] and ops["BashOperator"]["registry"] == ["shell_command_asset"]
     assert ops["KubernetesPodOperator"]["mapped_by_converter"] and "k8s_job_asset" in ops["KubernetesPodOperator"]["registry"]
-    assert not ops["BigQueryInsertJobOperator"]["mapped_by_converter"] and ops["BigQueryInsertJobOperator"]["registry"] == ["google_bigquery"]
+    assert not ops["GlueJobOperator"]["mapped_by_converter"] and ops["GlueJobOperator"]["registry"] == ["aws_glue"]
 
 
 def test_bash_execution_timeout_is_enforced_as_a_failure():
