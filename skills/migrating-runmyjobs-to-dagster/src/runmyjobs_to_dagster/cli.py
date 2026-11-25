@@ -302,3 +302,132 @@ def validate_model_cmd(model_file: str) -> None:
         raise click.ClickException(f"invalid model: unknown or missing field {e}")
     click.echo(f"ok: {len(m.processes)} process definition(s), {len(m.chains)} chain(s), "
                f"{len(m.schedules)} schedule(s), {len(m.queues)} queue(s)")
+
+
+# ---------------------------------------------------------------- the rewrite route: analyze -> prompt -> (Claude writes the project) -> accept -> equivalence
+
+
+@main.command("analyze")
+@click.argument("model_file", type=click.Path(exists=True, dir_okay=False))
+@click.option("--out-dir", default="rewrite", type=click.Path(), help="Where to write <unit>.spec.md/.json, ESTATE.md and estate.json")
+@click.option("--unit", "units", multiple=True, help="Only these units (chain or process definition names); default: every unit")
+@click.option("--manifest", "manifest_file", default=None, type=click.Path(exists=True, dir_okay=False),
+              help="A converter manifest (from convert): units are stamped with the rewrite unit they belong to and route: converter")
+def analyze_cmd(model_file: str, out_dir: str, units: tuple[str, ...], manifest_file: str | None) -> None:
+    """Rewrite route, step 1: a facts-only spec per chain or process definition, plus an estate view (deterministic; nothing is generated)."""
+    import json
+
+    from .rewrite.accept import annotate_manifest
+    from .rewrite.spec import render_estate_md, render_spec_md
+    from .rewrite.spec import build_specs
+    try:
+        model = load_model(model_file)
+    except ModelError as e:
+        raise click.ClickException(f"invalid model:\n{e}")
+    specs, estate, conv_manifest = build_specs(model)
+    if units:
+        missing = [u for u in units if u not in specs]
+        if missing:
+            raise click.ClickException(f"unknown unit(s) {missing}; units are: {', '.join(sorted(specs))}")
+        specs = {u: s for u, s in specs.items() if u in units}
+    out = Path(out_dir)
+    out.mkdir(parents=True, exist_ok=True)
+    for name, s in specs.items():
+        (out / f"{s['unit_id']}.spec.json").write_text(json.dumps(s, indent=1, sort_keys=True) + "\n")
+        (out / f"{s['unit_id']}.spec.md").write_text(render_spec_md(s))
+    (out / "estate.json").write_text(json.dumps(estate, indent=1, sort_keys=True) + "\n")
+    (out / "ESTATE.md").write_text(render_estate_md(estate, specs))
+    click.echo(f"wrote {len(specs)} spec(s), ESTATE.md and estate.json to {out}/")
+    for name, s in sorted(specs.items()):
+        click.echo(f"  {s['unit_id']}: {s['kind']}, {len(s['calls'])} call(s), converter {s['converter']['disposition']}")
+    if manifest_file:
+        m = mf.load(Path(manifest_file))
+        annotate_manifest(m, specs)
+        mf.save(m, Path(manifest_file))
+        click.echo(f"stamped {manifest_file}")
+
+
+@main.command("prompt")
+@click.argument("rewrite_dir", type=click.Path(exists=True, file_okay=False))
+@click.option("--project", default="my_project", help="Name of the Dagster project the agent should create or write into")
+@click.option("--package", default="my_pkg", help="Python package of that project")
+@click.option("--converter-dir", default=None, help="The converter's project for this estate (reference draft and fallback), shown in each prompt")
+def prompt_cmd(rewrite_dir: str, project: str, package: str, converter_dir: str | None) -> None:
+    """Rewrite route, step 2: <unit>.prompt.md for every spec in REWRITE_DIR, and ESTATE.prompt.md for one coherent project."""
+    import json
+
+    from .rewrite.prompt import render_estate, render_unit
+    d = Path(rewrite_dir)
+    specs = {}
+    for p in sorted(d.glob("*.spec.json")):
+        s = json.loads(p.read_text())
+        specs[s["unit"]] = s
+        (d / f"{s['unit_id']}.prompt.md").write_text(render_unit(s, p.with_suffix("").with_suffix(".spec.md").read_text(), project, package, converter_dir))
+        click.echo(f"wrote {d / (s['unit_id'] + '.prompt.md')}")
+    if (d / "estate.json").exists():
+        e = json.loads((d / "estate.json").read_text())
+        (d / "ESTATE.prompt.md").write_text(render_estate(e, (d / "ESTATE.md").read_text(), {u: specs[u] for u in e["units"] if u in specs}, project, package))
+        click.echo(f"wrote {d / 'ESTATE.prompt.md'}")
+
+
+@main.command("accept")
+@click.argument("spec_file", type=click.Path(exists=True, dir_okay=False))
+@click.option("--project", required=True, type=click.Path(exists=True, file_okay=False), help="The Dagster project root the rewrite was written into")
+@click.option("--pkg", default=None, help="Python package of the project (default: the one under src/)")
+@click.option("--manifest", "manifest_file", default=None, type=click.Path(exists=True, dir_okay=False), help="Record route and gate result in this manifest")
+@click.option("--python", "python", default=None, help="Python of the environment that has dagster, dg and dagster-community-components (default: this one)")
+@click.option("--unit-dir", default=None, type=click.Path(exists=True, file_okay=False), help="The unit's source folder when it is not src/<pkg>/defs/<unit>/")
+@click.option("--run-commands", is_flag=True, help="Also materialize assets whose commands are not on the echo/print allowlist (they run for real)")
+@click.option("--no-sql-materialize", is_flag=True, help="Do not run SQL assets against a local SQLite database")
+@click.option("--out", "out_file", default=None, help="Gate result JSON (default: next to the spec, <unit>.gates.json)")
+def accept_cmd(spec_file: str, project: str, pkg: str | None, manifest_file: str | None, python: str | None, unit_dir: str | None, run_commands: bool,
+               no_sql_materialize: bool, out_file: str | None) -> None:
+    """Rewrite route, step 3: run the acceptance gates on a rewritten unit. Exit 0 only when every gate passes."""
+    import json
+    import sys as _sys
+
+    from .rewrite.accept import record, run_gates
+    spec = json.loads(Path(spec_file).read_text())
+    results = run_gates(spec, Path(project), python or _sys.executable, pkg, run_commands, not no_sql_materialize, Path(unit_dir) if unit_dir else None)
+    ok = all(r["passed"] for r in results)
+    out = Path(out_file) if out_file else Path(spec_file).with_name(f"{spec['unit_id']}.gates.json")
+    out.write_text(json.dumps({"unit": spec["unit"], "route": "rewrite", "passed": ok, "gates": results}, indent=1) + "\n")
+    for r in results:
+        click.echo(f"{'PASS' if r['passed'] and r['ran'] else 'NOT RUN' if r['passed'] else 'FAIL'}  {r['gate']}: {r['detail']}")
+    if manifest_file:
+        m = mf.load(Path(manifest_file))
+        st = record(m, spec["unit"], results)
+        mf.save(m, Path(manifest_file))
+        click.echo("manifest: " + ", ".join(f"{k}={v}" for k, v in st.items()))
+    click.echo(f"unit {spec['unit']}: " + ("ACCEPTED (route: rewrite)" if ok else "NOT accepted: the converter's output remains the fallback"))
+    raise SystemExit(0 if ok else 1)
+
+
+@main.command("equivalence")
+@click.argument("spec_files", nargs=-1, required=True, type=click.Path(exists=True, dir_okay=False))
+@click.option("--converter-project", required=True, type=click.Path(exists=True, file_okay=False), help="Project from `convert --output components` (or python)")
+@click.option("--rewrite-project", required=True, type=click.Path(exists=True, file_okay=False), help="Project holding the rewritten unit(s)")
+@click.option("--python", "python", default=None)
+@click.option("--out", "out_file", default="equivalence.md")
+def equivalence_cmd(spec_files: tuple[str, ...], converter_project: str, rewrite_project: str, python: str | None, out_file: str) -> None:
+    """Compare the two routes for each unit by behavior (graph order, schedules, pools, retries, commands, notification targets, stubs)."""
+    import json
+    import sys as _sys
+
+    from .rewrite.equivalence import compare, converter_side, render_md, rewrite_side
+    py = python or _sys.executable
+    results = []
+    for sf in spec_files:
+        spec = json.loads(Path(sf).read_text())
+        conv = converter_side(spec, Path(converter_project), py)
+        rew = rewrite_side(spec, Path(rewrite_project), py)
+        for side, m in (("converter", conv), ("rewrite", rew)):
+            if "error" in m:
+                raise click.ClickException(f"{spec['unit']}: the {side} project did not load: {m['error']}")
+        r = compare(spec, conv, rew)
+        results.append(r)
+        click.echo(f"{spec['unit']}: " + ("equivalent on every machine-checked dimension" if r["equivalent_on_all_machine_checked_dimensions"] else
+                                         "; ".join(f"{d['dimension']}: {d['verdict']}" for d in r["dimensions"] if not d["verdict"].startswith("equivalent"))))
+    Path(out_file).write_text(render_md(results))
+    Path(out_file).with_suffix(".json").write_text(json.dumps(results, indent=1, default=str) + "\n")
+    click.echo(f"wrote {out_file} and {Path(out_file).with_suffix('.json')}")
