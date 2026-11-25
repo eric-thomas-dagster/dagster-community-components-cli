@@ -159,6 +159,34 @@ Asset checks come only from what the source shows, are `blocking=False`, and say
 
 Not generated, on purpose: a check that a SQL asset "ran without error" (a failure already fails the step, so the check would be vacuous), and any business check. dbt tests already become asset checks of the dbt models (see "Astronomer Cosmos").
 
+## Connections export: `connections_to_resources.py`
+
+`airflow connections export --format json` (or the names-only list from [hosted-airflow.md](hosted-airflow.md)) goes in; a resources section and a `.env.example` come out, **with variable names only**:
+
+```bash
+python3 scripts/connections_to_resources.py connections.json --out-dir connections_out    # resources_connections.py, .env.example, connections_summary.{md,json}
+```
+
+**No value is ever written, printed or logged.** From each record the script keeps two strings, the connection id and `conn_type`, and drops the rest (passwords, tokens, `extra` JSON with private keys and secret keys, hosts, logins, URIs) before anything is produced; an unreadable file gives an error that names no content. A test feeds a fixture full of fake secrets (every string value, and every piece of every `extra`) and asserts that none appears in the output, the summary or the printed text. Delete the export afterwards: it holds secrets.
+
+| Airflow `conn_type` | Becomes | Variables |
+|---|---|---|
+| `aws`, `s3` | `dagster_aws.s3.S3Resource()` (boto3's default credential chain) | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_SESSION_TOKEN`, `AWS_DEFAULT_REGION` (set what your deployment needs) |
+| `snowflake` | `dagster_snowflake.SnowflakeResource(account, user, password)` | `SNOWFLAKE_ACCOUNT`, `SNOWFLAKE_USER`, `SNOWFLAKE_PASSWORD` (the converter's own names) |
+| `gcpbigquery`, `bigquery` | `dagster_gcp.BigQueryResource(project=...)` | `<CONN>_PROJECT`, `GOOGLE_APPLICATION_CREDENTIALS` |
+| `google_cloud_platform` | `dagster_gcp.GCSResource(project=...)` | the same |
+| `slack` | `dagster_slack.SlackResource(token=...)` | `<CONN>_TOKEN` |
+| `ssh`, `sftp` | `dagster_ssh.SSHResource(remote_host, remote_port, username, password)` | `<CONN>_HOST`, `_PORT`, `_USER`, `_PASSWORD` (use `key_file` for key authentication) |
+| `databricks`, `dbt_cloud`, `airbyte`, `fivetran` | the resource the converter already writes for the operator | `<CONN>_HOST` and `_TOKEN`; `_API_TOKEN` and `_ACCOUNT_ID`; `_HOST`, `_PORT`, `_USER`, `_PASSWORD`; `_API_KEY` and `_API_SECRET` |
+| `postgres`, `mysql`, `mssql`, `sqlite`, `redshift` | no resource object: the converted SQL step reads one SQLAlchemy URL | `<CONN>_URL` |
+| `http` | read in the step | `<CONN>_BASE_URL`, optional `_AUTH_HEADER`, `_LOGIN`, `_PASSWORD`, `_HEADERS` |
+| `slackwebhook` | read in the step | `<CONN>_WEBHOOK_URL` |
+| `smtp`, `email` | read in the step | `<CONN>_HOST`, `_PORT`, `_USER`, `_PASSWORD`, `_STARTTLS`, `_SSL`, `_FROM` |
+| `kubernetes` | none: `dagster-k8s` uses the kubeconfig or in-cluster config | `KUBECONFIG` |
+| anything else (`wasb`/Azure, `mongo`, a names-only list) | a documented `UnmappedConnection` placeholder resource with a TODO, listed in the summary | `<CONN>_HOST`, `_PORT`, `_LOGIN`, `_PASSWORD`, `_SCHEMA`, `_EXTRA` |
+
+The table is `scripts/connections.py`, shared with `convert_ir.py`: the converter writes its `resources.py` entries (S3, Snowflake, dbt Cloud, Airbyte, Fivetran, Databricks) from the same table, so both files use the same keys, constructors and variable names (a test compares them, and `report.json` `connections` lists the names for S3 and Snowflake as it already did for the other kinds). The classes and constructor fields were checked by importing the libraries; the registry components that fit are named in the summary (`dagster-community-components` 0.10.188 manifest: `postgres_resource`, `mysql_resource`, `mssql_resource`, `redshift_resource`, `bigquery_resource`, `snowflake_resource`, `aws_s3_resource`, `http_resource`, `slack_resource`, `sftp_resource`, `databricks_resource`, `dbt_cloud_resource`, `airbyte_resource`, `fivetran_resource`, `smtp_resource`; there is none for `ssh`, `kubernetes`, a Google Cloud connection or sqlite, and `azure_openai_resource` is not an Azure storage resource). Not run against any real connection or service.
+
 ## Settings that map or degrade
 
 - `retry_exponential_backoff` becomes `Backoff.EXPONENTIAL`; a named XCom of a `multiple_outputs` task reads that key of the returned dict.

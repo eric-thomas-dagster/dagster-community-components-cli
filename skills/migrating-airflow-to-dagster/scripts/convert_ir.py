@@ -45,6 +45,7 @@ from pathlib import Path
 from typing import Any
 from urllib.parse import urlparse
 
+import connections as CN
 import cosmos_ops as K
 import gen_tests as G
 import provider_ops as P
@@ -3868,14 +3869,18 @@ def main(argv: list[str] | None = None) -> int:
         if sf_resources:
             lines.append("from dagster_snowflake import SnowflakeResource")
         lines += sorted({P.RESOURCE_KINDS[k]["import"] for k in lib_res.values()})
-        entries = [f"{r!r}: S3Resource()" for r in sorted(resources)] + [
-            f"{r!r}: SnowflakeResource(account=dg.EnvVar('SNOWFLAKE_ACCOUNT'), user=dg.EnvVar('SNOWFLAKE_USER'), password=dg.EnvVar('SNOWFLAKE_PASSWORD'))"
-            for r in sorted(sf_resources)] + [f"{c!r}: {P.RESOURCE_KINDS[k]['ctor'](c)}" for c, k in sorted(lib_res.items())]
+        entries = [f"{r!r}: {CN.resource_entry('aws', r)}" for r in sorted(resources)] + [
+            f"{r!r}: {CN.resource_entry('snowflake', r)}" for r in sorted(sf_resources)] + [f"{c!r}: {CN.resource_entry(k, c)}" for c, k in sorted(lib_res.items())]
         (a.out_dir / "resources.py").write_text("\n".join(lines) + "\n\n\n@dg.definitions\ndef resources() -> dg.Definitions:\n    return dg.Definitions(resources={" + ", ".join(entries) + "})\n")
+    if resources or sf_resources:                   # the S3 and Snowflake connections' variable names, from the same table connections_to_resources.py uses
+        report.setdefault("connections", {})
+        for kind_, ids_ in (("aws", resources), ("snowflake", sf_resources)):
+            for c_ in sorted(ids_):
+                report["connections"][c_] = {"kind": kind_, "environment": CN.env_names(kind_, c_), "read_by": "resource in resources.py"}
     if prov_conns:                                   # what each provider connection needs, by name only: no value is ever copied
-        report["connections"] = {c: {"kind": k, "environment": (P.RESOURCE_KINDS[k]["env"](c) if k in P.RESOURCE_KINDS else P.ENV_KINDS[k](c)),
-                                     "read_by": "resource in resources.py" if k in P.RESOURCE_KINDS else "the step, when it runs"}
-                                 for c, k in sorted(prov_conns.items()) if k in P.RESOURCE_KINDS or k in P.ENV_KINDS}
+        report.setdefault("connections", {}).update({c: {"kind": k, "environment": (P.RESOURCE_KINDS[k]["env"](c) if k in P.RESOURCE_KINDS else P.ENV_KINDS[k](c)),
+                                                         "read_by": "resource in resources.py" if k in P.RESOURCE_KINDS else "the step, when it runs"}
+                                                     for c, k in sorted(prov_conns.items()) if k in P.RESOURCE_KINDS or k in P.ENV_KINDS})
     if ext:
         (a.out_dir / "sources.py").write_text(
             '"""Assets that converted DAGs read or are triggered by but that no converted DAG produces."""\n'

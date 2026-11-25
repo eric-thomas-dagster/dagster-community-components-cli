@@ -122,7 +122,7 @@ python3 scripts/status.py defer   manifest.json A031 --reason "custom timetable;
 
 ### Phase 5: Platform layer
 
-Variables to environment variables or secrets (`dg plus create env`, never in the repo), Connections to resources, pools to Dagster pools (limits configured in Dagster), `default_args` retries to `RetryPolicy`, alerts and callbacks to alert policies or failure sensors, deployment to Dagster+ (see the CI/CD walkthrough in this repo's `examples/`).
+Connections: `scripts/connections_to_resources.py connections.json` turns `airflow connections export --format json` (or the names-only list) into a resources section and a `.env.example` with variable names only, and never reads a secret value (`reference/conversion.md`, "Connections export"); then variables to environment variables or secrets (`dg plus create env`, never in the repo), Connections to resources, pools to Dagster pools (limits configured in Dagster), `default_args` retries to `RetryPolicy`, alerts and callbacks to alert policies or failure sensors, deployment to Dagster+ (see the CI/CD walkthrough in this repo's `examples/`).
 
 ### Phase 6: Side by side, then cutover
 

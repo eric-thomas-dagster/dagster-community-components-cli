@@ -62,7 +62,7 @@ curl -s -H "$AUTH" "$BASE/api/v1/connections?limit=1000" | jq -r '.connections[]
 curl -s -H "$AUTH" "$BASE/api/v1/variables?limit=1000"   | jq -r '.variables[].key'               | sort > variable_names.txt
 ```
 
-These are Airflow's own endpoints and field names, recalled rather than re-read for each version: check the response of your instance once. Use the two files to build the secrets map (Phase 5 of `SKILL.md`), to set the extractor's placeholders, and to cross-check the converter's report (`connections`, and the `AIRFLOW_VAR_*` variables the converted code reads).
+These are Airflow's own endpoints and field names, recalled rather than re-read for each version: check the response of your instance once. `scripts/connections_to_resources.py connection_names.txt` turns the connection list into a resources section and a `.env.example` (a names-only list has no types, so each becomes a placeholder resource until the types are known; an `airflow connections export` file gives the types and is read for nothing else). Use the two files to build the secrets map (Phase 5 of `SKILL.md`), to set the extractor's placeholders, and to cross-check the converter's report (`connections`, and the `AIRFLOW_VAR_*` variables the converted code reads).
 
 ## Differences that matter for the migration
 
