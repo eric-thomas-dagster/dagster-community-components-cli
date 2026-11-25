@@ -1,0 +1,24 @@
+[build-system]
+requires = ["hatchling>=1.18"]
+build-backend = "hatchling.build"
+
+[project]
+name = "streamsets-to-dagster"
+version = "0.1.0"
+description = "Convert StreamSets Data Collector pipelines into a Dagster project, with a migration report."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+dependencies = ["click>=8.0", "pyyaml>=6.0.4"]
+
+[project.optional-dependencies]
+dev = ["pytest>=8", "dagster>=1.11", "dagster-dg-cli", "sqlalchemy>=2", "pandas>=2.3.3", "fsspec", "duckdb>=1.5.6", "duckdb-engine>=0.17.0"]
+
+[project.scripts]
+streamsets-to-dagster = "streamsets_to_dagster.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/streamsets_to_dagster"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

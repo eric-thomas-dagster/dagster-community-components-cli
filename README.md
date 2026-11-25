@@ -142,6 +142,7 @@ Source repo for the components themselves:
 - [`migrating-airflow-to-dagster`](skills/migrating-airflow-to-dagster/SKILL.md): Airflow DAGs, with parity checks against a running Airflow.
 - [`migrating-adf-to-dagster`](skills/migrating-adf-to-dagster/SKILL.md): Azure Data Factory pipelines, triggers and Mapping Data Flows.
 - [`migrating-runmyjobs-to-dagster`](skills/migrating-runmyjobs-to-dagster/SKILL.md): Redwood RunMyJobs process definitions and chains.
+- [`migrating-streamsets-to-dagster`](skills/migrating-streamsets-to-dagster/SKILL.md): StreamSets Data Collector pipelines (batch pipelines convert; continuous ones are reported and observed).
 
 ## Status
 
