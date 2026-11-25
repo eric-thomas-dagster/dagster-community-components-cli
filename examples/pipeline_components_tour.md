@@ -1,6 +1,6 @@
 # Pipeline Components Tour
 
-**One YAML declares a whole pipeline.** The `MLPipelineComponent`, `AgenticPipelineComponent`, and sibling `polars_pipeline` / `warehouse_pipeline` / `pyspark_pipeline` / `snowpark_pipeline` all share the same `source: + steps: + outputs:` shape. Different domains, same YAML idiom, same governance and CI story.
+**One YAML declares a whole pipeline.** The `MLPipelineComponent`, `AgenticPipelineComponent`, and sibling `polars_pipeline` / `warehouse_pipeline` / `pyspark_pipeline` / `snowpark_pipeline` / `context_engineering_pipeline` / `rag_pipeline` all share the same `source: + steps: + outputs:` shape. Different domains, same YAML idiom, same governance and CI story.
 
 This tour walks that pattern end-to-end in ~45 minutes.
 
@@ -39,7 +39,7 @@ Contains the **"Why Dagster (not just a job runner)"** section — the sharpest 
 
 ## The rest of the pipeline-component family
 
-The three walkthroughs above cover ML + agentic. The pattern extends to four more execution engines — same `source: + steps: + outputs:` YAML idiom, different backend:
+The three walkthroughs above cover ML + agentic. The pattern extends to six more domains/execution engines — same `source: + steps: + outputs:` YAML idiom, different backend:
 
 | Component | Domain | Execution engine | Walkthrough |
 |---|---|---|---|
@@ -49,6 +49,8 @@ The three walkthroughs above cover ML + agentic. The pattern extends to four mor
 | `pyspark_pipeline` | Big-data DataFrame transforms | PySpark / Catalyst — predicate pushdown, join reordering, cluster-scale execution | [pyspark_pipeline.md](./pyspark_pipeline.md) |
 | `snowpark_pipeline` | Warehouse-native DataFrame ops | Snowpark — lazy chain compiles to ONE Snowflake SQL statement, no data flows through Python | [snowpark_pipeline.md](./snowpark_pipeline.md) |
 | `warehouse_pipeline` | SQL CTE chain | Any warehouse (Snowflake / BigQuery / Redshift / Postgres / DuckDB) — multi-step compiled to ONE CTAS | [warehouse_native_pipeline.md](./warehouse_native_pipeline.md) |
+| `context_engineering_pipeline` | Build a governed, citeable knowledge base from raw text | chunk → classify → embed → write_vector_store, free/local by default (sentence-transformers + HuggingFace zero-shot + ChromaDB) | [context_engineering.md](./context_engineering.md) |
+| `rag_pipeline` | RAG query side | LiteLLM-backed `retrieve` / `hybrid_search` / `rerank` / `expand_query` / `generate` ops — reads what `context_engineering_pipeline` writes | [rag.md](./rag.md) |
 
 **Why the whole family matters:** one YAML shape means governance / review / CI templates transfer across ML, transforms, warehouse SQL, and agentic workflows. Learn the pattern once — apply it to every domain that has a "source → chained steps → sinks" story.
 
@@ -88,7 +90,7 @@ If you want the raw component READMEs — full op menu, schema, escape hatches �
 
 ## Browsable component registry
 
-Beyond the two pipeline components, the community registry has **~962 components** covering ingestion / transforms / IO managers / sensors / sinks / resources / integrations for the long tail of vendors and workflows:
+Beyond the pipeline-component family, the community registry has **~1,460 components** covering ingestion / transforms / IO managers / sensors / sinks / resources / integrations for the long tail of vendors and workflows:
 
 **Registry UI:** https://dagster-component-ui.vercel.app/
 
