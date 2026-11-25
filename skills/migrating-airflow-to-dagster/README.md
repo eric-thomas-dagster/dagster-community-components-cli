@@ -115,4 +115,6 @@ uv run --no-project --with pytest --with pyyaml --with dagster --with dagster-aw
 - `catchup=True` defers the DAG unless `--catchup ignore`, which runs from now on and does not replay history.
 - Eight corpus DAGs remain deferred (consumers of runtime-partitioned assets with rollup, fan-out, product or allowed-key mappings; a timetable with a mapper per asset; some mapped-task argument shapes).
 - Parity covers DAGs with no external systems. Operator-based tasks, sensors on external systems, durations, failure behavior and data volume still need a side-by-side run on the same logical window.
+- Cosmos: container execution modes (Kubernetes, Docker, cloud container services), `node_converters`, `run-operation`, docs and other non-build operators are loud stubs; `test_behavior=after_all` becomes `dbt build` (tests run per model, stated as a caveat); the dbt project and its profile secrets are not copied; verified only against DuckDB and Cosmos 1.15.1 on Airflow 2.10.5 ([reference/conversion.md](reference/conversion.md)).
+- `dagster-airlift` 0.29.31 reads only Airflow 2.x's `/api/v1` REST API; for an Airflow 3 source use the converter ([reference/airlift.md](reference/airlift.md)).
 - Airflow's run history does not migrate.
