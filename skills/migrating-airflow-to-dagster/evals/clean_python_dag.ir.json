@@ -1,0 +1,308 @@
+{
+ "airflow_version": "2.10.5",
+ "dags": [
+  {
+   "dag_id": "simple_sequential_pipeline",
+   "file": "simple_sequential.py",
+   "description": null,
+   "tags": [
+    "example",
+    "sequential"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-01-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "CronDataIntervalTimetable",
+    "cron": "0 9 * * *",
+    "timezone": "UTC",
+    "summary": "0 9 * * *",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10af8aa50>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10af8aa50>",
+    "kind": "cron_data_interval"
+   },
+   "default_args": {
+    "retries": 3,
+    "retry_delay": {
+     "seconds": 300.0
+    }
+   },
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "fetch_data",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "process_data"
+     ],
+     "retries": 3,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential.fetch_data"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "fetch_data",
+       "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+       "source": "@task\ndef fetch_data(source: str = \"api\") -> dict:\n    \"\"\"Fetch data from a source.\"\"\"\n    print(f\"Fetching data from {source}\")\n    return {\"source\": source, \"data\": [1, 2, 3, 4, 5]}\n",
+       "file": "@@DAGS@@/simple_sequential.py",
+       "params": [
+        "source"
+       ]
+      }
+     },
+     "callable": {
+      "name": "fetch_data",
+      "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+      "source": "@task\ndef fetch_data(source: str = \"api\") -> dict:\n    \"\"\"Fetch data from a source.\"\"\"\n    print(f\"Fetching data from {source}\")\n    return {\"source\": source, \"data\": [1, 2, 3, 4, 5]}\n",
+      "file": "@@DAGS@@/simple_sequential.py",
+      "params": [
+       "source"
+      ]
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "process_data",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [
+      "fetch_data"
+     ],
+     "downstream": [
+      "save_results"
+     ],
+     "retries": 3,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [
+       {
+        "xcom_from": "fetch_data",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [
+       {
+        "xcom_from": "fetch_data",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential.process_data"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "process_data",
+       "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+       "source": "@task\ndef process_data(data: dict) -> dict:\n    \"\"\"Process the fetched data.\"\"\"\n    print(f\"Processing data from {data['source']}\")\n    processed = {\n        \"source\": data[\"source\"],\n        \"processed\": [x * 2 for x in data[\"data\"]]\n    }\n    return processed\n",
+       "file": "@@DAGS@@/simple_sequential.py",
+       "params": [
+        "data"
+       ]
+      }
+     },
+     "callable": {
+      "name": "process_data",
+      "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+      "source": "@task\ndef process_data(data: dict) -> dict:\n    \"\"\"Process the fetched data.\"\"\"\n    print(f\"Processing data from {data['source']}\")\n    processed = {\n        \"source\": data[\"source\"],\n        \"processed\": [x * 2 for x in data[\"data\"]]\n    }\n    return processed\n",
+      "file": "@@DAGS@@/simple_sequential.py",
+      "params": [
+       "data"
+      ]
+     },
+     "op_args": [
+      {
+       "xcom_from": "fetch_data",
+       "key": "return_value"
+      }
+     ],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "save_results",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [
+      "process_data"
+     ],
+     "downstream": [],
+     "retries": 3,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [
+       {
+        "xcom_from": "process_data",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [
+       {
+        "xcom_from": "process_data",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential.save_results"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "save_results",
+       "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+       "source": "@task\ndef save_results(processed: dict) -> str:\n    \"\"\"Save the processed results.\"\"\"\n    result = f\"Saved {len(processed['processed'])} items from {processed['source']}\"\n    print(result)\n    return result\n",
+       "file": "@@DAGS@@/simple_sequential.py",
+       "params": [
+        "processed"
+       ]
+      }
+     },
+     "callable": {
+      "name": "save_results",
+      "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+      "source": "@task\ndef save_results(processed: dict) -> str:\n    \"\"\"Save the processed results.\"\"\"\n    result = f\"Saved {len(processed['processed'])} items from {processed['source']}\"\n    print(result)\n    return result\n",
+      "file": "@@DAGS@@/simple_sequential.py",
+      "params": [
+       "processed"
+      ]
+     },
+     "op_args": [
+      {
+       "xcom_from": "process_data",
+       "key": "return_value"
+      }
+     ],
+     "op_kwargs": {}
+    }
+   ]
+  }
+ ],
+ "import_errors": {}
+}

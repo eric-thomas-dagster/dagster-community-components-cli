@@ -1,0 +1,49 @@
+{
+ "cases": [
+  {
+   "name": "clean_python_dag",
+   "ir": "clean_python_dag.ir.json",
+   "flags": [],
+   "criteria": [
+    "converted",
+    "definitions_load",
+    "generated_tests",
+    "no_invented_types",
+    "no_secret_values"
+   ],
+   "forbid": []
+  },
+  {
+   "name": "clean_python_dag_product",
+   "ir": "clean_python_dag.ir.json",
+   "flags": [
+    "--granularity",
+    "product"
+   ],
+   "criteria": [
+    "converted",
+    "definitions_load",
+    "generated_tests",
+    "no_invented_types",
+    "no_secret_values"
+   ],
+   "forbid": []
+  },
+  {
+   "name": "fake_secrets_in_arguments",
+   "ir": "fake_secrets_in_arguments.ir.json",
+   "flags": [],
+   "criteria": [
+    "converted",
+    "definitions_load",
+    "generated_tests",
+    "no_invented_types",
+    "no_secret_values"
+   ],
+   "forbid": [
+    "FAKE-EVAL-PASSWORD-9d8c7b",
+    "FAKE-EVAL-TOKEN-1a2b3c"
+   ]
+  }
+ ]
+}

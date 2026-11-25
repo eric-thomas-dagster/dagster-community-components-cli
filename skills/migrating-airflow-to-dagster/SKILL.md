@@ -191,6 +191,7 @@ Writes `cutover-<dag_id>.md` for each converted DAG (pause plan, catchup and bac
 | `scripts/convert_ir.py --output components` | The same conversion, writing registry components (YAML) for DAGs whose tasks all have one (see `reference/conversion.md`) |
 | `scripts/dag_spec.py` | Facts-only specification of each DAG from the IR (rewrite route); no secret value |
 | `scripts/rewrite_prompt.py` | The self-contained prompt that has Claude write one DAG from its spec (rewrite route) |
+| `scripts/run_evals.py` | Skill-level evals (`evals/`): fixtures converted, then `dg check defs`, the generated tests, no invented component types and no secret values checked |
 | `scripts/accept_rewrite.py` | The gates for a rewrite, and the manifest record of which route produced each unit |
 | `scripts/plan.py` | Wave plan from the manifest (and IR and report): pattern, complexity, path, wave, coarse effort, pilot; heuristic and deterministic |
 | `scripts/cosmos_ops.py` | The Cosmos mapping `convert_ir.py` uses (dbt component, dbt steps, profiles) |
