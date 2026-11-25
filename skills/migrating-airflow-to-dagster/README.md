@@ -61,7 +61,7 @@ Not converted by code: Variables, `default_args` beyond retries, alerts and call
 - **Two kinds of caveat in `report.json`:** `stub` (not translated) and `degraded` (translated, with a stated difference, e.g. `depends_on_past`, `pool_slots`, `fail_stop` not enforced).
 - **Deferrals.** Whole-DAG problems (producer conflicts, some schedule shapes, SubDAGs, a custom operator class that cannot be copied) defer the DAG with every reason. A converter bug surfaces as a deferral named `CONVERTER ERROR`, not a crash.
 - **Operator report.** `report.json` has an `operators` section: each operator type, its task count, whether it is mapped, and the integration or registry component that fits.
-- **Manifest.** `apply_conversion.py` writes a `target` per converted unit and defers the rest with the reason. A unit with a caveat stays `deferred`.
+- **Manifest.** `apply_conversion.py` writes a `target` per converted unit and defers the rest with the reason. A unit whose task is a `stub` caveat stays `deferred`; a `degraded` caveat does not defer the unit (read the report).
 
 ## Validation and parity
 

@@ -80,19 +80,19 @@ A DAG stays Python when any task is templated (the component YAML has its own Ji
 
 ## Caveats: convert the shape, mark what is not translated
 
-A DAG with one untranslatable task used to be deferred whole. By default (`--caveats raise`) the converter now keeps the DAG's shape and writes the task as a stub: an asset in its place whose body calls `af_caveat(reason)`, with an `# AIRFLOW-CAVEAT:` comment. It applies to a callable that uses the Airflow API, an unresolved import or an async function, an operator with no conversion yet (provider operators, `PythonVirtualenvOperator`, human-in-the-loop operators), `templates_dict`, and templates that use names the runtime does not rebuild. The report lists each one under the DAG's `caveats`, and `apply_conversion.py` leaves that task's unit `deferred` with the reason.
+By default (`--caveats raise`) a DAG with one untranslatable task keeps its shape and the task is written as a stub: an asset in its place whose body calls `af_caveat(reason)`, with an `# AIRFLOW-CAVEAT:` comment. It applies to a callable that uses the Airflow API, an unresolved import or an async function, an operator with no conversion yet (provider operators, `PythonVirtualenvOperator`, human-in-the-loop operators), `templates_dict`, and templates that use names the runtime does not rebuild. The report lists each one under the DAG's `caveats`, and `apply_conversion.py` leaves that task's unit `deferred` with the reason.
 
-Two kinds of caveat appear in the report: `stub` (the task body is not translated) and `degraded` (translated, with a known difference: a dropped `ExternalTaskSensor` wait that the converter cannot express, or DAG-level callbacks that were not attached). Each unconverted operator names the registry component that covers the same work (`OPERATOR_COMPONENTS` in `convert_ir.py`).
+Two kinds of caveat appear in the report: `stub` (the task body is not translated) and `degraded` (translated, with a known difference: for example the settings listed in the table below, a dropped `ExternalTaskSensor` wait that the converter cannot express, or DAG-level callbacks that were not attached). Each unconverted operator names the registry component that covers the same work (`OPERATOR_COMPONENTS` in `convert_ir.py`).
 
 - `--caveats raise` (default): the stub fails when it runs, with the reason in the message, so nothing succeeds by accident.
 - `--caveats skip`: the stub returns nothing and the rest of the DAG runs. Use it to see the shape run end to end; read the caveat list before trusting any output.
-- `--caveats off`: the earlier behavior, the whole DAG deferred with the reason.
+- `--caveats off`: no stubs and no degraded caveats; the whole DAG is deferred with the reason instead.
 
 Whole-DAG problems still defer the DAG: producer conflicts, schedule shapes, a SubDAG, a partitioned DAG with steps that are not converted, a custom operator class that cannot be copied.
 
 ## What it defers, always with the reason
 
-Jinja templates, task context (`ds`, `ti`, `**context`, `dag_run`), other operators, dynamic task mapping, trigger rules other than `all_success`, setup/teardown, callbacks, `catchup=True`, other timetables (delta, partitioned assets), assets written by unordered tasks, an asset already produced by another DAG, and any callable that cannot be copied faithfully (lambdas, Airflow APIs, unresolved names). A DAG is converted whole or not at all: a partial conversion would silently change the graph. A converter bug shows up as a deferral named `CONVERTER ERROR`, never a crash or a silent skip.
+A whole DAG is deferred only when part of it cannot be expressed at all (a partial conversion would silently change the graph): an asset produced by unordered tasks or by two DAGs in a way it cannot split, a SubDAG, a schedule shape with no mapping (a timetable with a mapper per asset, custom timetables), `catchup=True` (unless `--catchup ignore`), a custom operator class that cannot be copied, an operator argument that is not a plain value, the mapped or partitioned shapes under "Still deferred", and any callable whose arguments cannot be wired (with `--caveats off`). Jinja templates, task context, dynamic mapping, trigger rules, setup/teardown and callbacks are translated (see above and the settings table below), not deferred. Everything else that cannot be translated is a loud stub or a `degraded` caveat (next section) unless `--caveats off`, which turns each of them into a deferral of the whole DAG. A converter bug shows up as a deferral named `CONVERTER ERROR`, never a crash or a silent skip.
 
 ## Rules this encodes (see also factories.md and dynamic-mapping.md)
 
@@ -122,22 +122,26 @@ The converter currently emits plain Python assets so converted code has no depen
 
 Callables that construct `S3Hook` themselves cannot reach a Dagster resource. The generated `runtime.py` includes an `S3Hook` shim for the commonly used methods (`load_file`, `load_string`, `load_bytes`, `check_for_key`, `list_keys`, `delete_objects`, `copy_object`). It was checked against Airflow's real hook with a recording fake boto client: 11 of 11 scenarios identical (calls, return values and errors). It uses the default AWS credential chain, and `read_key` (boto's resource API), compression, encryption and ACL options raise `NotImplementedError` instead of behaving differently. A converted DAG that uses it carries a `NOTE:` in its module.
 
-## Task and DAG settings: mapped or deferred, never ignored
+## Task and DAG settings: translated, degraded or deferred, never ignored
 
-Loading a converted project proves nothing about behavior. Running both sides (below) found settings the converter had silently dropped, so every setting that changes what happens is now handled explicitly:
+Loading a converted project proves nothing about behavior. Running both sides (below) found settings the converter had silently dropped, so every setting that changes what happens is now handled explicitly. "Degraded" is a caveat in the report (the DAG converts and the report says what is not enforced); with `--caveats off` each degraded setting defers the DAG.
 
 | Setting | Handling |
 |---|---|
-| `retries`, `retry_delay`, `pool`, task groups | mapped (`RetryPolicy`, `pool`, key prefix) |
-| `execution_timeout` on a shell task | mapped (`subprocess` timeout; the task fails, as in Airflow) |
-| `execution_timeout` on a Python task | deferred (a callable cannot be interrupted safely) |
-| `trigger_rule` other than `all_success` | deferred (see the component wishlist) |
-| `depends_on_past`, `wait_for_downstream`, `retry_exponential_backoff`, SLAs | deferred |
-| `max_active_tis_per_dag`, `max_active_tis_per_dagrun`, `pool_slots != 1` | deferred |
-| task callbacks (`on_*_callback`) and hooks (`pre_execute=`, `post_execute=`, `@task.run_if`, `skip_if`) | deferred (Airflow keeps the hook in `_pre_execute_hook`; the default no-op methods are not hooks) |
-| DAG `fail_stop=True` | deferred (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish) |
-| DAG `max_active_runs` / `max_active_tasks` / `concurrency` other than 16 | deferred (a run-queue limit is deployment configuration, not code; a converter could tag the job and emit the limit for the deployment) |
-| DAG `dagrun_timeout`, `max_consecutive_failed_dag_runs`, `render_template_as_native_obj` | deferred |
+| `retries`, `retry_delay`, `retry_exponential_backoff`, `pool`, task groups | translated (`RetryPolicy` with `Backoff.EXPONENTIAL`, `pool`, key prefix) |
+| `execution_timeout` on a shell task | translated (`subprocess` timeout; the task fails, as in Airflow) |
+| `execution_timeout` on a Python task | degraded (a callable cannot be interrupted safely) |
+| `trigger_rule` other than `all_success` | translated in the graph form (Airflow's own rule table); a rule the table does not have defers the DAG |
+| `sla` on a task | translated (an `sla_breach` observation; the task is not stopped, as in Airflow) |
+| `depends_on_past`, `wait_for_downstream` | degraded (not enforced) |
+| `max_active_tis_per_dagrun`, `pool_slots != 1` | degraded (not enforced; one slot is used) |
+| `max_active_tis_per_dag` | translated to a Dagster pool of that size (the limit goes in `concurrency_limits.yaml`); defers with a named pool or a value that is not a positive number |
+| task callbacks (`on_failure_callback`, `on_success_callback`, `on_retry_callback`) | translated with `@on_hooks` in the asset form; degraded in the graph form |
+| other hooks (`pre_execute=`, `post_execute=`, `@task.run_if`, `skip_if`, `on_skipped_callback`, `on_execute_callback`) | degraded (Airflow keeps the hook in `_pre_execute_hook`; the default no-op methods are not hooks) |
+| DAG `fail_stop=True` | degraded (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish) |
+| DAG `max_active_runs` / `max_active_tasks` other than 16 | translated to a run-queue tag limit and a per-run executor limit written to `concurrency_limits.yaml` for the deployment to apply; a value that is not a positive number defers |
+| DAG `dagrun_timeout` | translated to a `dagster/max_runtime` tag (enforced only with run monitoring); defers when not a number of seconds |
+| DAG `max_consecutive_failed_dag_runs`, `render_template_as_native_obj` | degraded |
 
 Detection traps this exposed: Airflow 2's decorated mapped tasks are `DecoratedMappedOperator`, a subclass of `MappedOperator`, so test the class hierarchy, not the class name; and `pre_execute` / `post_execute` exist on every operator as no-op methods, so only an override or a stored hook counts.
 
@@ -153,7 +157,7 @@ Detection traps this exposed: Airflow 2's decorated mapped tasks are `DecoratedM
 
 Corpus: 292 DAGs from 14 public repos (heavy on teaching repos for exactly the constructs that need a design decision, so do not read the conversion rate as typical).
 
-- **Conversion:** 284 of 292 DAGs convert (59 of them with at least one stubbed task) (`--caveats off` defers every DAG that would need a stub or a degraded setting; the report counts each kind) (partitioned DAGs are not in the parity comparison below: they need a partition to run). The rest are deferred, each with its reasons in `report.json`. Every converted repo loads in a real Dagster project (`load_check2.py`). Concurrency is mapped to Dagster concepts and written to a generated `concurrency_limits.yaml` that the deployment must apply: `max_active_runs` becomes a run-queue tag limit, a named pool or `max_active_tis_per_dag` becomes a Dagster pool (limit set with `dagster instance concurrency set`), and `max_active_tasks` becomes a per-run executor limit (exact only when runs are limited to one at a time). `pool_slots` above 1 and `max_active_tis_per_dagrun` are still deferred. These mappings are checked by loading and by unit tests; the pool and queue limits were not exercised under a running daemon.
+- **Conversion:** 284 of 292 DAGs convert (59 of them with at least one stubbed task) (`--caveats off` defers every DAG that would need a stub or a degraded setting; the report counts each kind) (partitioned DAGs are not in the parity comparison below: they need a partition to run). The rest are deferred, each with its reasons in `report.json`. Every converted repo loads in a real Dagster project (`load_check2.py`). Concurrency is mapped to Dagster concepts and written to a generated `concurrency_limits.yaml` that the deployment must apply: `max_active_runs` becomes a run-queue tag limit, a named pool or `max_active_tis_per_dag` becomes a Dagster pool (limit set with `dagster instance concurrency set`), and `max_active_tasks` becomes a per-run executor limit (exact only when runs are limited to one at a time). `pool_slots` above 1 and `max_active_tis_per_dagrun` are degraded caveats (not enforced). These mappings are checked by loading and by unit tests; the pool and queue limits were not exercised under a running daemon.
 - **Execution parity** (Airflow's own `dag.test()` against Dagster materialization, on converted DAGs with no external resources and no network or long sleeps): 117 DAGs, 115 compared and 2 not comparable (Airflow itself failed in the harness: a deadline-alert serialization error, and a param with no default). Of the 115, 106 had identical outcomes. The other 9 differ only in values that cannot match: random picks (five, one of them a random dog picture from a web API), timestamps (two), file listing times (one) and a tuple that Airflow's XCom stores as a tagged dict (one). Covered: branches and short-circuits, trigger rules, setup/teardown, mapped tasks, polling sensors, clock branches and triggered DAGs, in Airflow 2.10 and 3.4.
 - **Every converted DAG run in Dagster** (all 284, in-process with an ephemeral instance; partitioned DAGs given a partition key): 194 ran clean; 48 stopped at a marked caveat stub (the loud `AIRFLOW-CAVEAT` failure, as designed); 26 failed for reasons outside the converter (DAGs that fail on purpose, a network call, a data file or a package the example assumes, a failed upstream in a failure-path demo); 16 were only loaded (they need AWS or Snowflake credentials). This pass found and fixed: `templates_dict` read through `**kwargs`, `self` for `@asset` functions, `outlet_events`/`inlet_events` keyed by a URI string and `inlet_events.for_asset(...)`, the background `TriggerDagRunOperator` launch, a trigger whose target DAG is not in the converted set (now a stub), and loop-body callables that are left unexpanded (now stubs, as are callables that take `asset_state_store`).
 - **Passed values:** 435 task outcomes and 165 returned values were compared; 155 of the values were identical, and the 10 that differ are the cases above. For a mapped task Airflow records one instance and Dagster the collected list, so that check passes if Airflow's value appears in the list (a loose rule). Skipped, failed and branch markers are not compared as values. Nothing here ran against real S3 or Snowflake. Schedules were checked structurally (cron, timezone), not by waiting for ticks. The failure paths (a task that fails, a failed setup or teardown) are covered by unit tests, not by comparing against Airflow running a failing DAG.

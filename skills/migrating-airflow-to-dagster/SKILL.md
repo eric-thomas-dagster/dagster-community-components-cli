@@ -1,6 +1,6 @@
 ---
 name: migrating-airflow-to-dagster
-description: Guide for migrating Apache Airflow DAGs to Dagster. Use when the user mentions migrating, converting, porting or moving off Airflow (or MWAA, Cloud Composer, Astronomer) to Dagster, wants to assess such a migration, or asks what an Airflow construct maps to in Dagster. Covers DAGs, schedules, TaskFlow tasks, operators, sensors, datasets/assets, pools, XCom, Variables/Connections, dynamic task mapping, dag-factory and Cosmos. Load dagster-expert alongside this skill for Dagster specifics.
+description: Guide for migrating Apache Airflow DAGs to Dagster. Use when the user mentions migrating, converting, porting or moving off Airflow (or MWAA, Cloud Composer, Astronomer) to Dagster, wants to assess such a migration, or asks what an Airflow construct maps to in Dagster. Covers DAGs, schedules, TaskFlow tasks, operators, sensors, datasets/assets, pools, XCom, dynamic task mapping and dag-factory, with a converter that writes Dagster code for them. Connections become resources only for the operators the converter handles, Variables are read from `AIRFLOW_VAR_*` environment variables, and Cosmos DAGs are inventoried and mapped in guidance but not converted by code. Load dagster-expert alongside this skill for Dagster specifics.
 ---
 
 # Airflow to Dagster migration

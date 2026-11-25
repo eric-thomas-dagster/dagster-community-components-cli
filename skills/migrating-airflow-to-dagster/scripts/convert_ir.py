@@ -3,22 +3,33 @@
 
     python3 convert_ir.py ir.json --out-dir <dagster project>/src/<pkg>/defs --report report.json
 
-For each DAG it either writes one module (assets, a job, a schedule or automation conditions) or DEFERS the whole DAG
-with every reason, because a partial conversion would silently change the graph. Nothing is stubbed.
+For each DAG it writes one module (assets, a job, a schedule or automation conditions), or DEFERS the whole DAG with every
+reason when part of it cannot be expressed at all. By default (`--caveats raise`) a single task that cannot be translated is
+written as a loud stub in its place (an asset whose body raises `AIRFLOW-CAVEAT: <reason>`), and a setting that has no equivalent
+is a `degraded` caveat in the report; `--caveats off` defers the whole DAG instead of using either.
 
-Mapped today
-  tasks      PythonOperator / @task (callable source copied with the imports, constants and helpers it needs),
-             BashOperator, @task.bash, EmptyOperator (elided, edges rewired); callables using S3Hook (a mirrored subset),
+Converted
+  tasks      PythonOperator / @task (callable source copied with the imports, constants and helpers it needs, Airflow's task
+             context and Jinja templates rebuilt from run tags), BashOperator, @task.bash, EmptyOperator (elided, edges rewired),
+             virtualenv / external-python operators (run in their own interpreter), user-defined operator classes (copied),
+             callables using S3Hook (a mirrored subset), sensors (poll step), branches, short-circuits, clock branches,
+             TriggerDagRunOperator (target in the same conversion), ExternalTaskSensor (some shapes),
              S3ListOperator, S3CopyObjectOperator, S3DeleteObjectsOperator (explicit keys), LocalFilesystemToS3Operator,
-             CopyFromExternalStageToSnowflakeOperator, SnowflakeOperator / SQLExecuteQueryOperator on a Snowflake connection
+             S3CreateObjectOperator, CopyFromExternalStageToSnowflakeOperator, SnowflakeOperator / SQLExecuteQueryOperator
+             on a Snowflake connection
   data       a value returned by one task and passed to another becomes an asset parameter (the IO manager carries it)
   lineage    a task with one outlet is the asset with that key; inlets become dependencies
-  schedule   none, @once, cron (trigger or data-interval timetable) with timezone; asset triggers: a single or any-of
-             asset (`eager()`) or all-of several (a per-asset `since_last_handled` condition); retries, retry delay, pool
-  structure  task groups become key prefixes; one asset per task, one job per DAG
-Deferred with the reason: Jinja templates, task context (ds, ti, **context), other operators, dynamic mapping, trigger
-rules other than all_success, setup/teardown, callbacks, other timetables (delta, partitioned assets),
-and anything whose callable cannot be copied faithfully.
+  schedule   none, @once, cron (trigger or data-interval timetable) with timezone; asset triggers (single, any-of, all-of,
+             nested); partition timetables; retries, retry delay, exponential backoff, pool, SLA
+  structure  task groups become key prefixes; one asset per task, one job per DAG; dynamic task mapping, trigger rules,
+             setup/teardown and callbacks are translated (graph form or `@on_hooks`)
+Stubbed (loud, with the reason): a callable that uses the Airflow API or an unresolved import, a template the runtime does not
+rebuild, an operator with no conversion yet (the report names the integration or registry component that fits), a mapped provider
+operator outside the S3 and Snowflake ones, human-in-the-loop operators.
+Deferred with the reason (whole DAG): producer conflicts, SubDAGs, schedules with no mapping, `catchup=True` (unless
+`--catchup ignore`), a custom operator class that cannot be copied, and the mapped or partitioned shapes listed in
+reference/conversion.md. Settings Dagster cannot enforce (`depends_on_past`, `pool_slots` above 1, `fail_stop`, ...) are `degraded`
+caveats, or deferrals with `--caveats off`.
 """
 from __future__ import annotations
 
