@@ -19,10 +19,10 @@
     "timezone": "UTC",
     "summary": "0 6 * * *",
     "assets": [
-     "<airflow.timetables.base._NullDataset object at 0x10ae495e0>"
+     "<airflow.timetables.base._NullDataset object at 0x10cd4e810>"
     ],
     "asset_logic": "single",
-    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10ae495e0>",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10cd4e810>",
     "kind": "cron_data_interval"
    },
    "default_args": {},
@@ -198,6 +198,10 @@
       "has_callback": false,
       "py_requirements": null,
       "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
       "node": {
        "unique_id": "model.shop.customer_totals",
        "resource_type": "model",
@@ -307,6 +311,10 @@
       "has_callback": false,
       "py_requirements": null,
       "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
       "node": {
        "unique_id": "model.shop.customer_totals",
        "resource_type": "model",
@@ -415,6 +423,10 @@
       "has_callback": false,
       "py_requirements": null,
       "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
       "node": {
        "unique_id": "model.shop.stg_customers",
        "resource_type": "model",
@@ -525,6 +537,10 @@
       "has_callback": false,
       "py_requirements": null,
       "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
       "node": {
        "unique_id": "model.shop.stg_orders",
        "resource_type": "model",
@@ -637,6 +653,10 @@
       "has_callback": false,
       "py_requirements": null,
       "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
       "node": {
        "unique_id": "model.shop.stg_orders",
        "resource_type": "model",
@@ -690,6 +710,439 @@
    ]
   },
   {
+   "dag_id": "shop_operators",
+   "file": "cosmos_shop.py",
+   "description": null,
+   "tags": [
+    "cosmos"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-01-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10cd4e810>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10cd4e810>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "seed",
+     "type": "DbtSeedLocalOperator",
+     "module": "cosmos.operators.local",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "run_staging"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": {
+      "class": "DbtSeedLocalOperator",
+      "kind": "seed",
+      "mode": "local",
+      "group_root": null,
+      "project_dir": "/opt/airflow/dbt_shop",
+      "profile": {
+       "profile_name": "shop",
+       "target_name": "dev",
+       "profiles_yml_filepath": "/opt/airflow/dbt_shop/profiles.yml",
+       "mapping": null
+      },
+      "select": null,
+      "exclude": null,
+      "selector": null,
+      "models": null,
+      "vars": null,
+      "full_refresh": false,
+      "dbt_cmd_flags": [],
+      "dbt_cmd_global_flags": [],
+      "env_names": [],
+      "install_deps": false,
+      "invocation_mode": null,
+      "dbt_executable_path": "/opt/dbt-venv/bin/dbt",
+      "emit_datasets": true,
+      "warn_error": false,
+      "quiet": false,
+      "fail_fast": false,
+      "no_version_check": false,
+      "indirect_selection": null,
+      "has_callback": false,
+      "py_requirements": null,
+      "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
+      "node": null
+     },
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [
+      "seed"
+     ],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "env": null,
+      "select": null,
+      "exclude": null,
+      "selector": null,
+      "vars": null,
+      "models": null,
+      "dbt_cmd_flags": [],
+      "compiled_sql": "",
+      "freshness": "",
+      "install_deps": false,
+      "full_refresh": false
+     },
+     "args": {},
+     "callable_args": {}
+    },
+    {
+     "task_id": "run_staging",
+     "type": "DbtRunLocalOperator",
+     "module": "cosmos.operators.local",
+     "group": null,
+     "upstream": [
+      "seed"
+     ],
+     "downstream": [
+      "build_totals"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": {
+      "class": "DbtRunLocalOperator",
+      "kind": "run",
+      "mode": "local",
+      "group_root": null,
+      "project_dir": "/opt/airflow/dbt_shop",
+      "profile": {
+       "profile_name": "shop",
+       "target_name": "dev",
+       "profiles_yml_filepath": "/opt/airflow/dbt_shop/profiles.yml",
+       "mapping": null
+      },
+      "select": "tag:staging",
+      "exclude": null,
+      "selector": null,
+      "models": null,
+      "vars": {
+       "min_amount": 1
+      },
+      "full_refresh": true,
+      "dbt_cmd_flags": [],
+      "dbt_cmd_global_flags": [],
+      "env_names": [],
+      "install_deps": false,
+      "invocation_mode": null,
+      "dbt_executable_path": "/opt/dbt-venv/bin/dbt",
+      "emit_datasets": true,
+      "warn_error": false,
+      "quiet": false,
+      "fail_fast": false,
+      "no_version_check": false,
+      "indirect_selection": null,
+      "has_callback": false,
+      "py_requirements": null,
+      "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
+      "node": null
+     },
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [
+      "run_staging"
+     ],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "env": null,
+      "select": "tag:staging",
+      "exclude": null,
+      "selector": null,
+      "vars": {
+       "min_amount": 1
+      },
+      "models": null,
+      "dbt_cmd_flags": [],
+      "compiled_sql": "",
+      "freshness": "",
+      "install_deps": false,
+      "full_refresh": true
+     },
+     "args": {},
+     "callable_args": {}
+    },
+    {
+     "task_id": "build_totals",
+     "type": "DbtBuildLocalOperator",
+     "module": "cosmos.operators.local",
+     "group": null,
+     "upstream": [
+      "run_staging"
+     ],
+     "downstream": [
+      "test_all"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": {
+      "class": "DbtBuildLocalOperator",
+      "kind": "build",
+      "mode": "local",
+      "group_root": null,
+      "project_dir": "/opt/airflow/dbt_shop",
+      "profile": {
+       "profile_name": "shop",
+       "target_name": "dev",
+       "profiles_yml_filepath": "/opt/airflow/dbt_shop/profiles.yml",
+       "mapping": null
+      },
+      "select": "customer_totals",
+      "exclude": "tag:slow",
+      "selector": null,
+      "models": null,
+      "vars": null,
+      "full_refresh": false,
+      "dbt_cmd_flags": [],
+      "dbt_cmd_global_flags": [],
+      "env_names": [],
+      "install_deps": false,
+      "invocation_mode": null,
+      "dbt_executable_path": "/opt/dbt-venv/bin/dbt",
+      "emit_datasets": true,
+      "warn_error": false,
+      "quiet": false,
+      "fail_fast": false,
+      "no_version_check": false,
+      "indirect_selection": null,
+      "has_callback": false,
+      "py_requirements": null,
+      "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
+      "node": null
+     },
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [
+      "build_totals"
+     ],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "env": null,
+      "select": "customer_totals",
+      "exclude": "tag:slow",
+      "selector": null,
+      "vars": null,
+      "models": null,
+      "dbt_cmd_flags": [],
+      "compiled_sql": "",
+      "freshness": "",
+      "install_deps": false,
+      "full_refresh": false
+     },
+     "args": {
+      "on_warning_callback": null
+     },
+     "callable_args": {}
+    },
+    {
+     "task_id": "test_all",
+     "type": "DbtTestLocalOperator",
+     "module": "cosmos.operators.local",
+     "group": null,
+     "upstream": [
+      "build_totals"
+     ],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": {
+      "class": "DbtTestLocalOperator",
+      "kind": "test",
+      "mode": "local",
+      "group_root": null,
+      "project_dir": "/opt/airflow/dbt_shop",
+      "profile": {
+       "profile_name": "shop",
+       "target_name": "dev",
+       "profiles_yml_filepath": "/opt/airflow/dbt_shop/profiles.yml",
+       "mapping": null
+      },
+      "select": null,
+      "exclude": null,
+      "selector": null,
+      "models": null,
+      "vars": null,
+      "full_refresh": false,
+      "dbt_cmd_flags": [],
+      "dbt_cmd_global_flags": [],
+      "env_names": [],
+      "install_deps": false,
+      "invocation_mode": null,
+      "dbt_executable_path": "/opt/dbt-venv/bin/dbt",
+      "emit_datasets": true,
+      "warn_error": false,
+      "quiet": false,
+      "fail_fast": false,
+      "no_version_check": false,
+      "indirect_selection": null,
+      "has_callback": false,
+      "py_requirements": null,
+      "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
+      "node": null
+     },
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [
+      "test_all"
+     ],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "env": null,
+      "select": null,
+      "exclude": null,
+      "selector": null,
+      "vars": null,
+      "models": null,
+      "dbt_cmd_flags": [],
+      "compiled_sql": "",
+      "freshness": "",
+      "install_deps": false
+     },
+     "args": {
+      "on_warning_callback": null
+     },
+     "callable_args": {}
+    }
+   ]
+  },
+  {
    "dag_id": "shop_mixed",
    "file": "cosmos_shop.py",
    "description": null,
@@ -707,10 +1160,10 @@
     "timezone": "UTC",
     "summary": "0 0 * * *",
     "assets": [
-     "<airflow.timetables.base._NullDataset object at 0x10ae495e0>"
+     "<airflow.timetables.base._NullDataset object at 0x10cd4e810>"
     ],
     "asset_logic": "single",
-    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10ae495e0>",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10cd4e810>",
     "kind": "cron_data_interval"
    },
    "default_args": {},
@@ -940,6 +1393,10 @@
       "has_callback": false,
       "py_requirements": null,
       "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
       "node": {
        "unique_id": "model.shop.customer_totals",
        "resource_type": "model",
@@ -1051,6 +1508,10 @@
       "has_callback": false,
       "py_requirements": null,
       "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
       "node": {
        "unique_id": "model.shop.stg_orders",
        "resource_type": "model",
@@ -1163,6 +1624,10 @@
       "has_callback": false,
       "py_requirements": null,
       "image": null,
+      "container": {
+       "settings": [],
+       "command_override": null
+      },
       "node": null
      },
      "is_setup": false,
@@ -1261,423 +1726,6 @@
      "callable_args": {
       "output_processor": "airflow.operators.bash.BashOperator.<lambda>"
      }
-    }
-   ]
-  },
-  {
-   "dag_id": "shop_operators",
-   "file": "cosmos_shop.py",
-   "description": null,
-   "tags": [
-    "cosmos"
-   ],
-   "catchup": false,
-   "max_active_runs": 16,
-   "start_date": "2024-01-01 00:00:00+00:00",
-   "is_subdag": false,
-   "parent_dag_id": null,
-   "timetable": {
-    "class": "NullTimetable",
-    "timezone": "UTC",
-    "summary": "None",
-    "assets": [
-     "<airflow.timetables.base._NullDataset object at 0x10ae495e0>"
-    ],
-    "asset_logic": "single",
-    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10ae495e0>",
-    "kind": "manual"
-   },
-   "default_args": {},
-   "params": {},
-   "dag_settings": {
-    "fail_stop": false,
-    "max_active_tasks": 16,
-    "max_active_runs": 16,
-    "max_consecutive_failed_dag_runs": 0,
-    "render_template_as_native_obj": false,
-    "concurrency": 16
-   },
-   "has_callbacks": false,
-   "cosmos_groups": [],
-   "tasks": [
-    {
-     "task_id": "seed",
-     "type": "DbtSeedLocalOperator",
-     "module": "cosmos.operators.local",
-     "group": null,
-     "upstream": [],
-     "downstream": [
-      "run_staging"
-     ],
-     "retries": 0,
-     "retry_delay_s": 300.0,
-     "pool": null,
-     "do_xcom_push": true,
-     "sensor": null,
-     "operator_class": null,
-     "trigger_rule": "all_success",
-     "owner": "airflow",
-     "queue": null,
-     "execution_timeout_s": null,
-     "expand": null,
-     "is_mapped": false,
-     "loop": null,
-     "cosmos": {
-      "class": "DbtSeedLocalOperator",
-      "kind": "seed",
-      "mode": "local",
-      "group_root": null,
-      "project_dir": "/opt/airflow/dbt_shop",
-      "profile": {
-       "profile_name": "shop",
-       "target_name": "dev",
-       "profiles_yml_filepath": "/opt/airflow/dbt_shop/profiles.yml",
-       "mapping": null
-      },
-      "select": null,
-      "exclude": null,
-      "selector": null,
-      "models": null,
-      "vars": null,
-      "full_refresh": false,
-      "dbt_cmd_flags": [],
-      "dbt_cmd_global_flags": [],
-      "env_names": [],
-      "install_deps": false,
-      "invocation_mode": null,
-      "dbt_executable_path": "/opt/dbt-venv/bin/dbt",
-      "emit_datasets": true,
-      "warn_error": false,
-      "quiet": false,
-      "fail_fast": false,
-      "no_version_check": false,
-      "indirect_selection": null,
-      "has_callback": false,
-      "py_requirements": null,
-      "image": null,
-      "node": null
-     },
-     "is_setup": false,
-     "is_teardown": false,
-     "on_failure_fail_dagrun": false,
-     "short_circuit_hard": true,
-     "depends_on_past": false,
-     "wait_for_downstream": false,
-     "max_active_tis_per_dag": null,
-     "max_active_tis_per_dagrun": null,
-     "pool_slots": 1,
-     "retry_exponential_backoff": false,
-     "max_retry_delay_s": null,
-     "sla_s": null,
-     "callback_fns": {},
-     "callbacks": [],
-     "outlets": [
-      "seed"
-     ],
-     "outlet_assets": [],
-     "inlets": [],
-     "template_fields": {
-      "env": null,
-      "select": null,
-      "exclude": null,
-      "selector": null,
-      "vars": null,
-      "models": null,
-      "dbt_cmd_flags": [],
-      "compiled_sql": "",
-      "freshness": "",
-      "install_deps": false,
-      "full_refresh": false
-     },
-     "args": {},
-     "callable_args": {}
-    },
-    {
-     "task_id": "run_staging",
-     "type": "DbtRunLocalOperator",
-     "module": "cosmos.operators.local",
-     "group": null,
-     "upstream": [
-      "seed"
-     ],
-     "downstream": [
-      "build_totals"
-     ],
-     "retries": 0,
-     "retry_delay_s": 300.0,
-     "pool": null,
-     "do_xcom_push": true,
-     "sensor": null,
-     "operator_class": null,
-     "trigger_rule": "all_success",
-     "owner": "airflow",
-     "queue": null,
-     "execution_timeout_s": null,
-     "expand": null,
-     "is_mapped": false,
-     "loop": null,
-     "cosmos": {
-      "class": "DbtRunLocalOperator",
-      "kind": "run",
-      "mode": "local",
-      "group_root": null,
-      "project_dir": "/opt/airflow/dbt_shop",
-      "profile": {
-       "profile_name": "shop",
-       "target_name": "dev",
-       "profiles_yml_filepath": "/opt/airflow/dbt_shop/profiles.yml",
-       "mapping": null
-      },
-      "select": "tag:staging",
-      "exclude": null,
-      "selector": null,
-      "models": null,
-      "vars": {
-       "min_amount": 1
-      },
-      "full_refresh": true,
-      "dbt_cmd_flags": [],
-      "dbt_cmd_global_flags": [],
-      "env_names": [],
-      "install_deps": false,
-      "invocation_mode": null,
-      "dbt_executable_path": "/opt/dbt-venv/bin/dbt",
-      "emit_datasets": true,
-      "warn_error": false,
-      "quiet": false,
-      "fail_fast": false,
-      "no_version_check": false,
-      "indirect_selection": null,
-      "has_callback": false,
-      "py_requirements": null,
-      "image": null,
-      "node": null
-     },
-     "is_setup": false,
-     "is_teardown": false,
-     "on_failure_fail_dagrun": false,
-     "short_circuit_hard": true,
-     "depends_on_past": false,
-     "wait_for_downstream": false,
-     "max_active_tis_per_dag": null,
-     "max_active_tis_per_dagrun": null,
-     "pool_slots": 1,
-     "retry_exponential_backoff": false,
-     "max_retry_delay_s": null,
-     "sla_s": null,
-     "callback_fns": {},
-     "callbacks": [],
-     "outlets": [
-      "run_staging"
-     ],
-     "outlet_assets": [],
-     "inlets": [],
-     "template_fields": {
-      "env": null,
-      "select": "tag:staging",
-      "exclude": null,
-      "selector": null,
-      "vars": {
-       "min_amount": 1
-      },
-      "models": null,
-      "dbt_cmd_flags": [],
-      "compiled_sql": "",
-      "freshness": "",
-      "install_deps": false,
-      "full_refresh": true
-     },
-     "args": {},
-     "callable_args": {}
-    },
-    {
-     "task_id": "build_totals",
-     "type": "DbtBuildLocalOperator",
-     "module": "cosmos.operators.local",
-     "group": null,
-     "upstream": [
-      "run_staging"
-     ],
-     "downstream": [
-      "test_all"
-     ],
-     "retries": 0,
-     "retry_delay_s": 300.0,
-     "pool": null,
-     "do_xcom_push": true,
-     "sensor": null,
-     "operator_class": null,
-     "trigger_rule": "all_success",
-     "owner": "airflow",
-     "queue": null,
-     "execution_timeout_s": null,
-     "expand": null,
-     "is_mapped": false,
-     "loop": null,
-     "cosmos": {
-      "class": "DbtBuildLocalOperator",
-      "kind": "build",
-      "mode": "local",
-      "group_root": null,
-      "project_dir": "/opt/airflow/dbt_shop",
-      "profile": {
-       "profile_name": "shop",
-       "target_name": "dev",
-       "profiles_yml_filepath": "/opt/airflow/dbt_shop/profiles.yml",
-       "mapping": null
-      },
-      "select": "customer_totals",
-      "exclude": "tag:slow",
-      "selector": null,
-      "models": null,
-      "vars": null,
-      "full_refresh": false,
-      "dbt_cmd_flags": [],
-      "dbt_cmd_global_flags": [],
-      "env_names": [],
-      "install_deps": false,
-      "invocation_mode": null,
-      "dbt_executable_path": "/opt/dbt-venv/bin/dbt",
-      "emit_datasets": true,
-      "warn_error": false,
-      "quiet": false,
-      "fail_fast": false,
-      "no_version_check": false,
-      "indirect_selection": null,
-      "has_callback": false,
-      "py_requirements": null,
-      "image": null,
-      "node": null
-     },
-     "is_setup": false,
-     "is_teardown": false,
-     "on_failure_fail_dagrun": false,
-     "short_circuit_hard": true,
-     "depends_on_past": false,
-     "wait_for_downstream": false,
-     "max_active_tis_per_dag": null,
-     "max_active_tis_per_dagrun": null,
-     "pool_slots": 1,
-     "retry_exponential_backoff": false,
-     "max_retry_delay_s": null,
-     "sla_s": null,
-     "callback_fns": {},
-     "callbacks": [],
-     "outlets": [
-      "build_totals"
-     ],
-     "outlet_assets": [],
-     "inlets": [],
-     "template_fields": {
-      "env": null,
-      "select": "customer_totals",
-      "exclude": "tag:slow",
-      "selector": null,
-      "vars": null,
-      "models": null,
-      "dbt_cmd_flags": [],
-      "compiled_sql": "",
-      "freshness": "",
-      "install_deps": false,
-      "full_refresh": false
-     },
-     "args": {
-      "on_warning_callback": null
-     },
-     "callable_args": {}
-    },
-    {
-     "task_id": "test_all",
-     "type": "DbtTestLocalOperator",
-     "module": "cosmos.operators.local",
-     "group": null,
-     "upstream": [
-      "build_totals"
-     ],
-     "downstream": [],
-     "retries": 0,
-     "retry_delay_s": 300.0,
-     "pool": null,
-     "do_xcom_push": true,
-     "sensor": null,
-     "operator_class": null,
-     "trigger_rule": "all_success",
-     "owner": "airflow",
-     "queue": null,
-     "execution_timeout_s": null,
-     "expand": null,
-     "is_mapped": false,
-     "loop": null,
-     "cosmos": {
-      "class": "DbtTestLocalOperator",
-      "kind": "test",
-      "mode": "local",
-      "group_root": null,
-      "project_dir": "/opt/airflow/dbt_shop",
-      "profile": {
-       "profile_name": "shop",
-       "target_name": "dev",
-       "profiles_yml_filepath": "/opt/airflow/dbt_shop/profiles.yml",
-       "mapping": null
-      },
-      "select": null,
-      "exclude": null,
-      "selector": null,
-      "models": null,
-      "vars": null,
-      "full_refresh": false,
-      "dbt_cmd_flags": [],
-      "dbt_cmd_global_flags": [],
-      "env_names": [],
-      "install_deps": false,
-      "invocation_mode": null,
-      "dbt_executable_path": "/opt/dbt-venv/bin/dbt",
-      "emit_datasets": true,
-      "warn_error": false,
-      "quiet": false,
-      "fail_fast": false,
-      "no_version_check": false,
-      "indirect_selection": null,
-      "has_callback": false,
-      "py_requirements": null,
-      "image": null,
-      "node": null
-     },
-     "is_setup": false,
-     "is_teardown": false,
-     "on_failure_fail_dagrun": false,
-     "short_circuit_hard": true,
-     "depends_on_past": false,
-     "wait_for_downstream": false,
-     "max_active_tis_per_dag": null,
-     "max_active_tis_per_dagrun": null,
-     "pool_slots": 1,
-     "retry_exponential_backoff": false,
-     "max_retry_delay_s": null,
-     "sla_s": null,
-     "callback_fns": {},
-     "callbacks": [],
-     "outlets": [
-      "test_all"
-     ],
-     "outlet_assets": [],
-     "inlets": [],
-     "template_fields": {
-      "env": null,
-      "select": null,
-      "exclude": null,
-      "selector": null,
-      "vars": null,
-      "models": null,
-      "dbt_cmd_flags": [],
-      "compiled_sql": "",
-      "freshness": "",
-      "install_deps": false
-     },
-     "args": {
-      "on_warning_callback": null
-     },
-     "callable_args": {}
     }
    ]
   }

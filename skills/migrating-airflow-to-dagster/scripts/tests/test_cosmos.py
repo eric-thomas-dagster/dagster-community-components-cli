@@ -94,16 +94,69 @@ def test_per_task_operators_become_steps_not_components():
     assert steps["run_staging"]["upstream"] == ["seed"]                    # the chain is kept
 
 
-def test_container_modes_and_node_converters_stay_loud_stubs():
+POD = ["image", "namespace", "node_selector", "resources", "secrets", "service_account_name"]
+
+
+def container_ir(mode="kubernetes", only=None, override=None):
+    """A synthetic edit of the real IR: every Cosmos task and group as if it ran in `mode`, with pod settings named (values are never in the IR)."""
     ir = ir_with()
-    d = dag_of("shop_dbt_dag", ir)
-    d["cosmos_groups"][0]["execution"]["mode"] = "kubernetes"
-    for t in d["tasks"]:
-        t["cosmos"]["mode"] = "kubernetes"
-        t["cosmos"]["image"] = "registry.example/dbt:1"
+    for d in ir["dags"]:
+        if only and d["dag_id"] not in only:
+            continue
+        for g in d["cosmos_groups"]:
+            g["execution"]["mode"] = mode
+        for t in d["tasks"]:
+            if t.get("cosmos"):
+                t["cosmos"]["mode"] = mode.replace("_", "")
+                t["cosmos"]["image"] = "registry.example/dbt:1"
+                t["cosmos"]["container"] = {"settings": POD, "command_override": override}
+    return ir
+
+
+MODES = ["docker", "kubernetes", "aws_eks", "aws_ecs", "azure_container_instance", "gcp_cloud_run_job", "virtualenv", "watcher", "airflow_async"]
+
+
+@pytest.mark.parametrize("mode", MODES)
+def test_container_modes_convert_exactly_like_local_with_one_informational_note(mode):
+    local = K.plan(dag_of("shop_mixed"), {}, "dbt")[1][0]
+    d = dag_of("shop_mixed", container_ir(mode))
+    new, clusters, stubs = K.plan(d, {}, "dbt")
+    assert stubs == {} and len(clusters) == 1
+    c = clusters[0]
+    assert K.component_yaml(c, [["x"]]) == K.component_yaml(local, [["x"]])           # the same component, field for field
+    assert c["cli_args"] == local["cli_args"] and c["keys"] == local["keys"] and c["caveats"] == local["caveats"]       # nothing degraded, nothing extra to review
+    note = [n for n in c["notes"] if f"was {K.norm_mode(mode)} in Cosmos" in n]
+    assert len(note) == 1 and K.norm_mode(mode) in note[0]
+    if K.is_variant(K.norm_mode(mode)):
+        assert "engine variant of the same dbt run" in note[0]
+    else:
+        assert "in Dagster dbt runs in the code location's environment, so pin dbt-core and the adapter" in note[0] and "image-only dependencies" in note[0]
+        assert "image, namespace" in note[0] and "registry.example" not in note[0]            # pod settings dropped: their names listed, never a value
+
+
+def test_per_task_operators_in_container_modes_are_steps_with_the_note():
+    d = dag_of("shop_operators", container_ir("kubernetes"))
+    new, clusters, stubs = K.plan(d, {}, "dbt")
+    assert stubs == {} and clusters == []
+    local = {t["task_id"]: t for t in K.plan(dag_of("shop_operators"), {}, "dbt")[0]["tasks"]}
+    for t in new["tasks"]:
+        assert t["type"] == "CosmosDbtStep" and t["cosmos_step"]["args"] == local[t["task_id"]]["cosmos_step"]["args"]
+        assert "was kubernetes in Cosmos" in t["cosmos_step"]["mode_note"] and "image, namespace" in t["cosmos_step"]["mode_note"]
+    assert local["seed"]["cosmos_step"]["mode_note"] is None
+
+
+def test_a_container_that_runs_something_other_than_dbt_stays_a_loud_stub():
+    d = dag_of("shop_dbt_dag", container_ir("docker", override=["/bin/bash", "-c", "make nightly"]))
     new, clusters, stubs = K.plan(d, {}, "dbt")
     assert clusters == [] and set(stubs) == {t["task_id"] for t in d["tasks"]}
-    assert all("kubernetes" in r and "registry.example/dbt:1" in r for r in stubs.values())
+    assert all("custom entrypoint or command that is not dbt" in r and "make nightly" in r for r in stubs.values())
+    d2 = dag_of("shop_operators", container_ir("docker", override=["dbt"]))                    # an entrypoint that is dbt is fine
+    assert K.plan(d2, {}, "dbt")[2] == {}
+    d3 = dag_of("shop_operators", container_ir("kubernetes", override=["python", "run.py"]))
+    assert len(K.plan(d3, {}, "dbt")[2]) == 4
+
+
+def test_node_converters_and_other_operators_still_stub():
     d2 = dag_of("shop_dbt_dag", ir_with())
     d2["cosmos_groups"][0]["render"]["node_converters"] = True
     assert K.plan(d2, {}, "dbt")[2] and "node_converters" in next(iter(K.plan(d2, {}, "dbt")[2].values()))
@@ -131,12 +184,19 @@ def test_conversion_report_and_component_yaml(tmp_path):
     # a second Cosmos group over the same project would collide on asset keys: it is keyed under by_<dag>/
     assert dags["shop_dbt_dag"]["cosmos"][0]["prefix"] == "by_shop_dbt_dag"
     assert 'key_prefix: "by_shop_dbt_dag"' in (tmp_path / "pkg" / "defs" / "shop_dbt_dag_dbt" / "defs.yaml").read_text()
+    mixed_src = (tmp_path / "pkg" / "defs" / "shop_mixed.py").read_text()
     reasons = " ".join(c["reason"] for c in mixed["caveats"])
     assert "AFTER_ALL" in reasons                                          # the behaviour difference is stated
-    assert "retries=2" in " ".join(c["reason"] for c in dags["shop_dbt_dag"]["caveats"])
+    assert "retries" not in " ".join(c["reason"] for c in dags["shop_dbt_dag"]["caveats"])        # retries are a behaviour change stated in a note, not a degraded unit
+    dag_src = (tmp_path / "pkg" / "defs" / "shop_dbt_dag.py").read_text()
+    assert "'dagster/max_retries': '2'" in dag_src and "dbt retry" in dag_src and "run_retries.enabled" in dag_src       # the DAG's retries became run retries on the job
+    assert dags["shop_dbt_dag"]["cosmos"][0]["retries"] == 2
     assert "model-level lineage" in " ".join(c["reason"] for c in dags["shop_operators"]["caveats"])
     assert "dagster-dbt" in mixed["requirements"]
     assert (tmp_path / "pkg" / "converted_requirements.txt").read_text().split() == ["dagster-dbt"]
+    proj = rep["dbt"]["projects"]["dbt_shop"]
+    assert proj["used_unchanged"] is True and proj["converter_changes"] == ["asset keys are prefixed `by_shop_dbt_dag/` (the component's key_prefix; no model file changes)"]       # only what the converter changes
+    assert "used unchanged" in mixed_src
     assert rep["dbt"]["projects"]["dbt_shop"]["environment"] == ["SHOP_DUCKDB_PATH"] and rep["dbt"]["projects"]["dbt_shop"]["expected_path"] == "pkg/dbt/dbt_shop"
     assert "dbt_shop" in (tmp_path / "pkg" / "defs" / "shop_operators.py").read_text()
 
@@ -175,21 +235,14 @@ def test_profiles_file_outside_the_project_is_not_copied():
     assert any("NOT copied" in x["reason"] and "env_var()" in x["reason"] for x in c["caveats"])
 
 
-def test_container_mode_dag_converts_with_loud_stubs_and_defers_with_caveats_off(tmp_path):
-    ir = ir_with()
-    d = dag_of("shop_mixed", ir)
-    d["cosmos_groups"][0]["execution"]["mode"] = "docker"
-    for t in d["tasks"]:
-        if t.get("cosmos"):
-            t["cosmos"]["mode"] = "docker"
-    ir["dags"] = [d]
-    rep = convert(tmp_path, ir)["dags"]["shop_mixed"]
-    stubs = {c["task"] for c in rep["caveats"] if c["kind"] == "stub"}
-    assert stubs == {"transform.customer_totals_run", "transform.stg_orders_run", "transform.dbt_shop_test"} and rep["cosmos"] == []
+def test_container_mode_dag_converts_in_every_caveats_mode_with_a_note_and_no_review_flag(tmp_path):
+    for flag in ([], ["--caveats", "off"]):
+        rep = convert(tmp_path, container_ir("kubernetes", only={"shop_mixed"}) | {"dags": [d for d in container_ir("kubernetes", only={"shop_mixed"})["dags"] if d["dag_id"] == "shop_mixed"]}, *flag)["dags"]["shop_mixed"]
+        assert rep["status"] == "converted" and rep["cosmos"] and not [c for c in rep["caveats"] if c["kind"] == "stub"]
+        assert not any("kubernetes" in c["reason"] or "container" in c["reason"] for c in rep["caveats"])          # not a caveat: nothing to review
     src = (tmp_path / "pkg" / "defs" / "shop_mixed.py").read_text()
-    assert "AIRFLOW-CAVEAT" in src and "docker" in src
-    off = convert(tmp_path, ir, "--caveats", "off")["dags"]["shop_mixed"]
-    assert off["status"] == "deferred" and "docker" in off["reason"]
+    assert "was kubernetes in Cosmos; in Dagster dbt runs in the code location's environment" in src and "image, namespace" in src and "registry.example" not in src
+    assert 'select: "tag:staging customer_totals"' in (tmp_path / "pkg" / "defs" / "shop_mixed_dbt_transform" / "defs.yaml").read_text()
 
 
 def test_apply_conversion_plans_cosmos_units(tmp_path):
@@ -206,14 +259,13 @@ def test_apply_conversion_plans_cosmos_units(tmp_path):
 
 # ---- Dagster, dbt and DuckDB, for real ----------------------------------------------------------------------------------------------
 
-@pytest.fixture
-def project(tmp_path, monkeypatch):
+def _project(tmp_path, monkeypatch, ir):
     dg = pytest.importorskip("dagster")
     pytest.importorskip("dagster_dbt")
     pytest.importorskip("duckdb")
     if not (Path(sys.executable).parent / "dbt").exists() and not shutil.which("dbt"):
         pytest.skip("dbt is not installed")
-    rep = convert(tmp_path, IR)
+    rep = convert(tmp_path, ir)
     shutil.copytree(FIX / "dbt_shop", tmp_path / "pkg" / "dbt" / "dbt_shop", ignore=shutil.ignore_patterns("target", "logs", "*.duckdb"))
     monkeypatch.setenv("PATH", str(Path(sys.executable).parent) + os.pathsep + os.environ["PATH"])
     monkeypatch.setenv("SHOP_DUCKDB_PATH", str(tmp_path / "shop.duckdb"))
@@ -227,6 +279,18 @@ def project(tmp_path, monkeypatch):
         del sys.modules[m]
     defs = load_defs(importlib.import_module("pkg.defs"), project_root=tmp_path)
     return defs, rep
+
+
+@pytest.fixture
+def project(tmp_path, monkeypatch):
+    return _project(tmp_path, monkeypatch, IR)
+
+
+def test_container_mode_dags_load_with_the_same_asset_graph_as_local(tmp_path, monkeypatch):
+    defs, _ = _project(tmp_path, monkeypatch, container_ir("kubernetes"))            # no container runs: the DAG is only converted and loaded
+    specs = {s.key.to_user_string(): sorted(d.asset_key.to_user_string() for d in s.deps) for s in defs.resolve_all_asset_specs()}
+    assert specs["customer_totals"] == ["stg_customers", "stg_orders"] and specs["stg_orders"] == ["raw_orders", "shop_mixed/extract"] and specs["shop_mixed/publish"] == ["customer_totals"]
+    assert len(list(defs.resolve_asset_graph().asset_check_keys)) == 6
 
 
 def test_converted_cosmos_dags_load_with_model_level_lineage(project):

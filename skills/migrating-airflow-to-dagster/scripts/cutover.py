@@ -207,8 +207,12 @@ def build_checklist(dag_id: str, manifest: dict[str, Any], rep: dict[str, Any], 
     pools = rep.get("pools") or {}
     L += ["## 5. Retries, pools and concurrency to apply", "",
           "`concurrency_limits.yaml` (written by the converter) holds the values; **they take effect only when applied to the deployment**.", ""]
-    ret = sorted({(t["task_id"], t["retries"]) for t in (ir_dag or {}).get("tasks", []) if t.get("retries")})
+    ret = sorted({(t["task_id"], t["retries"]) for t in (ir_dag or {}).get("tasks", []) if t.get("retries") and t["task_id"] not in (rep.get("cosmos_tasks") or {})})
+    run_retries = max((cl.get("retries") or 0 for cl in rep.get("cosmos") or []), default=0)
     L += [f"- Retries: {', '.join(f'`{t}` x{n}' for t, n in ret)} (`RetryPolicy` on the assets)" if ret else "- Retries: none set (or not known without `--ir`)"]
+    if run_retries:
+        L.append(f"- [ ] The Cosmos tasks' retries (x{run_retries}) became the job tag `dagster/max_retries={run_retries}`: enable run retries on the deployment (`run_retries.enabled` in dagster.yaml), "
+                 "or the tag does nothing. One `dbt build` is the unit that is retried; `dbt retry` re-runs only the failed models (a behaviour change, and an improvement)")
     if pools:
         for p, n in sorted(pools.items()):
             cmd = f"{dg_cmd} instance concurrency set {p} {n if n is not None else '<slot count of the Airflow pool>'}"

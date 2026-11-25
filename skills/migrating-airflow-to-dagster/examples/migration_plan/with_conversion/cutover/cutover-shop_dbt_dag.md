@@ -55,12 +55,13 @@ dagster schedule start shop_dbt_dag_schedule
 
 `concurrency_limits.yaml` (written by the converter) holds the values; **they take effect only when applied to the deployment**.
 
-- Retries: `customer_totals.run` x2, `customer_totals.test` x2, `stg_customers_run` x2, `stg_orders.run` x2, `stg_orders.test` x2 (`RetryPolicy` on the assets)
+- Retries: none set (or not known without `--ir`)
+- [ ] The Cosmos tasks' retries (x2) became the job tag `dagster/max_retries=2`: enable run retries on the deployment (`run_retries.enabled` in dagster.yaml), or the tag does nothing. One `dbt build` is the unit that is retried; `dbt retry` re-runs only the failed models (a behaviour change, and an improvement)
 - Pools: none
 
 ## 6. NOT converted: needs a manual replacement
 
-- [ ] task `customer_totals.run`: retries=2 on the Cosmos tasks is not applied: the dbt component has no per-step retry policy (use run retries: set `dagster/max_retries` through the deployment's run retry settings)
+- Nothing the converter reported as unconverted (still read the report's `caveats` for this DAG).
 
 ## 7. Freshness expectations
 

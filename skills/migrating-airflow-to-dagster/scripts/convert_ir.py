@@ -1687,11 +1687,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         caveats += [{**cv, "task": cv["task"] or c["members"][0]} for cv in c["caveats"]]
         notes += c["notes"]
         notes.append(f"Cosmos {'DbtDag' if not c['gid'] else 'DbtTaskGroup ' + repr(c['gid'])} ({len(c['members'])} Airflow tasks) became one dbt component, defs/{c['dir']}/defs.yaml: "
-                     f"{len(c['keys'])} dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. Copy the dbt project from "
-                     f"{c['project_path']} to <package>/{c['dbt_dir']}/{c['project']} and run `dbt deps` there; with `dg dev` the component refreshes its manifest, in a deployment run "
+                     f"{len(c['keys'])} dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. The dbt project is used "
+                     f"unchanged: copy it from {c['project_path']} to <package>/{c['dbt_dir']}/{c['project']}; with `dg dev` the component refreshes its manifest, in a deployment run "
                      "`dg utils refresh-defs-state` at build time")
         cosmos_out.append({"id": c["id"], "dir": c["dir"], "members": c["members"], "project": c["project"], "airflow_project_path": c["project_path"], "select": c["select"],
-                           "exclude": c["exclude"], "selector": c["selector"], "cli_args": c["cli_args"], "keys": ["/".join(k) for k in c["keys"]],
+                           "exclude": c["exclude"], "selector": c["selector"], "cli_args": c["cli_args"], "mode": c["mode"], "retries": c["retries"], "profiles_generated": sorted(c["profile"]["generated"]), "keys": ["/".join(k) for k in c["keys"]],
                            "upstream_keys": ["/".join(k) for k in up], "profile": c["profile"]["profile"], "target": c["profile"]["target"], "environment": c["env"],
                            "test_behavior": c["test_behavior"], "prefix": c["prefix"], "pools": c["pools"]})
     consumed: set[str] = set()
@@ -2270,7 +2270,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 deco.append("kinds={'python'}")
         elif ty in COSMOS_STEP:
             cs = t["cosmos_step"]
-            cosmos_steps.append({"task": tid, **{k: cs[k] for k in ("project", "project_path", "kind", "args", "profile", "target", "profiles_dir", "env", "mode")}})
+            cosmos_steps.append({"task": tid, **{k: cs[k] for k in ("project", "project_path", "kind", "args", "profile", "target", "profiles_dir", "env", "mode")}, "profiles_generated": sorted(cs["generated"])})
             cosmos_files.update(cs["generated"])
             cosmos_reqs.update(["dagster-dbt", *cs["requirements"]])
             body = ctx_line + K.step_body(cs)
@@ -2284,8 +2284,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             notes += [f"{tid}: {x}" for x in cs["profile_info"]]
             if cs.get("has_callback"):
                 caveats.append({"task": tid, "kind": "degraded", "reason": "the Cosmos `callback` is not applied"})
-            if cs["mode"] == "virtualenv":
-                caveats.append({"task": tid, "kind": "degraded", "reason": "Cosmos ran dbt in a virtualenv built from py_requirements; the step runs dbt in the Dagster environment"})
+            if cs.get("mode_note"):
+                notes.append(cs["mode_note"])
         elif ty in PROV_STEPS:
             pv = prov_for(t, params, ctxn)
             if pv.resource:
@@ -2390,7 +2390,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     mapped_keys = [keyparts[x] for x in (pplan["args"] if pplan else [])]
     job_keys = [k for k in keys if k not in mapped_keys] if pplan and pplan["kind"] == "xcom" else keys
     pd_arg = (f", partitions_def={safe(dag_id)}_items" if pplan and pplan["kind"] == "literal" else (f", partitions_def={part_var}" if ppart else ""))
-    job_tags = {**({"airflow/dag_id": dag_id} if max_runs else {}), **({"dagster/max_runtime": str(run_timeout)} if run_timeout else {})}
+    cosmos_retries = max((c["retries"] for c in cosmos_clusters), default=0)       # the dbt component has no retry-policy field: Cosmos task retries become run retries
+    job_tags = {**({"airflow/dag_id": dag_id} if max_runs else {}), **({"dagster/max_runtime": str(run_timeout)} if run_timeout else {}),
+                **({"dagster/max_retries": str(cosmos_retries)} if cosmos_retries else {})}
     out += (f"\n{safe(dag_id)}_job = dg.define_asset_job({safe(dag_id)!r}, selection=[dg.AssetKey(k) for k in {job_keys!r}]{pd_arg}"
             + (f", tags={job_tags!r}" if job_tags else "")
             + (f", executor_def=dg.multiprocess_executor.configured({{'max_concurrent': {max_tasks}}})" if max_tasks else "") + ")\n")
@@ -3704,7 +3706,15 @@ def main(argv: list[str] | None = None) -> int:
         for cl in [*(v.get("cosmos") or []), *(v.get("cosmos_steps") or [])]:
             nm = cl["project"]
             e = dbt_projects.setdefault(nm, {"airflow_path": cl.get("airflow_project_path") or cl.get("project_path"), "expected_path": f"{a.out_dir.parent.name}/{DBT_DIR}/{nm}",
-                                             "used_by": [], "environment": []})
+                                             "used_unchanged": True, "converter_changes": [], "used_by": [], "environment": []})
+            for gen in cl.get("profiles_generated") or []:
+                ch = f"generated {gen} (every connection field read with env_var()); the project's own files are not modified"
+                if ch not in e["converter_changes"]:
+                    e["converter_changes"].append(ch)
+            if cl.get("prefix"):
+                ch = f"asset keys are prefixed `{cl['prefix']}/` (the component's key_prefix; no model file changes)"
+                if ch not in e["converter_changes"]:
+                    e["converter_changes"].append(ch)
             e["used_by"].append(f"{dag_id_}:{cl.get('id') or cl.get('task')}")
             e["environment"] = sorted(set(e["environment"]) | set(cl.get("environment") or cl.get("env") or []))
     if dbt_projects:                                   # names only: the profile fields every generated profiles.yml reads, and where each dbt project must be copied to

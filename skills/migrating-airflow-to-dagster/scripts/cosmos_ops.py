@@ -8,7 +8,10 @@ under `cosmos_groups`) and turns it into Dagster's own dbt integration:
 * a per-task Cosmos operator (`DbtRunLocalOperator`, `DbtBuildLocalOperator`, ... used on its own) becomes one asset that runs the same dbt
   command through `dagster_dbt.DbtCliResource`. Such an operator only holds a `select` string, never the nodes it ran, so no model-level
   lineage can be drawn from it;
-* anything else (a container execution mode, `node_converters`, `run-operation`, docs, ...) stays in the DAG as a loud stub that names the reason.
+* the execution mode does not matter: Cosmos offers docker, kubernetes, aws_eks, aws_ecs, azure_container_instance, gcp_cloud_run_job and virtualenv only because
+  dbt's dependencies clash with Airflow's, and in Dagster dbt runs in the code location's own environment. Those modes convert exactly as local mode, with one
+  informational note. Watcher and airflow_async modes are engine variants of the same dbt run and are treated the same way;
+* anything that cannot be a dbt command (a custom container entrypoint, `node_converters`, `run-operation`, docs, ...) stays in the DAG as a loud stub that names the reason.
 
 Nothing here reads a profiles.yml or an Airflow connection. A Cosmos profile mapping becomes a generated `profiles.yml` whose every connection
 field is `{{ env_var('<CONN>_<FIELD>') }}`; the names are listed in the report.
@@ -27,7 +30,39 @@ DBT_DIR_DEFAULT = "dbt"
 PACKAGE_REL = ""        # the package directory relative to the Dagster project root (set by convert_ir.py): component paths other than project_dir are absolute templates
 STEP_KINDS = {"run", "build", "seed", "snapshot", "test"}          # the commands a per-task operator can run through DbtCliResource
 ASSET_TYPES = {"model", "seed", "snapshot"}                         # dbt resources that become Dagster assets (tests become asset checks)
-LOCAL_MODES = {"local", "virtualenv"}                               # execution modes whose dbt runs in the Airflow worker's environment
+CONTAINER_MODES = {"docker", "kubernetes", "awseks", "awsecs", "azurecontainerinstance", "gcpcloudrunjob", "gcpgke", "virtualenv"}      # where dbt ran, only to avoid dependency clashes
+LOCAL_MODES = {"local"}
+
+
+def norm_mode(mode: str | None) -> str:
+    """`aws_eks`, `AwsEks` and `awseks` are one mode."""
+    return re.sub(r"[^a-z]", "", (mode or "local").lower())
+
+
+def is_variant(mode: str) -> bool:
+    """Execution-engine variants of the same dbt run: watcher (a producer task runs dbt once, consumers watch it) and airflow_async (the compiled SQL runs through Airflow's own async operators)."""
+    return mode.startswith("watcher") or mode == "airflowasync"
+
+
+def mode_note(label: str, mode: str, settings: list[str], requirements: list[str] | None = None) -> str | None:
+    """The one informational note for a task or group that did not run in Cosmos's local mode. Not a caveat: it never marks the unit as needing review."""
+    if mode in LOCAL_MODES:
+        return None
+    if is_variant(mode):
+        return (f"{label} was {mode} in Cosmos, an execution-engine variant of the same dbt run; in Dagster one `dbt build` runs in the code location's environment, so pin dbt-core "
+                "and the adapter in the project's dependencies.")
+    dropped = f" The {mode} settings that are not carried over (names only): {', '.join(settings)}." if settings else ""
+    reqs = f" The Cosmos `py_requirements` ({', '.join(requirements)}) are in converted_requirements.txt." if requirements else ""
+    return (f"{label} was {mode} in Cosmos; in Dagster dbt runs in the code location's environment, so pin dbt-core and the adapter in the project's dependencies; "
+            f"image-only dependencies (anything baked into the container) must be added to the environment.{dropped}{reqs}")
+
+
+def custom_command(c: dict[str, Any]) -> str | None:
+    """A container whose DAG overrides the entrypoint or command with something that is not dbt cannot be expressed as a dbt command."""
+    ov = (c.get("container") or {}).get("command_override")
+    if ov and not PurePosixPath(ov[0]).name.startswith("dbt"):
+        return f"the container is told to run `{' '.join(ov)[:80]}` (a custom entrypoint or command that is not dbt)"
+    return None
 SECRET_NAME = re.compile(r"pass|secret|token|key|credential|private|auth", re.I)
 TEST_BEHAVIOR_NOTE = {
     "after_all": ("test_behavior=AFTER_ALL runs every model, then one test task. The component runs `dbt build`, which runs each model's tests right after it, "
@@ -132,14 +167,6 @@ def profile_plan(profile: dict[str, Any] | None, proj_dir: str | None, pname: st
 # ---------------------------------------------------------------------------------------------------------------------
 # planning: which tasks form a dbt component, which become steps, which stay stubs
 # ---------------------------------------------------------------------------------------------------------------------
-def _mode_reason(mode: str | None, t: dict[str, Any] | None = None) -> str | None:
-    if mode in LOCAL_MODES or mode is None:
-        return None
-    img = ((t or {}).get("cosmos") or {}).get("image")
-    return (f"Cosmos execution mode {mode!r} runs dbt in a separate container{f' (image {img})' if img else ''}; the dbt component and the dbt step run dbt in the "
-            f"Dagster process, which is not the same environment. {HINT}")
-
-
 def plan(dag: dict[str, Any], produced: dict[str, str], dbt_dir: str = "dbt") -> tuple[dict[str, Any], list[dict[str, Any]], dict[str, str]]:
     """Split a DAG's Cosmos tasks out. Returns (the DAG without the tasks that became a component, the clusters, {task_id: reason} for Cosmos tasks left in place
     as stubs). Tasks that become a per-task step are rewritten in place with type `CosmosDbtStep`."""
@@ -156,12 +183,15 @@ def plan(dag: dict[str, Any], produced: dict[str, str], dbt_dir: str = "dbt") ->
                    if (is_cosmos(t) and t["cosmos"].get("group_root") == gid) or (gid and ((t.get("group") or "") == gid or (t.get("group") or "").startswith(gid + ".")))]
         cos_members = [m for m in members if is_cosmos(tasks[m])]
         why: list[str] = []
-        mode = (g.get("execution") or {}).get("mode")
-        if _mode_reason(mode, tasks[cos_members[0]] if cos_members else None):
-            why.append(_mode_reason(mode, tasks[cos_members[0]]))             # type: ignore[arg-type]
+        mode = norm_mode((g.get("execution") or {}).get("mode"))
+        for m in cos_members:
+            cc = custom_command(tasks[m]["cosmos"])
+            if cc:
+                why.append(f"{m}: {cc}")
         if (g.get("render") or {}).get("node_converters"):
             why.append("RenderConfig.node_converters changes how nodes are rendered, which the dbt component does not reproduce")
-        bad = sorted({tasks[m]["cosmos"].get("class") or tasks[m]["type"] for m in cos_members if tasks[m]["cosmos"].get("kind") not in STEP_KINDS})
+        bad = sorted({tasks[m]["cosmos"].get("class") or tasks[m]["type"] for m in cos_members
+                      if tasks[m]["cosmos"].get("kind") not in STEP_KINDS and not (is_variant(mode) and tasks[m]["cosmos"].get("kind") is None)})
         if bad:
             why.append(f"Cosmos operator(s) {bad} have no dbt component form")
         nodes = [n for n in g.get("nodes") or [] if n["resource_type"] in ASSET_TYPES]
@@ -180,7 +210,7 @@ def plan(dag: dict[str, Any], produced: dict[str, str], dbt_dir: str = "dbt") ->
         if tid in claimed or not is_cosmos(t):
             continue
         c = t["cosmos"]
-        why2 = _mode_reason(c.get("mode"), t) or (None if c.get("kind") in STEP_KINDS else f"Cosmos operator {c.get('class')} has no conversion yet. {HINT}")
+        why2 = custom_command(c) or (None if c.get("kind") in STEP_KINDS else f"Cosmos operator {c.get('class')} has no conversion yet. {HINT}")
         if why2:
             stubs[tid] = why2
             continue
@@ -235,7 +265,7 @@ def _step(t: dict[str, Any], dbt_dir: str) -> dict[str, Any]:
     pp = profile_plan(c.get("profile"), c.get("project_dir"), pname)
     return {"project": pname, "project_path": c.get("project_dir"), "args": args, "global_flags": [str(x) for x in c.get("dbt_cmd_global_flags") or []],
             "profile": pp["profile"], "target": pp["target"], "profiles_dir": pp["profiles_dir"], "generated": pp["generated"], "env": pp["env"] + list(c.get("env_names") or []),
-            "profile_notes": pp["caveats"], "profile_info": pp["notes"], "requirements": list(c.get("py_requirements") or []), "mode": c.get("mode"), "kind": c["kind"], "has_callback": c.get("has_callback"),
+            "profile_notes": pp["caveats"], "profile_info": pp["notes"], "requirements": list(c.get("py_requirements") or []), "mode": norm_mode(c.get("mode")), "mode_note": mode_note(f"{t['task_id']}", norm_mode(c.get("mode")), (c.get("container") or {}).get("settings") or [], list(c.get("py_requirements") or [])), "kind": c["kind"], "has_callback": c.get("has_callback"),
             "emit_datasets": c.get("emit_datasets"), "dbt_dir": dbt_dir}
 
 
@@ -283,8 +313,10 @@ def _group_cluster(dag: dict[str, Any], g: dict[str, Any], members: list[str], t
         cli.append({"--vars": {k: (f"{{{{ env.{k.upper()} }}}}" if v == "<redacted>" else v) for k, v in vars_.items()}})      # type: ignore[arg-type]
     retries = max((tasks[m].get("retries") or 0 for m in members), default=0)
     if retries:
-        caveats.append({"task": "", "kind": "degraded", "reason": f"retries={retries} on the Cosmos tasks is not applied: the dbt component has no per-step retry policy "
-                                                                  "(use run retries: set `dagster/max_retries` through the deployment's run retry settings)"})
+        notes.append(f"retries={retries} on the Cosmos tasks: the job carries the tag `dagster/max_retries={retries}`, so Dagster re-launches a failed run up to {retries} time(s) from the failed step "
+                     "(run retries must be enabled on the deployment: `run_retries.enabled` in dagster.yaml, off by default in open source). The dbt component has no retry-policy field "
+                     "(its `op` takes name, tags, description, pool, backfill_policy), so this is run-level. Cosmos retried one task per model; here one `dbt build` is the unit, and "
+                     "`dbt retry` re-runs only the models that failed. A behaviour change, and an improvement (`dbt retry` is a dbt command the converter does not wire in)")
     if any(tasks[m].get("callbacks") for m in members):
         caveats.append({"task": "", "kind": "degraded", "reason": "callbacks on the Cosmos tasks were not converted (attach a run failure sensor or alert policy)"})
     if any((tasks[m].get("cosmos") or {}).get("has_callback") for m in members):
@@ -292,9 +324,12 @@ def _group_cluster(dag: dict[str, Any], g: dict[str, Any], members: list[str], t
     pools = sorted({tasks[m]["pool"] for m in members if tasks[m].get("pool")})
     if rn.get("emit_datasets") or any((tasks[m].get("cosmos") or {}).get("emit_datasets") for m in members):
         notes.append("Cosmos emitted an Airflow Dataset per model; the dbt assets have their own keys, so a DAG scheduled on those datasets needs an automation condition on the dbt asset keys")
-    if g.get("execution", {}).get("mode") == "virtualenv":
-        caveats.append({"task": "", "kind": "degraded", "reason": "Cosmos ran dbt in a virtualenv built from py_requirements; the component runs dbt in the Dagster environment "
-                                                                   "(the requirements are in converted_requirements.txt)"})
+    gmode = norm_mode((g.get("execution") or {}).get("mode"))
+    settings = sorted({s for m in members for s in ((tasks[m].get("cosmos") or {}).get("container") or {}).get("settings") or []})
+    reqs_ = sorted({r for m in members for r in (tasks[m].get("cosmos") or {}).get("py_requirements") or []})
+    mn = mode_note(f"The Cosmos group {gid!r}" if gid else "The DbtDag", gmode, settings, reqs_)
+    if mn:
+        notes.append(mn)
     pp = profile_plan(g.get("profile"), g.get("project_dir"), pname)
     for text in pp["caveats"]:
         caveats.append({"task": "", "kind": "degraded", "reason": text})
@@ -321,8 +356,8 @@ def _group_cluster(dag: dict[str, Any], g: dict[str, Any], members: list[str], t
     return {"id": f"{cid}", "gid": gid, "members": members, "dag_id": dag["dag_id"], "project": pname, "project_path": g.get("project_dir"), "project_name": g.get("project_name"),
             "dir": f"{safe(dag['dag_id'])}_dbt" + (f"_{cid}" if gid else ""), "select": " ".join(rn.get("select") or []), "exclude": " ".join(exclude), "selector": rn.get("selector"),
             "cli_args": cli, "profile": pp, "nodes": nodes, "keys": all_keys, "sink_keys": sink_keys, "roots": roots, "prefix": prefix, "caveats": caveats, "notes": notes,
-            "pool": pools[0] if len(pools) == 1 else None, "pools": pools, "requirements": sorted({r for m in members for r in (tasks[m].get("cosmos") or {}).get("py_requirements") or []}),
-            "env": sorted(set(pp["env"]) | set(g.get("env_names") or [])), "dbt_dir": dbt_dir, "load_method": rn.get("load_method"), "test_behavior": tb, "ext_up_tasks": [], "ext_up_keys": []}
+            "pool": pools[0] if len(pools) == 1 else None, "pools": pools, "requirements": reqs_, "retries": retries,
+            "env": sorted(set(pp["env"]) | set(g.get("env_names") or [])), "dbt_dir": dbt_dir, "load_method": rn.get("load_method"), "mode": gmode, "test_behavior": tb, "ext_up_tasks": [], "ext_up_keys": []}
 
 
 # ---------------------------------------------------------------------------------------------------------------------

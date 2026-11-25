@@ -334,6 +334,24 @@ def _cosmos_group_root(task: Any) -> str | None:
     return root
 
 
+_CONTAINER_SETTINGS = ("image", "namespace", "secrets", "resources", "volumes", "volume_mounts", "env_vars", "node_selector", "tolerations", "affinity", "service_account_name",
+                       "labels", "image_pull_secrets", "pod_template_file", "full_pod_spec", "config_file", "kubernetes_conn_id", "cmds", "arguments", "entrypoint",
+                       "docker_url", "network_mode", "mounts", "cluster_name", "region", "cpu", "memory", "container_name", "task_definition", "launch_type", "overrides",
+                       "project_id", "job_name", "resource_group", "subscription_id")
+
+
+def _container_ir(task: Any) -> dict[str, Any]:
+    """Container execution settings of a Cosmos Kubernetes/Docker/ECS/... operator: the NAMES of the settings that are set (values can hold secrets and are not
+    recorded), and the command the container was told to run when the DAG overrides it (`cmds` / `entrypoint`)."""
+    names = sorted(n for n in _CONTAINER_SETTINGS if getattr(task, n, None) not in (None, "", [], {}, ()))
+    override = None
+    for n in ("entrypoint", "cmds"):
+        v = getattr(task, n, None)
+        if v:
+            override = [str(x) for x in (v if isinstance(v, (list, tuple)) else [v])]
+    return {"settings": names, "command_override": override}
+
+
 def _cosmos_task_ir(task: Any) -> dict[str, Any] | None:
     """The settings of an Astronomer Cosmos operator (DbtRunLocalOperator, DbtBuildKubernetesOperator, ...), or None for any other task."""
     cls = type(task)
@@ -353,7 +371,7 @@ def _cosmos_task_ir(task: Any) -> dict[str, Any] | None:
         "install_deps": bool(g("install_deps", False)), "invocation_mode": getattr(inv, "value", inv), "dbt_executable_path": str(g("dbt_executable_path")) if g("dbt_executable_path") else None,
         "emit_datasets": bool(g("emit_datasets", False)), "warn_error": bool(g("warn_error", False)), "quiet": bool(g("quiet", False)), "fail_fast": bool(g("fail_fast", False)),
         "no_version_check": bool(g("no_version_check", False)), "indirect_selection": getattr(g("indirect_selection"), "value", g("indirect_selection")),
-        "has_callback": bool(g("callback")), "py_requirements": _jsonable(list(g("py_requirements") or [])) or None, "image": g("image"),
+        "has_callback": bool(g("callback")), "py_requirements": _jsonable(list(g("py_requirements") or [])) or None, "image": g("image"), "container": _container_ir(task),
         "node": _cosmos_node(g("extra_context")),
     }
 

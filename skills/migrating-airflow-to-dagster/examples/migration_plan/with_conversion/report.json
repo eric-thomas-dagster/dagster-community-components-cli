@@ -14,17 +14,12 @@
    "provider_connections": {},
    "shims": [],
    "notes": [
+    "retries=2 on the Cosmos tasks: the job carries the tag `dagster/max_retries=2`, so Dagster re-launches a failed run up to 2 time(s) from the failed step (run retries must be enabled on the deployment: `run_retries.enabled` in dagster.yaml, off by default in open source). The dbt component has no retry-policy field (its `op` takes name, tags, description, pool, backfill_policy), so this is run-level. Cosmos retried one task per model; here one `dbt build` is the unit, and `dbt retry` re-runs only the models that failed. A behaviour change, and an improvement (`dbt retry` is a dbt command the converter does not wire in)",
     "Cosmos emitted an Airflow Dataset per model; the dbt assets have their own keys, so a DAG scheduled on those datasets needs an automation condition on the dbt asset keys",
     "profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)",
-    "Cosmos DbtDag (5 Airflow tasks) became one dbt component, defs/shop_dbt_dag_dbt/defs.yaml: 3 dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. Copy the dbt project from /opt/airflow/dbt_shop to <package>/dbt/dbt_shop and run `dbt deps` there; with `dg dev` the component refreshes its manifest, in a deployment run `dg utils refresh-defs-state` at build time"
+    "Cosmos DbtDag (5 Airflow tasks) became one dbt component, defs/shop_dbt_dag_dbt/defs.yaml: 3 dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. The dbt project is used unchanged: copy it from /opt/airflow/dbt_shop to <package>/dbt/dbt_shop; with `dg dev` the component refreshes its manifest, in a deployment run `dg utils refresh-defs-state` at build time"
    ],
-   "caveats": [
-    {
-     "task": "customer_totals.run",
-     "kind": "degraded",
-     "reason": "retries=2 on the Cosmos tasks is not applied: the dbt component has no per-step retry policy (use run retries: set `dagster/max_retries` through the deployment's run retry settings)"
-    }
-   ],
+   "caveats": [],
    "catalog_keys": [],
    "local_modules": [],
    "requirements": [
@@ -66,6 +61,9 @@
        }
       }
      ],
+     "mode": "local",
+     "retries": 2,
+     "profiles_generated": [],
      "keys": [
       "customer_totals",
       "stg_customers",
@@ -138,141 +136,6 @@
    "max_active_tasks": null,
    "pools": {},
    "task_keys": {},
-   "output": "python"
-  },
-  "shop_mixed": {
-   "status": "converted",
-   "assets": 2,
-   "elided": 0,
-   "schedule": "0 0 * * *",
-   "timezone": "UTC",
-   "triggers": [],
-   "resources": [],
-   "snowflake_resources": [],
-   "provider_connections": {},
-   "shims": [],
-   "notes": [
-    "Cosmos emitted an Airflow Dataset per model; the dbt assets have their own keys, so a DAG scheduled on those datasets needs an automation condition on the dbt asset keys",
-    "profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)",
-    "Cosmos DbtTaskGroup 'transform' (3 Airflow tasks) became one dbt component, defs/shop_mixed_dbt_transform/defs.yaml: 2 dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. Copy the dbt project from /opt/airflow/dbt_shop to <package>/dbt/dbt_shop and run `dbt deps` there; with `dg dev` the component refreshes its manifest, in a deployment run `dg utils refresh-defs-state` at build time"
-   ],
-   "caveats": [
-    {
-     "task": "transform.customer_totals_run",
-     "kind": "degraded",
-     "reason": "test_behavior=AFTER_ALL runs every model, then one test task. The component runs `dbt build`, which runs each model's tests right after it, so a failing test now stops the models downstream of it, which Airflow did not do under AFTER_ALL"
-    },
-    {
-     "task": "transform.customer_totals_run",
-     "kind": "degraded",
-     "reason": "dbt assets with the same keys are already produced by another DAG or Cosmos group; Dagster allows one producer per asset, so these assets are keyed under `by_shop_mixed_transform/`"
-    }
-   ],
-   "catalog_keys": [],
-   "local_modules": [],
-   "requirements": [
-    "dagster-dbt"
-   ],
-   "external": [
-    "by_shop_mixed_transform/customer_totals"
-   ],
-   "keys": [
-    [
-     "shop_mixed",
-     "extract"
-    ],
-    [
-     "shop_mixed",
-     "publish"
-    ],
-    [
-     "by_shop_mixed_transform",
-     "customer_totals"
-    ],
-    [
-     "by_shop_mixed_transform",
-     "stg_orders"
-    ]
-   ],
-   "cosmos": [
-    {
-     "id": "transform",
-     "dir": "shop_mixed_dbt_transform",
-     "members": [
-      "transform.customer_totals_run",
-      "transform.stg_orders_run",
-      "transform.dbt_shop_test"
-     ],
-     "project": "dbt_shop",
-     "airflow_project_path": "/opt/airflow/dbt_shop",
-     "select": "tag:staging customer_totals",
-     "exclude": "stg_customers",
-     "selector": null,
-     "cli_args": [
-      "build",
-      {
-       "--vars": {
-        "min_amount": 5
-       }
-      }
-     ],
-     "keys": [
-      "by_shop_mixed_transform/customer_totals",
-      "by_shop_mixed_transform/stg_orders"
-     ],
-     "upstream_keys": [
-      "shop_mixed/extract"
-     ],
-     "profile": "shop",
-     "target": "dev",
-     "environment": [
-      "SHOP_DUCKDB_PATH"
-     ],
-     "test_behavior": "after_all",
-     "prefix": "by_shop_mixed_transform",
-     "pools": []
-    }
-   ],
-   "cosmos_steps": [],
-   "cosmos_files": [
-    "defs/shop_mixed_dbt_transform/defs.yaml"
-   ],
-   "cosmos_tasks": {
-    "transform.customer_totals_run": [
-     "by_shop_mixed_transform/customer_totals",
-     "by_shop_mixed_transform/stg_orders"
-    ],
-    "transform.stg_orders_run": [
-     "by_shop_mixed_transform/customer_totals",
-     "by_shop_mixed_transform/stg_orders"
-    ],
-    "transform.dbt_shop_test": [
-     "by_shop_mixed_transform/customer_totals",
-     "by_shop_mixed_transform/stg_orders"
-    ]
-   },
-   "cosmos_sinks": {
-    "transform.customer_totals_run": [
-     "by_shop_mixed_transform/customer_totals"
-    ],
-    "transform.stg_orders_run": [
-     "by_shop_mixed_transform/customer_totals"
-    ],
-    "transform.dbt_shop_test": [
-     "by_shop_mixed_transform/customer_totals"
-    ]
-   },
-   "uses_context": false,
-   "run_timeout_s": null,
-   "partitions": null,
-   "mapping": null,
-   "max_active_runs": null,
-   "max_active_tasks": null,
-   "pools": {},
-   "task_keys": {
-    "extract": "shop_mixed/extract",
-    "publish": "shop_mixed/publish"
-   },
    "output": "python"
   },
   "shop_operators": {
@@ -352,7 +215,8 @@
      "target": "dev",
      "profiles_dir": null,
      "env": [],
-     "mode": "local"
+     "mode": "local",
+     "profiles_generated": []
     },
     {
      "task": "run_staging",
@@ -371,7 +235,8 @@
      "target": "dev",
      "profiles_dir": null,
      "env": [],
-     "mode": "local"
+     "mode": "local",
+     "profiles_generated": []
     },
     {
      "task": "build_totals",
@@ -389,7 +254,8 @@
      "target": "dev",
      "profiles_dir": null,
      "env": [],
-     "mode": "local"
+     "mode": "local",
+     "profiles_generated": []
     },
     {
      "task": "test_all",
@@ -403,7 +269,8 @@
      "target": "dev",
      "profiles_dir": null,
      "env": [],
-     "mode": "local"
+     "mode": "local",
+     "profiles_generated": []
     }
    ],
    "cosmos_files": [],
@@ -423,6 +290,144 @@
     "test_all": "shop_operators/test_all"
    },
    "output": "python"
+  },
+  "shop_mixed": {
+   "status": "converted",
+   "assets": 2,
+   "elided": 0,
+   "schedule": "0 0 * * *",
+   "timezone": "UTC",
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "provider_connections": {},
+   "shims": [],
+   "notes": [
+    "Cosmos emitted an Airflow Dataset per model; the dbt assets have their own keys, so a DAG scheduled on those datasets needs an automation condition on the dbt asset keys",
+    "profiles.yml (profiles.yml) lives inside the dbt project and is used as it is; it was not read, so check it for inline credentials (use env_var() for every secret)",
+    "Cosmos DbtTaskGroup 'transform' (3 Airflow tasks) became one dbt component, defs/shop_mixed_dbt_transform/defs.yaml: 2 dbt assets (one per model, seed or snapshot) with lineage between them and the tests as asset checks. The dbt project is used unchanged: copy it from /opt/airflow/dbt_shop to <package>/dbt/dbt_shop; with `dg dev` the component refreshes its manifest, in a deployment run `dg utils refresh-defs-state` at build time"
+   ],
+   "caveats": [
+    {
+     "task": "transform.customer_totals_run",
+     "kind": "degraded",
+     "reason": "test_behavior=AFTER_ALL runs every model, then one test task. The component runs `dbt build`, which runs each model's tests right after it, so a failing test now stops the models downstream of it, which Airflow did not do under AFTER_ALL"
+    },
+    {
+     "task": "transform.customer_totals_run",
+     "kind": "degraded",
+     "reason": "dbt assets with the same keys are already produced by another DAG or Cosmos group; Dagster allows one producer per asset, so these assets are keyed under `by_shop_mixed_transform/`"
+    }
+   ],
+   "catalog_keys": [],
+   "local_modules": [],
+   "requirements": [
+    "dagster-dbt"
+   ],
+   "external": [
+    "by_shop_mixed_transform/customer_totals"
+   ],
+   "keys": [
+    [
+     "shop_mixed",
+     "extract"
+    ],
+    [
+     "shop_mixed",
+     "publish"
+    ],
+    [
+     "by_shop_mixed_transform",
+     "customer_totals"
+    ],
+    [
+     "by_shop_mixed_transform",
+     "stg_orders"
+    ]
+   ],
+   "cosmos": [
+    {
+     "id": "transform",
+     "dir": "shop_mixed_dbt_transform",
+     "members": [
+      "transform.customer_totals_run",
+      "transform.stg_orders_run",
+      "transform.dbt_shop_test"
+     ],
+     "project": "dbt_shop",
+     "airflow_project_path": "/opt/airflow/dbt_shop",
+     "select": "tag:staging customer_totals",
+     "exclude": "stg_customers",
+     "selector": null,
+     "cli_args": [
+      "build",
+      {
+       "--vars": {
+        "min_amount": 5
+       }
+      }
+     ],
+     "mode": "local",
+     "retries": 0,
+     "profiles_generated": [],
+     "keys": [
+      "by_shop_mixed_transform/customer_totals",
+      "by_shop_mixed_transform/stg_orders"
+     ],
+     "upstream_keys": [
+      "shop_mixed/extract"
+     ],
+     "profile": "shop",
+     "target": "dev",
+     "environment": [
+      "SHOP_DUCKDB_PATH"
+     ],
+     "test_behavior": "after_all",
+     "prefix": "by_shop_mixed_transform",
+     "pools": []
+    }
+   ],
+   "cosmos_steps": [],
+   "cosmos_files": [
+    "defs/shop_mixed_dbt_transform/defs.yaml"
+   ],
+   "cosmos_tasks": {
+    "transform.customer_totals_run": [
+     "by_shop_mixed_transform/customer_totals",
+     "by_shop_mixed_transform/stg_orders"
+    ],
+    "transform.stg_orders_run": [
+     "by_shop_mixed_transform/customer_totals",
+     "by_shop_mixed_transform/stg_orders"
+    ],
+    "transform.dbt_shop_test": [
+     "by_shop_mixed_transform/customer_totals",
+     "by_shop_mixed_transform/stg_orders"
+    ]
+   },
+   "cosmos_sinks": {
+    "transform.customer_totals_run": [
+     "by_shop_mixed_transform/customer_totals"
+    ],
+    "transform.stg_orders_run": [
+     "by_shop_mixed_transform/customer_totals"
+    ],
+    "transform.dbt_shop_test": [
+     "by_shop_mixed_transform/customer_totals"
+    ]
+   },
+   "uses_context": false,
+   "run_timeout_s": null,
+   "partitions": null,
+   "mapping": null,
+   "max_active_runs": null,
+   "max_active_tasks": null,
+   "pools": {},
+   "task_keys": {
+    "extract": "shop_mixed/extract",
+    "publish": "shop_mixed/publish"
+   },
+   "output": "python"
   }
  },
  "dbt": {
@@ -430,13 +435,17 @@
    "dbt_shop": {
     "airflow_path": "/opt/airflow/dbt_shop",
     "expected_path": "pkg/dbt/dbt_shop",
+    "used_unchanged": true,
+    "converter_changes": [
+     "asset keys are prefixed `by_shop_mixed_transform/` (the component's key_prefix; no model file changes)"
+    ],
     "used_by": [
      "shop_dbt_dag:all",
-     "shop_mixed:transform",
      "shop_operators:seed",
      "shop_operators:run_staging",
      "shop_operators:build_totals",
-     "shop_operators:test_all"
+     "shop_operators:test_all",
+     "shop_mixed:transform"
     ],
     "environment": [
      "SHOP_DUCKDB_PATH"
@@ -454,6 +463,14 @@
    "tasks": 4,
    "mapped_by_converter": false
   },
+  "DbtSeedLocalOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
+  "DbtBuildLocalOperator": {
+   "tasks": 1,
+   "mapped_by_converter": false
+  },
   "PythonOperator": {
    "tasks": 1,
    "mapped_by_converter": true
@@ -465,14 +482,6 @@
     "shell_command_asset"
    ],
    "gap": "no retries, pool, multi-part asset key, automation condition or metadata attributes"
-  },
-  "DbtSeedLocalOperator": {
-   "tasks": 1,
-   "mapped_by_converter": false
-  },
-  "DbtBuildLocalOperator": {
-   "tasks": 1,
-   "mapped_by_converter": false
   }
  }
 }

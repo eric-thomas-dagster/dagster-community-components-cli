@@ -10,7 +10,7 @@
       "bucket": "needs-care",
       "bucket_reasons": [
         "needs-care from the manifest (Cosmos DbtDag: dagster-dbt)",
-        "the converter produced Dagster code with no stubbed task, so what remains is review and parity (1 stated difference(s) to confirm)"
+        "the converter produced Dagster code with no stubbed task, so what remains is review and parity"
       ],
       "classes": {
         "JUDG": 0,
