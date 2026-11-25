@@ -4,7 +4,7 @@
 
 > 🧭 **Not sure which variant to pick?** See [`wine_ml.md`](wine_ml.md) — the shape-selector index for all six wine variants with pros / cons and a decision tree.
 
-**Same pipeline as [`wine_ml_pipeline.md`](wine_ml_pipeline.md), one Python file, no YAML.** Community components can be defined in *either* YAML (via `defs.yaml`) *or* pure Python by instantiating the class directly. This walkthrough shows the Python shape — useful for teams migrating from single-script frameworks (Prefect, Airflow decorators, Luigi) who prefer everything visible in one file.
+**Same pipeline as [`wine_ml_pipeline.md`](wine_ml_pipeline.md), one Python file, no YAML.** Registry components can be defined in *either* YAML (via `defs.yaml`) *or* pure Python by instantiating the class directly. This walkthrough shows the Python shape — useful for teams migrating from single-script frameworks (Prefect, Airflow decorators, Luigi) who prefer everything visible in one file.
 
 ## Pipeline
 
@@ -57,7 +57,7 @@ Replace the default `src/<pkg>/defs/__init__.py` (or write to `src/<pkg>/defs/pi
 ```python
 """Wine ML pipeline — pure Python variant.
 
-Uses the same six community components as the sibling YAML walkthrough
+Uses the same six registry components as the sibling YAML walkthrough
 (`wine_ml_pipeline`) but wires them via direct class instantiation.
 """
 from dagster import Definitions

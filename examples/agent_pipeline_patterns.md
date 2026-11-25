@@ -88,4 +88,4 @@ at one of these seven is almost always better than "let me spin up a LangChain a
 ## See also
 
 - [`examples/README.md`](./README.md) — the flat index of all demos in this repo.
-- [Component registry](https://dagster-component-ui.vercel.app/) — search the ~950 community components; the ones marked `agent`/`ai` are the building blocks these demos compose.
+- [Component registry](https://dagster-component-ui.vercel.app/) — search the ~950 registry components; the ones marked `agent`/`ai` are the building blocks these demos compose.

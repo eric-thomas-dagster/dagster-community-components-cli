@@ -13,8 +13,8 @@
 | [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) | Raw `@dg.asset` + `@dg.multi_asset`, everything inline in decorator bodies | Simplest; everything at asset grain |
 | [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) *(this one)* | Same as raw, but the multi-asset body calls plain Python helper funcs | Same Dagster surface as raw, cleaner Python organization; each helper is unit-testable without touching Dagster |
 | [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) | `@op`s composed by `@graph_multi_asset` | Sub-steps deserve first-class Dagster tracking (typed I/O, individual retry policies, cross-asset reuse) |
-| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | Community components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
-| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | Community components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
+| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | Registry components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
+| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | Registry components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
 
 ## What's different from `_raw` vs `_ops`
 
@@ -152,7 +152,7 @@ Same tests aren't possible against `_raw`-style inline logic without either (a) 
 - [`wine_ml_pipeline_minimal.md`](wine_ml_pipeline_minimal.md) — same pipeline with only 3 assets (scaling/splitting/CSV writes are plain Python; most Prefect-like).
 - [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — inline logic (this variant's starting point).
 - [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same shape but helpers are `@dg.op` functions inside a `@dg.graph_multi_asset`.
-- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python instantiation).
+- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via registry components (Python instantiation).
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML `defs.yaml` files.
 - [`wine_ml_pipeline_component.md`](wine_ml_pipeline_component.md) — same pipeline as ONE MLPipelineComponent (single YAML, standardized ML shape).
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

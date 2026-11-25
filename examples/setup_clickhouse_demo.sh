@@ -2,7 +2,7 @@
 # ClickHouse end-to-end demo — single-container Docker.
 #
 # WHAT THIS DEMONSTRATES
-#   The three ClickHouse community components shipped in dagster-community-components:
+#   The three ClickHouse registry components shipped in dagster-community-components:
 #
 #     1. `clickhouse_resource` — connection resource (clickhouse-connect HTTP client + SQLAlchemy URL)
 #     2. `dataframe_to_clickhouse` — bulk-insert Pandas DataFrame via clickhouse-connect's insert_df

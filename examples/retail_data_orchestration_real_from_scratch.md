@@ -80,7 +80,7 @@ dcc add hvr_hub_workspace     --auto-install     # Scenario 2
 dcc add freshness_check       --auto-install     # freshness SLAs + Scenario 3 Mechanism B
 ```
 
-Also install the OFFICIAL Power BI integration (not a community component — Dagster's own package):
+Also install the OFFICIAL Power BI integration (not a registry component — Dagster's own package):
 
 ```bash
 uv add dagster-powerbi
@@ -476,7 +476,7 @@ uv run dg check defs
 cat > src/retail_data_orchestration/definitions.py <<'PY'
 """Definitions root — Dagster discovers assets via dg autoload, plus the
 Power BI workspace defined manually below (official integration, not a
-community component)."""
+registry component)."""
 from dagster import Definitions, load_from_defs_folder
 from dagster_powerbi import PowerBIServicePrincipal, PowerBIWorkspace
 from pathlib import Path
@@ -554,7 +554,7 @@ attributes:
     max_retries: 3
     delay: 60             # seconds
     backoff: exponential  # doubles between attempts
-    # No `error_filter:` field exists on RetryPolicy. If the community
+    # No `error_filter:` field exists on RetryPolicy. If the
     # component's compute wraps its outbound API call as shown above,
     # `RetryRequested` uses this budget; a `Failure` bypasses it entirely.
 ```

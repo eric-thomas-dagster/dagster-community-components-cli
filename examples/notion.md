@@ -15,7 +15,7 @@
 
 ## What it demonstrates
 
-The shape a SaaS API integration takes in the community registry when there is **no orchestration primitive** to trigger (i.e. no "run this workflow" or "refresh this dataset"). Instead of an enumeration-based `_workspace` component, we build:
+The shape a SaaS API integration takes in the registry when there is **no orchestration primitive** to trigger (i.e. no "run this workflow" or "refresh this dataset"). Instead of an enumeration-based `_workspace` component, we build:
 
 1. **A rich `_resource`** — with read AND write convenience methods for the API. Consumers use it directly from their own assets (`context.resources.notion.query_database(...)`).
 2. **Sink assets for common upsert patterns** — `_database_upsert` (multi-row DB mirror) and `_page_sync` (single-page property patch).

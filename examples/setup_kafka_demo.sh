@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Kafka demo — full pipeline against a local Kafka broker (KRaft mode, no Zookeeper).
-# Validates the entire Kafka family of community components end-to-end with
+# Validates the entire Kafka family of registry components end-to-end with
 # no SaaS, no auth, no managed cluster.
 #
 # WHAT THIS DEMONSTRATES

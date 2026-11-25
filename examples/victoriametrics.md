@@ -53,7 +53,7 @@ Expected: a JSON matrix with `values` arrays of `[timestamp, count]` pairs — c
 
 1. **Starts VictoriaMetrics single-node in Docker** (`victoriametrics/victoria-metrics:latest`) on host port 18428 with `-retentionPeriod=1d`. Plenty of room for the 24h synthetic samples.
 2. **Scaffolds the Dagster project** with `uvx create-dagster project`.
-3. **Installs the 4 components** via the community CLI (`--refresh` on first call).
+3. **Installs the 4 components** via the CLI (`--refresh` on first call).
 4. **Overwrites the CLI-installed example defs.yamls** with demo-specific configuration — `sensors` schema for the generator, `sensor_reading` metric name on the VM sink, `avg(sensor_reading) by (sensor_type)` for the read-back, and `deps: [vm_sensor_ingest]` to ensure the read-back asset materializes after the ingest.
 
 ## Teardown

@@ -10,7 +10,7 @@ Uses the **official `dagster-databricks` integration's [`DatabricksWorkspaceComp
 | Component | Source | Role |
 |---|---|---|
 | `DatabricksWorkspaceComponent` | official (`dagster-databricks`) | Each task in each Databricks Job becomes a Dagster asset. Cross-job deps + `AutomationCondition.eager()` wired via `assets_by_job_task_key`. |
-| `cron_schedule` | community (scaffolded via `dagster-component add cron_schedule --auto-install`) | Triggers root jobs on a cron expression. Component source is copied into `src/<pkg>/components/cron_schedule/` so the Dagster autoloader picks it up. Only included when you pick "Cron schedule" in the orchestration prompt. |
+| `cron_schedule` | registry (scaffolded via `dagster-component add cron_schedule --auto-install`) | Triggers root jobs on a cron expression. Component source is copied into `src/<pkg>/components/cron_schedule/` so the Dagster autoloader picks it up. Only included when you pick "Cron schedule" in the orchestration prompt. |
 
 ## Run
 

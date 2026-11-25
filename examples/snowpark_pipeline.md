@@ -46,7 +46,7 @@ uv run dg launch --assets '*'
 
 ## Validation status
 
-This demo is **code-level validated** — `dg check defs` confirms the YAML loads and resolves correctly. End-to-end materialization requires real Snowflake credentials and isn't run as part of the community CI. The component itself is the same shape as the per-engine `pyspark_pipeline` (which IS end-to-end validated locally), so the YAML contract is well-tested.
+This demo is **code-level validated** — `dg check defs` confirms the YAML loads and resolves correctly. End-to-end materialization requires real Snowflake credentials and isn't run as part of this repo's CI. The component itself is the same shape as the per-engine `pyspark_pipeline` (which IS end-to-end validated locally), so the YAML contract is well-tested.
 
 If you have a Snowflake trial account, this demo will run start-to-finish in well under a minute on the smallest warehouse (XS).
 

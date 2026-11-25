@@ -40,12 +40,12 @@ This is a Databricks-flavored take on [`delta_pipeline.md`](delta_pipeline.md). 
 
 | Component | Source | Role |
 |---|---|---|
-| `delta_ingestion` | community | Read Databricks-written Delta table (UC or raw S3/ADLS) → pandas DataFrame |
-| `dataframe_to_delta_table` | community | Optional — write back via delta-rs (cross-engine path) |
-| `dataframe_to_databricks` | community | Optional — write to Databricks SQL warehouse instead |
-| `external_delta_table` | community | Declare Databricks-owned table for lineage |
-| `oauth_token_resource` | community | Optional — Databricks OAuth M2M tokens (production) |
-| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+| `delta_ingestion` | registry | Read Databricks-written Delta table (UC or raw S3/ADLS) → pandas DataFrame |
+| `dataframe_to_delta_table` | registry | Optional — write back via delta-rs (cross-engine path) |
+| `dataframe_to_databricks` | registry | Optional — write to Databricks SQL warehouse instead |
+| `external_delta_table` | registry | Declare Databricks-owned table for lineage |
+| `oauth_token_resource` | registry | Optional — Databricks OAuth M2M tokens (production) |
+| `summarize`, `dataframe_to_*` | registry | Downstream transforms + sinks |
 
 ## Step 1 (one-time) — mint a Databricks PAT
 

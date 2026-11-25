@@ -36,7 +36,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 12 community components into src/$PKG/components/ + defs/"
+echo ">>> Installing 12 registry components into src/$PKG/components/ + defs/"
 $CLI add file_ingestion        --auto-install
 $CLI add unique_dedup              --auto-install
 $CLI add data_cleansing            --auto-install

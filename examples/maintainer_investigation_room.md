@@ -212,7 +212,7 @@ write a JSON token to the approval directory.
 ## Authoring the plan — coding-agent authored, in one prompt
 
 The whole plan can be authored by Claude Code (or Cursor / Copilot) via
-the community components CLI:
+the registry components CLI:
 
 ```bash
 uvx --from dagster-community-components-cli dagster-component init

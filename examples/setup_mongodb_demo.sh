@@ -3,7 +3,7 @@
 # instance running in Docker. No SaaS, no auth, no managed cluster.
 #
 # WHAT THIS DEMONSTRATES
-#   The full MongoDB community-component family in one project:
+#   The full MongoDB component family in one project:
 #     - mongodb_resource      (shared connection)
 #     - mongodb_io_manager    (project IO manager — every DataFrame asset
 #                              auto-serialized to a MongoDB collection)

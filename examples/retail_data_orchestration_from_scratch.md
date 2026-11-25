@@ -79,9 +79,9 @@ All definitions loaded successfully.
 
 ---
 
-## Step 2: Install community components as files inside your project
+## Step 2: Install registry components as files inside your project
 
-The `dagster-component-cli` CLI has an `add` command that copies a community component's `.py` + `schema.json` + `README.md` directly into your project. **Not** a library import — actual files you can read and edit.
+The `dagster-component-cli` CLI has an `add` command that copies a registry component's `.py` + `schema.json` + `README.md` directly into your project. **Not** a library import — actual files you can read and edit.
 
 Set up a shortcut for the rest of the tutorial:
 
@@ -138,7 +138,7 @@ rm -rf src/retail_data_orchestration/defs/shell_command_asset \
 
 ## Step 3: Add the official Power BI integration (optional stretch)
 
-For scenario 1's stretch goal (S1.8 — Power BI refresh on completion), Dagster's official `dagster-powerbi` package is the right primitive — NOT a community component. Add it now if you want the stretch, or skip and come back to it later:
+For scenario 1's stretch goal (S1.8 — Power BI refresh on completion), Dagster's official `dagster-powerbi` package is the right primitive — NOT a registry component. Add it now if you want the stretch, or skip and come back to it later:
 
 ```bash
 uv add dagster-powerbi
@@ -567,7 +567,7 @@ YAML
 - `~dg.AutomationCondition.newly_materialized_within(hours=1)` — UNLESS this asset was itself materialized in the last hour (i.e., it's still fresh)
 - The `&` combines them: run when a parent materialized AND we're not still fresh.
 
-**Mechanism A** (defer to dbt state — `no-op` responses treated as materialization) requires the `dbt_state_reuse_patch` community component + real dbt Cloud. It's documented in the [real-mode swap guide](retail_data_orchestration_real_mode.md#scenario-3--state-aware-skip). Not included in the local demo because local dbt Core doesn't emit `no-op` responses.
+**Mechanism A** (defer to dbt state — `no-op` responses treated as materialization) requires the `dbt_state_reuse_patch` registry component + real dbt Cloud. It's documented in the [real-mode swap guide](retail_data_orchestration_real_mode.md#scenario-3--state-aware-skip). Not included in the local demo because local dbt Core doesn't emit `no-op` responses.
 
 Validate:
 
@@ -673,14 +673,14 @@ Each swap requires `dcc add <new-component-id>` first — which drops the new co
 
 ## What you built (recap)
 
-- A Dagster project with 4 community components installed as **files inside the project**.
+- A Dagster project with 4 registry components installed as **files inside the project**.
 - 3 scenario asset groups, each demonstrating a different orchestration pattern.
 - A local dbt Core project against DuckDB, standing in for dbt Cloud.
 - A MinIO container, standing in for S3.
 - A sensor that triggers dbt on **evidence of load completion**, not on a timer — the exact primitive most orchestrator RFPs are asking to prove.
 - Freshness checks + AutomationCondition for state-awareness.
 
-**When you convert to the real POC**, the community components install the same way — `dagster-component add snowflake_snowpipe_load_sensor` drops the sensor's source code into your project. Nothing about the architecture changes; the config swaps.
+**When you convert to the real POC**, the registry components install the same way — `dagster-component add snowflake_snowpipe_load_sensor` drops the sensor's source code into your project. Nothing about the architecture changes; the config swaps.
 
 ---
 

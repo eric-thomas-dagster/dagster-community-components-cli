@@ -119,7 +119,7 @@ Matches Prefect Method 2 (git-driven Managed pool) exactly once the runner is up
 - **Rich metadata surface** — `MetadataValue.float / .int / .timestamp / .markdown / .json` render inline in the UI. Dagster+ Insights can promote any numeric metadata to a custom metric with alerts (a few UI clicks). Prefect logs are logs; you build the metrics pipeline yourself.
 - **Partitions as a first-class concept** — every asset can be daily / hourly / static / dynamic partitioned. Backfill any date range. Time-travel to any partition's materialization to see what happened. Prefect has scheduling but no equivalent per-partition browsable state.
 - **Lineage, natively** — the asset graph shows every dependency. Prefect flows are DAG blocks with less rich cross-flow lineage.
-- **Component library** — Dagster's community components (~960) cover the long tail of integrations. Prefect has integrations but a smaller declarative catalog.
+- **Component library** — Dagster's registry components (~960) cover the long tail of integrations. Prefect has integrations but a smaller declarative catalog.
 - **Reproducibility** — code snapshotted into a pex at deploy time = every run in a given deployment runs against the same code. Prefect Managed fetches from GitHub at runtime → theoretically faster iteration but harder to guarantee "this exact code ran that day."
 
 ## Both do

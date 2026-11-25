@@ -4,7 +4,7 @@
 
 Self-contained demo of Dagster orchestrating a full MLflow-backed ML pipeline. Trains a churn model, registers it, promotes Staging → Production as a Dagster asset, then scores customer data using the promoted model — with an asset check gating on model existence.
 
-Uses **all 7 community MLflow components**:
+Uses **all 7 MLflow components**:
 
 | Component | Role in this demo |
 |---|---|
@@ -99,14 +99,14 @@ On subsequent runs (v1 already at Production), the promotion asset raises "no ve
 - `end_mlflow_on_run_finished` hook — cleanly closes it
 - Use in training assets that call `mlflow.log_metric()` etc.
 
-**Community components (this demo)** — Dagster OBSERVES + ACTS on MLflow state:
+**Registry components (this demo)** — Dagster OBSERVES + ACTS on MLflow state:
 - Enumerate registry as assets (`mlflow_workspace`)
 - React to registry changes (`mlflow_model_sensor`, `mlflow_experiment_sensor`)
 - Gate downstream on registry state (`mlflow_model_version_check`)
 - Take actions in the registry (`mlflow_model_promotion`)
 - Score with registered models (`mlflow_model_inference`)
 
-Different direction of the arrow. A real MLflow-heavy project uses **both** together — `dagster-mlflow` during training runs, community components everywhere else.
+Different direction of the arrow. A real MLflow-heavy project uses **both** together — `dagster-mlflow` during training runs, registry components everywhere else.
 
 ## Extending the demo
 

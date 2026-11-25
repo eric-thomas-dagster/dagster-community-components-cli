@@ -116,7 +116,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 1 community component"
+echo ">>> Installing 1 registry component"
 $CLI add azure_synapse --auto-install
 
 echo ">>> Writing demo defs.yaml"

@@ -29,7 +29,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 4 community components into src/$PKG/components/ + defs/"
+echo ">>> Installing 4 registry components into src/$PKG/components/ + defs/"
 $CLI add synthetic_data_generator --auto-install
 $CLI add ts_filler                --auto-install
 $CLI add running_total            --auto-install

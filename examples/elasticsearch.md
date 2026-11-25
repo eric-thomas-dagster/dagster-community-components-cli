@@ -1,14 +1,14 @@
 # Elasticsearch end-to-end — local docker, no auth
 > ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
-Read documents from an Elasticsearch index via the community-component family. Same components target Elastic Cloud / self-hosted clusters unchanged — only `hosts` / `api_key_env_var` change.
+Read documents from an Elasticsearch index via the component family. Same components target Elastic Cloud / self-hosted clusters unchanged — only `hosts` / `api_key_env_var` change.
 
 ## Components used
 
 | Component | Source | Role |
 |---|---|---|
-| `elasticsearch_resource` | community | Shared connection config |
-| `elasticsearch_reader` | community | Run a search query → DataFrame asset (one row per hit) |
+| `elasticsearch_resource` | registry | Shared connection config |
+| `elasticsearch_reader` | registry | Run a search query → DataFrame asset (one row per hit) |
 
 ## Run
 

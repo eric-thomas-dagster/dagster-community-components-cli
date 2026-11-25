@@ -2,7 +2,7 @@
 # VictoriaMetrics end-to-end demo — single-container Docker.
 #
 # WHAT THIS DEMONSTRATES
-#   The 3 VictoriaMetrics community components shipped in v0.10.1:
+#   The 3 VictoriaMetrics registry components shipped in v0.10.1:
 #
 #     1. `victoriametrics_resource`     connection resource (HTTP endpoints + auth)
 #     2. `dataframe_to_victoriametrics` bulk ingest a Pandas DataFrame as

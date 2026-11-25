@@ -59,7 +59,7 @@ uvx create-dagster project "$PROJECT_DIR" --uv-sync >/dev/null
 cd "$PROJECT_DIR"
 PKG=$(python -c 'import os; print(os.path.basename(os.getcwd()).replace("-","_"))')
 
-echo ">>> 4/5  Installing community components: dremio_ingestion + summarize + dataframe_to_parquet"
+echo ">>> 4/5  Installing registry components: dremio_ingestion + summarize + dataframe_to_parquet"
 uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \
   dagster-component add dremio_ingestion >/dev/null
 uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \

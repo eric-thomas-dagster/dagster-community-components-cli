@@ -1052,7 +1052,7 @@ Under the hood, each trigger IS a real Dagster sensor — you get the full Dagst
 
 - **Component loads:** `dg check defs` → "All definitions loaded successfully"
 - **Sensors materialize:** `dg list defs` shows one sensor per trigger, named `<automation>__<trigger_type>_<i>`
-- **Registered in the community-components manifest** with `agent_hints` covering when-to-use / typical-upstream / typical-downstream / example-prompts
+- **Registered in the registry's manifest** with `agent_hints` covering when-to-use / typical-upstream / typical-downstream / example-prompts
 
 ## See also
 

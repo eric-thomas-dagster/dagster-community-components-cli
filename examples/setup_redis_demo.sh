@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Redis demo — exercise the Redis family of community components against a
+# Redis demo — exercise the Redis family of registry components against a
 # local Redis running in Docker. No SaaS, no auth, no managed cluster.
 #
 # WHAT THIS DEMONSTRATES

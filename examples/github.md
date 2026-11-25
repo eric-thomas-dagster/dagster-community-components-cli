@@ -90,7 +90,7 @@ The script scaffolds a Dagster project, materializes the pipeline twice with a 1
 
 ## Auth notes
 
-The community `GithubResourceComponent` uses PAT (personal access token) auth — the simplest path and enough for most demos. For **GitHub App** auth (installation tokens, higher rate limits, org-scale deployments), pair this resource with the official [`dagster_github.GithubResource`](https://docs.dagster.io/integrations/libraries/github) under a different resource key.
+The `GithubResourceComponent` uses PAT (personal access token) auth — the simplest path and enough for most demos. For **GitHub App** auth (installation tokens, higher rate limits, org-scale deployments), pair this resource with the official [`dagster_github.GithubResource`](https://docs.dagster.io/integrations/libraries/github) under a different resource key.
 
 ## Cleanup
 

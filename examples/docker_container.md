@@ -7,7 +7,7 @@ Run any container image as a first-class Dagster asset via `dagster-docker`. No 
 
 | Component | Source | Role |
 |---|---|---|
-| `docker_container_asset` | community | Wraps `dagster_docker.execute_docker_container` — image / command / env_vars / network → Dagster asset |
+| `docker_container_asset` | registry | Wraps `dagster_docker.execute_docker_container` — image / command / env_vars / network → Dagster asset |
 
 ## Architecture
 

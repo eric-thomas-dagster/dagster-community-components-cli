@@ -47,7 +47,7 @@ Sensor-driven round-trip pipeline, 100% components, validated end-to-end. New CS
               └──────────────────────────────────────────┘
 ```
 
-## Components (all from the community registry)
+## Components (all from the registry)
 
 | # | Component | Role |
 |---|---|---|

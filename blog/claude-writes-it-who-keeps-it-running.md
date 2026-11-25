@@ -9,7 +9,7 @@ description: "A daily calendar digest is the perfect first project, and a Claude
 
 **Eric Thomas · November 2026**
 
-*This is an independent community project, not an official Dagster Labs position — my own components, my own reading of Anthropic's docs, my own opinions. The story below is a composite of how I'd expect this to go, not one real team's account.*
+*This is an independent project, not an official Dagster Labs position — my own components, my own reading of Anthropic's docs, my own opinions. The story below is a composite of how I'd expect this to go, not one real team's account.*
 
 ---
 
@@ -148,4 +148,4 @@ Swap the stand-in server for a real calendar MCP server and you have the first m
 
 If you have a digest that outgrew a routine, I'd like to hear which of the four moments came first.
 
-*Components referenced above are in the [community registry](https://dagster-component-ui.vercel.app); each has an example YAML and README. Routines details are from [Anthropic's docs](https://code.claude.com/docs/en/routines.md) and [announcement](https://claude.com/blog/introducing-routines-in-claude-code).*
+*Components referenced above are in the [registry](https://dagster-component-ui.vercel.app); each has an example YAML and README. Routines details are from [Anthropic's docs](https://code.claude.com/docs/en/routines.md) and [announcement](https://claude.com/blog/introducing-routines-in-claude-code).*

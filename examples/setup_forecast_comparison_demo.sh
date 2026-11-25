@@ -26,7 +26,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 5 community components"
+echo ">>> Installing 5 registry components"
 $CLI add time_series_generator --auto-install
 $CLI add ts_filler             --auto-install
 $CLI add arima_forecast        --auto-install

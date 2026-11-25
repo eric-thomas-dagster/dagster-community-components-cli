@@ -52,7 +52,7 @@ EOF
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components"
+echo ">>> Installing 3 registry components"
 $CLI add file_ingestion --auto-install
 mkdir -p "src/$PKG/defs/csv_today"  # only needs defs.yaml; component code is in components/file_ingestion/
 $CLI add scd_type_2         --auto-install

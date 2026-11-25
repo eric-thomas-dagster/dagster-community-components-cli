@@ -2,7 +2,7 @@
 # TimescaleDB end-to-end demo — single-container Docker.
 #
 # WHAT THIS DEMONSTRATES
-#   The TimescaleDB community component shipped in v0.10.1:
+#   The TimescaleDB registry component shipped in v0.10.1:
 #
 #     1. `timescaledb_resource`  Postgres-extension resource with hypertable /
 #                                compression / retention helpers

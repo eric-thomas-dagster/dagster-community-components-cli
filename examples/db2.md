@@ -12,10 +12,10 @@ Read/write IBM Db2 via the new `db2_resource` + the generic SQL component family
 
 | Component | Source | Role |
 |---|---|---|
-| `db2_resource` | community (new) | Shared connection — `host` / `port` / `database` / auth / SSL |
-| `synthetic_data_generator` | community | Upstream — 20 synthetic orders |
-| `dataframe_to_table` | community | Writes DataFrame → Db2 table via SQLAlchemy (`ibm_db_sa` dialect) |
-| `local_parquet_io_manager` | community | Persists intermediate outputs across subprocesses |
+| `db2_resource` | registry (new) | Shared connection — `host` / `port` / `database` / auth / SSL |
+| `synthetic_data_generator` | registry | Upstream — 20 synthetic orders |
+| `dataframe_to_table` | registry | Writes DataFrame → Db2 table via SQLAlchemy (`ibm_db_sa` dialect) |
+| `local_parquet_io_manager` | registry | Persists intermediate outputs across subprocesses |
 
 ## Architecture
 

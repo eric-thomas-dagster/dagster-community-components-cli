@@ -27,7 +27,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 5 community components into src/$PKG/components/ + defs/"
+echo ">>> Installing 5 registry components into src/$PKG/components/ + defs/"
 $CLI add rest_api_ingestion    --auto-install
 $CLI add json_flatten        --auto-install
 $CLI add select_columns      --auto-install

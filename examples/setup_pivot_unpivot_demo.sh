@@ -37,7 +37,7 @@ EOF
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 4 community components"
+echo ">>> Installing 4 registry components"
 $CLI add file_ingestion --auto-install
 $CLI add pivot              --auto-install
 $CLI add unpivot            --auto-install

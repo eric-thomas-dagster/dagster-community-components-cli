@@ -65,10 +65,10 @@ Firehose is the right boundary between the streaming layer and Dagster.
 
 | Component | Source | Role |
 |---|---|---|
-| `s3_monitor` | community | Polls the S3 bucket, registers each new Parquet file as a dynamic partition. |
-| `file_ingestion` | community | Partitioned asset reads each Parquet as a pandas DataFrame. |
-| `summarize` | community | Per-partition group-by + aggregations. |
-| `dataframe_to_parquet` | community | Writes the curated Parquet back to S3. |
+| `s3_monitor` | registry | Polls the S3 bucket, registers each new Parquet file as a dynamic partition. |
+| `file_ingestion` | registry | Partitioned asset reads each Parquet as a pandas DataFrame. |
+| `summarize` | registry | Per-partition group-by + aggregations. |
+| `dataframe_to_parquet` | registry | Writes the curated Parquet back to S3. |
 
 Plus the AWS-native pieces you provide: Kinesis Data Stream (or direct PUT), Firehose delivery stream, S3 bucket, Glue database+table, and (optionally) Athena workgroup.
 

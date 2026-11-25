@@ -2,7 +2,7 @@
 # HuggingFace — full integration surface demo scaffold.
 #
 # WHAT THIS DEMONSTRATES
-#   6 of 7 HuggingFace community components scaffolded by default; the
+#   6 of 7 HuggingFace registry components scaffolded by default; the
 #   7th (huggingface_inference_endpoint) requires a customer-deployed
 #   dedicated endpoint and is left out of the default scaffold.
 #

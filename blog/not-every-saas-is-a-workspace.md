@@ -2,7 +2,7 @@
 title: "Not every SaaS integration should be a workspace"
 date: 2026-08-16
 author: Eric Thomas
-description: "A design essay on when to build a `_workspace` component, when to build a `_resource + _sink` pair, and how to tell the difference. Includes the taxonomy behind the community-components reshape of Notion, GitHub, Jira, and PagerDuty."
+description: "A design essay on when to build a `_workspace` component, when to build a `_resource + _sink` pair, and how to tell the difference. Includes the taxonomy behind the component reshape of Notion, GitHub, Jira, and PagerDuty."
 ---
 
 # Not every SaaS integration should be a workspace
@@ -15,7 +15,7 @@ description: "A design essay on when to build a `_workspace` component, when to 
 ---
 
 A couple of weeks ago I set out to do what looked like a mechanical
-refactor across the community components registry: sweep 22 `_workspace`
+refactor across the component registry: sweep 22 `_workspace`
 components onto the canonical `workspace: <VendorResource>` pattern that
 `dagster-databricks`, `dagster-snowflake`, `dagster-fivetran`, and
 `dagster-powerbi` all use. Same YAML shape as the official integrations,
@@ -64,7 +64,7 @@ vendor *do work*.
 
 ## The mistake I found
 
-I looked at what the community registry called `github_workspace`. It
+I looked at what the registry called `github_workspace`. It
 opened a session against `api.github.com`, listed repos × workflows, and
 emitted one asset per (repo, workflow). Materializing the asset called
 `GET /repos/{owner}/{name}/actions/workflows/{id}/runs` — the LIST
@@ -109,7 +109,7 @@ If the answer is *no* — the materialization just reads state, or lists
 things, or maps API responses to a DataFrame — then the component is
 ingestion. Calling it a workspace is a lie in the name.
 
-Applying this to the 22 community `_workspace` components:
+Applying this to the 22 `_workspace` components:
 
 | Bucket | Vendors | Verdict |
 |---|---|---|
@@ -166,7 +166,7 @@ That `_resolve_data_source_id` helper hides Notion's 2025 API
 redesign, which split `database` (container) from `data_source`
 (queryable schema). Old integrations that call
 `databases.query(database_id=...)` broke at some point in
-`notion-client v3`. The community resource swallows the split so
+`notion-client v3`. The resource swallows the split so
 customers don't need to know.
 
 Two sinks:
@@ -376,6 +376,6 @@ I'll ship them as they get built. The pattern is now the pattern.
 - [`github.md`](../examples/github.md) — DataFrame → GitHub Issues upsert
 - [`jira.md`](../examples/jira.md) — DataFrame → Jira Issues upsert
 - [`pagerduty.md`](../examples/pagerduty.md) — DataFrame → PagerDuty incidents upsert
-- The full [community components registry][ui] — ~960 components, 619 live-validated.
+- The full [component registry][ui] — ~960 components, 619 live-validated.
 
 [ui]: https://dagster-component-ui.vercel.app/

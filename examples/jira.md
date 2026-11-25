@@ -90,7 +90,7 @@ The script scaffolds a Dagster project, materializes the pipeline twice with a 1
 
 ## Auth notes
 
-Uses classic **email + API-token Basic auth** — simplest path, works for any Atlassian user. The community `JiraResourceComponent` doesn't currently support OAuth 2.0 / Atlassian Forge auth; open an issue if you need it.
+Uses classic **email + API-token Basic auth** — simplest path, works for any Atlassian user. The `JiraResourceComponent` doesn't currently support OAuth 2.0 / Atlassian Forge auth; open an issue if you need it.
 
 ## Cleanup
 

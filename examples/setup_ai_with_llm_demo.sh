@@ -46,7 +46,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 6 community components"
+echo ">>> Installing 6 registry components"
 $CLI add synthetic_data_generator --auto-install
 $CLI add text_classifier          --auto-install
 $CLI add entity_extractor         --auto-install

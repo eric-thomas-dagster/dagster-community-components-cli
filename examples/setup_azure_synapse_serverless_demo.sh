@@ -118,7 +118,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components"
+echo ">>> Installing 3 registry components"
 $CLI add synthetic_data_generator --auto-install
 $CLI add dataframe_to_adls        --auto-install
 $CLI add dataframe_from_sql       --auto-install

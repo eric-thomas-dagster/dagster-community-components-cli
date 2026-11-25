@@ -60,7 +60,7 @@ Expected output: `10000  2026-04-26 22:30:16  2026-05-27 22:14:00` (date range d
 1. **Starts ClickHouse Server in Docker** (`clickhouse/clickhouse-server:latest`) on host ports 18123 (HTTP) + 19000 (native).
 2. **Pre-creates the destination table** `analytics.orders` via HTTP POST. Schema matches `synthetic_data_generator`'s `orders` shape exactly (11 columns: `order_id`, `customer_id`, `order_date`, `category`, `num_items`, `subtotal`, `shipping`, `tax`, `total`, `status`, `region`).
 3. **Scaffolds the Dagster project** with `uvx create-dagster project`.
-4. **Installs the 4 components** via the community CLI (`--refresh` on first call to bust the manifest cache).
+4. **Installs the 4 components** via the CLI (`--refresh` on first call to bust the manifest cache).
 5. **Overwrites the CLI-installed example defs.yamls** with demo-specific configuration — points `dataframe_to_clickhouse` at `orders_clean` from the upstream synthetic generator, configures host/port/auth env vars.
 
 ## Teardown

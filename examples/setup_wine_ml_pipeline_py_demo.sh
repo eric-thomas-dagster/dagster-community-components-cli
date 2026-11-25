@@ -33,7 +33,7 @@ echo ">>> Writing single-file pipeline to src/$PKG/defs/pipeline.py"
 cat > "src/$PKG/defs/pipeline.py" <<'PYEOF'
 """Wine ML pipeline — pure Python variant.
 
-Uses the same six community components as the sibling YAML walkthrough
+Uses the same six registry components as the sibling YAML walkthrough
 (wine_ml_pipeline) but wires them via direct class instantiation instead
 of per-component defs.yaml files.
 """

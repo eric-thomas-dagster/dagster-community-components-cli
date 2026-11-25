@@ -55,11 +55,11 @@ Walkthrough config below works against this endpoint with no other setup.
 
 | Component | Source | Role |
 |---|---|---|
-| `odata_ingestion` | community | Read from any S/4HANA OData service |
-| `odata_resource` | community | Optional — register the connection once if you read from multiple entity sets |
-| `odata_check` | community | Asset check — tenant reachability + row count + expected columns |
-| `dataframe_to_odata` | community | Reverse direction: write back to S/4HANA (with CSRF handling) |
-| `summarize`, `dataframe_to_*` | community | Standard transform + sink |
+| `odata_ingestion` | registry | Read from any S/4HANA OData service |
+| `odata_resource` | registry | Optional — register the connection once if you read from multiple entity sets |
+| `odata_check` | registry | Asset check — tenant reachability + row count + expected columns |
+| `dataframe_to_odata` | registry | Reverse direction: write back to S/4HANA (with CSRF handling) |
+| `summarize`, `dataframe_to_*` | registry | Standard transform + sink |
 
 ## defs.yaml — three connection modes
 

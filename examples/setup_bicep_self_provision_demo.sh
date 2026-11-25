@@ -87,7 +87,7 @@ BICEP
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components"
+echo ">>> Installing 3 registry components"
 $CLI add bicep_asset              --auto-install
 $CLI add synthetic_data_generator --auto-install
 $CLI add dataframe_to_adls        --auto-install

@@ -48,7 +48,7 @@ Without this component, you edit every asset's `defs.yaml` to set its automation
 
 | Component | Source | Role |
 |---|---|---|
-| `automation_condition_applicator` | community | Applies rules to a `Definitions` at project load time — the only component this walkthrough needs |
+| `automation_condition_applicator` | registry | Applies rules to a `Definitions` at project load time — the only component this walkthrough needs |
 
 ## Full surface — every rule shape
 

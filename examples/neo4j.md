@@ -1,16 +1,16 @@
 # Neo4j end-to-end — local docker, no SaaS
 > ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
-Read / write the Neo4j graph database via the community-component family. Same components target AuraDB / self-hosted clusters unchanged — only `uri` + auth env vars change.
+Read / write the Neo4j graph database via the component family. Same components target AuraDB / self-hosted clusters unchanged — only `uri` + auth env vars change.
 
 ## Components used
 
 | Component | Source | Role |
 |---|---|---|
-| `neo4j_resource` | community | Shared connection — `uri` / `username` / `password_env_var` / `database` |
-| `neo4j_reader` | community | Run a Cypher query → DataFrame asset |
-| `neo4j_writer` | community | DataFrame → labeled nodes (with optional MERGE-by-key upsert) |
-| `synthetic_data_generator` | community | Upstream of the writer — generates 10 customer rows |
+| `neo4j_resource` | registry | Shared connection — `uri` / `username` / `password_env_var` / `database` |
+| `neo4j_reader` | registry | Run a Cypher query → DataFrame asset |
+| `neo4j_writer` | registry | DataFrame → labeled nodes (with optional MERGE-by-key upsert) |
+| `synthetic_data_generator` | registry | Upstream of the writer — generates 10 customer rows |
 
 ## Architecture
 

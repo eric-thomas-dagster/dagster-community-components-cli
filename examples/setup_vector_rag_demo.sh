@@ -90,7 +90,7 @@ QUERIES = [
 CHAT_LOG = [
     ("How do I get started with Dagster?", "Run `uvx create-dagster@latest project my-project` to scaffold a new project."),
     ("What's a component?", "A component is a reusable, YAML-configurable unit that produces Dagster definitions."),
-    ("Can I use components for ingestion?", "Yes — there are dozens of community components for ingestion (S3, Kafka, REST APIs, databases)."),
+    ("Can I use components for ingestion?", "Yes — there are dozens of registry components for ingestion (S3, Kafka, REST APIs, databases)."),
 ]
 
 

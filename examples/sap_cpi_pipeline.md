@@ -25,9 +25,9 @@ SAP Integration Suite (formerly CPI / HCI / Cloud Integration) is the BTP-based 
 
 | Component | Source | Role |
 |---|---|---|
-| `oauth_token_resource` | community | OAuth client_credentials for Integration Suite |
-| `sap_cpi_observation_sensor` | community | Poll MPL → AssetObservations |
-| `oauth_rest_ingestion` (optional) | community | POST trigger to an iFlow's HTTPS endpoint |
+| `oauth_token_resource` | registry | OAuth client_credentials for Integration Suite |
+| `sap_cpi_observation_sensor` | registry | Poll MPL → AssetObservations |
+| `oauth_rest_ingestion` (optional) | registry | POST trigger to an iFlow's HTTPS endpoint |
 
 ## Run
 

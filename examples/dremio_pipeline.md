@@ -53,9 +53,9 @@ The script:
 
 | Component | Source | Role |
 |---|---|---|
-| `dremio_ingestion` | community | Submit SQL → poll job → fetch results → pandas DataFrame |
-| `summarize` | community | Per-group aggregations |
-| `dataframe_to_parquet` | community | Write curated parquet |
+| `dremio_ingestion` | registry | Submit SQL → poll job → fetch results → pandas DataFrame |
+| `summarize` | registry | Per-group aggregations |
+| `dataframe_to_parquet` | registry | Write curated parquet |
 
 ## defs.yaml — Dremio Cloud (production)
 

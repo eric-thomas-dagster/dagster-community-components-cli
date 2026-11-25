@@ -12,10 +12,10 @@ Read/write Oracle via the new `oracle_resource` + the generic SQL component fami
 
 | Component | Source | Role |
 |---|---|---|
-| `oracle_resource` | community (new) | Shared connection — `host` / `port` / `service_name` / auth |
-| `synthetic_data_generator` | community | Upstream — 20 synthetic orders |
-| `dataframe_to_table` | community | Writes DataFrame → Oracle table via SQLAlchemy (`oracledb` thin-mode) |
-| `local_parquet_io_manager` | community | Persists intermediate outputs across subprocesses |
+| `oracle_resource` | registry (new) | Shared connection — `host` / `port` / `service_name` / auth |
+| `synthetic_data_generator` | registry | Upstream — 20 synthetic orders |
+| `dataframe_to_table` | registry | Writes DataFrame → Oracle table via SQLAlchemy (`oracledb` thin-mode) |
+| `local_parquet_io_manager` | registry | Persists intermediate outputs across subprocesses |
 
 ## Architecture
 

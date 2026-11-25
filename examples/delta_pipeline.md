@@ -48,9 +48,9 @@ This walkthrough uses `delta_ingestion` and `dataframe_to_delta_table` — both 
 
 | Component | Source | Role |
 |---|---|---|
-| `delta_ingestion` | community | Read existing Delta table → DataFrame |
-| `dataframe_to_delta_table` | community | Append / overwrite / merge |
-| `external_delta_table` | community | Declare externally-owned table for lineage |
+| `delta_ingestion` | registry | Read existing Delta table → DataFrame |
+| `dataframe_to_delta_table` | registry | Append / overwrite / merge |
+| `external_delta_table` | registry | Declare externally-owned table for lineage |
 
 ## Storage matrix
 

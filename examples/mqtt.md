@@ -7,10 +7,10 @@ Exercise the MQTT family against a local Eclipse Mosquitto broker. Same componen
 
 | Component | Source | Role |
 |---|---|---|
-| `mqtt_to_database_asset` | community | Subscribe + collect-for-N-seconds → write rows to a database table |
-| `mqtt_monitor` | community | Sensor: poll subscribe-and-collect window, trigger a job on new messages |
-| `mqtt_observation_sensor` | community | Emit `AssetObservation` on a topic |
-| `python_callable_job` | community | Target job for mqtt_monitor |
+| `mqtt_to_database_asset` | registry | Subscribe + collect-for-N-seconds → write rows to a database table |
+| `mqtt_monitor` | registry | Sensor: poll subscribe-and-collect window, trigger a job on new messages |
+| `mqtt_observation_sensor` | registry | Emit `AssetObservation` on a topic |
+| `python_callable_job` | registry | Target job for mqtt_monitor |
 
 ## Run
 
@@ -53,7 +53,7 @@ attributes:
 
 - **Mosquitto 2.x requires explicit `allow_anonymous true` config.** The setup script writes a minimal mosquitto.conf inline.
 - **MQTT is fire-and-forget by default.** Without QoS-2 + retained messages, a message published when no subscriber is connected is gone. The demo publishes *during* the asset's `collect_seconds` window via a background `mosquitto_pub` loop.
-- **For "pull historical" semantics, use a broker with persistence** (HiveMQ Enterprise, EMQ X with replay) — out of scope for the community components today.
+- **For "pull historical" semantics, use a broker with persistence** (HiveMQ Enterprise, EMQ X with replay) — out of scope for the registry components today.
 
 ## Production retargeting
 

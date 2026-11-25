@@ -3,7 +3,7 @@
 # on the local filesystem. No SaaS, no cloud, no auth.
 #
 # WHAT THIS DEMONSTRATES
-#   The transform + IO-manager + sink family of community components. Each
+#   The transform + IO-manager + sink family of registry components. Each
 #   asset is materialized via a Parquet IO manager (so the data persists on
 #   disk between steps), filter + summarize transforms are chained, and a
 #   final sink writes Avro files for downstream consumers (Kafka, Hive, etc.)

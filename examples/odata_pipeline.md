@@ -64,9 +64,9 @@ Open the UI to inspect: `uv run dg dev`, then http://localhost:3000.
 
 | Component | Source | Role |
 |---|---|---|
-| `odata_ingestion` | community | OData v2/v4 GET → pandas DataFrame. Handles pagination, `$filter`, `$select`, etc. |
-| `summarize` | community | Per-group aggregations on the DataFrame. |
-| `dataframe_to_parquet` | community | Write curated DataFrame to Parquet locally or to S3/GCS/ADLS via fsspec. |
+| `odata_ingestion` | registry | OData v2/v4 GET → pandas DataFrame. Handles pagination, `$filter`, `$select`, etc. |
+| `summarize` | registry | Per-group aggregations on the DataFrame. |
+| `dataframe_to_parquet` | registry | Write curated DataFrame to Parquet locally or to S3/GCS/ADLS via fsspec. |
 
 Plus optional companions if you need them:
 

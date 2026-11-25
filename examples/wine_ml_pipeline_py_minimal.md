@@ -4,7 +4,7 @@
 
 > 🧭 **Not sure which variant to pick?** See [`wine_ml.md`](wine_ml.md) — the shape-selector index for all wine variants with pros / cons and a decision tree.
 
-**Cross of two axes**: **3 assets** (only real deliverables tracked, like `_minimal`) × **community components where they save work** (like `_py`). One `FileIngestionComponent` for the ingest asset (URL fetch + CSV parse + metadata is boilerplate worth delegating), custom Python for the model + CV stages (bespoke enough that a component would add friction). This is the **most common middle-ground shape** in real projects.
+**Cross of two axes**: **3 assets** (only real deliverables tracked, like `_minimal`) × **registry components where they save work** (like `_py`). One `FileIngestionComponent` for the ingest asset (URL fetch + CSV parse + metadata is boilerplate worth delegating), custom Python for the model + CV stages (bespoke enough that a component would add friction). This is the **most common middle-ground shape** in real projects.
 
 ## When to reach for this over `_minimal` or `_py`
 

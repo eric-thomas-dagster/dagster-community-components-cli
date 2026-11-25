@@ -97,7 +97,7 @@ attributes:
 | `warehouse_query` | `{kind: warehouse_query, resource_key: snowflake, sql: "SELECT ..."}` | **Production ML from a live warehouse** — Snowflake, BigQuery, Postgres, MySQL, MSSQL |
 | `upstream_asset` | `{kind: upstream_asset, upstream_asset_key: raw/events}` | Chain the ML pipeline downstream of any other Dagster asset |
 
-The `warehouse_query` kind works with **any Dagster resource** that exposes `.get_engine()` (SQLAlchemy) or `.get_connection()` (DB-API) — the community-components `postgres_resource`, `mysql_resource`, `mssql_resource`, `snowflake_resource`, `bigquery_resource`, or any custom resource with the same shape. **Required resource keys are auto-detected** from source + sink configs — the customer never lists them.
+The `warehouse_query` kind works with **any Dagster resource** that exposes `.get_engine()` (SQLAlchemy) or `.get_connection()` (DB-API) — the registry's `postgres_resource`, `mysql_resource`, `mssql_resource`, `snowflake_resource`, `bigquery_resource`, or any custom resource with the same shape. **Required resource keys are auto-detected** from source + sink configs — the customer never lists them.
 
 ## Output options — csv, parquet, table, or asset
 
@@ -208,7 +208,7 @@ attributes:
          schema: ml_output, if_exists: replace}
 ```
 
-Wire `snowflake` in the top-level `definitions.py` as a `SnowflakeResource` or the community `snowflake_resource`. That's it — the component reads from Snowflake, runs XGBoost, writes predictions back to Snowflake.
+Wire `snowflake` in the top-level `definitions.py` as a `SnowflakeResource` or the registry's `snowflake_resource`. That's it — the component reads from Snowflake, runs XGBoost, writes predictions back to Snowflake.
 
 ## Partitioning — the production pattern
 
@@ -331,7 +331,7 @@ attributes:
 ## See also
 
 - [`wine_ml.md`](wine_ml.md) — the shape-selector index for all eight wine variants.
-- [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline as 6 separate community components in YAML (contrast to this variant's single component).
+- [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline as 6 separate registry components in YAML (contrast to this variant's single component).
 - [`wine_ml_pipeline_py_minimal.md`](wine_ml_pipeline_py_minimal.md) — hybrid: 1 component + custom Python.
 - Sibling pipeline components: [`warehouse_pipeline`](warehouse_pipeline.md), [`polars_pipeline`](polars_pipeline.md), [`pyspark_pipeline`](pyspark_pipeline.md), [`snowpark_pipeline`](snowpark_pipeline.md) — same "one YAML, multi-step, multi-output" pattern for other domains.
 - [Walkthrough index](README.md) — 270+ end-to-end demos across every component family.

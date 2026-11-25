@@ -30,11 +30,11 @@ Pull data from Microsoft Dynamics 365 (Sales / Customer Service / Field Service 
 
 | Component | Source | Role |
 |---|---|---|
-| `oauth_token_resource` | community | Azure AD OAuth2 client_credentials grant |
-| `odata_ingestion` | community | OData v4 GET against Dataverse (`/api/data/v9.2/...`) → pandas DataFrame |
-| `odata_check` | community | Optional — smoke-test tenant + entity-set |
-| `dataframe_to_odata` | community | Optional — write back to Dataverse (POST / PATCH / DELETE) |
-| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+| `oauth_token_resource` | registry | Azure AD OAuth2 client_credentials grant |
+| `odata_ingestion` | registry | OData v4 GET against Dataverse (`/api/data/v9.2/...`) → pandas DataFrame |
+| `odata_check` | registry | Optional — smoke-test tenant + entity-set |
+| `dataframe_to_odata` | registry | Optional — write back to Dataverse (POST / PATCH / DELETE) |
+| `summarize`, `dataframe_to_*` | registry | Downstream transforms + sinks |
 
 ## Auth: Azure AD app registration
 

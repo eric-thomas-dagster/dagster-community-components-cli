@@ -25,9 +25,9 @@ Same `odata_ingestion` component as the rest of the SAP family — IBP exposes O
 
 | Component | Source | Role |
 |---|---|---|
-| `odata_ingestion` | community | OData v2 GET against IBP EXTRACT_ODATA_SRV → pandas DataFrame |
-| `dataframe_to_odata` | community | Optional — push actuals INTO IBP (reverse direction) |
-| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+| `odata_ingestion` | registry | OData v2 GET against IBP EXTRACT_ODATA_SRV → pandas DataFrame |
+| `dataframe_to_odata` | registry | Optional — push actuals INTO IBP (reverse direction) |
+| `summarize`, `dataframe_to_*` | registry | Downstream transforms + sinks |
 
 ## defs.yaml — pull a key figure
 

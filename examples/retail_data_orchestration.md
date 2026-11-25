@@ -18,7 +18,7 @@ chmod +x setup.sh
 
 **What you get:**
 
-- A canonical `create-dagster` project with community components installed as **files inside the project** (`src/retail_data_orchestration/components/<id>/component.py`) — no library import to inspect through. Every component's source is right there, copy-editable.
+- A canonical `create-dagster` project with registry components installed as **files inside the project** (`src/retail_data_orchestration/components/<id>/component.py`) — no library import to inspect through. Every component's source is right there, copy-editable.
 - Three scenarios wired as separate defs directories:
   - **Scenario 1** — Python extract → SnowPipe load → dbt build → mart (triggered by load-completion evidence, not a timer)
   - **Scenario 2** — External replication API refresh → dbt build (triggered by verified completion)
@@ -113,7 +113,7 @@ attributes:
 | `shell_command_asset` extract | `shell_command_asset` unchanged | The Python script writes to real S3 instead of MinIO — env var swap only, no component change (G7). |
 | `shell_command_asset` (dbt) | `dbt_cloud_resource` + `dbt_cloud_trigger_job` (+ optional `dbt_cloud_job_sensor`) | Registers the dbt Cloud connection, then wraps `DbtCloudResource.run_job_and_poll` in a Dagster op-job any sensor / schedule / upstream event can target by name. Emits per-model `AssetMaterialization` events for keys in `emit_materializations_for`, wiring the run into the asset graph. `dbt_cloud_job_sensor` is the reverse direction (observes dbt Cloud, triggers Dagster downstream) — optional. **`dbt_run_job` runs dbt Core via subprocess, NOT dbt Cloud — don't confuse them.** |
 | Mock replication CLI | **`hvr_hub_workspace`** with `action: refresh` + `polling_sensor: true` | ONE YAML block replaces the shim — POST /refresh + polls completion + emits per-table observation events with integrate-lag metadata. |
-| — (add) | `dagster-powerbi` `PowerBIWorkspace` | S1.8 stretch — official Dagster integration, not a community component. Emits report/dataset/semantic-model assets hanging off Snowflake mart. |
+| — (add) | `dagster-powerbi` `PowerBIWorkspace` | S1.8 stretch — official Dagster integration, not a registry component. Emits report/dataset/semantic-model assets hanging off Snowflake mart. |
 | — (add) | `dbt_state_reuse_patch` | Scenario 3 Mechanism A — treats dbt Cloud `no-op` responses as materialization events instead of failures. |
 
 **Piecemeal alternative** — when the workspace defaults don't fit, use `snowflake_snowpipe_load_sensor` / `snowflake_snowpipe` / `external_snowflake_table` individually. See the [real-mode swap guide](retail_data_orchestration_real_mode.md#1a-alt-piecemeal--snowflake_snowpipe_load_sensor-for-finer-control) for the piecemeal path.
@@ -263,7 +263,7 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 | OBS-06 | dbt source freshness against threshold | `dbt_project` `sources.yml` freshness declarations become Dagster `FreshnessPolicy` on the source assets. |
 | OBS-07 | Lineage source → mart → reports | Asset graph, cross-code-location deps for the Power BI report step. `dagster-powerbi` `PowerBIWorkspace` (real mode) emits report / dataset assets that depend on the mart. |
 | OBS-08 | Lineage onward to consuming reports | Same as OBS-07 — Power BI datasets are first-class assets with lineage back to mart tables. |
-| OBS-09 | Run history + duration trend per pipeline | Dagster+ UI runs view + `dagster_runs_to_statsd_sensor` / `dagster_runs_to_otlp_metrics_sensor` (both are community components; wire whichever your metrics backend accepts). |
+| OBS-09 | Run history + duration trend per pipeline | Dagster+ UI runs view + `dagster_runs_to_statsd_sensor` / `dagster_runs_to_otlp_metrics_sensor` (both are registry components; wire whichever your metrics backend accepts). |
 | OBS-10 | "Is today's data here yet" without an engineering license | Dagster+ Viewer license (unlimited free viewers). Attach a `FreshnessPolicy` to `mart_daily_summary`; stakeholders read the green/red badge in the catalog. |
 
 ### Trigger (TRG-series)
@@ -299,8 +299,8 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 | INT-03 | SnowPipe status → orchestrator | `snowflake_snowpipe_load_sensor`. |
 | INT-05 | External replication API (HVR / Fivetran / …) | `hvr_hub_workspace` (real mode). `fivetran_workspace` also available for the Fivetran side of the migration. |
 | INT-06 | Stream-processing observability | Out of scope per source doc, but noted: `dagster_runs_to_otlp_sensor` + Kafka `*_to_database_asset` family. |
-| INT-07 | Kafka topic health | `kafka_health_sensor` community component observes lag / topic-arrival. |
-| INT-08 | Power BI refresh | `dagster-powerbi` official integration (`uv add dagster-powerbi`). Not a community component — official Dagster package. |
+| INT-07 | Kafka topic health | `kafka_health_sensor` registry component observes lag / topic-arrival. |
+| INT-08 | Power BI refresh | `dagster-powerbi` official integration (`uv add dagster-powerbi`). Not a registry component — official Dagster package. |
 | INT-09 | Existing Python job unchanged | `shell_command_asset` — the Python script is invoked as-is via subprocess. |
 
 ### Error handling (ERR-series)
@@ -309,21 +309,21 @@ Rows follow the Ground Rules + Scenario numbering in the source POC document.
 |---|---|---|
 | ERR-01 | Legible errors from third-party tools | `snowflake_snowpipe_load_sensor` bubbles `COPY_HISTORY.ERROR_MESSAGE` per-file into asset metadata. `hvr_hub_workspace` bubbles HVR error codes as run failures. |
 | ERR-03 | Classify infrastructure vs data failure | Dagster distinguishes `RetryRequested` (infra, consumes a retry from the `RetryPolicy` budget) from `Failure` (data, non-retryable). Classification lives in the compute function itself: a `try/except` around the API call maps transient errors (`ConnectionError`, `TimeoutError`, HTTP 5xx) to `raise dagster.RetryRequested(...)` and lets data errors (schema violation, `Failure`) surface as terminal. `RetryPolicy` itself only sets `max_retries` / `delay` / `backoff` / `jitter` — no built-in error-type filter. |
-| ERR-05 | Snowflake dynamic-table fallback-to-full-refresh visibility | `snowflake_table_observation_sensor` component (community) reads `INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY` — surfaces incremental-vs-full as sensor metadata. Direct answer to the A3 pain point. |
+| ERR-05 | Snowflake dynamic-table fallback-to-full-refresh visibility | `snowflake_table_observation_sensor` component (registry) reads `INFORMATION_SCHEMA.DYNAMIC_TABLE_REFRESH_HISTORY` — surfaces incremental-vs-full as sensor metadata. Direct answer to the A3 pain point. |
 
 ### Alerting (ALT-series)
 
 | # | Requirement | Satisfied by |
 |---|---|---|
-| ALT-02 | Missing-run alert (not just failing) | `dagster_missing_run_sensor` community component fires on "expected but did not run." |
-| ALT-04 | Stakeholder subscription | Dagster+ Insights subscriptions + `slack_alert` / `teams_alert` community components. |
+| ALT-02 | Missing-run alert (not just failing) | `dagster_missing_run_sensor` registry component fires on "expected but did not run." |
+| ALT-04 | Stakeholder subscription | Dagster+ Insights subscriptions + `slack_alert` / `teams_alert` registry components. |
 | ALT-05 | Free viewer access | Dagster+ Viewer license (unlimited free); OBS-10 shared cell above. |
 
 ### Development (DEV-series)
 
 | # | Requirement | Satisfied by |
 |---|---|---|
-| DEV-01 | Templated pipeline creation | This is what community components ARE — every `defs.yaml` is a template with typed placeholders. The `dagster-community-components-cli` `add` command copies a component's files into your project so the template becomes yours. |
+| DEV-01 | Templated pipeline creation | This is what registry components ARE — every `defs.yaml` is a template with typed placeholders. The `dagster-community-components-cli` `add` command copies a component's files into your project so the template becomes yours. |
 | DEV-02 | Standardization | `dg check defs` validates every `defs.yaml` against its component schema at CI time — the standardization is enforced, not aspirational. |
 | DEV-03 | Git-based promotion + PR-level preview | Dagster+ Branch Deployments — one branch = one preview deployment. |
 | DEV-04 | Rollback | Git revert + Dagster+ deployment rollback UI. |

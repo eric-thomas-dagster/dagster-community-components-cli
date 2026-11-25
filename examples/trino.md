@@ -1,14 +1,14 @@
 # Trino end-to-end — local docker, no auth
 > ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
-Connect to Trino via the community-component family using a single-container Trino coordinator with built-in `memory` catalog.
+Connect to Trino via the component family using a single-container Trino coordinator with built-in `memory` catalog.
 
 ## Components used
 
 | Component | Source | Role |
 |---|---|---|
-| `trino_resource` | community | Shared connection — host / port / catalog / schema / auth |
-| `trino_io_manager` | community | Asset IO manager — DataFrame ↔ Trino via partition-aware DELETE+INSERT (**only works against catalogs that support DELETE**) |
+| `trino_resource` | registry | Shared connection — host / port / catalog / schema / auth |
+| `trino_io_manager` | registry | Asset IO manager — DataFrame ↔ Trino via partition-aware DELETE+INSERT (**only works against catalogs that support DELETE**) |
 
 ## Run
 

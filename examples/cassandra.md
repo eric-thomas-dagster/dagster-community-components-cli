@@ -1,15 +1,15 @@
 # Cassandra end-to-end — local docker, no auth
 > ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
-Read from Cassandra via the community-component family against a single-node Cassandra container.
+Read from Cassandra via the component family against a single-node Cassandra container.
 
 ## Components used
 
 | Component | Source | Role |
 |---|---|---|
-| `cassandra_resource` | community | Shared connection — `hosts` / `port` / `keyspace` / auth env vars |
-| `cassandra_reader` | community | Run a CQL query → DataFrame asset |
-| `cassandra_writer` | community | DataFrame → Cassandra table (**not validated** — see Known issues) |
+| `cassandra_resource` | registry | Shared connection — `hosts` / `port` / `keyspace` / auth env vars |
+| `cassandra_reader` | registry | Run a CQL query → DataFrame asset |
+| `cassandra_writer` | registry | DataFrame → Cassandra table (**not validated** — see Known issues) |
 
 ## Run
 

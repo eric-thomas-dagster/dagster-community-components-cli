@@ -73,7 +73,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components"
+echo ">>> Installing 3 registry components"
 $CLI add dagster_plus_audit_log_ingestion --auto-install
 $CLI add ocsf_normalizer                  --auto-install
 $CLI add audit_logs_to_sentinel           --auto-install

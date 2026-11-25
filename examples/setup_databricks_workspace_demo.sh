@@ -987,7 +987,7 @@ fi
 # ── 7. Orchestration mode ──────────────────────────────────────────────
 # How should the assets be triggered? Three options:
 #   1. Cron schedule          — runs all selected jobs on a cron (using the
-#                               community cron_schedule component)
+#                               cron_schedule component)
 #   2. Auto-trigger on upstream completion — each downstream job materializes
 #                               as soon as its upstream completes (Dagster
 #                               AutomationCondition.eager). For job chains
@@ -1212,7 +1212,7 @@ index_for_name() {
 
 # Cron schedule for ROOT jobs only — downstream cascades via automation_condition.
 if [ "$ORCH_MODE" = "cron" ]; then
-  echo ">>> Installing the community cron_schedule component ..."
+  echo ">>> Installing the cron_schedule component ..."
   # `--auto-install` copies the component source into src/<pkg>/components/cron_schedule/
   # AND writes a default sample defs.yaml at src/<pkg>/defs/cron_schedule/defs.yaml.
   # We then overwrite that defs.yaml with the one targeting THIS project's root jobs.

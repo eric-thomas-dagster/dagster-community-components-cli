@@ -32,7 +32,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 7 community components into src/$PKG/components/ + defs/"
+echo ">>> Installing 7 registry components into src/$PKG/components/ + defs/"
 $CLI add synthetic_data_generator --auto-install
 $CLI add datetime_parser          --auto-install
 $CLI add rfm_segmentation         --auto-install

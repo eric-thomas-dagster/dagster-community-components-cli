@@ -52,7 +52,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 4 community components"
+echo ">>> Installing 4 registry components"
 $CLI add gcs_monitor           --auto-install
 $CLI add file_ingestion        --auto-install
 $CLI add summarize             --auto-install

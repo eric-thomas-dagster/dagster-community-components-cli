@@ -1,7 +1,7 @@
 # Composition primitives — small jobs without external auth
 > ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
-Dagster pipelines aren't only assets. Most production projects need a handful of small **jobs**: nightly database VACUUM, uptime heartbeats, calls to internal services, scheduled callbacks into Python utilities. The community registry has a family of `*_job` components that wrap each pattern declaratively — pure YAML, no Python.
+Dagster pipelines aren't only assets. Most production projects need a handful of small **jobs**: nightly database VACUUM, uptime heartbeats, calls to internal services, scheduled callbacks into Python utilities. The registry has a family of `*_job` components that wrap each pattern declaratively — pure YAML, no Python.
 
 This walkthrough sets up five of them in one project, with **no SaaS / cloud / auth** required: SQLite covers SQL, `httpbin.org` covers HTTP, an in-package Python function covers the callable case.
 
@@ -9,11 +9,11 @@ This walkthrough sets up five of them in one project, with **no SaaS / cloud / a
 
 | Component | Source | Role |
 |---|---|---|
-| `python_callable_job` | community | Wraps any `module.path:function` as an op job |
-| `http_webhook_job` | community | Fires one HTTP request as an op job |
-| `observability_heartbeat_job` | community | Multi-target heartbeat (HTTP / Slack / Teams / PagerDuty) |
-| `warehouse_maintenance_job` | community | N SQL statements sequentially against SQLAlchemy URL |
-| `sql_command_job` | community | One multi-statement SQL block against SQLAlchemy URL |
+| `python_callable_job` | registry | Wraps any `module.path:function` as an op job |
+| `http_webhook_job` | registry | Fires one HTTP request as an op job |
+| `observability_heartbeat_job` | registry | Multi-target heartbeat (HTTP / Slack / Teams / PagerDuty) |
+| `warehouse_maintenance_job` | registry | N SQL statements sequentially against SQLAlchemy URL |
+| `sql_command_job` | registry | One multi-statement SQL block against SQLAlchemy URL |
 
 All five inherit the same shape:
 

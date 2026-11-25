@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Wine ML Pipeline demo — py-minimal (3 assets + 1 community component +
+# Wine ML Pipeline demo — py-minimal (3 assets + 1 registry component +
 # custom Python for the rest).
 #
 # The most common middle-ground shape in real projects. Delegate the
-# boilerplate stages (ingest) to a community component; write custom
+# boilerplate stages (ingest) to a registry component; write custom
 # Python for the bespoke stages (model, CV) where component config would
 # add friction.
 #

@@ -29,8 +29,8 @@ Everything else is implementation detail. This variant makes that choice explici
 | [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) | 8 | Raw `@dg.asset` funcs, inline pandas/sklearn | Every stage is a first-class asset; simplest per-stage code |
 | [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) | 8 | Same 8 assets, but the model stage calls plain Python helpers | Same asset graph as raw; model helpers unit-testable in isolation |
 | [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) | 8 | `@op` + `@graph_multi_asset` for the model | Sub-steps deserve typed I/O, per-op retry policies, cross-asset reuse |
-| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | 9 | Community components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
-| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | 9 | Community components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
+| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | 9 | Registry components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
+| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | 9 | Registry components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
 
 **Same underlying computation in every variant.** The choice is about how many "things" you want Dagster to track as first-class assets.
 
@@ -241,8 +241,8 @@ In the UI: **3 nodes** (wine_raw, wine_model_outputs which shows two output bran
 - [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — 8 assets, everything at asset-grain (the "opposite end" of the design space from this variant).
 - [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) — 8 assets but the model stage uses plain-Python helpers (halfway house).
 - [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — 8 assets with `@op` + `@graph_multi_asset` for the model stage.
-- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python).
-- [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via community components (YAML).
+- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via registry components (Python).
+- [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via registry components (YAML).
 - [`wine_ml_pipeline_ops_minimal.md`](wine_ml_pipeline_ops_minimal.md) — same 3-asset shape but with `@op`+`@graph_multi_asset` for typed sub-step composition.
 - [`wine_ml_pipeline_py_minimal.md`](wine_ml_pipeline_py_minimal.md) — same 3-asset shape but with a `FileIngestionComponent` for the ingest stage.
 - [`wine_ml_pipeline_component.md`](wine_ml_pipeline_component.md) — same pipeline as ONE MLPipelineComponent (single YAML, standardized ML shape).

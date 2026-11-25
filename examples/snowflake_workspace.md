@@ -36,7 +36,7 @@ Idempotent. Takes 2–3 minutes. Re-runs with `--reset` if you want a clean slat
 
 ### Step 2 — Scaffold the Dagster project
 
-`bootstrap.sh` reads the `.env` written by `seed.sh`, creates a fresh project via `uvx create-dagster`, installs the community components, and writes `defs.yaml` files with cross-component dependencies wired in.
+`bootstrap.sh` reads the `.env` written by `seed.sh`, creates a fresh project via `uvx create-dagster`, installs the registry components, and writes `defs.yaml` files with cross-component dependencies wired in.
 
 ```bash
 curl -fsSL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community-components-cli/main/examples/bootstrap.sh -o bootstrap.sh
@@ -350,7 +350,7 @@ snowflake-demo/
 ├── .env.secrets                              # mode 600, gitignored, holds secrets
 ├── pyproject.toml                            # snowflake-connector-python pinned + extras
 └── src/snowflake_demo/
-    ├── components/                           # community component sources installed by bootstrap.sh
+    ├── components/                           # registry component sources installed by bootstrap.sh
     │   ├── snowflake_workspace/
     │   ├── synthetic_data_generator/
     │   ├── dataframe_to_snowflake/
@@ -411,7 +411,7 @@ aws iam delete-role --role-name <role>
 
 ## Layer in more Snowflake components
 
-The community registry ships a wide Snowflake surface. Compose them as needed:
+The registry ships a wide Snowflake surface. Compose them as needed:
 
 | Component | What it does |
 |---|---|

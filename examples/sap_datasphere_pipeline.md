@@ -36,10 +36,10 @@ Datasphere sits between operational SAP systems (S/4HANA, BW/4HANA) and downstre
 
 | Component | Source | Role |
 |---|---|---|
-| `oauth_token_resource` | community | XSUAA OAuth2 client_credentials grant |
-| `odata_ingestion` | community | OData v4 GET against Datasphere consumption endpoint → pandas DataFrame |
-| `odata_check` | community | Optional — health-check the analytic model |
-| `dataframe_to_*` | community | Downstream sinks |
+| `oauth_token_resource` | registry | XSUAA OAuth2 client_credentials grant |
+| `odata_ingestion` | registry | OData v4 GET against Datasphere consumption endpoint → pandas DataFrame |
+| `odata_check` | registry | Optional — health-check the analytic model |
+| `dataframe_to_*` | registry | Downstream sinks |
 
 ## Auth — XSUAA client_credentials
 

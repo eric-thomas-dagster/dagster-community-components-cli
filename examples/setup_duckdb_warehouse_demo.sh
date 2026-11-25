@@ -31,7 +31,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --refresh --from dagster-community-components-cli dagster-component --refresh"
 
-echo ">>> Installing 3 community components"
+echo ">>> Installing 3 registry components"
 $CLI add file_ingestion --auto-install
 $CLI add duckdb_io_manager  --auto-install
 $CLI add cron_schedule      --auto-install

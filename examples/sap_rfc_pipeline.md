@@ -82,8 +82,8 @@ RUN pip install pyrfc dagster dagster-community-components
 
 | Component | Source | Role |
 |---|---|---|
-| `sap_rfc_resource` | community | Holds connection params; opens pyrfc Connection per call |
-| `sap_rfc_ingestion` | community | Executes RFC_READ_TABLE or BAPI → DataFrame |
+| `sap_rfc_resource` | registry | Holds connection params; opens pyrfc Connection per call |
+| `sap_rfc_ingestion` | registry | Executes RFC_READ_TABLE or BAPI → DataFrame |
 
 ## defs.yaml — resource
 

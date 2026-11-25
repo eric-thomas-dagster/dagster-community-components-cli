@@ -68,7 +68,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components"
+echo ">>> Installing 3 registry components"
 $CLI add adls_monitor             --auto-install
 $CLI add adls_to_database_asset   --auto-install
 $CLI add asset_job                --auto-install

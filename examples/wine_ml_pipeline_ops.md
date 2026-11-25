@@ -13,8 +13,8 @@
 | [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) | Raw `@dg.asset` funcs, inline pandas/sklearn | Simplest; everything at asset grain |
 | [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) | Same shape but the multi-asset body calls plain Python helper funcs | Same Dagster surface; helpers are unit-testable without touching Dagster |
 | [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) *(this one)* | `@op` + `@graph_multi_asset` — sub-steps have first-class typed I/O | Sub-steps deserve Dagster tracking (typed I/O, per-op retries, cross-asset reuse) |
-| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | Community components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
-| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | Community components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
+| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | Registry components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
+| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | Registry components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
 
 ## Why mix ops with assets?
 
@@ -261,7 +261,7 @@ Ops also compose across graph assets — you can reuse the same `train_model` op
 
 - [`wine_ml_pipeline_minimal.md`](wine_ml_pipeline_minimal.md) — same pipeline with only 3 assets (scaling/splitting/CSV writes are plain Python; most Prefect-like).
 - [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) — same pipeline, all `@asset` funcs, no ops.
-- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python instantiation).
+- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via registry components (Python instantiation).
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML `defs.yaml` files.
 - [Dagster docs — passing data between assets](https://docs.dagster.io/guides/build/assets/passing-data-between-assets) — deeper on the IO manager story that connects asset outputs to downstream inputs.
 - [`wine_ml_pipeline_ops_minimal.md`](wine_ml_pipeline_ops_minimal.md) — same `@op`+`@graph_multi_asset` style but with only 3 assets (compressed).

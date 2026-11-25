@@ -1,5 +1,5 @@
 ---
-title: "One YAML, every Snowflake object: how the community `snowflake_workspace` component turns Snowflake into a Dagster catalog"
+title: "One YAML, every Snowflake object: how the `snowflake_workspace` component turns Snowflake into a Dagster catalog"
 date: 2026-09-09
 author: Eric Thomas
 description: A tour of the `snowflake_workspace` component — 11+ Snowflake object types as Dagster assets, every Snowflake-native event as a trigger, plus the sibling components (`snowpark_pipeline` with in-warehouse ML + Model Registry, `snowflake_cortex_agent` / `_asset` / `_search`) that turn "Snowflake is external" into a full Snowflake-native pipeline toolkit.
@@ -552,8 +552,7 @@ The Snowflake components live in the
 where I ship the long tail of what teams actually run against Snowflake
 day-to-day: streams and stages and OpenFlow flows and the Cortex trio
 and multi-step Snowpark ML pipelines with Model Registry. Dagster keeps
-shipping the core platform + the flagship integrations; the community
-registry is where the long tail lives.
+shipping the core platform + the flagship integrations; the registry is where the long tail lives.
 
 If a component here almost does what you need but not quite, **the
 right move is often to fork it into your project**. The whole thing

@@ -2,7 +2,7 @@
 # InfluxDB 2.x end-to-end demo — single-container Docker.
 #
 # WHAT THIS DEMONSTRATES
-#   The 2 InfluxDB community components shipped in v0.10.1:
+#   The 2 InfluxDB registry components shipped in v0.10.1:
 #
 #     1. `influxdb_resource`     connection resource (official influxdb-client SDK)
 #     2. `dataframe_to_influxdb` bulk-write a Pandas DataFrame as line-protocol

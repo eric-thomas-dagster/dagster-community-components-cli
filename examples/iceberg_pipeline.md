@@ -49,11 +49,11 @@ This walkthrough uses `iceberg_ingestion` (read) and `dataframe_to_iceberg_table
 
 | Component | Source | Role |
 |---|---|---|
-| `iceberg_catalog_resource` | community | Register catalog config once (REST / Glue / Hive / Hadoop / SQL) |
-| `iceberg_ingestion` | community | Read existing table → DataFrame |
-| `dataframe_to_iceberg_table` | community | Append / overwrite an existing table |
-| `external_iceberg_table` | community | Declare externally-owned table for lineage |
-| `summarize`, `dataframe_join`, `sort`, `dataframe_to_*` | community | Standard transforms + alternate sinks |
+| `iceberg_catalog_resource` | registry | Register catalog config once (REST / Glue / Hive / Hadoop / SQL) |
+| `iceberg_ingestion` | registry | Read existing table → DataFrame |
+| `dataframe_to_iceberg_table` | registry | Append / overwrite an existing table |
+| `external_iceberg_table` | registry | Declare externally-owned table for lineage |
+| `summarize`, `dataframe_join`, `sort`, `dataframe_to_*` | registry | Standard transforms + alternate sinks |
 
 ## Catalog config matrix
 

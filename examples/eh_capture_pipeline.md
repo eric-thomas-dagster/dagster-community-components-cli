@@ -66,10 +66,10 @@ EH Capture is the right boundary. It owns the queue → storage step. Dagster ow
 
 | Component | Source | Role |
 |---|---|---|
-| `adls_monitor` | community | Polls the ADLS Capture container, registers each new Parquet file as a dynamic partition, yields `RunRequest(partition_key=...)`. |
-| `file_ingestion` | community | Partitioned asset reads each Parquet file as a pandas DataFrame. |
-| `summarize` | community | Per-partition group-by + aggregations. |
-| `dataframe_to_parquet` | community | Writes the curated Parquet back to ADLS (one file per partition). |
+| `adls_monitor` | registry | Polls the ADLS Capture container, registers each new Parquet file as a dynamic partition, yields `RunRequest(partition_key=...)`. |
+| `file_ingestion` | registry | Partitioned asset reads each Parquet file as a pandas DataFrame. |
+| `summarize` | registry | Per-partition group-by + aggregations. |
+| `dataframe_to_parquet` | registry | Writes the curated Parquet back to ADLS (one file per partition). |
 
 Plus the Azure-native pieces you provide: the Event Hub namespace, the Capture configuration, the Storage Account + containers, and (optionally) a Synapse Serverless SQL pool.
 

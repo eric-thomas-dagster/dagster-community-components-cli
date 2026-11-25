@@ -32,7 +32,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --refresh --from dagster-community-components-cli dagster-component --refresh"
 
-echo ">>> Installing 2 community components"
+echo ">>> Installing 2 registry components"
 $CLI add sql_monitor          --auto-install
 $CLI add python_callable_job  --auto-install
 

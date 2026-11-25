@@ -7,8 +7,8 @@ Materialize an analysis `.ipynb` as a first-class Dagster asset. `papermill` run
 
 | Component | Source | Role |
 |---|---|---|
-| `synthetic_data_generator` | community | Seeds an upstream pandas DataFrame |
-| `jupyter_notebook_asset` | community | Runs a `.ipynb` via papermill, saves the executed notebook |
+| `synthetic_data_generator` | registry | Seeds an upstream pandas DataFrame |
+| `jupyter_notebook_asset` | registry | Runs a `.ipynb` via papermill, saves the executed notebook |
 
 ## Architecture
 

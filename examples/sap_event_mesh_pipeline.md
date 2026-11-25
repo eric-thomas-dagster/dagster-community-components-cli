@@ -33,9 +33,9 @@ Real-time-ish: subscribe to **SAP Event Mesh** queues and trigger Dagster runs p
 
 | Component | Source | Role |
 |---|---|---|
-| `oauth_token_resource` | community | XSUAA OAuth2 client_credentials for Event Mesh access |
-| `sap_event_mesh_sensor` | community | Polls Event Mesh queue, registers dynamic partitions per message |
-| `file_ingestion` / custom asset | community | Processes the event payload per partition (downstream) |
+| `oauth_token_resource` | registry | XSUAA OAuth2 client_credentials for Event Mesh access |
+| `sap_event_mesh_sensor` | registry | Polls Event Mesh queue, registers dynamic partitions per message |
+| `file_ingestion` / custom asset | registry | Processes the event payload per partition (downstream) |
 
 ## Why REST polling instead of AMQP-WebSocket?
 

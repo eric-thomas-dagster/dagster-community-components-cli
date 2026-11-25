@@ -24,9 +24,9 @@ OCC speaks JSON REST, not pure OData — pagination is via `currentPage` / `page
 
 | Component | Source | Role |
 |---|---|---|
-| `oauth_token_resource` | community | OAuth2 client_credentials grant for OCC |
-| `oauth_rest_ingestion` | community | Paginated REST GET (page-based) → pandas DataFrame |
-| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+| `oauth_token_resource` | registry | OAuth2 client_credentials grant for OCC |
+| `oauth_rest_ingestion` | registry | Paginated REST GET (page-based) → pandas DataFrame |
+| `summarize`, `dataframe_to_*` | registry | Downstream transforms + sinks |
 
 ## Run
 

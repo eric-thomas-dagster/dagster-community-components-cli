@@ -2,7 +2,7 @@
 # Apache Iceberg pipeline blueprint — runnable end-to-end demo.
 # Local SQLite-backed pyiceberg catalog ('sql' catalog type) → no JVM,
 # no S3, no auth. Demonstrates the iceberg_pipeline.md blueprint:
-# read an existing Iceberg table → transform via a community transform
+# read an existing Iceberg table → transform via a transform component
 # → write the result back to another Iceberg table → read it back.
 #
 # Mirrors the blueprint's "another engine owns the source table" pattern

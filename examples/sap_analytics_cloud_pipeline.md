@@ -22,10 +22,10 @@ Pull **SAP Analytics Cloud** stories, models, and comments into Dagster. SAC is 
 
 | Component | Source | Role |
 |---|---|---|
-| `oauth_token_resource` | community | OAuth2 client_credentials for SAC REST API |
-| `oauth_rest_ingestion` | community | GET SAC stories / models / comments metadata |
-| `rest_api_ingestion` | community | POST data INTO SAC models (the more valuable direction) |
-| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+| `oauth_token_resource` | registry | OAuth2 client_credentials for SAC REST API |
+| `oauth_rest_ingestion` | registry | GET SAC stories / models / comments metadata |
+| `rest_api_ingestion` | registry | POST data INTO SAC models (the more valuable direction) |
+| `summarize`, `dataframe_to_*` | registry | Downstream transforms + sinks |
 
 ## When to integrate SAC with Dagster
 

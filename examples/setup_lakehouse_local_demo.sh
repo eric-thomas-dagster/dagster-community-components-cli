@@ -3,7 +3,7 @@
 # the local filesystem. No cloud, no auth, no JVM, no catalog server.
 #
 # WHAT THIS DEMONSTRATES
-#   The Iceberg + Delta family of community components — *_ingestion (read),
+#   The Iceberg + Delta family of registry components — *_ingestion (read),
 #   dataframe_to_*_table (write), iceberg_catalog_resource (shared catalog),
 #   external_*_table (declare-only) — all wired into a single end-to-end demo.
 #   Generates synthetic orders + events, writes them to local Iceberg and

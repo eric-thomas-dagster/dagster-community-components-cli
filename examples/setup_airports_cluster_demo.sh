@@ -27,7 +27,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components into src/$PKG/components/ + defs/"
+echo ">>> Installing 3 registry components into src/$PKG/components/ + defs/"
 $CLI add file_ingestion    --auto-install
 $CLI add spatial_cluster       --auto-install
 $CLI add dataframe_to_csv      --auto-install

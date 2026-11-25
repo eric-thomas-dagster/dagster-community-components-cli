@@ -2,14 +2,14 @@
 title: "Orchestration for the HVR long tail"
 date: 2026-08-19
 author: Eric Thomas
-description: "Standalone HVR Hub is still in production at large enterprises that adopted it pre-Fivetran-acquisition. The new hvr_hub_workspace community component brings that install base into the Dagster catalog with one YAML — full Fivetran-shape, no migration required."
+description: "Standalone HVR Hub is still in production at large enterprises that adopted it pre-Fivetran-acquisition. The new hvr_hub_workspace registry component brings that install base into the Dagster catalog with one YAML — full Fivetran-shape, no migration required."
 ---
 
 # Orchestration for the HVR long tail
 
 *Standalone HVR Hub is still in production at large enterprises that
 adopted it pre-Fivetran-acquisition. The new `hvr_hub_workspace`
-community component brings that install base into the Dagster catalog
+registry component brings that install base into the Dagster catalog
 with one YAML — full Fivetran-shape, no migration required.*
 
 **Eric Thomas · August 2026**
@@ -33,7 +33,7 @@ before the acquisition, still replicating from Oracle / Db2 / SAP HANA
 to your warehouse on the same infrastructure it's been running on for
 five to ten years.
 
-This post is about a new community component — `hvr_hub_workspace` —
+This post is about a new registry component — `hvr_hub_workspace` —
 that gets those tables into the Dagster catalog with one YAML file, no
 migration required.
 
@@ -220,7 +220,7 @@ Not that you should migrate off HVR to Fivetran. Not that HVR is
 legacy. Not anything about Fivetran's roadmap.
 
 The point is: **standalone HVR Hub is a real product in production at
-serious scale, and the community components project meets it where it
+serious scale, and the registry components project meets it where it
 lives.** The team maintaining HVR at your organization shouldn't have
 to choose between "keep the replication that works" and "get their
 tables into the modern data platform." Both, please. Now.
@@ -253,7 +253,7 @@ Your replicated tables are now Dagster assets.
 ## The broader shape
 
 `hvr_hub_workspace` isn't a one-off. It's the same pattern the
-community components project uses across the **long tail of enterprise
+registry components project uses across the **long tail of enterprise
 integrations that don't get official packages**:
 
 - **`qlik_replicate_workspace`** — same shape for Qlik Replicate (also
@@ -265,7 +265,7 @@ integrations that don't get official packages**:
 - **`sap_s4hana` / `oracle_ebs` / `dynamics_365`** patterns
 
 Whenever a real product runs at real customers and there's no official
-Dagster integration, the community components project is where the gap
+Dagster integration, the registry components project is where the gap
 closes. Browse the [registry](https://dagster-component-ui.vercel.app/)
 or run `dagster-component search <keyword>` to find what's there.
 
@@ -273,9 +273,9 @@ or run `dagster-component search <keyword>` to find what's there.
 
 ---
 
-*Community components are unofficial. They live at
+*Registry components are unofficial. They live at
 `dagster-community-components` on PyPI, are maintained outside the
 Dagster team, and don't carry the same support guarantees as Dagster's
 official integrations. That's the tradeoff: official integrations get
-enterprise-tier support; community components get the long tail of
+enterprise-tier support; registry components get the long tail of
 integrations that don't have an official maintainer yet. Both matter.*

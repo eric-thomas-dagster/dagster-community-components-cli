@@ -7,11 +7,11 @@ A full DataFrame transform chain that lives entirely on the local filesystem. Ev
 
 | Component | Source | Role |
 |---|---|---|
-| `synthetic_data_generator` | community | Seeds 1000 synthetic orders |
-| `local_parquet_io_manager` | community | Project IO manager — persists every asset as Parquet |
-| `filter` | community | Row-level filter via pandas `df.query` |
-| `summarize` | community | Group-by + aggregate (SQL `GROUP BY` equivalent) |
-| `dataframe_to_avro` | community | Sink — writes a DataFrame to a local `.avro` file |
+| `synthetic_data_generator` | registry | Seeds 1000 synthetic orders |
+| `local_parquet_io_manager` | registry | Project IO manager — persists every asset as Parquet |
+| `filter` | registry | Row-level filter via pandas `df.query` |
+| `summarize` | registry | Group-by + aggregate (SQL `GROUP BY` equivalent) |
+| `dataframe_to_avro` | registry | Sink — writes a DataFrame to a local `.avro` file |
 
 ## Architecture
 

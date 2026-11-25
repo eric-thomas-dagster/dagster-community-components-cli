@@ -2,7 +2,7 @@
 # Qlik Replicate end-to-end demo — mock Enterprise Manager in Docker, live-validated.
 #
 # WHAT THIS DEMONSTRATES
-#   The four Qlik Replicate components shipped in the community registry:
+#   The four Qlik Replicate components shipped in the registry:
 #
 #     1. qlik_replicate_resource                 — shared EM auth
 #     2. qlik_replicate_task_trigger_job         — start / stop / reload a task

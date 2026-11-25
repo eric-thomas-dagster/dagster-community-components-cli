@@ -26,7 +26,7 @@ The typical F500 stack carries **three schedulers** with distinct pain, each sol
 - **A per-domain DAG scheduler** (representative: DolphinScheduler / Airflow-per-team / vendor-specific tools) — YAML-defined DAGs scoped to a single domain project, but **no cross-project asset linking**. Each domain becomes an island; cross-domain deps are duct-taped with time-based waits.
 - **A Python-flow tool for MLOps / data-science** (representative: vanilla Airflow / bespoke Python) — often deployed per-team and hitting scale ceilings. Per-team instances can't interconnect, so ML features derived from central marts either duplicate the upstream logic or fall out of sync.
 
-Dagster+ replaces all three with one asset graph, one control plane, one alert path. What replaces what depends on the specific tools in play — the community components cover the common shapes:
+Dagster+ replaces all three with one asset graph, one control plane, one alert path. What replaces what depends on the specific tools in play — the registry components cover the common shapes:
 
 | Pattern in the legacy stack | Dagster shape |
 |---|---|
@@ -75,7 +75,7 @@ Set via code-location-scoped Teams: `sales-team` has `Editor` on `sales/`, `View
 
 Once the platform is stood up, adding a new domain shouldn't require a platform-team ticket. The pattern:
 
-1. **PR #1 — new repo** — domain team runs `uvx create-dagster@latest project <domain-name>` locally, adds their `defs.yaml` files with community components, opens a PR against a template repo.
+1. **PR #1 — new repo** — domain team runs `uvx create-dagster@latest project <domain-name>` locally, adds their `defs.yaml` files with registry components, opens a PR against a template repo.
 2. **PR #2 — register the code-location** — platform team merges a one-line entry into the Dagster+ workspace config pointing at the new repo. Cross-loc AssetSpec references become live once both PRs are merged.
 
 Total platform-team touch: ~5 minutes reviewing PR #2. The domain team is autonomous for their own asset graph.
@@ -104,7 +104,7 @@ Failed checks → Dagster+ alert → PagerDuty. No separate GreatExpectations de
 
 **Dagster+ Insights for BigQuery** — see item 4. Per-asset slot-hours, bytes-processed, and dollar cost, auto-instrumented on every BQ materialization. No manual metrics wiring, no separate BQ billing export pipeline. See [Dagster+ Insights for BigQuery](https://docs.dagster.io/guides/observe/insights/google-bigquery).
 
-Also covered: Snowflake credits, Databricks DBUs, Fivetran MAR. All native to Dagster+, not community components.
+Also covered: Snowflake credits, Databricks DBUs, Fivetran MAR. All native to Dagster+, not registry components.
 
 ## BI layer — how each tool appears in the asset graph
 
@@ -113,9 +113,9 @@ Different BI tools plug in through different components. For the typical F500 st
 | BI tool | Component to use | Why this one |
 |---|---|---|
 | **Looker** | Official [`dagster-looker`](https://docs.dagster.io/integrations/libraries/looker/dagster-looker) — a **workspace** (single component, one config, auto-emits an asset per LookML view / explore / dashboard) | Officially maintained by Dagster Labs; keeps LookML lineage in sync with the actual Looker instance. |
-| **Power BI Fabric** | Community `fabric_workspace` (7-component set — lakehouse, warehouse, pipeline, notebook, semantic model, report, dashboard) | Workspace-shape: one config picks up everything in the tenant / capacity. |
+| **Power BI Fabric** | `fabric_workspace` (7-component set — lakehouse, warehouse, pipeline, notebook, semantic model, report, dashboard) | Workspace-shape: one config picks up everything in the tenant / capacity. |
 | **Power BI on-prem** | Official [`dagster-powerbi`](https://docs.dagster.io/integrations/libraries/powerbi) | Officially maintained; connects to a Power BI Report Server. |
-| **IBM Cognos** | Community `cognos_workspace` + 4 sibling components (`cognos_resource`, `cognos_report_run_job`, `cognos_report_status_sensor`, `cognos_report_data_ingestion`) | No official Cognos integration; the community set handles both refresh-orchestration and data-ingest-from-Cognos-reports. |
+| **IBM Cognos** | `cognos_workspace` + 4 sibling components (`cognos_resource`, `cognos_report_run_job`, `cognos_report_status_sensor`, `cognos_report_data_ingestion`) | No official Cognos integration; this set handles both refresh-orchestration and data-ingest-from-Cognos-reports. |
 | **Tableau** | Official [`dagster-tableau`](https://docs.dagster.io/integrations/libraries/tableau) | Officially maintained; workbook / worksheet / dashboard assets. |
 
 The lineage chain the POC demos looks like this:
@@ -159,7 +159,7 @@ Every downstream BI asset becomes a first-class node in the Dagster graph. When 
 
 Task-scheduling (Airflow / Autosys / legacy job schedulers) treats each step as an anonymous unit of work. SDA treats each step as a named data asset with typed dependencies + observability + independent materialization.
 
-**Demo**: the `data_vault_hub_link_satellite` community component takes ONE config and emits 2–3 SDAs (hub + sat + optional link) with:
+**Demo**: the `data_vault_hub_link_satellite` registry component takes ONE config and emits 2–3 SDAs (hub + sat + optional link) with:
 - `hash_key`, `hash_diff`, `load_date`, `record_source` system columns auto-populated
 - Each layer independently materializable (rebuild only the sat if descriptive attrs changed)
 - Full lineage from raw source → hub → sat → downstream marts, visible in the UI
@@ -188,7 +188,7 @@ Failed checks block downstream materializations (`asset_check_severity: ERROR`) 
 
 **BigQuery cost management:**
 
-**Use Dagster+ Insights for BigQuery**, not a community component. Dagster+ auto-instruments every asset materialization that runs a BQ query — you get per-asset cost + slot-hours + bytes-processed in the Insights tab. See [Dagster+ Insights for BigQuery docs](https://docs.dagster.io/guides/observe/insights/google-bigquery).
+**Use Dagster+ Insights for BigQuery**, not a registry component. Dagster+ auto-instruments every asset materialization that runs a BQ query — you get per-asset cost + slot-hours + bytes-processed in the Insights tab. See [Dagster+ Insights for BigQuery docs](https://docs.dagster.io/guides/observe/insights/google-bigquery).
 
 ### 5. Orchestration: dbt on BigQuery (via GKE), cross-project deps
 
@@ -216,7 +216,7 @@ Dagster+ renders the cross-code-location edge in the asset graph, so the marketi
 
 **Use `pyspark_pipeline` + `k8s_job_asset` (or `google_cloud_run_jobs` for GKE).**
 
-Community components:
+Registry components:
 - `pyspark_pipeline` — declare a Spark ETL as an asset with input/output typing
 - `pyspark_resource` — Spark session config (master URL, packages, jars)
 - `k8s_job_asset` — run any container-packaged job as a Dagster asset on your k8s cluster
@@ -249,7 +249,7 @@ No observation component for the retiring orchestrator is needed since you're le
 
 ### 8. Orchestration: Generic k8s / GKE / Cloud Run
 
-**Community components already cover all three:**
+**Registry components already cover all three:**
 
 - `k8s_job_asset` — on-prem Kubernetes + GKE (same YAML, different context)
 - `cloud_run_job_trigger_asset` / `google_cloud_run_jobs` — GCP Cloud Run
@@ -279,8 +279,8 @@ Runs on the Dagster agent host (bare-metal in your case). Environment variables 
 
 - **`dg` CLI** — `dg check defs` validates every YAML against its schema, `dg dev` launches the local UI, `dg launch --assets '*'` runs headless for CI. `uvx create-dagster@latest project <name>` scaffolds a full project in one command.
 - **Dagster UI** (OSS + Dagster+) — asset graph browser, materialization history, lineage view, backfill launcher, sensor / schedule dashboard. Point-and-click **materialize / retry / partition selection**, not point-and-click component *authoring*.
-- **`dagster-community-components-cli`** — `dagster-component search foo` finds components in the community registry, `dagster-component add foo` installs one into a project (drops files under `src/<pkg>/defs/`, generates the `defs.yaml`, and installs pip deps). 900+ components indexed.
-- **YAML defs + schema validation** — every community component ships a `schema.json` alongside `defs.yaml`. `dg check` validates the YAML against the schema before runtime. Enum + required-field violations surface at check time, not at materialization.
+- **`dagster-community-components-cli`** — `dagster-component search foo` finds components in the registry, `dagster-component add foo` installs one into a project (drops files under `src/<pkg>/defs/`, generates the `defs.yaml`, and installs pip deps). 900+ components indexed.
+- **YAML defs + schema validation** — every registry component ships a `schema.json` alongside `defs.yaml`. `dg check` validates the YAML against the schema before runtime. Enum + required-field violations surface at check time, not at materialization.
 - **Dagster+ Insights** — per-asset cost, latency, bytes-processed for BigQuery / Snowflake / Databricks runs, all auto-instrumented. No manual metrics wiring.
 - **StateBackedComponent refresh flow** — for workspaces (Salesforce / HubSpot / Cognos / etc.), `refresh_if_dev: true` re-enumerates the vendor catalog on next `dg dev` restart; `dg utils refresh-defs-state` refreshes on demand. Discovery is cached so cold starts are fast even with hundreds of assets.
 
@@ -299,7 +299,7 @@ Runs on the Dagster agent host (bare-metal in your case). Environment variables 
      └────────────┴────────────┴─────────────┴─────────────┴─────────────┘
                                         │
                                         ▼
-─── INGESTION (community components) ────────────────────────────────────────
+─── INGESTION (registry components) ────────────────────────────────────────
 
      s3_to_database_asset    trino_io_manager    mssql_ingestion
      minio_resource          cognos_workspace    bigquery_query_asset
@@ -476,7 +476,7 @@ Local mode uses synthetic seed data; the shape + graph + checks + lineage are id
 
 ## Component coverage summary
 
-Everything the F500 stack requires ships as either a community component (from this session) or an official Dagster integration:
+Everything the F500 stack requires ships as either a registry component (from this session) or an official Dagster integration:
 
 | Category | Coverage |
 |---|---|

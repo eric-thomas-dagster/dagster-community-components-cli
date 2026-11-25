@@ -1378,7 +1378,7 @@ def prospect_recon_brief(context: dg.AssetExecutionContext, items: dict, candida
         "(template unavailable -- use this structure: discovery half with Demo thesis / "
         "Meeting / Use case / Current stack / Pain / Data domains / Public signals / "
         "Conflicts and gaps, then a '# Build directives' half with Asset graph / Fidelity "
-        "/ Demo shape / Native integrations to use / Community components to search for / "
+        "/ Demo shape / Native integrations to use / Registry components to search for / "
         "Asset checks / Demo mode / Three buckets / Demo name / Money shot / Capability "
         "talk track / Explicitly out of scope)"
     )

@@ -7,7 +7,7 @@
 # WHAT THIS DEMONSTRATES
 #   Dagster runs lots of "small jobs" alongside assets — nightly VACUUMs,
 #   uptime heartbeats, calling internal services, kicking off cleanup
-#   tasks. The community registry has a family of `*_job` components
+#   tasks. The registry has a family of `*_job` components
 #   that wrap each pattern declaratively (YAML, no Python). This demo
 #   installs five of them in one project and proves they all load +
 #   execute.
@@ -98,7 +98,7 @@ attributes:
 write_yaml "observability_heartbeat_job" "type: $PKG.components.observability_heartbeat_job.component.ObservabilityHeartbeatJobComponent
 attributes:
   job_name: platform_heartbeat
-  message: 'community-components demo heartbeat'
+  message: 'registry demo heartbeat'
   http_heartbeat_url: https://httpbin.org/get"
 
 write_yaml "warehouse_maintenance_job" "type: $PKG.components.warehouse_maintenance_job.component.WarehouseMaintenanceJobComponent

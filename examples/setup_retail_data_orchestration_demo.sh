@@ -65,8 +65,8 @@ mkdir -p data/incoming data/landing output extract_scripts \
          "src/$PKG/defs/scenario3_state_awareness" \
          dbt_project/models/scenario1 dbt_project/models/scenario2 dbt_project/models/scenario3
 
-# ── 2/7  install community components as files ──────────────────────────
-echo ">>> 2/7  Installing community components as files (not library imports)"
+# ── 2/7  install registry components as files ──────────────────────────
+echo ">>> 2/7  Installing registry components as files (not library imports)"
 
 CLI="uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git dagster-component"
 
@@ -496,7 +496,7 @@ attributes:
 
 ### 1e. Power BI refresh (S1.8 stretch)
 
-Use the OFFICIAL `dagster-powerbi` integration (not a community component).
+Use the OFFICIAL `dagster-powerbi` integration (not a registry component).
 Add to your `definitions.py` root:
 
 ```python

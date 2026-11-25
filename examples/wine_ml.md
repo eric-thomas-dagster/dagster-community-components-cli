@@ -26,8 +26,8 @@ Every non-component variant is a point on a **2D grid**:
   - **Inline** — logic lives directly in `@dg.asset` / `@dg.multi_asset` bodies.
   - **Plain Python helpers** — undecorated helper functions called from asset bodies.
   - **`@dg.op` + `@dg.graph_multi_asset`** — sub-steps get typed I/O, per-op retry policies, cross-asset reuse.
-  - **Community components (Python)** — instantiate tested components; delegates pandas / sklearn glue.
-  - **Community components (YAML)** — declarative `defs.yaml` files.
+  - **Registry components (Python)** — instantiate tested components; delegates pandas / sklearn glue.
+  - **Registry components (YAML)** — declarative `defs.yaml` files.
 
 ## The grid — 8 shapes across 9 walkthroughs
 
@@ -36,8 +36,8 @@ Every non-component variant is a point on a **2D grid**:
 | **⭐ One MLPipelineComponent** *(standardized ML)* | [`_component`](wine_ml_pipeline_component.md) — 3 assets from ONE YAML component + `steps:` list | *(intentionally one shape — standardization IS the point)* |
 | **Inline / helpers** *(plain Python)* | [`_minimal`](wine_ml_pipeline_minimal.md) — the "one-flow" shape | [`_raw`](wine_ml_pipeline_raw.md) + [`_helpers`](wine_ml_pipeline_helpers.md) |
 | **`@op` + `@graph_multi_asset`** | [`_ops_minimal`](wine_ml_pipeline_ops_minimal.md) — typed sub-steps + op reuse across assets | [`_ops`](wine_ml_pipeline_ops.md) — typed sub-steps on model stage |
-| **6 Community components (Python)** | [`_py_minimal`](wine_ml_pipeline_py_minimal.md) — 1 component (ingest) + custom Python | [`_py`](wine_ml_pipeline_py.md) — every stage is a component |
-| **6 Community components (YAML)** | *(hybrid — unusual)* | [`_yaml`](wine_ml_pipeline.md) — every stage in `defs.yaml` |
+| **6 Registry components (Python)** | [`_py_minimal`](wine_ml_pipeline_py_minimal.md) — 1 component (ingest) + custom Python | [`_py`](wine_ml_pipeline_py.md) — every stage is a component |
+| **6 Registry components (YAML)** | *(hybrid — unusual)* | [`_yaml`](wine_ml_pipeline.md) — every stage in `defs.yaml` |
 
 **Every cell produces byte-identical CSVs.** The choice is about maintenance shape, not outputs.
 
@@ -103,13 +103,13 @@ Every non-component variant is a point on a **2D grid**:
 
 **Trade-off**: most Dagster surface of the 8-asset variants.
 
-### `_py` — 9 assets, community components (Python)
+### `_py` — 9 assets, registry components (Python)
 
 **When to pick**: team wants to skip per-project pandas / sklearn plumbing; prefers Python over YAML; every stage benefits from being tracked as its own asset.
 
 **Trade-off**: 6 different component classes to know; less standardized than `_component` (every team wires them differently).
 
-### `_yaml` — 9 assets, community components (YAML)
+### `_yaml` — 9 assets, registry components (YAML)
 
 **When to pick**: team is declarative-first (dbt / Terraform mindset); non-Python teammates own the config; per-stage assets are useful.
 

@@ -3,7 +3,7 @@
 #
 # Scaffold a Dagster project that orchestrates the demo environment created
 # by seed.sh. Reads .env, creates a fresh project via `uvx create-dagster`,
-# installs the community components needed for the demo, and writes
+# installs the registry components needed for the demo, and writes
 # defs.yaml files with dependencies wired so the lineage forms ONE
 # connected end-to-end DAG.
 #
@@ -454,11 +454,11 @@ PYEOF
 sed -i.bak "s/PKG_IMPORT/$PKG/" "src/$PKG/definitions.py" && rm -f "src/$PKG/definitions.py.bak"
 echo "  ✓ definitions.py wired up"
 
-# ─── Install community components ─────────────────────────────────────────
+# ─── Install registry components ─────────────────────────────────────────
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
 echo
-echo ">>> Installing community components ..."
+echo ">>> Installing registry components ..."
 
 # Always install workspace + Python ingest stack
 COMPONENTS_TO_INSTALL="snowflake_workspace synthetic_data_generator dataframe_to_snowflake freshness_check"
@@ -499,7 +499,7 @@ for c in $COMPONENTS_TO_INSTALL; do
   rm -rf "src/$PKG/defs/$c"
 done
 
-# dbt component is from dagster_dbt (built-in), not the community CLI.
+# dbt component is from dagster_dbt (built-in), not from this registry.
 # It's pinned + installed alongside the other runtime deps below so the
 # version solver sees the dbt constraints (which transitively pin
 # snowflake-connector-python<4) at the same time as the core deps.
@@ -1602,7 +1602,7 @@ if uv run dg check defs 2>&1 | tee /tmp/bootstrap_check.log | tail -20; then
     echo "  ⚠ dg check defs reported issues — inspect the output above."
     echo "    Common fixes:"
     echo "      • Field name mismatch between this script's YAML and the installed component schema"
-    echo "        (the community components evolve; verify with: uv run dg list components)"
+    echo "        (the registry components evolve; verify with: uv run dg list components)"
     echo "      • Auth field convention (direct vs _env_var) — check the component's docs"
     echo "    The project still scaffolded — edit src/$PKG/defs/<name>/defs.yaml as needed."
   else

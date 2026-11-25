@@ -3,7 +3,7 @@
 #
 # PlannedCatalogAgentComponent takes a natural-language task field, invokes
 # an LLM planner at PREPARE time, picks a component from the ~960-component
-# community registry, and caches the plan to Dagster's state store.
+# registry, and caches the plan to Dagster's state store.
 #
 # From then on, every load reads the cached plan and emits REAL Dagster
 # assets — zero LLM cost per run. Edit the `task:` string + run

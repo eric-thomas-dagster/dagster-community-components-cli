@@ -124,7 +124,7 @@ If query results come back as garbled text on string columns, the issue is usual
 
 ## What's NOT covered
 
-- **CL / RPG programs as Dagster assets** — IBM i ships CL (Control Language) + RPG II/III/IV programs. There's no community component that wraps `CALL QSYS/QCMDEXC(...)` today; you'd need to write a custom op against the `ibm_db.callproc` interface, or call them through SQL stored-procedure aliases (`CREATE PROCEDURE ... LANGUAGE CL EXTERNAL NAME ...`).
+- **CL / RPG programs as Dagster assets** — IBM i ships CL (Control Language) + RPG II/III/IV programs. There's no registry component that wraps `CALL QSYS/QCMDEXC(...)` today; you'd need to write a custom op against the `ibm_db.callproc` interface, or call them through SQL stored-procedure aliases (`CREATE PROCEDURE ... LANGUAGE CL EXTERNAL NAME ...`).
 - **Journaling / commitment control hooks** — IBM i has a journaling system that's distinct from Db2 LUW's transaction log. Out of scope for current components.
 - **IBM i task scheduler integration** — i has `WRKJOBSCDE` for scheduled jobs; Dagster doesn't ship a sensor that reads i job-scheduler state. If a customer asks, we'd model it the same way as `precisely_job_sensor`: poll a status table, emit on terminal SUCCESS.
 

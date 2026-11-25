@@ -50,7 +50,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 21 community components"
+echo ">>> Installing 21 registry components"
 # Ingest (1 base + 2 extra target dirs for customers, products)
 $CLI add synthetic_data_generator --auto-install
 mkdir -p "src/$PKG/defs/customers_gen"  # only needs defs.yaml; component code is in components/synthetic_data_generator/

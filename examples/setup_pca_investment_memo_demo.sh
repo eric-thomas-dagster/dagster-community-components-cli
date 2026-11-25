@@ -2,7 +2,7 @@
 # pca_investment_memo — the "3-analyst debate" pattern, PCA-authored.
 #
 # PlannedCatalogAgentComponent takes an NL task, LLM planner picks
-# agentic_pipeline from the community registry, emits a debate pipeline
+# agentic_pipeline from the registry, emits a debate pipeline
 # with 3 proposers + arbitrator. Cached to state; every subsequent run
 # is pure Dagster with no LLM planner cost.
 #

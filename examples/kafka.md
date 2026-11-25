@@ -1,18 +1,18 @@
 # Kafka end-to-end — local broker, no SaaS, no auth
 > ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
-Full validation of the Kafka community-component family against a single-container Kafka broker running locally in KRaft mode (no Zookeeper, no managed cluster, no auth). The same components work unchanged against MSK / Confluent Cloud / Strimzi / self-hosted clusters — just swap `bootstrap_servers` + `security_protocol`.
+Full validation of the Kafka component family against a single-container Kafka broker running locally in KRaft mode (no Zookeeper, no managed cluster, no auth). The same components work unchanged against MSK / Confluent Cloud / Strimzi / self-hosted clusters — just swap `bootstrap_servers` + `security_protocol`.
 
 ## Components used
 
 | Component | Source | Role |
 |---|---|---|
-| `external_kafka_asset` | community | Declare-only `AssetSpec` for the topic (lineage / catalog) |
-| `kafka_resource` | community | Shared Kafka connection config — referenced by sensors and observations |
-| `kafka_to_database_asset` | community | Consume N messages → write to a database table via SQLAlchemy |
-| `kafka_monitor` | community | Sensor: poll Kafka, trigger a job when new messages arrive |
-| `kafka_observation_sensor` | community | Emit `AssetObservation` events on the external Kafka asset |
-| `python_callable_job` | community | Target job kicked off by `kafka_monitor` (placeholder) |
+| `external_kafka_asset` | registry | Declare-only `AssetSpec` for the topic (lineage / catalog) |
+| `kafka_resource` | registry | Shared Kafka connection config — referenced by sensors and observations |
+| `kafka_to_database_asset` | registry | Consume N messages → write to a database table via SQLAlchemy |
+| `kafka_monitor` | registry | Sensor: poll Kafka, trigger a job when new messages arrive |
+| `kafka_observation_sensor` | registry | Emit `AssetObservation` events on the external Kafka asset |
+| `python_callable_job` | registry | Target job kicked off by `kafka_monitor` (placeholder) |
 
 ## Architecture
 

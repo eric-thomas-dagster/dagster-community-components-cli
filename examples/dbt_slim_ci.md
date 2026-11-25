@@ -42,7 +42,7 @@ Examples below use option 2 (GH artifacts) because it's the easiest cross-cuttin
 
 **Why it's the safest pick:** zero CI plumbing, zero prior-manifest storage, zero cross-team coordination on artifact paths / adapter versions / dbt versions between the CI runner and the code-location image. The failure mode is just "the code location didn't reload" — which you'd see immediately in Dagster+ deploy logs anyway. Everything downstream is Dagster's automation-tick loop doing what it always does.
 
-**Straight Dagster** — no community component required. Two equivalent shapes, pick whichever fits the project's style:
+**Straight Dagster** — no registry component required. Two equivalent shapes, pick whichever fits the project's style:
 
 ### Shape 1 — translator override (~10 lines, ships as a Python file)
 

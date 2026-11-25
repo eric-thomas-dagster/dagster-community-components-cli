@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # setup_mlflow_pipeline_demo.sh
 #
-# End-to-end MLflow pipeline demo — showcases all 7 community MLflow components
+# End-to-end MLflow pipeline demo — showcases all 7 MLflow components
 # working together in one Dagster project, backed by a local file-store MLflow
 # tracking backend (no server, no docker).
 #

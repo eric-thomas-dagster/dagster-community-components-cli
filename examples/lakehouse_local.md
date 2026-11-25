@@ -1,20 +1,20 @@
 # Lakehouse local roundtrip — Iceberg + Delta without cloud
 > ✅ **Dagster+ Serverless / Hybrid:** deploys as-is via [`deploy_to_dagster_plus.sh`](deploy_to_dagster_plus.sh).
 
-A complete `dataframe → table → dataframe` cycle for both **Apache Iceberg** and **Delta Lake**, running entirely against the local filesystem. No S3, no Glue, no Snowflake catalog, no Spark/JVM, no auth. Validates that the Iceberg and Delta family of community components work end-to-end before you point them at a real lakehouse.
+A complete `dataframe → table → dataframe` cycle for both **Apache Iceberg** and **Delta Lake**, running entirely against the local filesystem. No S3, no Glue, no Snowflake catalog, no Spark/JVM, no auth. Validates that the Iceberg and Delta family of registry components work end-to-end before you point them at a real lakehouse.
 
 ## Components used
 
 | Component | Source | Role |
 |---|---|---|
-| `synthetic_data_generator` | community | Seeds pandas DataFrames (`orders`, `events`) — upstream of the writers |
-| `iceberg_catalog_resource` | community | Shared catalog config (here: SQLite-backed local catalog) |
-| `dataframe_to_iceberg_table` | community | Writes a DataFrame to an Iceberg table |
-| `iceberg_ingestion` | community | Reads an Iceberg table back into a DataFrame |
-| `dataframe_to_delta_table` | community | Writes a DataFrame to a Delta table |
-| `delta_ingestion` | community | Reads a Delta table back into a DataFrame |
-| `external_iceberg_table` | community | Declare-only AssetSpec for the same Iceberg table |
-| `external_delta_table` | community | Declare-only AssetSpec for the same Delta path |
+| `synthetic_data_generator` | registry | Seeds pandas DataFrames (`orders`, `events`) — upstream of the writers |
+| `iceberg_catalog_resource` | registry | Shared catalog config (here: SQLite-backed local catalog) |
+| `dataframe_to_iceberg_table` | registry | Writes a DataFrame to an Iceberg table |
+| `iceberg_ingestion` | registry | Reads an Iceberg table back into a DataFrame |
+| `dataframe_to_delta_table` | registry | Writes a DataFrame to a Delta table |
+| `delta_ingestion` | registry | Reads a Delta table back into a DataFrame |
+| `external_iceberg_table` | registry | Declare-only AssetSpec for the same Iceberg table |
+| `external_delta_table` | registry | Declare-only AssetSpec for the same Delta path |
 
 ## Architecture
 

@@ -27,7 +27,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component --refresh"
 
-echo ">>> Installing 4 community components"
+echo ">>> Installing 4 registry components"
 $CLI add rest_api_ingestion  --auto-install
 $CLI add xml_parser        --auto-install
 $CLI add dataframe_to_csv  --auto-install

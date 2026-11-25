@@ -64,10 +64,10 @@ The Cloud Storage Subscription is the right boundary between the streaming layer
 
 | Component | Source | Role |
 |---|---|---|
-| `gcs_monitor` | community | Polls the GCS bucket, registers each new Parquet file as a dynamic partition, yields `RunRequest(partition_key=...)`. |
-| `file_ingestion` | community | Partitioned asset reads each Parquet as a pandas DataFrame. |
-| `summarize` | community | Per-partition group-by + aggregations. |
-| `dataframe_to_parquet` | community | Writes the curated Parquet back to GCS. |
+| `gcs_monitor` | registry | Polls the GCS bucket, registers each new Parquet file as a dynamic partition, yields `RunRequest(partition_key=...)`. |
+| `file_ingestion` | registry | Partitioned asset reads each Parquet as a pandas DataFrame. |
+| `summarize` | registry | Per-partition group-by + aggregations. |
+| `dataframe_to_parquet` | registry | Writes the curated Parquet back to GCS. |
 
 Plus the GCP-native pieces you provide: the Pub/Sub topic, the Cloud Storage Subscription, the GCS bucket, and (optionally) a BigQuery dataset.
 

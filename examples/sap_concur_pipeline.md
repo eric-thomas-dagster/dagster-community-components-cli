@@ -38,9 +38,9 @@ Pull expense reports, travel itineraries, and invoice approvals from SAP Concur 
 
 | Component | Source | Role |
 |---|---|---|
-| `oauth_token_resource` | community | OAuth2 refresh-token grant + rotation writeback for headless ops |
-| `oauth_rest_ingestion` | community | Paginated REST GET (Concur `NextPage` style) → pandas DataFrame |
-| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+| `oauth_token_resource` | registry | OAuth2 refresh-token grant + rotation writeback for headless ops |
+| `oauth_rest_ingestion` | registry | Paginated REST GET (Concur `NextPage` style) → pandas DataFrame |
+| `summarize`, `dataframe_to_*` | registry | Downstream transforms + sinks |
 
 ## Headless OAuth refresh-token rotation (the actual hard part)
 

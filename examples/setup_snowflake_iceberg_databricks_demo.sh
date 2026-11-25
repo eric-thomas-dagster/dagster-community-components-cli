@@ -16,7 +16,7 @@
 # location; no intermediate REST-catalog server required. A catalog-
 # coordinated alternative is documented in the walkthrough.
 #
-# Dagster wires both sides via the existing community components:
+# Dagster wires both sides via the existing registry components:
 #   - snowflake_workspace          → imports Snowflake dynamic tables as assets
 #   - external_snowflake_table     → declares the Iceberg landing for explicit lineage
 #   - databricks_workspace         → imports the Lakeflow (DLT) pipeline + its outputs as assets
@@ -43,7 +43,7 @@ PKG="$(ls src/ | head -1)"
 
 echo ">>> Adding runtime + dev deps"
 # Official Dagster integrations — these provide DatabricksWorkspaceComponent
-# and SnowflakeResource. The community snowflake_workspace below sits on top
+# and SnowflakeResource. The snowflake_workspace below sits on top
 # of dagster-snowflake.
 uv add -q dagster-databricks dagster-snowflake snowflake-connector-python databricks-sdk
 uv add -q 'yarl<1.24'  # workaround: yarl 1.24.0 only ships cp310 wheels — breaks installs on 3.11/3.12/3.13/3.14
@@ -51,7 +51,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 2 community components"
+echo ">>> Installing 2 registry components"
 echo "    (Snowflake side: no official DynamicTable/Task importer;"
 echo "     Databricks side: OFFICIAL component from dagster-databricks)"
 $CLI add snowflake_workspace --auto-install
@@ -68,9 +68,9 @@ mkdir -p "src/$PKG/defs/snowflake_silver" \
 echo ">>> Writing defs.yaml"
 
 # --- 1. Snowflake side: import Dynamic Tables + Tasks from the SILVER schema.
-# Uses the COMMUNITY snowflake_workspace component — there is no official
+# Uses the snowflake_workspace component — there is no official
 # dagster-snowflake component for Dynamic Tables / Tasks / Streams. The
-# community component sits on top of dagster-snowflake's SnowflakeResource.
+# registry component sits on top of dagster-snowflake's SnowflakeResource.
 # In Snowflake, the Dynamic Iceberg Table `CUSTOMER_METRICS` is defined as:
 #
 #   CREATE OR REPLACE DYNAMIC ICEBERG TABLE CUSTOMER_METRICS
@@ -318,7 +318,7 @@ Architectural overview, gotchas, and customer-customization walkthrough:
 What this script DID do:
   - Scaffolded a Dagster project
   - Added dagster-databricks, dagster-snowflake, snowflake-connector-python, databricks-sdk
-  - Installed snowflake_workspace + cron_schedule community components
+  - Installed snowflake_workspace + cron_schedule registry components
   - Wrote three defs.yaml files, each annotated with '# CUSTOMIZE:' markers
   - Wrote $PROJECT_DIR/CUSTOMIZE.md (the punch list)
 

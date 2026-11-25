@@ -1,16 +1,16 @@
 # RabbitMQ end-to-end — local docker, no auth
 > ❌ **Dagster+ Serverless / Hybrid:** this walkthrough is local-only — the setup script stands up local infrastructure in Docker for zero-cost reproducibility, and Serverless/Hybrid won't run those containers for you. The components themselves have no such requirement: point them at any already-running, reachable instance instead — self-hosted on your own infrastructure, or a managed/cloud service — deployed separately from Dagster+, and the same YAML deploys as-is.
 
-Exercise the RabbitMQ community-component family against a local AMQP broker. Same components target self-hosted clusters / Amazon MQ / CloudAMQP unchanged — only the `amqp_url_env_var` content changes.
+Exercise the RabbitMQ component family against a local AMQP broker. Same components target self-hosted clusters / Amazon MQ / CloudAMQP unchanged — only the `amqp_url_env_var` content changes.
 
 ## Components used
 
 | Component | Source | Role |
 |---|---|---|
-| `rabbitmq_to_database_asset` | community | Consume N messages → write rows to a database table via SQLAlchemy |
-| `rabbitmq_monitor` | community | Sensor: poll a queue, trigger a job on new messages |
-| `rabbitmq_observation_sensor` | community | Emit `AssetObservation` on a queue (depth / consumer count / health) |
-| `python_callable_job` | community | Target job for the streams monitor |
+| `rabbitmq_to_database_asset` | registry | Consume N messages → write rows to a database table via SQLAlchemy |
+| `rabbitmq_monitor` | registry | Sensor: poll a queue, trigger a job on new messages |
+| `rabbitmq_observation_sensor` | registry | Emit `AssetObservation` on a queue (depth / consumer count / health) |
+| `python_callable_job` | registry | Target job for the streams monitor |
 
 ## Run
 

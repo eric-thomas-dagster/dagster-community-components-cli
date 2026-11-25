@@ -87,7 +87,7 @@ The demo's `sql_transform` runs the cast in place via `ALTER TABLE … ALTER COL
 1. **Starts TimescaleDB single-container in Docker** (`timescale/timescaledb:latest-pg16`) on host port 15432.
 2. **Polls until CREATE EXTENSION succeeds** — the TimescaleDB image auto-tunes on first launch, which restarts Postgres once after `pg_isready` first reports green. We wait for the extension-create to actually succeed instead of trusting `pg_isready` alone.
 3. **Scaffolds the Dagster project** with `uvx create-dagster project`.
-4. **Installs the 4 components** via the community CLI (`--refresh` on first call to bust the manifest cache).
+4. **Installs the 4 components** via the CLI (`--refresh` on first call to bust the manifest cache).
 5. **Overwrites the CLI-installed example defs.yamls** with demo-specific configuration.
 
 ## Teardown

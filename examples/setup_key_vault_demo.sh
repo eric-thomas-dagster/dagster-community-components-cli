@@ -74,7 +74,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 2 community components + a custom op for KV-driven URL"
+echo ">>> Installing 2 registry components + a custom op for KV-driven URL"
 $CLI add synthetic_data_generator   --auto-install
 $CLI add key_vault_resource         --auto-install
 

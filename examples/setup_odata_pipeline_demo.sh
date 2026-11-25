@@ -26,7 +26,7 @@ uvx create-dagster project "$PROJECT_DIR" --uv-sync >/dev/null
 cd "$PROJECT_DIR"
 PKG=$(python -c 'import os; print(os.path.basename(os.getcwd()).replace("-","_"))')
 
-echo ">>> 2/4  Installing community components: odata_ingestion + summarize + dataframe_to_parquet"
+echo ">>> 2/4  Installing registry components: odata_ingestion + summarize + dataframe_to_parquet"
 uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \
   dagster-component add odata_ingestion >/dev/null
 uvx --from git+https://github.com/eric-thomas-dagster/dagster-community-components-cli.git \

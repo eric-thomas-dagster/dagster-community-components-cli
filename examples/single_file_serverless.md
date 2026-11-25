@@ -174,7 +174,7 @@ That's it. No work pools to configure, no blocks to register, no runtime contain
 
 With the wrapper, the user-facing footprint matches Prefect exactly: one `.py`, one deploy command, auto-detected deps, one local-dev command. **The scaffold is generated + hidden.** For existing dg projects it stays out of the way — just runs `dg plus deploy` in place.
 
-For a detailed comparison including where each tool wins (Prefect: `flow.serve()`, first-party CLI ubiquity; Dagster+: assets model, Insights metrics, partitions, lineage, ~960 community components), see [`prefect_vs_dagster_single_file.md`](./prefect_vs_dagster_single_file.md).
+For a detailed comparison including where each tool wins (Prefect: `flow.serve()`, first-party CLI ubiquity; Dagster+: assets model, Insights metrics, partitions, lineage, ~960 registry components), see [`prefect_vs_dagster_single_file.md`](./prefect_vs_dagster_single_file.md).
 
 ## Additional examples
 

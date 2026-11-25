@@ -32,9 +32,9 @@ Pull HRIS data (employees, departments, jobs, performance reviews, comp plans) f
 
 | Component | Source | Role |
 |---|---|---|
-| `odata_ingestion` | community | OData v2 GET against SuccessFactors entity sets → pandas DataFrame |
-| `odata_check` | community | Optional — smoke-test SF tenant + entity-set reachability |
-| `summarize`, `dataframe_join`, `dataframe_to_*` | community | Downstream transforms + sinks |
+| `odata_ingestion` | registry | OData v2 GET against SuccessFactors entity sets → pandas DataFrame |
+| `odata_check` | registry | Optional — smoke-test SF tenant + entity-set reachability |
+| `summarize`, `dataframe_join`, `dataframe_to_*` | registry | Downstream transforms + sinks |
 
 ## Auth: User@CompanyID
 

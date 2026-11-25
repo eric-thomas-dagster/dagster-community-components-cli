@@ -36,7 +36,7 @@ Both produce the same 5 assets:
          │           → 2 rewrites → synthesize final..."         │
          │                                                       │
          │    planner LLM (gpt-4o-mini) picks agentic_pipeline   │
-         │    from ~960-component community registry, writes     │
+         │    from ~960-component registry, writes     │
          │    the full config to Dagster's state store           │
          │                                                       │
          │    every subsequent load → REAL Dagster assets from   │

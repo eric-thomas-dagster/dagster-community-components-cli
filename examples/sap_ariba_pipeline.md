@@ -36,9 +36,9 @@ Pull purchase requisitions, suppliers, contracts, and sourcing events from SAP A
 
 | Component | Source | Role |
 |---|---|---|
-| `oauth_token_resource` | community | OAuth2 client_credentials grant — pure M2M, no rotation |
-| `oauth_rest_ingestion` | community | Paginated REST GET (cursor-based) → pandas DataFrame |
-| `summarize`, `dataframe_to_*` | community | Downstream transforms + sinks |
+| `oauth_token_resource` | registry | OAuth2 client_credentials grant — pure M2M, no rotation |
+| `oauth_rest_ingestion` | registry | Paginated REST GET (cursor-based) → pandas DataFrame |
+| `summarize`, `dataframe_to_*` | registry | Downstream transforms + sinks |
 
 ## Headless OAuth — client_credentials (the easy case)
 

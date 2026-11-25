@@ -9,7 +9,7 @@ description: "Apache Airflow's common.ai provider landed a dedicated LLMBatchOpe
 
 **Eric Thomas · October 2026**
 
-*This is an independent community project, not an official Dagster Labs comparison — my own components, my own read of Airflow's PR, my own opinions below.*
+*This is an independent project, not an official Dagster Labs comparison — my own components, my own read of Airflow's PR, my own opinions below.*
 
 ---
 

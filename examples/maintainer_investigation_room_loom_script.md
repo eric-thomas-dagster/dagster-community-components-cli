@@ -48,7 +48,7 @@ Recommended for the 8-minute version; skip for the 6-minute cut.
 > command does three things:
 >
 > 1. Writes `CLAUDE.md` / `.cursorrules` / Copilot instructions so the
->    coding agent knows about 963 community components.
+>    coding agent knows about 963 registry components.
 > 2. Injects the Python entry point into `pyproject.toml` so the
 >    Dagster UI's Components tab lists this project's components.
 > 3. Runs `uv pip install -e .` so the entry point actually registers.
@@ -317,7 +317,7 @@ export DAGSTER_HOME=$(pwd)/.dagster_home && mkdir -p "$DAGSTER_HOME"
 ```
 
 **Do:** paste this prompt into Claude Code (verbatim — Claude Code
-composes the whole thing from CLAUDE.md's op catalog + community
+composes the whole thing from CLAUDE.md's op catalog + registry
 manifest):
 
 > *Build a comprehensive AI maintainer triage room for GitHub issues,
@@ -370,7 +370,7 @@ manifest):
 > the 2026-08 additions section of CLAUDE.md — every op documented,
 > every YAML shape, every flag. It composes the whole 9-step YAML +
 > the LangGraph target module in one pass. Not a demo of Claude Code
-> being smart — a demo of the community registry documenting itself
+> being smart — a demo of the registry documenting itself
 > well enough that Claude Code doesn't need to guess."
 
 **Do:** when Claude finishes, sync deps + launch via the config-driven
@@ -441,7 +441,7 @@ Adjust `Target length` at the top accordingly (7-8 min for 5 + 5b,
 > the YAML in git or the NL prompt in git, both are one flag away —
 > see the `pca_*` variants for the state-backed authoring path.
 >
-> Everything you saw is on the community registry site. Six
+> Everything you saw is on the registry site. Six
 > walkthroughs — three shapes × two authoring paths. Link in the
 > description."
 

@@ -44,7 +44,7 @@ EOF
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 9 community components"
+echo ">>> Installing 9 registry components"
 $CLI add file_ingestion        --auto-install
 $CLI add parametric_data_generator --auto-install
 $CLI add create_points             --auto-install

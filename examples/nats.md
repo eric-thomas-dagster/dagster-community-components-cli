@@ -7,10 +7,10 @@ Exercise the NATS family against a local `nats-server -js` (JetStream enabled). 
 
 | Component | Source | Role |
 |---|---|---|
-| `nats_to_database_asset` | community | Pull from JetStream consumer → write rows to a database table |
-| `nats_monitor` | community | Sensor: poll JetStream, trigger a job on new messages |
-| `nats_observation_sensor` | community | Emit `AssetObservation` on a stream (message count / freshness) |
-| `python_callable_job` | community | Target job for nats_monitor |
+| `nats_to_database_asset` | registry | Pull from JetStream consumer → write rows to a database table |
+| `nats_monitor` | registry | Sensor: poll JetStream, trigger a job on new messages |
+| `nats_observation_sensor` | registry | Emit `AssetObservation` on a stream (message count / freshness) |
+| `python_callable_job` | registry | Target job for nats_monitor |
 
 ## Run
 

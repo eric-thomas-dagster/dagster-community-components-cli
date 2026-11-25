@@ -3,7 +3,7 @@
 
 > **Replication vs. migration:** this walkthrough covers the **recurring** data-sync pattern — runs on a schedule, picks up incrementally, keeps the warehouse in sync with the operational DB. For the **one-time** warehouse-migration story (PL/SQL procedures, scheduled jobs, views, triggers — everything that's *not* a table), see [warehouse_migration.md](warehouse_migration.md), which uses `database_schema_inventory` alongside this same `database_replication` component.
 
-Replicate tables from a legacy operational database into a modern warehouse using the dedicated `database_replication` community component (Sling under the hood — no Sling YAML to write, no Python in memory, no Dagster framework knobs to twist).
+Replicate tables from a legacy operational database into a modern warehouse using the dedicated `database_replication` registry component (Sling under the hood — no Sling YAML to write, no Python in memory, no Dagster framework knobs to twist).
 
 Same component + same YAML retargets across:
 
@@ -16,7 +16,7 @@ Only `source_type` / `target_type` and the connection URLs change.
 
 | Component | Source | Role |
 |---|---|---|
-| `database_replication` | community (new) | Streaming SQL→SQL replication via Sling. 3 instances in this demo (full refresh, incremental, filtered subset). |
+| `database_replication` | registry (new) | Streaming SQL→SQL replication via Sling. 3 instances in this demo (full refresh, incremental, filtered subset). |
 
 That's it — one component, three YAML files. Sling is bundled in `dagster-sling` so no separate install.
 

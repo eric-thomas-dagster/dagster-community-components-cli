@@ -4,7 +4,7 @@
 
 > 🧭 **Not sure which variant to pick?** See [`wine_ml.md`](wine_ml.md) — the shape-selector index for all six wine variants with pros / cons and a decision tree.
 
-**Same pipeline as [`wine_ml_pipeline.md`](wine_ml_pipeline.md) and [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md), zero community components** — every step is a raw `@dg.asset`-decorated function with inline pandas/scikit-learn code. This is the most familiar shape for teams coming from Prefect (`@flow` + `@task`) or Airflow's TaskFlow API.
+**Same pipeline as [`wine_ml_pipeline.md`](wine_ml_pipeline.md) and [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md), zero registry components** — every step is a raw `@dg.asset`-decorated function with inline pandas/scikit-learn code. This is the most familiar shape for teams coming from Prefect (`@flow` + `@task`) or Airflow's TaskFlow API.
 
 ## The five variants — pick your shape
 
@@ -15,8 +15,8 @@ Same ML pipeline, five shapes:
 | [`wine_ml_pipeline_raw.md`](wine_ml_pipeline_raw.md) *(this one)* | Raw `@dg.asset` funcs, inline pandas/sklearn | Simplest; everything at asset grain — most Prefect-familiar |
 | [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) | Same shape but the multi-asset body calls plain Python helper funcs | Same Dagster surface; helpers are unit-testable without touching Dagster |
 | [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) | `@op` + `@graph_multi_asset` — sub-steps have first-class typed I/O | Sub-steps deserve Dagster tracking (typed I/O, per-op retries, cross-asset reuse) |
-| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | Community components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
-| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | Community components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
+| [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) | Registry components, Python instantiation | Delegate pandas/sklearn boilerplate to tested components |
+| [`wine_ml_pipeline.md`](wine_ml_pipeline.md) | Registry components, YAML `defs.yaml` | Declarative — analysts / SREs edit config, not code |
 
 **All five run the same graph and produce byte-identical CSVs.** The choice is purely about the shape your team prefers to maintain.
 
@@ -58,7 +58,7 @@ Write to `src/<pkg>/defs/pipeline.py`:
 """Wine ML pipeline — pure Dagster, no components.
 
 Every asset is a raw @dg.asset function with inline pandas/scikit-learn.
-Compare to wine_ml_pipeline_py.md (same pipeline via community components).
+Compare to wine_ml_pipeline_py.md (same pipeline via registry components).
 """
 from io import StringIO
 
@@ -236,7 +236,7 @@ Compare the same 6 pipeline steps across the three variants:
 | CSV sinks × 3 | 3 × 4-line @dg.asset | 3 × 5-line `DataframeToCsvComponent(...)` | 3 × 6-line defs.yaml |
 | **Total** | ~180 lines | ~90 lines | ~140 lines YAML |
 
-The **content** is identical — same fit params, same output columns, same file paths. The community components pre-package the pandas/sklearn glue so you don't rewrite it per-project. Each component is also tested end-to-end, so you don't reimplement the "empty upstream" / "missing column" / "IO manager dict-concat" edge cases.
+The **content** is identical — same fit params, same output columns, same file paths. The registry components pre-package the pandas/sklearn glue so you don't rewrite it per-project. Each component is also tested end-to-end, so you don't reimplement the "empty upstream" / "missing column" / "IO manager dict-concat" edge cases.
 
 **Trade-off**: components hide the implementation. When you need to customize (e.g. add class_weight to the DecisionTreeClassifier), you either (a) pass a matching field if the component exposes it, or (b) drop back to raw `@dg.asset` for that specific step. Mixing shapes is fine.
 
@@ -245,7 +245,7 @@ The **content** is identical — same fit params, same output columns, same file
 - [`wine_ml_pipeline_minimal.md`](wine_ml_pipeline_minimal.md) — same pipeline with only 3 assets (scaling/splitting/CSV writes are plain Python; most Prefect-like).
 - [`wine_ml_pipeline_helpers.md`](wine_ml_pipeline_helpers.md) — same as raw, but the multi-asset body calls plain Python helper funcs.
 - [`wine_ml_pipeline_ops.md`](wine_ml_pipeline_ops.md) — same shape with @op + @graph_multi_asset — first-class typed I/O per step.
-- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via community components (Python instantiation).
+- [`wine_ml_pipeline_py.md`](wine_ml_pipeline_py.md) — same pipeline via registry components (Python instantiation).
 - [`wine_ml_pipeline.md`](wine_ml_pipeline.md) — same pipeline via YAML defs.yaml files.
 - [`titanic_complete.md`](titanic_complete.md) — larger ML pipeline (12 components) on the Titanic dataset.
 - [`airports_cluster.md`](airports_cluster.md) — unsupervised ML variant (k-means clustering).

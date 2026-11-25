@@ -7,7 +7,7 @@
 # ideal target — SQLAlchemy-compatible via duckdb-engine, no server,
 # no auth, hermetic (file on disk).
 #
-# Shape (3 community components, no custom Python):
+# Shape (3 registry components, no custom Python):
 #   external_sql_asset (declare-only Dagster asset for the SQL table)
 #     └── sql_observation_sensor (polls the table + emits materialization)
 #
@@ -31,7 +31,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --refresh --from dagster-community-components-cli dagster-component --refresh"
 
-echo ">>> Installing 2 community components"
+echo ">>> Installing 2 registry components"
 $CLI add external_sql_asset      --auto-install
 $CLI add sql_observation_sensor  --auto-install
 

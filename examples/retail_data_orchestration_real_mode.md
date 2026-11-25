@@ -194,7 +194,7 @@ Either way, OBS-02 is satisfied — last-updated + row count show up as *propert
 
 ### 1e. Power BI refresh (S1.8 stretch)
 
-Use the OFFICIAL `dagster-powerbi` integration (not a community component). Add:
+Use the OFFICIAL `dagster-powerbi` integration (not a registry component). Add:
 
 ```bash
 uv add dagster-powerbi

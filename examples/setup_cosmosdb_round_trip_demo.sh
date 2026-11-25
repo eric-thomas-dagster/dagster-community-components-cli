@@ -68,7 +68,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 4 community components"
+echo ">>> Installing 4 registry components"
 $CLI add synthetic_data_generator --auto-install
 $CLI add cosmosdb_writer          --auto-install
 $CLI add cosmosdb_reader          --auto-install

@@ -27,7 +27,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --refresh --from dagster-community-components-cli dagster-component --refresh"
 
-echo ">>> Installing 1 community component"
+echo ">>> Installing 1 registry component"
 $CLI add sql_to_database_asset  --auto-install
 
 # ── Seed a source DuckDB with a small contacts table.

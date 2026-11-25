@@ -26,7 +26,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 5 community components"
+echo ">>> Installing 5 registry components"
 $CLI add file_ingestion    --auto-install
 $CLI add feature_scaler        --auto-install
 $CLI add pca                   --auto-install

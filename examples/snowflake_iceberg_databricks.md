@@ -57,9 +57,9 @@ Iceberg is an open table format — the table's metadata + data files in object 
 
 | Component | Source | Role |
 |---|---|---|
-| `snowflake_workspace` | **community** (no official equivalent) | Imports Snowflake Dynamic Tables / Tasks / Streams / Snowpipes as Dagster assets. The Dynamic Iceberg Table becomes a materializable asset; a sensor observes refreshes. Sits on top of `dagster-snowflake`'s `SnowflakeResource`. |
+| `snowflake_workspace` | **registry** (no official equivalent) | Imports Snowflake Dynamic Tables / Tasks / Streams / Snowpipes as Dagster assets. The Dynamic Iceberg Table becomes a materializable asset; a sensor observes refreshes. Sits on top of `dagster-snowflake`'s `SnowflakeResource`. |
 | `DatabricksWorkspaceComponent` | **official** (`dagster-databricks`) | Imports Databricks Jobs as Dagster assets (each job's tasks become assets). Lakeflow pipelines are surfaced by wrapping them in a Job with a `pipeline_task` — the standard Databricks pattern, which is how this customer already has them defined. |
-| `cron_schedule` | community | Daily 06:00 UTC schedule that materializes the chain end-to-end in topological order. |
+| `cron_schedule` | registry | Daily 06:00 UTC schedule that materializes the chain end-to-end in topological order. |
 
 That's it — two assets in a deps chain (`snowflake_silver/CUSTOMER_METRICS` → `databricks/lakeflow/customer_metrics_enriched`), a schedule, and the two auto-generated sensors. Dagster sequences the materialization, the Lakeflow pipeline reads the Iceberg table when it runs.
 

@@ -7,7 +7,7 @@
 #   in Azure PostgreSQL. Round-trips through a real message queue with
 #   lineage flowing across the broker.
 #
-# Pipeline (3 components, all from the community registry):
+# Pipeline (3 components, all from the registry):
 #   synthetic_data_generator → dataframe_to_eventhub → Event Hub
 #                                                          │
 #                          ┌───────────────────────────────┘
@@ -79,7 +79,7 @@ uv add --dev -q dagster-dg-cli dagster-webserver
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 3 community components"
+echo ">>> Installing 3 registry components"
 $CLI add synthetic_data_generator     --auto-install
 $CLI add dataframe_to_eventhub        --auto-install
 $CLI add eventhubs_to_database_asset  --auto-install

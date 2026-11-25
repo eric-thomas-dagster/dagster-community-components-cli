@@ -33,9 +33,9 @@ When you want **raw table-level access** (versus the OData layer of S/4HANA), HA
 
 | Component | Source | Role |
 |---|---|---|
-| `sap_hana_resource` | community | Register HANA connection once (URL builder + helpers) |
-| `sap_hana_ingestion` | community | SQL → DataFrame asset |
-| `dataframe_to_table` | community | Write DataFrame BACK to a HANA table (or any SQLAlchemy DB) |
+| `sap_hana_resource` | registry | Register HANA connection once (URL builder + helpers) |
+| `sap_hana_ingestion` | registry | SQL → DataFrame asset |
+| `dataframe_to_table` | registry | Write DataFrame BACK to a HANA table (or any SQLAlchemy DB) |
 
 ## defs.yaml — HANA Cloud (basic auth, TLS)
 

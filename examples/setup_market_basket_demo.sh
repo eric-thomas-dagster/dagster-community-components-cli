@@ -61,7 +61,7 @@ PY
 
 CLI="uvx --from dagster-community-components-cli dagster-component"
 
-echo ">>> Installing 5 community components"
+echo ">>> Installing 5 registry components"
 $CLI add file_ingestion    --auto-install
 $CLI add market_basket_rules   --auto-install
 $CLI add filter                --auto-install

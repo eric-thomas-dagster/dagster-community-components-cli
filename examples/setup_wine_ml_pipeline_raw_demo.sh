@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# Wine ML Pipeline demo — pure Dagster (no community components).
+# Wine ML Pipeline demo — pure Dagster (no registry components).
 #
 # Same 6-step pipeline as setup_wine_ml_pipeline_demo.sh and
 # setup_wine_ml_pipeline_py_demo.sh, but built with raw @dg.asset
-# decorators and inline pandas/scikit-learn — no community components.
+# decorators and inline pandas/scikit-learn — no registry components.
 # This is the most Prefect-familiar shape.
 #
 # Pipeline (8 raw assets, all in src/<pkg>/defs/pipeline.py):
@@ -35,7 +35,7 @@ cat > "src/$PKG/defs/pipeline.py" <<'PYEOF'
 """Wine ML pipeline — pure Dagster, no components.
 
 Every asset is a raw @dg.asset function with inline pandas/scikit-learn.
-Compare to wine_ml_pipeline_py.md (same pipeline via community components).
+Compare to wine_ml_pipeline_py.md (same pipeline via registry components).
 """
 from io import StringIO
 

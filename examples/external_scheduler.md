@@ -52,7 +52,7 @@ The setup script writes:
 
 ## Components used
 
-The four community components below compose into the full pattern. The
+The four registry components below compose into the full pattern. The
 star is **`asset_job`** — without it, the scheduler has no stable name to
 target.
 
@@ -219,21 +219,21 @@ This is the shape that lets Dagster compose with a scheduler-owned dependency �
 
 ### Status across schedulers
 
-| Scheduler | Trigger API | Status / poll API | Community-fair-game? |
+| Scheduler | Trigger API | Status / poll API | Registry-fair-game? |
 |---|---|---|---|
-| **Control-M** | REST `/automation-api/run/order/` | REST `/automation-api/run/jobs/<id>` | **No — commercial reserve.** Control-M trigger+monitor is built as a separate paid offering. Won't ship to the community registry. |
+| **Control-M** | REST `/automation-api/run/order/` | REST `/automation-api/run/jobs/<id>` | **No — commercial reserve.** Control-M trigger+monitor is built as a separate paid offering. Won't ship to the registry. |
 | **IBM TWS / z/OS workload automation** | conman + Z/OS DDR | conman / DDR | **No — commercial reserve.** Same rationale as Control-M (mainframe footprint, paid engagement model). |
-| **Autosys (Workload Automation AE)** | WAAE REST `/aedb/api/v2/jobs/<name>/run` | WAAE REST `/aedb/api/v2/jobs/<name>` | Yes — community can ship `autosys_job_asset` |
-| **CA WA ESP** | iXp REST `/v1/executejob` | iXp REST `/v1/jobinfo` | Yes — community `esp_job_asset` |
-| **JAMS** | JAMS REST `/api/Jobs/Submit` | `/api/History/<id>` | Yes — community `jams_job_asset` |
-| **Stonebranch UAC** | UAC REST `/resources/task/runtask` | `/resources/taskinstance/<id>` | Yes — community `stonebranch_task_asset` |
-| **Redwood RMS** | RMS REST `/api/processes/submit` | `/api/processes/<id>` | Yes — community `redwood_process_asset` |
-| **Tidal** | Tidal REST `/api/scheduler/jobs/submit` | `/api/scheduler/jobs/<id>` | Yes — community `tidal_job_asset` |
+| **Autosys (Workload Automation AE)** | WAAE REST `/aedb/api/v2/jobs/<name>/run` | WAAE REST `/aedb/api/v2/jobs/<name>` | Yes — can ship `autosys_job_asset` |
+| **CA WA ESP** | iXp REST `/v1/executejob` | iXp REST `/v1/jobinfo` | Yes — `esp_job_asset` |
+| **JAMS** | JAMS REST `/api/Jobs/Submit` | `/api/History/<id>` | Yes — `jams_job_asset` |
+| **Stonebranch UAC** | UAC REST `/resources/task/runtask` | `/resources/taskinstance/<id>` | Yes — `stonebranch_task_asset` |
+| **Redwood RMS** | RMS REST `/api/processes/submit` | `/api/processes/<id>` | Yes — `redwood_process_asset` |
+| **Tidal** | Tidal REST `/api/scheduler/jobs/submit` | `/api/scheduler/jobs/<id>` | Yes — `tidal_job_asset` |
 | **Airflow** | Airflow REST `/api/v1/dags/<id>/dagRuns` | `/api/v1/dags/<id>/dagRuns/<run_id>` | **Use the official `dagster-airlift`** package — it's a richer Airflow-Dagster integration than a custom component would be. |
-| **Jenkins** | Jenkins REST `/job/<name>/buildWithParameters` | `/job/<name>/<build>/api/json` | Yes — community `jenkins_job_asset` |
+| **Jenkins** | Jenkins REST `/job/<name>/buildWithParameters` | `/job/<name>/<build>/api/json` | Yes — `jenkins_job_asset` |
 | **cron** | n/a — cron has no API | n/a | Not applicable; cron is fire-and-forget |
 
-### Pattern for the community-fair-game ones
+### Pattern for the registry-fair-game ones
 
 The component shape is uniform across schedulers — just like the observation-sensor shape was. ~150 lines of vendor SDK glue per scheduler:
 
@@ -268,9 +268,9 @@ def scheduler_owned_step(context: AssetExecutionContext):
 
 ### Status today (registry)
 
-None of the trigger+monitor components are in the community registry yet — they've been roadmap items but lower priority than the kick-off-direction script (which covers the common case). If you need one for a specific scheduler, open an issue or contribute one — they're tractable (<200 LOC plus tests) once you have the vendor's REST API doc in hand.
+None of the trigger+monitor components are in the registry yet — they've been roadmap items but lower priority than the kick-off-direction script (which covers the common case). If you need one for a specific scheduler, open an issue or contribute one — they're tractable (<200 LOC plus tests) once you have the vendor's REST API doc in hand.
 
-For **Control-M** and **IBM TWS / z/OS**, the trigger+monitor capability is built as a separate paid offering and won't ship in the community registry. If that's your target, contact Dagster Labs for the commercial path. The observation-direction story for those is also commercial — same reasoning.
+For **Control-M** and **IBM TWS / z/OS**, the trigger+monitor capability is built as a separate paid offering and won't ship in the registry. If that's your target, contact Dagster Labs for the commercial path. The observation-direction story for those is also commercial — same reasoning.
 
 ## Auth notes — local vs Dagster+
 
@@ -296,7 +296,7 @@ The other two directions are real but live in different components:
 | Scheduler → runs job → Dagster watches | per-vendor observation sensor | see *Observability* section above |
 | Dagster → triggers scheduler → waits → continues | per-vendor `*_job_asset` component | see *Trigger + monitor* section above |
 
-Control-M and IBM TWS (and the broader z/OS workload-automation family) are reserved for the **commercial** offering across all three directions — the community registry stays clean of them. Every other scheduler in the table is community-fair-game.
+Control-M and IBM TWS (and the broader z/OS workload-automation family) are reserved for the **commercial** offering across all three directions — the registry stays clean of them. Every other scheduler in the table is registry-fair-game.
 
 ## See also
 
