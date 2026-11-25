@@ -129,3 +129,14 @@ def test_apply_conversion_marks_converter_units_with_their_route():
     import apply_conversion
     man = json.loads((EX / "manifest.json").read_text())
     assert {u.get("route") for u in man["units"]} == {"converter"}
+
+
+def test_spec_carries_params_user_defined_macros_and_value_references_unmasked():
+    d = copy.deepcopy(next(x for x in IR["dags"] if x["dag_id"] == "simple_sequential_pipeline"))
+    d["params"] = {"num_guests": 23}
+    d["user_defined_macros"] = {"my_json": '{"a": 1}'}
+    d["tasks"][1]["op_args"] = [{"xcom_from": "fetch_data", "key": "return_value"}]
+    s = DS.build(d, None, None, None, "2.10.5")
+    md = DS.render_md(s)
+    assert "## DAG parameters" in md and '"num_guests": 23' in md and "## User-defined macros" in md and "my_json" in md and '{\\"a\\": 1}' in md
+    assert s["tasks"][1]["op_args"] == [{"xcom_from": "fetch_data", "key": "return_value"}]          # `key` here names the XCom, it is not a credential

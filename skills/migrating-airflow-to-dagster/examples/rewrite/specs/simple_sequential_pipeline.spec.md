@@ -11,6 +11,10 @@ Facts read from the IR (what Airflow built). Statements marked *inferred* are no
 - its final step(s) are save_results (tasks with no downstream task)
 - it has no persisted output and uses no connection, so it may be a demonstration or a local computation (no outlets, no connection ids) *inferred*
 
+## DAG parameters (`params`, readable as `context["params"]` and `{{ params.x }}`)
+
+none
+
 ## Schedule
 
 - kind `cron_data_interval`, cron `0 9 * * *`, interval seconds None, timezone `UTC`
@@ -61,7 +65,7 @@ def fetch_data(source: str = "api") -> dict:
 - retries 3 (delay 300.0 s, exponential False); pool None; timeout None s; SLA None s; callbacks none
 - reads a value from: fetch_data; pushes a value: True; outlets none; inlets none
 - connections: none; Variables: none
-- resolved arguments: `{"op_args": [{"key": "<redacted: a credential-like argument; its value is not recorded>", "xcom_from": "fetch_data"}], "op_kwargs": {}, "templates_dict": null}`
+- resolved arguments: `{"op_args": [{"key": "return_value", "xcom_from": "fetch_data"}], "op_kwargs": {}, "templates_dict": null}`
 - arguments that hold a function: python_callable
 - source of the function given as `python_callable` (`process_data`):
 
@@ -89,7 +93,7 @@ def process_data(data: dict) -> dict:
     }
     return processed
 ```
-- called with args `[{"xcom_from": "fetch_data", "key": "<redacted: a credential-like argument; its value is not recorded>"}]` kwargs `{}`
+- called with args `[{"xcom_from": "fetch_data", "key": "return_value"}]` kwargs `{}`
 
 ### `save_results` (_PythonDecoratedOperator)
 
@@ -97,7 +101,7 @@ def process_data(data: dict) -> dict:
 - retries 3 (delay 300.0 s, exponential False); pool None; timeout None s; SLA None s; callbacks none
 - reads a value from: process_data; pushes a value: True; outlets none; inlets none
 - connections: none; Variables: none
-- resolved arguments: `{"op_args": [{"key": "<redacted: a credential-like argument; its value is not recorded>", "xcom_from": "process_data"}], "op_kwargs": {}, "templates_dict": null}`
+- resolved arguments: `{"op_args": [{"key": "return_value", "xcom_from": "process_data"}], "op_kwargs": {}, "templates_dict": null}`
 - arguments that hold a function: python_callable
 - source of the function given as `python_callable` (`save_results`):
 
@@ -119,7 +123,7 @@ def save_results(processed: dict) -> str:
     print(result)
     return result
 ```
-- called with args `[{"xcom_from": "process_data", "key": "<redacted: a credential-like argument; its value is not recorded>"}]` kwargs `{}`
+- called with args `[{"xcom_from": "process_data", "key": "return_value"}]` kwargs `{}`
 
 ## Behaviours that must be preserved
 

@@ -1,0 +1,41 @@
+{
+ "toy_taskflow_bash": {
+  "state": "success",
+  "tasks": {
+   "upstream_task": {
+    "state": "success",
+    "value": "{'names': ['Trevor', 'Grant', 'Marcy', 'Carly', 'Philip'], 'dogs': [1, 2, 2, 0, 4]}"
+   },
+   "bash_task": {
+    "state": "success",
+    "value": "'Carly urgently needs a dog!'"
+   }
+  }
+ },
+ "literal_wrapper_example": {
+  "state": "failed",
+  "tasks": {
+   "echo_a_jinja_template": {
+    "state": "success",
+    "value": "'231942'"
+   },
+   "use_literal_wrapper_to_ignore_jinja_template": {
+    "state": "failed",
+    "value": "None"
+   }
+  }
+ },
+ "pool_example": {
+  "state": "success",
+  "tasks": {
+   "count_guests": {
+    "state": "success",
+    "value": "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]"
+   },
+   "jump_into_the_pool": {
+    "state": "success",
+    "value": "None"
+   }
+  }
+ }
+}

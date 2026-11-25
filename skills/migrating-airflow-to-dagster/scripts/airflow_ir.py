@@ -493,6 +493,8 @@ def _dag_ir(dag: Any, folder: Path) -> dict[str, Any]:
         "start_date": str(getattr(dag, "start_date", None) or da.get("start_date") or "") or None,
         "is_subdag": bool(getattr(dag, "is_subdag", False)), "parent_dag_id": getattr(getattr(dag, "parent_dag", None), "dag_id", None),
         "timetable": _timetable(dag), "default_args": {k: _jsonable(v) for k, v in da.items() if k != "start_date"},
+        "user_defined_macros": {k: _jsonable(v) for k, v in (getattr(dag, "user_defined_macros", None) or {}).items() if not callable(v)},      # names a template can use (`{{ my_json }}`)
+        "user_defined_macro_functions": sorted(k for k, v in (getattr(dag, "user_defined_macros", None) or {}).items() if callable(v)),
         "params": {k: _jsonable(getattr(v, "value", v)) for k, v in (getattr(dag, "params", None) or {}).items()} if getattr(dag, "params", None) else {},
         "dag_settings": {k: _jsonable(getattr(dag, k, None)) for k in ("fail_stop", "max_active_tasks", "max_active_runs", "dagrun_timeout",
                          "max_consecutive_failed_dag_runs", "render_template_as_native_obj", "is_paused_upon_creation", "concurrency")

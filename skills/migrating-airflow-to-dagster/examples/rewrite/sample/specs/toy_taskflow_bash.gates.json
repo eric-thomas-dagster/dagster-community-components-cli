@@ -1,0 +1,42 @@
+{
+ "dag_id": "toy_taskflow_bash",
+ "module": "rs_pkg.defs.toy_taskflow_bash",
+ "passed": true,
+ "gates": [
+  {
+   "gate": "definitions_load",
+   "passed": true,
+   "detail": "dg check defs"
+  },
+  {
+   "gate": "generated_tests",
+   "passed": true,
+   "detail": "test_toy_taskflow_bash_rewrite.py: 2 passed, 1 skipped in 0.23s"
+  },
+  {
+   "gate": "asset_checks_present",
+   "passed": true,
+   "detail": "1 asset check(s) in the rewrite; the converter derived 1 from the source (at least 1 is required when it derived any)"
+  },
+  {
+   "gate": "parity",
+   "passed": true,
+   "detail": "outcome and 1 value(s) match Airflow"
+  },
+  {
+   "gate": "no_secret_values",
+   "passed": true,
+   "detail": "none found"
+  },
+  {
+   "gate": "no_invented_apis",
+   "passed": true,
+   "detail": "every import and component type resolves"
+  },
+  {
+   "gate": "tasks_accounted_for",
+   "passed": true,
+   "detail": "every Airflow task is named in the header with what happened to it"
+  }
+ ]
+}

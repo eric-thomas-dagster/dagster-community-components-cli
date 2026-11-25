@@ -24,9 +24,14 @@ SECRET_ASSIGN = re.compile(r"""((?:\w*(?:pass|secret|token|key|credential|privat
 VAR_RX = [re.compile(r"var\.(?:value|json)\.([A-Za-z0-9_\-]+)"), re.compile(r"Variable\.(?:get|set)\(\s*['\"]([^'\"]+)['\"]")]
 
 
+NOISE_ARGS = {"deps", "expand_input", "op_kwargs_expand_input", "partial_kwargs", "mapped_kwargs"}      # Airflow internals that carry no behaviour
+
+
 def mask(v: Any, name: str = "") -> Any:
+    if isinstance(v, dict) and "xcom_from" in v:                      # a value reference ({"xcom_from": task, "key": "return_value"}), not a credential
+        return v
     if isinstance(v, dict):
-        return {str(k): mask(x, str(k)) for k, x in v.items()}
+        return {str(k): mask(x, str(k)) for k, x in v.items() if str(k) not in NOISE_ARGS}
     if isinstance(v, (list, tuple)):
         return [mask(x, name) for x in v]
     if isinstance(v, str) and name and SECRET_NAME.search(name) and not name.endswith("_conn_id") and name != "conn_id":
@@ -156,7 +161,7 @@ def build(dag: dict[str, Any], report: dict[str, Any] | None, manifest: dict[str
         "owners": sorted({t["owner"] for t in tasks if t.get("owner")}),
         "schedule": {"kind": tt.get("kind"), "cron": tt.get("cron"), "interval_seconds": tt.get("interval_seconds"), "timezone": tt.get("timezone"), "assets": [a for a in (tt.get("assets") or []) if "object at 0x" not in str(a)] or None, "asset_logic": tt.get("asset_logic") if [a for a in (tt.get("assets") or []) if "object at 0x" not in str(a)] else None,
                      "catchup": dag.get("catchup"), "start_date": dag.get("start_date"), "max_active_runs": dag.get("max_active_runs"), "settings": dag.get("dag_settings"), "has_dag_callbacks": dag.get("has_callbacks")},
-        "default_args": mask(dag.get("default_args") or {}), "params": mask(dag.get("params") or {}),
+        "default_args": mask(dag.get("default_args") or {}), "user_defined_macros": mask(dag.get("user_defined_macros") or {}), "user_defined_macro_functions": dag.get("user_defined_macro_functions") or [], "params": mask(dag.get("params") or {}),
         "tasks": tasks,
         "edges": sorted([u, t["task_id"]] for t in tasks for u in t["upstream"]),
         "value_flow": sorted([s, t["task_id"]] for t in tasks for s in t["reads_value_from"]),
@@ -189,6 +194,9 @@ def render_md(s: dict[str, Any]) -> str:
     for p in s["purpose"]:
         L.append(f"- {p['statement']} ({p['basis']}){' *inferred*' if p['inferred'] == 'yes' else ''}")
     sc = s["schedule"]
+    if s["user_defined_macros"] or s["user_defined_macro_functions"]:
+        L += ["", "## User-defined macros (names a template can use, e.g. `{{ my_json }}`)", "", f"values: `{json.dumps(s['user_defined_macros'], sort_keys=True, default=str)}`; functions (source not recorded): {', '.join(s['user_defined_macro_functions']) or 'none'}"]
+    L += ["", "## DAG parameters (`params`, readable as `context[\"params\"]` and `{{ params.x }}`)", "", f"`{json.dumps(s['params'], sort_keys=True, default=str)}`" if s["params"] else "none"]
     L += ["", "## Schedule", "", f"- kind `{sc['kind']}`, cron `{sc['cron']}`, interval seconds {sc['interval_seconds']}, timezone `{sc['timezone']}`", f"- catchup {sc['catchup']}, start date {sc['start_date']}, max active runs {sc['max_active_runs']}",
           f"- triggered by assets: {sc['assets'] or 'none'} ({sc['asset_logic']})", f"- DAG settings: {json.dumps(sc['settings'], sort_keys=True)}; DAG-level callbacks: {sc['has_dag_callbacks']}", "",
           "## Graph", "", f"- edges (upstream -> downstream): {', '.join(f'{a} -> {b}' for a, b in s['edges']) or 'none'}", f"- value flow (producer -> consumer): {', '.join(f'{a} -> {b}' for a, b in s['value_flow']) or 'none'}",
@@ -197,7 +205,7 @@ def render_md(s: dict[str, Any]) -> str:
     for t in s["tasks"]:
         L += [f"### `{t['task_id']}` ({t['operator']})", "",
               f"- upstream: {', '.join(t['upstream']) or 'none'}; trigger rule `{t['trigger_rule']}`; group {t['group']}; owner {t['owner']}",
-              f"- retries {t['retries']} (delay {t['retry_delay_s']} s, exponential {t['retry_exponential_backoff']}); pool {t['pool']}; timeout {t['execution_timeout_s']} s; SLA {t['sla_s']} s; callbacks {t['callbacks'] or 'none'}",
+              f"- retries {t['retries']} (delay {t['retry_delay_s']} s, exponential {t['retry_exponential_backoff']}); pool {t['pool']}{' (its slot count lives in Airflow\'s metadata database and is not in the IR)' if t['pool'] else ''}; timeout {t['execution_timeout_s']} s; SLA {t['sla_s']} s; callbacks {t['callbacks'] or 'none'}",
               f"- reads a value from: {', '.join(t['reads_value_from']) or 'nothing'}; pushes a value: {t['produces_value']}; outlets {t['outlets'] or 'none'}; inlets {t['inlets'] or 'none'}",
               f"- connections: {t['connections'] or 'none'}; Variables: {t['variables'] or 'none'}"]
         if t["is_mapped"] or t["expand"]:

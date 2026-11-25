@@ -1,0 +1,1031 @@
+{
+ "airflow_version": "2.10.5",
+ "dags": [
+  {
+   "dag_id": "basic_dataset_schedule_upstream_2",
+   "file": "2-10-example-dags/datasets/basic_dataset_schedule/basic_dataset_schedule_upstream_2.py",
+   "description": null,
+   "tags": [
+    "2-10",
+    "Basic Dataset Schedule",
+    "Datasets"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-08-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "user_defined_macros": {},
+   "user_defined_macro_functions": [],
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "write_to_s3",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [
+      "s3://basic-datasets/output_2.txt"
+     ],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_d6a239b7f7bc5a287d1fb1b5fe0f3c5fba5c72d8_basic_dataset_schedule_upstream_2.basic_dataset_schedule_upstream_2.<locals>.write_to_s3"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "write_to_s3",
+       "module": "unusual_prefix_d6a239b7f7bc5a287d1fb1b5fe0f3c5fba5c72d8_basic_dataset_schedule_upstream_2",
+       "source": "@task(outlets=[Dataset(\"s3://basic-datasets/output_2.txt\")])\ndef write_to_s3():\n    t_log.info(\"I'm pretending to write a txt file to S3.\")\n",
+       "file": "/opt/airflow/dags/2-10-example-dags/datasets/basic_dataset_schedule/basic_dataset_schedule_upstream_2.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "write_to_s3",
+      "module": "unusual_prefix_d6a239b7f7bc5a287d1fb1b5fe0f3c5fba5c72d8_basic_dataset_schedule_upstream_2",
+      "source": "@task(outlets=[Dataset(\"s3://basic-datasets/output_2.txt\")])\ndef write_to_s3():\n    t_log.info(\"I'm pretending to write a txt file to S3.\")\n",
+      "file": "/opt/airflow/dags/2-10-example-dags/datasets/basic_dataset_schedule/basic_dataset_schedule_upstream_2.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    }
+   ]
+  },
+  {
+   "dag_id": "babel_format",
+   "file": "2-10-example-dags/other/babel_format.py",
+   "description": null,
+   "tags": [
+    "2-10",
+    "babel"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-08-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "user_defined_macros": {},
+   "user_defined_macro_functions": [],
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "welcher_tag_ist_heute",
+     "type": "BashOperator",
+     "module": "airflow.operators.bash",
+     "group": null,
+     "upstream": [],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "bash_command": "echo {{ macros.ds_format_locale(ds, '%Y-%m-%d', \"EEEE, 'der' d. MMMM yyyy\", 'de_DE') }}",
+      "env": null,
+      "cwd": null
+     },
+     "args": {
+      "append_env": false,
+      "bash_command": "echo {{ macros.ds_format_locale(ds, '%Y-%m-%d', \"EEEE, 'der' d. MMMM yyyy\", 'de_DE') }}",
+      "cwd": null,
+      "env": null,
+      "output_encoding": "utf-8",
+      "skip_on_exit_code": [
+       99
+      ]
+     },
+     "callable_args": {
+      "output_processor": "airflow.operators.bash.BashOperator.<lambda>"
+     },
+     "callable_arg_info": {}
+    }
+   ]
+  },
+  {
+   "dag_id": "literal_wrapper_example",
+   "file": "2-8-example-dags/literal_wrapper_example.py",
+   "description": null,
+   "tags": [
+    "2-8",
+    "core",
+    "literal"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2023-12-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "user_defined_macros": {},
+   "user_defined_macro_functions": [],
+   "params": {
+    "the_best_number": 231942
+   },
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "echo_a_jinja_template",
+     "type": "BashOperator",
+     "module": "airflow.operators.bash",
+     "group": null,
+     "upstream": [],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "bash_command": "echo {{ params.the_best_number }}",
+      "env": null,
+      "cwd": null
+     },
+     "args": {
+      "append_env": false,
+      "bash_command": "echo {{ params.the_best_number }}",
+      "cwd": null,
+      "env": null,
+      "output_encoding": "utf-8",
+      "skip_on_exit_code": [
+       99
+      ]
+     },
+     "callable_args": {
+      "output_processor": "airflow.operators.bash.BashOperator.<lambda>"
+     },
+     "callable_arg_info": {}
+    },
+    {
+     "task_id": "use_literal_wrapper_to_ignore_jinja_template",
+     "type": "BashOperator",
+     "module": "airflow.operators.bash",
+     "group": null,
+     "upstream": [],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "bash_command": "{% raw %}echo {{ params.the_best_number }}{% endraw %}",
+      "env": null,
+      "cwd": null
+     },
+     "args": {
+      "append_env": false,
+      "bash_command": "{% raw %}echo {{ params.the_best_number }}{% endraw %}",
+      "cwd": null,
+      "env": null,
+      "output_encoding": "utf-8",
+      "skip_on_exit_code": [
+       99
+      ]
+     },
+     "callable_args": {
+      "output_processor": "airflow.operators.bash.BashOperator.<lambda>"
+     },
+     "callable_arg_info": {}
+    }
+   ]
+  },
+  {
+   "dag_id": "pool_example",
+   "file": "2-8-example-dags/pool_example.py",
+   "description": null,
+   "tags": [
+    "2-8",
+    "Pools",
+    "core"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2023-12-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "user_defined_macros": {},
+   "user_defined_macro_functions": [],
+   "params": {
+    "num_guests": 23
+   },
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "count_guests",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "jump_into_the_pool"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_8561c66c9fe5b5cf83ec2f04b4d3099cb505c37e_pool_example.pool_example.<locals>.count_guests"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "count_guests",
+       "module": "unusual_prefix_8561c66c9fe5b5cf83ec2f04b4d3099cb505c37e_pool_example",
+       "source": "@task\ndef count_guests(**context):\n    num_guests = context[\"params\"][\"num_guests\"]\n    print(f\"There are {num_guests} people at my garden party!\")\n    print(\"They all want to jump into the pool!\")\n    return [i for i in range(num_guests)]\n",
+       "file": "/opt/airflow/dags/2-8-example-dags/pool_example.py",
+       "params": [
+        "context"
+       ]
+      }
+     },
+     "callable": {
+      "name": "count_guests",
+      "module": "unusual_prefix_8561c66c9fe5b5cf83ec2f04b4d3099cb505c37e_pool_example",
+      "source": "@task\ndef count_guests(**context):\n    num_guests = context[\"params\"][\"num_guests\"]\n    print(f\"There are {num_guests} people at my garden party!\")\n    print(\"They all want to jump into the pool!\")\n    return [i for i in range(num_guests)]\n",
+      "file": "/opt/airflow/dags/2-8-example-dags/pool_example.py",
+      "params": [
+       "context"
+      ]
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "jump_into_the_pool",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.base",
+     "group": null,
+     "upstream": [
+      "count_guests"
+     ],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": "my_garden_pool",
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": {
+      "form": "expand",
+      "args": {
+       "guest": {
+        "kind": "xcom",
+        "wrapper": "PlainXComArg",
+        "task_id": "count_guests",
+        "key": "return_value"
+       }
+      },
+      "fixed": {},
+      "fixed_unserializable": [],
+      "partial": {},
+      "op_args": false
+     },
+     "is_mapped": true,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [
+      "pre_execute",
+      "post_execute"
+     ],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {},
+     "args": {
+      "deps": {
+       "repr": "frozenset({<TIDep(Previous Dagrun State)>, <TIDep(Not In Retry Period)>, <TIDep(Not Previously Skipped)>, <TIDep(Trigger Rule)>, <TIDep(Mapped dependencies have succeeded)>, <TIDep(Task has been mappe"
+      },
+      "expand_input": [
+       {}
+      ],
+      "op_kwargs_expand_input": [
+       {
+        "guest": {
+         "xcom_from": "count_guests",
+         "key": "return_value"
+        }
+       }
+      ],
+      "operator_extra_links": [],
+      "operator_name": "@task",
+      "partial_kwargs": {
+       "pool": "my_garden_pool",
+       "is_setup": false,
+       "is_teardown": false,
+       "on_failure_fail_dagrun": false,
+       "retries": 0,
+       "retry_delay": {
+        "seconds": 300.0
+       },
+       "max_retry_delay": null,
+       "resources": null,
+       "executor_config": {},
+       "op_args": [],
+       "op_kwargs": {}
+      },
+      "start_from_trigger": false,
+      "start_trigger_args": null,
+      "subdag": null,
+      "supports_lineage": false,
+      "task_type": "_PythonDecoratedOperator",
+      "template_ext": [],
+      "template_fields": [
+       "templates_dict",
+       "op_args",
+       "op_kwargs"
+      ],
+      "template_fields_renderers": {
+       "templates_dict": "json",
+       "op_args": "py",
+       "op_kwargs": "py"
+      },
+      "ui_color": "#ffefeb",
+      "ui_fgcolor": "#000"
+     },
+     "callable_args": {
+      "operator_class": "airflow.decorators.python._PythonDecoratedOperator",
+      "python_callable": "unusual_prefix_8561c66c9fe5b5cf83ec2f04b4d3099cb505c37e_pool_example.pool_example.<locals>.jump_into_the_pool"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "jump_into_the_pool",
+       "module": "unusual_prefix_8561c66c9fe5b5cf83ec2f04b4d3099cb505c37e_pool_example",
+       "source": "@task(\n    pool=MY_POOL_NAME,\n)\ndef jump_into_the_pool(guest):\n    print(f\"Guest number {guest} is jumping into the pool!\")\n    print(f\"Guest number {guest} is swimming in the pool!\")\n    swim_time = 10\n    time.sleep(swim_time)\n    print(\n        f\"After {swim_time} seconds, guest number {guest} is getting out of the pool!\"\n    )\n",
+       "file": "/opt/airflow/dags/2-8-example-dags/pool_example.py",
+       "params": [
+        "guest"
+       ]
+      }
+     },
+     "callable": {
+      "name": "jump_into_the_pool",
+      "module": "unusual_prefix_8561c66c9fe5b5cf83ec2f04b4d3099cb505c37e_pool_example",
+      "source": "@task(\n    pool=MY_POOL_NAME,\n)\ndef jump_into_the_pool(guest):\n    print(f\"Guest number {guest} is jumping into the pool!\")\n    print(f\"Guest number {guest} is swimming in the pool!\")\n    swim_time = 10\n    time.sleep(swim_time)\n    print(\n        f\"After {swim_time} seconds, guest number {guest} is getting out of the pool!\"\n    )\n",
+      "file": "/opt/airflow/dags/2-8-example-dags/pool_example.py",
+      "params": [
+       "guest"
+      ]
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    }
+   ]
+  },
+  {
+   "dag_id": "toy_taskflow_bash",
+   "file": "2-9-example-dags/toys/toy_taskflow_bash.py",
+   "description": null,
+   "tags": [
+    "@task.bash",
+    "toy"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": null,
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "user_defined_macros": {},
+   "user_defined_macro_functions": [],
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "upstream_task",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "bash_task"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_91419526e9d2cfc767d516b31c9af0461263234e_toy_taskflow_bash.toy_taskflow_bash.<locals>.upstream_task"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "upstream_task",
+       "module": "unusual_prefix_91419526e9d2cfc767d516b31c9af0461263234e_toy_taskflow_bash",
+       "source": "@task\ndef upstream_task():\n    dog_owner_data = {\n        \"names\": [\"Trevor\", \"Grant\", \"Marcy\", \"Carly\", \"Philip\"],\n        \"dogs\": [1, 2, 2, 0, 4],\n    }\n\n    return dog_owner_data\n",
+       "file": "/opt/airflow/dags/2-9-example-dags/toys/toy_taskflow_bash.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "upstream_task",
+      "module": "unusual_prefix_91419526e9d2cfc767d516b31c9af0461263234e_toy_taskflow_bash",
+      "source": "@task\ndef upstream_task():\n    dog_owner_data = {\n        \"names\": [\"Trevor\", \"Grant\", \"Marcy\", \"Carly\", \"Philip\"],\n        \"dogs\": [1, 2, 2, 0, 4],\n    }\n\n    return dog_owner_data\n",
+      "file": "/opt/airflow/dags/2-9-example-dags/toys/toy_taskflow_bash.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "bash_task",
+     "type": "_BashDecoratedOperator",
+     "module": "airflow.decorators.bash",
+     "group": null,
+     "upstream": [
+      "upstream_task"
+     ],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "op_args": [],
+      "op_kwargs": {
+       "dog_owner_data": {
+        "xcom_from": "upstream_task",
+        "key": "return_value"
+       }
+      },
+      "bash_command": null,
+      "env": null,
+      "cwd": null
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {
+       "dog_owner_data": {
+        "xcom_from": "upstream_task",
+        "key": "return_value"
+       }
+      }
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_91419526e9d2cfc767d516b31c9af0461263234e_toy_taskflow_bash.toy_taskflow_bash.<locals>.bash_task"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "bash_task",
+       "module": "unusual_prefix_91419526e9d2cfc767d516b31c9af0461263234e_toy_taskflow_bash",
+       "source": "@task.bash\ndef bash_task(dog_owner_data):\n    names_of_dogless_people = []\n    for name, dog in zip(dog_owner_data[\"names\"], dog_owner_data[\"dogs\"]):\n        if dog < 1:\n            names_of_dogless_people.append(name)\n\n    if names_of_dogless_people:\n        if len(names_of_dogless_people) == 1:\n            return f'echo \"{names_of_dogless_people[0]} urgently needs a dog!\"'\n        else:\n            names_of_dogless_people_str = \" and \".join(names_of_dogless_people)\n            return f'echo \"{names_of_dogless_people_str} urgently need a dog!\"'\n    else:\n        return f'echo \"All good, everyone has at least one dog!\"'\n",
+       "file": "/opt/airflow/dags/2-9-example-dags/toys/toy_taskflow_bash.py",
+       "params": [
+        "dog_owner_data"
+       ]
+      }
+     },
+     "callable": {
+      "name": "bash_task",
+      "module": "unusual_prefix_91419526e9d2cfc767d516b31c9af0461263234e_toy_taskflow_bash",
+      "source": "@task.bash\ndef bash_task(dog_owner_data):\n    names_of_dogless_people = []\n    for name, dog in zip(dog_owner_data[\"names\"], dog_owner_data[\"dogs\"]):\n        if dog < 1:\n            names_of_dogless_people.append(name)\n\n    if names_of_dogless_people:\n        if len(names_of_dogless_people) == 1:\n            return f'echo \"{names_of_dogless_people[0]} urgently needs a dog!\"'\n        else:\n            names_of_dogless_people_str = \" and \".join(names_of_dogless_people)\n            return f'echo \"{names_of_dogless_people_str} urgently need a dog!\"'\n    else:\n        return f'echo \"All good, everyone has at least one dog!\"'\n",
+      "file": "/opt/airflow/dags/2-9-example-dags/toys/toy_taskflow_bash.py",
+      "params": [
+       "dog_owner_data"
+      ]
+     },
+     "op_args": [],
+     "op_kwargs": {
+      "dog_owner_data": {
+       "xcom_from": "upstream_task",
+       "key": "return_value"
+      }
+     }
+    }
+   ]
+  },
+  {
+   "dag_id": "json_yaml_macros_toy",
+   "file": "2-6-example-dags/json_yaml_macros_toy.py",
+   "description": null,
+   "tags": [
+    "templating",
+    "toy"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2023-04-18 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10a9bf0e0>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "user_defined_macros": {
+    "my_json": "{\"a\":\"hello\", \"b\":4, \"c\":true, \"d\": [ 1, 2, 3, 4, 5 ], \"e\" : {\"e1\" : 1, \"e2\" : \"bye\"}}",
+    "my_yaml": "a: hello\nb: 4\nc: true\nd:\n  - 1\n  - 2\n  - 3\n  - 4\n  - 5\ne:\n  e1: 1\n  e2: bye"
+   },
+   "user_defined_macro_functions": [],
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "print_json_macro",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": {
+       "my_config": "{{ macros.json.loads(my_json)}}"
+      },
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_095570a3a1bf4e10e3ce6a1fef1669d07061e09c_json_yaml_macros_toy.json_yaml_macros_toy.<locals>.print_json_macro"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "print_json_macro",
+       "module": "unusual_prefix_095570a3a1bf4e10e3ce6a1fef1669d07061e09c_json_yaml_macros_toy",
+       "source": "@task(templates_dict={\"my_config\": \"{{ macros.json.loads(my_json)}}\"})\ndef print_json_macro(**context):\n    print(context[\"templates_dict\"][\"my_config\"])\n",
+       "file": "/opt/airflow/dags/2-6-example-dags/json_yaml_macros_toy.py",
+       "params": [
+        "context"
+       ]
+      }
+     },
+     "callable": {
+      "name": "print_json_macro",
+      "module": "unusual_prefix_095570a3a1bf4e10e3ce6a1fef1669d07061e09c_json_yaml_macros_toy",
+      "source": "@task(templates_dict={\"my_config\": \"{{ macros.json.loads(my_json)}}\"})\ndef print_json_macro(**context):\n    print(context[\"templates_dict\"][\"my_config\"])\n",
+      "file": "/opt/airflow/dags/2-6-example-dags/json_yaml_macros_toy.py",
+      "params": [
+       "context"
+      ]
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "print_yaml_macro",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": {
+       "my_config": "{{ macros.yaml.safe_load(my_yaml)}}"
+      },
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_095570a3a1bf4e10e3ce6a1fef1669d07061e09c_json_yaml_macros_toy.json_yaml_macros_toy.<locals>.print_yaml_macro"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "print_yaml_macro",
+       "module": "unusual_prefix_095570a3a1bf4e10e3ce6a1fef1669d07061e09c_json_yaml_macros_toy",
+       "source": "@task(templates_dict={\"my_config\": \"{{ macros.yaml.safe_load(my_yaml)}}\"})\ndef print_yaml_macro(**context):\n    print(context[\"templates_dict\"][\"my_config\"])\n",
+       "file": "/opt/airflow/dags/2-6-example-dags/json_yaml_macros_toy.py",
+       "params": [
+        "context"
+       ]
+      }
+     },
+     "callable": {
+      "name": "print_yaml_macro",
+      "module": "unusual_prefix_095570a3a1bf4e10e3ce6a1fef1669d07061e09c_json_yaml_macros_toy",
+      "source": "@task(templates_dict={\"my_config\": \"{{ macros.yaml.safe_load(my_yaml)}}\"})\ndef print_yaml_macro(**context):\n    print(context[\"templates_dict\"][\"my_config\"])\n",
+      "file": "/opt/airflow/dags/2-6-example-dags/json_yaml_macros_toy.py",
+      "params": [
+       "context"
+      ]
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    }
+   ]
+  }
+ ],
+ "import_errors": {}
+}

@@ -28,6 +28,42 @@ With `--manifest`, each unit of the DAG gets `route: rewrite` and the gate resul
 
 `examples/rewrite/` has two real DAGs: `simple_sequential_pipeline` (the converter handles it) and `partner_ingest` (the converter stubs two tasks). I wrote both rewrites by following the generated prompts. Both pass all seven gates; the README there compares them with the converter's output (one asset against three, 52 lines against 100 plus a shared 1,561-line runtime; two assets that run against five assets of which two are loud stubs) and lists what the spec missed and what was fixed in the generators.
 
+## Measured: both routes on a sample (8 DAGs, not a benchmark)
+
+**Sample size, plainly.** The target was at least 10 DAGs the converter defers or stubs plus 10 it converts cleanly. I ran **4 + 4 = 8**: the two worked examples above and six more from public Astronomer example repositories (`2-5` to `2-10-example-dags`, `airflow-example-dags`, `astro-example-dags`: 114 DAG files, 81 DAGs extracted with Airflow 2.10.5, of which the converter handles 61 cleanly, stubs part of 19 and defers 1). Fewer than asked because every rewrite is performed by me, one at a time, in this session; I counted the rewrites I performed (**8**) and extrapolated nothing. These are teaching DAGs (macros, datasets, pools, Jinja), chosen small and diverse, not a typical estate, so the numbers show what the routes do on these DAGs and nothing about yours. Artefacts: `examples/rewrite/sample/` (IR, specs, generated prompts, gate results, the converter's modules, the rewrites in a `dg check defs` project, Airflow's results).
+
+| DAG | Converter: result | Converter: gates | Rewrite: structure | Rewrite: gates |
+|---|---|---|---|---|
+| `simple_sequential_pipeline` (clean) | 3 assets, 2 structural checks | its generated tests pass; Airflow parity not run for it | 1 asset, 1 check, 52 lines | 7 of 7 |
+| `toy_taskflow_bash` (clean) | 2 assets, 1 check | tests pass (shell materialize needs `CONVERTED_TESTS_RUN_SHELL=1`); parity: identical outcome | 1 asset, 1 check, 42 lines | 7 of 7 (parity: same value as Airflow) |
+| `literal_wrapper_example` (clean) | 2 assets | tests pass; parity: identical outcome (**Airflow's own run fails** on Airflow 2.10.5: `LiteralValue` has no `endswith`; the converter's output also fails) | 1 asset, 1 check, 38 lines | **6 of 7: parity fails**: Airflow failed, the rewrite succeeds |
+| `pool_example` (clean) | a graph asset with a mapped op and the pool (2 assets in the report) | tests pass; parity: identical outcome | 1 graph asset (3 ops, pool on the mapped op), 1 check, 53 lines | 7 of 7 (parity: outcome only) |
+| `partner_ingest` (2 stubs) | 5 assets, **2 loud stubs** | shape tests pass; units deferred; the DAG fails at the first stub | 2 assets, 1 check, 88 lines; runs against a local stand-in | 7 of 7 (no Airflow baseline) |
+| `babel_format` (1 stub: `macros.ds_format_locale`) | 1 asset, **stub** | shape tests pass; materialize skipped (stub) | 1 asset, 1 check, 30 lines | 7 of 7 (no baseline: not run) |
+| `json_yaml_macros_toy` (2 stubs: `macros.json`, `macros.yaml`) | 2 assets, **2 stubs** | shape tests pass; materialize skipped | 1 asset, 1 check, 33 lines | 7 of 7 (no baseline) |
+| `basic_dataset_schedule_upstream_2` (1 stub: a name from an Airflow import) | 1 asset, **stub** | shape tests pass; materialize skipped | 1 asset (the Dataset's key), 0 checks (the source has nothing checkable), 17 lines | 7 of 7 (no baseline) |
+
+**Pass rates on this sample.** Converter: the 4 clean DAGs pass their generated tests (4 of 4) and, where parity was run, match Airflow (3 of 3); the 4 stubbed DAGs are translated only in shape (0 of 4 fully translated; every stubbed task fails when run, by design). Rewrite: 7 of 8 pass all seven gates; the eighth (`literal_wrapper_example`) fails the parity gate because the Airflow baseline itself fails, which the gate cannot tell apart from a behavioural difference (the converter's output reproduces that failure and so "matches"; whether a rewrite should is a decision for a person). Operators covered: the converter's stubs were a Jinja macro (`ds_format_locale`, `json`, `yaml`) three times, an Airflow import once and a function-valued sensor argument plus an Airflow connection read once; the rewrites replaced each with the library the macro stands for or plain Python. The converter route's ceiling on this sample is what it can translate mechanically; the rewrite route had no such ceiling but its evidence is thinner (no Airflow baseline for the DAGs that needed it most: they call external systems or use macros that were not eligible).
+
+**Effort.** 8 rewrites performed, one writing pass each plus the generator fixes below, against under a second for the converter. Not extrapolated to 100 DAGs.
+
+**What failed, why, and the generator fixes (made for the class, not per DAG).** No rewrite failed a gate through a defect of its own. The sample exposed gaps in what the spec and gates knew, each fixed in the generators:
+
+| Pattern | What was missing | Fix |
+|---|---|---|
+| a function passed as an argument (a sensor's `response_check`) | its logic was not in the spec | the IR records the user's function arguments' source; the spec prints it |
+| a connection read inside a callable (`BaseHook.get_connection("x")`) | not listed as a connection | the spec finds `get_connection("...")` calls (names only) |
+| DAG `params` (`context["params"]["num_guests"]`) | not shown in the spec's Markdown | a "DAG parameters" section |
+| `user_defined_macros` (`{{ my_json }}`) | not in the IR or the spec: my first `json_yaml_macros_toy` rewrite had to invent example values | the IR records them (values, and the names of function macros); the spec prints them; the rewrite now uses the real values |
+| a value reference `{"xcom_from": ..., "key": "return_value"}` | the `key` was masked as if it were a credential | value references are never masked |
+| Airflow internals in a mapped task's arguments (`deps`, `expand_input`) | noise in the spec | dropped |
+| a pool | its slot count is not in the IR (it lives in Airflow's metadata database) | the spec says so and the rewrite's header says how to set the limit |
+| gate: structural-check count | demanded as many as the task-per-asset converter derived | at least one when the converter derived any |
+| gate: parity of folded tasks | compared a folded task's value with the merged asset | only tasks the header says are `replaced by` an asset are compared (a task `merged into` or `folded into` another is not) |
+| gate: secret literal | the failure message echoed the literal | it names the variable and the line only |
+
+Remaining pattern, not fixed: the parity gate cannot distinguish a baseline that fails for an environmental reason from a behavioural difference (`literal_wrapper_example`); it reports the difference and leaves the decision to a person.
+
 ## When to use it
 
 For a DAG the converter deferred or stubbed, a redesign-heavy DAG, the plan's last wave, and the pilot DAGs where idiomatic output matters while the mapping is being learned. Keep the converter for the mechanical bulk. **Cost:** the rewrite spends model effort on every DAG (the prompt is 14 to 16 KB for these two, the model reads it, searches the registry and writes the file, and a failed gate means another pass); the converter takes under a second. The plan's effort figures do not include it.

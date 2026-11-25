@@ -1,0 +1,287 @@
+{
+ "acceptable_differences": [
+  "asset keys and the grouping of tasks into data products (one asset per data product is the target; several tasks may become one asset)",
+  "per-task run records, durations and logs are replaced by per-asset runs and materializations",
+  "XCom is replaced by asset values (IO manager) or by plain function calls inside an asset",
+  "the Airflow UI, task instances and `dag_run` objects have no counterpart",
+  "notification, wait and glue tasks may become sensors, hooks, run-status sensors or be folded into the producing asset",
+  "operators may be replaced by an official integration or a registry component with the same effect"
+ ],
+ "airflow_version": "2.10.5",
+ "assets_in": [],
+ "assets_out": [],
+ "connections": [],
+ "converter": {
+  "asset_checks": [],
+  "caveats": [],
+  "generated_tests": {
+   "file": "tests/test_pool_example.py",
+   "functions": 5,
+   "materialize_skip_reason": null,
+   "materializes": true,
+   "needs_shell": false
+  },
+  "keys": [
+   "pool_example/count_guests",
+   "pool_example/jump_into_the_pool"
+  ],
+  "notes": [
+   "dynamic task mapping became dynamic outputs inside one graph asset: the whole DAG runs as one Dagster run, mapped tasks are mapped ops and a task after them receives the collected list. Differences from Airflow: retries and pools apply per op; individual tasks cannot be re-run on their own (the asset is the unit), and an empty list skips the mapped step and gives the next step an empty list."
+  ],
+  "output": "python",
+  "reason": null,
+  "status": "converted",
+  "stubbed": [],
+  "task_keys": {
+   "count_guests": "pool_example/count_guests",
+   "jump_into_the_pool": "pool_example/jump_into_the_pool"
+  }
+ },
+ "cosmos_groups": [],
+ "dag_id": "pool_example",
+ "default_args": {},
+ "description": null,
+ "edges": [
+  [
+   "count_guests",
+   "jump_into_the_pool"
+  ]
+ ],
+ "file": "2-8-example-dags/pool_example.py",
+ "manifest_units": [],
+ "must_preserve": [
+  "the dependencies between tasks (what must finish before what), including trigger rules and which branch or skip decisions are taken",
+  "the schedule (cron or interval) and its timezone, and what `catchup` and `start_date` meant for missed intervals",
+  "retries, retry delay and backoff, pools and concurrency limits, execution timeouts",
+  "every value that one task passes to another, and every output a task persists (outlets / assets, files, tables, keys)",
+  "the failure behaviour of each step (what fails the run, what is skipped, what continues)",
+  "the connections and Variables used, by name (values come from the environment, never from the code)",
+  "the result of each external side effect (the file written, the message sent, the job started) for the same inputs"
+ ],
+ "owners": [
+  "airflow"
+ ],
+ "params": {
+  "num_guests": 23
+ },
+ "parity_baseline": {
+  "note": "Airflow's own outcome from dag.test(); a value is a repr truncated to 120 characters and may contain data",
+  "state": "success",
+  "tasks": {
+   "count_guests": {
+    "state": "success",
+    "value": "[0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22]"
+   },
+   "jump_into_the_pool": {
+    "state": "success",
+    "value": "None"
+   }
+  }
+ },
+ "purpose": [
+  {
+   "basis": "the task list",
+   "inferred": "no",
+   "statement": "a 2-task DAG using _PythonDecoratedOperator"
+  },
+  {
+   "basis": "tasks with no downstream task",
+   "inferred": "no",
+   "statement": "its final step(s) are jump_into_the_pool"
+  },
+  {
+   "basis": "no outlets, no connection ids",
+   "inferred": "yes",
+   "statement": "it has no persisted output and uses no connection, so it may be a demonstration or a local computation"
+  }
+ ],
+ "schedule": {
+  "asset_logic": null,
+  "assets": null,
+  "catchup": false,
+  "cron": null,
+  "has_dag_callbacks": false,
+  "interval_seconds": null,
+  "kind": "manual",
+  "max_active_runs": 16,
+  "settings": {
+   "concurrency": 16,
+   "fail_stop": false,
+   "max_active_runs": 16,
+   "max_active_tasks": 16,
+   "max_consecutive_failed_dag_runs": 0,
+   "render_template_as_native_obj": false
+  },
+  "start_date": "2023-12-01 00:00:00+00:00",
+  "timezone": "UTC"
+ },
+ "tags": [
+  "2-8",
+  "Pools",
+  "core"
+ ],
+ "tasks": [
+  {
+   "arguments": {
+    "op_args": [],
+    "op_kwargs": {},
+    "templates_dict": null
+   },
+   "callable": {
+    "name": "count_guests",
+    "params": [
+     "context"
+    ],
+    "source": "@task\ndef count_guests(**context):\n    num_guests = context[\"params\"][\"num_guests\"]\n    print(f\"There are {num_guests} people at my garden party!\")\n    print(\"They all want to jump into the pool!\")\n    return [i for i in range(num_guests)]\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "count_guests",
+     "source": "@task\ndef count_guests(**context):\n    num_guests = context[\"params\"][\"num_guests\"]\n    print(f\"There are {num_guests} people at my garden party!\")\n    print(\"They all want to jump into the pool!\")\n    return [i for i in range(num_guests)]\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [
+    "jump_into_the_pool"
+   ],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "airflow",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [],
+   "retries": 0,
+   "retry_delay_s": 300.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "count_guests",
+   "trigger_rule": "all_success",
+   "upstream": [],
+   "variables": [],
+   "wait_for_downstream": false
+  },
+  {
+   "arguments": {
+    "operator_extra_links": [],
+    "operator_name": "@task",
+    "start_from_trigger": false,
+    "start_trigger_args": null,
+    "subdag": null,
+    "supports_lineage": false,
+    "task_type": "_PythonDecoratedOperator",
+    "template_ext": [],
+    "template_fields": [
+     "templates_dict",
+     "op_args",
+     "op_kwargs"
+    ],
+    "template_fields_renderers": {
+     "op_args": "py",
+     "op_kwargs": "py",
+     "templates_dict": "json"
+    },
+    "ui_color": "#ffefeb",
+    "ui_fgcolor": "#000"
+   },
+   "callable": {
+    "name": "jump_into_the_pool",
+    "params": [
+     "guest"
+    ],
+    "source": "@task(\n    pool=MY_POOL_NAME,\n)\ndef jump_into_the_pool(guest):\n    print(f\"Guest number {guest} is jumping into the pool!\")\n    print(f\"Guest number {guest} is swimming in the pool!\")\n    swim_time = 10\n    time.sleep(swim_time)\n    print(\n        f\"After {swim_time} seconds, guest number {guest} is getting out of the pool!\"\n    )\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "jump_into_the_pool",
+     "source": "@task(\n    pool=MY_POOL_NAME,\n)\ndef jump_into_the_pool(guest):\n    print(f\"Guest number {guest} is jumping into the pool!\")\n    print(f\"Guest number {guest} is swimming in the pool!\")\n    swim_time = 10\n    time.sleep(swim_time)\n    print(\n        f\"After {swim_time} seconds, guest number {guest} is getting out of the pool!\"\n    )\n"
+    }
+   },
+   "callable_args": [
+    "operator_class",
+    "python_callable"
+   ],
+   "callbacks": [
+    "post_execute",
+    "pre_execute"
+   ],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [],
+   "execution_timeout_s": null,
+   "expand": {
+    "args": {
+     "guest": {
+      "key": "return_value",
+      "kind": "xcom",
+      "task_id": "count_guests",
+      "wrapper": "PlainXComArg"
+     }
+    },
+    "fixed": {},
+    "fixed_unserializable": [],
+    "form": "expand",
+    "op_args": false,
+    "partial": {}
+   },
+   "group": null,
+   "inlets": [],
+   "is_mapped": true,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "airflow",
+   "pool": "my_garden_pool",
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [
+    "count_guests"
+   ],
+   "retries": 0,
+   "retry_delay_s": 300.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "jump_into_the_pool",
+   "trigger_rule": "all_success",
+   "upstream": [
+    "count_guests"
+   ],
+   "variables": [],
+   "wait_for_downstream": false
+  }
+ ],
+ "user_defined_macro_functions": [],
+ "user_defined_macros": {},
+ "value_flow": [
+  [
+   "count_guests",
+   "jump_into_the_pool"
+  ]
+ ],
+ "variables": []
+}

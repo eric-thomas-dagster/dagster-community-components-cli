@@ -1,0 +1,42 @@
+{
+ "dag_id": "json_yaml_macros_toy",
+ "module": "rs_pkg.defs.json_yaml_macros_toy",
+ "passed": true,
+ "gates": [
+  {
+   "gate": "definitions_load",
+   "passed": true,
+   "detail": "dg check defs"
+  },
+  {
+   "gate": "generated_tests",
+   "passed": true,
+   "detail": "test_json_yaml_macros_toy_rewrite.py: 3 passed in 0.46s"
+  },
+  {
+   "gate": "asset_checks_present",
+   "passed": true,
+   "detail": "1 asset check(s) in the rewrite; the converter derived 0 from the source (at least 1 is required when it derived any)"
+  },
+  {
+   "gate": "parity",
+   "passed": true,
+   "detail": "not run (no Airflow baseline for this DAG: it may be ineligible, or none was given)"
+  },
+  {
+   "gate": "no_secret_values",
+   "passed": true,
+   "detail": "none found"
+  },
+  {
+   "gate": "no_invented_apis",
+   "passed": true,
+   "detail": "every import and component type resolves"
+  },
+  {
+   "gate": "tasks_accounted_for",
+   "passed": true,
+   "detail": "every Airflow task is named in the header with what happened to it"
+  }
+ ]
+}

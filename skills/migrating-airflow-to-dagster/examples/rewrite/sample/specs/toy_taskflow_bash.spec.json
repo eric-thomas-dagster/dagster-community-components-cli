@@ -1,0 +1,263 @@
+{
+ "acceptable_differences": [
+  "asset keys and the grouping of tasks into data products (one asset per data product is the target; several tasks may become one asset)",
+  "per-task run records, durations and logs are replaced by per-asset runs and materializations",
+  "XCom is replaced by asset values (IO manager) or by plain function calls inside an asset",
+  "the Airflow UI, task instances and `dag_run` objects have no counterpart",
+  "notification, wait and glue tasks may become sensors, hooks, run-status sensors or be folded into the producing asset",
+  "operators may be replaced by an official integration or a registry component with the same effect"
+ ],
+ "airflow_version": "2.10.5",
+ "assets_in": [],
+ "assets_out": [],
+ "connections": [],
+ "converter": {
+  "asset_checks": [
+   {
+    "asset": "toy_taskflow_bash/upstream_task",
+    "kind": "returned_value",
+    "name": "returned_value_present"
+   }
+  ],
+  "caveats": [],
+  "generated_tests": {
+   "file": "tests/test_toy_taskflow_bash.py",
+   "functions": 5,
+   "materialize_skip_reason": null,
+   "materializes": true,
+   "needs_shell": true
+  },
+  "keys": [
+   "toy_taskflow_bash/upstream_task",
+   "toy_taskflow_bash/bash_task"
+  ],
+  "notes": [],
+  "output": "python",
+  "reason": null,
+  "status": "converted",
+  "stubbed": [],
+  "task_keys": {
+   "bash_task": "toy_taskflow_bash/bash_task",
+   "upstream_task": "toy_taskflow_bash/upstream_task"
+  }
+ },
+ "cosmos_groups": [],
+ "dag_id": "toy_taskflow_bash",
+ "default_args": {},
+ "description": null,
+ "edges": [
+  [
+   "upstream_task",
+   "bash_task"
+  ]
+ ],
+ "file": "2-9-example-dags/toys/toy_taskflow_bash.py",
+ "manifest_units": [],
+ "must_preserve": [
+  "the dependencies between tasks (what must finish before what), including trigger rules and which branch or skip decisions are taken",
+  "the schedule (cron or interval) and its timezone, and what `catchup` and `start_date` meant for missed intervals",
+  "retries, retry delay and backoff, pools and concurrency limits, execution timeouts",
+  "every value that one task passes to another, and every output a task persists (outlets / assets, files, tables, keys)",
+  "the failure behaviour of each step (what fails the run, what is skipped, what continues)",
+  "the connections and Variables used, by name (values come from the environment, never from the code)",
+  "the result of each external side effect (the file written, the message sent, the job started) for the same inputs"
+ ],
+ "owners": [
+  "airflow"
+ ],
+ "params": {},
+ "parity_baseline": {
+  "note": "Airflow's own outcome from dag.test(); a value is a repr truncated to 120 characters and may contain data",
+  "state": "success",
+  "tasks": {
+   "bash_task": {
+    "state": "success",
+    "value": "'Carly urgently needs a dog!'"
+   },
+   "upstream_task": {
+    "state": "success",
+    "value": "{'names': ['Trevor', 'Grant', 'Marcy', 'Carly', 'Philip'], 'dogs': [1, 2, 2, 0, 4]}"
+   }
+  }
+ },
+ "purpose": [
+  {
+   "basis": "the task list",
+   "inferred": "no",
+   "statement": "a 2-task DAG using _BashDecoratedOperator, _PythonDecoratedOperator"
+  },
+  {
+   "basis": "tasks with no downstream task",
+   "inferred": "no",
+   "statement": "its final step(s) are bash_task"
+  },
+  {
+   "basis": "no outlets, no connection ids",
+   "inferred": "yes",
+   "statement": "it has no persisted output and uses no connection, so it may be a demonstration or a local computation"
+  }
+ ],
+ "schedule": {
+  "asset_logic": null,
+  "assets": null,
+  "catchup": false,
+  "cron": null,
+  "has_dag_callbacks": false,
+  "interval_seconds": null,
+  "kind": "manual",
+  "max_active_runs": 16,
+  "settings": {
+   "concurrency": 16,
+   "fail_stop": false,
+   "max_active_runs": 16,
+   "max_active_tasks": 16,
+   "max_consecutive_failed_dag_runs": 0,
+   "render_template_as_native_obj": false
+  },
+  "start_date": null,
+  "timezone": "UTC"
+ },
+ "tags": [
+  "@task.bash",
+  "toy"
+ ],
+ "tasks": [
+  {
+   "arguments": {
+    "bash_command": null,
+    "cwd": null,
+    "env": null,
+    "op_args": [],
+    "op_kwargs": {
+     "dog_owner_data": {
+      "key": "return_value",
+      "xcom_from": "upstream_task"
+     }
+    }
+   },
+   "callable": {
+    "name": "bash_task",
+    "params": [
+     "dog_owner_data"
+    ],
+    "source": "@task.bash\ndef bash_task(dog_owner_data):\n    names_of_dogless_people = []\n    for name, dog in zip(dog_owner_data[\"names\"], dog_owner_data[\"dogs\"]):\n        if dog < 1:\n            names_of_dogless_people.append(name)\n\n    if names_of_dogless_people:\n        if len(names_of_dogless_people) == 1:\n            return f'echo \"{names_of_dogless_people[0]} urgently needs a dog!\"'\n        else:\n            names_of_dogless_people_str = \" and \".join(names_of_dogless_people)\n            return f'echo \"{names_of_dogless_people_str} urgently need a dog!\"'\n    else:\n        return f'echo \"All good, everyone has at least one dog!\"'\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "bash_task",
+     "source": "@task.bash\ndef bash_task(dog_owner_data):\n    names_of_dogless_people = []\n    for name, dog in zip(dog_owner_data[\"names\"], dog_owner_data[\"dogs\"]):\n        if dog < 1:\n            names_of_dogless_people.append(name)\n\n    if names_of_dogless_people:\n        if len(names_of_dogless_people) == 1:\n            return f'echo \"{names_of_dogless_people[0]} urgently needs a dog!\"'\n        else:\n            names_of_dogless_people_str = \" and \".join(names_of_dogless_people)\n            return f'echo \"{names_of_dogless_people_str} urgently need a dog!\"'\n    else:\n        return f'echo \"All good, everyone has at least one dog!\"'\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {
+    "dog_owner_data": {
+     "key": "return_value",
+     "xcom_from": "upstream_task"
+    }
+   },
+   "operator": "_BashDecoratedOperator",
+   "outlets": [],
+   "owner": "airflow",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [
+    "upstream_task"
+   ],
+   "retries": 0,
+   "retry_delay_s": 300.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "bash_task",
+   "trigger_rule": "all_success",
+   "upstream": [
+    "upstream_task"
+   ],
+   "variables": [],
+   "wait_for_downstream": false
+  },
+  {
+   "arguments": {
+    "op_args": [],
+    "op_kwargs": {},
+    "templates_dict": null
+   },
+   "callable": {
+    "name": "upstream_task",
+    "params": [],
+    "source": "@task\ndef upstream_task():\n    dog_owner_data = {\n        \"names\": [\"Trevor\", \"Grant\", \"Marcy\", \"Carly\", \"Philip\"],\n        \"dogs\": [1, 2, 2, 0, 4],\n    }\n\n    return dog_owner_data\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "upstream_task",
+     "source": "@task\ndef upstream_task():\n    dog_owner_data = {\n        \"names\": [\"Trevor\", \"Grant\", \"Marcy\", \"Carly\", \"Philip\"],\n        \"dogs\": [1, 2, 2, 0, 4],\n    }\n\n    return dog_owner_data\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [
+    "bash_task"
+   ],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "airflow",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [],
+   "retries": 0,
+   "retry_delay_s": 300.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "upstream_task",
+   "trigger_rule": "all_success",
+   "upstream": [],
+   "variables": [],
+   "wait_for_downstream": false
+  }
+ ],
+ "user_defined_macro_functions": [],
+ "user_defined_macros": {},
+ "value_flow": [
+  [
+   "upstream_task",
+   "bash_task"
+  ]
+ ],
+ "variables": []
+}

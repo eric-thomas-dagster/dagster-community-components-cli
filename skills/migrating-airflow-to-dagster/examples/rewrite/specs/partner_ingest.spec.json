@@ -255,7 +255,7 @@
    "arguments": {
     "op_args": [
      {
-      "key": "<redacted: a credential-like argument; its value is not recorded>",
+      "key": "return_value",
       "xcom_from": "reshape"
      }
     ],
@@ -295,7 +295,7 @@
    "max_active_tis_per_dag": null,
    "op_args": [
     {
-     "key": "<redacted: a credential-like argument; its value is not recorded>",
+     "key": "return_value",
      "xcom_from": "reshape"
     }
    ],
@@ -379,7 +379,7 @@
    "arguments": {
     "op_args": [
      {
-      "key": "<redacted: a credential-like argument; its value is not recorded>",
+      "key": "return_value",
       "xcom_from": "fetch_export"
      }
     ],
@@ -419,7 +419,7 @@
    "max_active_tis_per_dag": null,
    "op_args": [
     {
-     "key": "<redacted: a credential-like argument; its value is not recorded>",
+     "key": "return_value",
      "xcom_from": "fetch_export"
     }
    ],
@@ -522,6 +522,8 @@
    "wait_for_downstream": false
   }
  ],
+ "user_defined_macro_functions": [],
+ "user_defined_macros": {},
  "value_flow": [
   [
    "fetch_export",

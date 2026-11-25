@@ -1,0 +1,162 @@
+{
+ "acceptable_differences": [
+  "asset keys and the grouping of tasks into data products (one asset per data product is the target; several tasks may become one asset)",
+  "per-task run records, durations and logs are replaced by per-asset runs and materializations",
+  "XCom is replaced by asset values (IO manager) or by plain function calls inside an asset",
+  "the Airflow UI, task instances and `dag_run` objects have no counterpart",
+  "notification, wait and glue tasks may become sensors, hooks, run-status sensors or be folded into the producing asset",
+  "operators may be replaced by an official integration or a registry component with the same effect"
+ ],
+ "airflow_version": "2.10.5",
+ "assets_in": [],
+ "assets_out": [],
+ "connections": [],
+ "converter": {
+  "asset_checks": [],
+  "caveats": [
+   {
+    "kind": "stub",
+    "reason": "template uses macros ['ds_format_locale'], which the runtime does not provide",
+    "task": "welcher_tag_ist_heute"
+   }
+  ],
+  "generated_tests": {
+   "file": "tests/test_babel_format.py",
+   "functions": 5,
+   "materialize_skip_reason": "the DAG contains a loud stub (AIRFLOW-CAVEAT), which fails when it runs by design",
+   "materializes": false,
+   "needs_shell": false
+  },
+  "keys": [
+   "babel_format/welcher_tag_ist_heute"
+  ],
+  "notes": [],
+  "output": "python",
+  "reason": null,
+  "status": "converted",
+  "stubbed": [
+   "welcher_tag_ist_heute"
+  ],
+  "task_keys": {
+   "welcher_tag_ist_heute": "babel_format/welcher_tag_ist_heute"
+  }
+ },
+ "cosmos_groups": [],
+ "dag_id": "babel_format",
+ "default_args": {},
+ "description": null,
+ "edges": [],
+ "file": "2-10-example-dags/other/babel_format.py",
+ "manifest_units": [],
+ "must_preserve": [
+  "the dependencies between tasks (what must finish before what), including trigger rules and which branch or skip decisions are taken",
+  "the schedule (cron or interval) and its timezone, and what `catchup` and `start_date` meant for missed intervals",
+  "retries, retry delay and backoff, pools and concurrency limits, execution timeouts",
+  "every value that one task passes to another, and every output a task persists (outlets / assets, files, tables, keys)",
+  "the failure behaviour of each step (what fails the run, what is skipped, what continues)",
+  "the connections and Variables used, by name (values come from the environment, never from the code)",
+  "the result of each external side effect (the file written, the message sent, the job started) for the same inputs"
+ ],
+ "owners": [
+  "airflow"
+ ],
+ "params": {},
+ "parity_baseline": null,
+ "purpose": [
+  {
+   "basis": "the task list",
+   "inferred": "no",
+   "statement": "a 1-task DAG using BashOperator"
+  },
+  {
+   "basis": "tasks with no downstream task",
+   "inferred": "no",
+   "statement": "its final step(s) are welcher_tag_ist_heute"
+  },
+  {
+   "basis": "no outlets, no connection ids",
+   "inferred": "yes",
+   "statement": "it has no persisted output and uses no connection, so it may be a demonstration or a local computation"
+  }
+ ],
+ "schedule": {
+  "asset_logic": null,
+  "assets": null,
+  "catchup": false,
+  "cron": null,
+  "has_dag_callbacks": false,
+  "interval_seconds": null,
+  "kind": "manual",
+  "max_active_runs": 16,
+  "settings": {
+   "concurrency": 16,
+   "fail_stop": false,
+   "max_active_runs": 16,
+   "max_active_tasks": 16,
+   "max_consecutive_failed_dag_runs": 0,
+   "render_template_as_native_obj": false
+  },
+  "start_date": "2024-08-01 00:00:00+00:00",
+  "timezone": "UTC"
+ },
+ "tags": [
+  "2-10",
+  "babel"
+ ],
+ "tasks": [
+  {
+   "arguments": {
+    "append_env": false,
+    "bash_command": "echo {{ macros.ds_format_locale(ds, '%Y-%m-%d', \"EEEE, 'der' d. MMMM yyyy\", 'de_DE') }}",
+    "cwd": null,
+    "env": null,
+    "output_encoding": "utf-8",
+    "skip_on_exit_code": [
+     99
+    ]
+   },
+   "callable": null,
+   "callable_arg_sources": {},
+   "callable_args": [
+    "output_processor"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {},
+   "operator": "BashOperator",
+   "outlets": [],
+   "owner": "airflow",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [],
+   "retries": 0,
+   "retry_delay_s": 300.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "welcher_tag_ist_heute",
+   "trigger_rule": "all_success",
+   "upstream": [],
+   "variables": [],
+   "wait_for_downstream": false
+  }
+ ],
+ "user_defined_macro_functions": [],
+ "user_defined_macros": {},
+ "value_flow": [],
+ "variables": []
+}

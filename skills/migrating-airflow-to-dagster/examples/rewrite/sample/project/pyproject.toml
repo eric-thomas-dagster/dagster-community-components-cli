@@ -1,0 +1,17 @@
+[project]
+name = "rs_pkg"
+version = "0.0.1"
+requires-python = ">=3.10"
+dependencies = ["dagster"]
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "rs_pkg"
+defs_module = "rs_pkg.defs"
+code_location_target_module = "rs_pkg.definitions"
+
+[tool.dagster]
+module_name = "rs_pkg.definitions"
+code_location_name = "rs_pkg"

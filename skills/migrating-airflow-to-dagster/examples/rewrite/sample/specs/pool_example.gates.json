@@ -1,0 +1,42 @@
+{
+ "dag_id": "pool_example",
+ "module": "rs_pkg.defs.pool_example",
+ "passed": true,
+ "gates": [
+  {
+   "gate": "definitions_load",
+   "passed": true,
+   "detail": "dg check defs"
+  },
+  {
+   "gate": "generated_tests",
+   "passed": true,
+   "detail": "test_pool_example_rewrite.py: 3 passed in 230.83s (0:03:50)"
+  },
+  {
+   "gate": "asset_checks_present",
+   "passed": true,
+   "detail": "1 asset check(s) in the rewrite; the converter derived 0 from the source (at least 1 is required when it derived any)"
+  },
+  {
+   "gate": "parity",
+   "passed": true,
+   "detail": "outcome and 0 value(s) match Airflow"
+  },
+  {
+   "gate": "no_secret_values",
+   "passed": true,
+   "detail": "none found"
+  },
+  {
+   "gate": "no_invented_apis",
+   "passed": true,
+   "detail": "every import and component type resolves"
+  },
+  {
+   "gate": "tasks_accounted_for",
+   "passed": true,
+   "detail": "every Airflow task is named in the header with what happened to it"
+  }
+ ]
+}

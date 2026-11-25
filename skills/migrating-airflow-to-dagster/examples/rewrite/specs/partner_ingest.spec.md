@@ -11,6 +11,10 @@ Facts read from the IR (what Airflow built). Statements marked *inferred* are no
 - its final step(s) are remove_tmp (tasks with no downstream task)
 - it waits for an external condition before processing (a sensor task) *inferred*
 
+## DAG parameters (`params`, readable as `context["params"]` and `{{ params.x }}`)
+
+none
+
 ## Schedule
 
 - kind `cron_data_interval`, cron `0 */6 * * *`, interval seconds None, timezone `UTC`
@@ -63,7 +67,7 @@ def fetch_export() -> list[dict]:
 - retries 2 (delay 600.0 s, exponential False); pool None; timeout None s; SLA None s; callbacks none
 - reads a value from: reshape; pushes a value: True; outlets none; inlets none
 - connections: none; Variables: none
-- resolved arguments: `{"op_args": [{"key": "<redacted: a credential-like argument; its value is not recorded>", "xcom_from": "reshape"}], "op_kwargs": {}, "templates_dict": null}`
+- resolved arguments: `{"op_args": [{"key": "return_value", "xcom_from": "reshape"}], "op_kwargs": {}, "templates_dict": null}`
 - arguments that hold a function: python_callable
 - source of the function given as `python_callable` (`publish`):
 
@@ -83,7 +87,7 @@ def publish(summary: dict) -> str:
     print(line)
     return line
 ```
-- called with args `[{"xcom_from": "reshape", "key": "<redacted: a credential-like argument; its value is not recorded>"}]` kwargs `{}`
+- called with args `[{"xcom_from": "reshape", "key": "return_value"}]` kwargs `{}`
 
 ### `remove_tmp` (BashOperator)
 
@@ -100,7 +104,7 @@ def publish(summary: dict) -> str:
 - retries 2 (delay 600.0 s, exponential False); pool None; timeout None s; SLA None s; callbacks none
 - reads a value from: fetch_export; pushes a value: True; outlets none; inlets none
 - connections: none; Variables: none
-- resolved arguments: `{"op_args": [{"key": "<redacted: a credential-like argument; its value is not recorded>", "xcom_from": "fetch_export"}], "op_kwargs": {}, "templates_dict": null}`
+- resolved arguments: `{"op_args": [{"key": "return_value", "xcom_from": "fetch_export"}], "op_kwargs": {}, "templates_dict": null}`
 - arguments that hold a function: python_callable
 - source of the function given as `python_callable` (`reshape`):
 
@@ -126,7 +130,7 @@ def reshape(rows: list[dict]) -> dict:
             out[r["customer_id"]] = out.get(r["customer_id"], 0.0) + float(r.get("amount", 0))
     return {"customers": len(out), "total": round(sum(out.values()), 2), "by_customer": out}
 ```
-- called with args `[{"xcom_from": "fetch_export", "key": "<redacted: a credential-like argument; its value is not recorded>"}]` kwargs `{}`
+- called with args `[{"xcom_from": "fetch_export", "key": "return_value"}]` kwargs `{}`
 
 ### `wait_for_export` (HttpSensor)
 
