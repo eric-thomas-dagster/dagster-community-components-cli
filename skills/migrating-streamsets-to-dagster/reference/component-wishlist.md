@@ -12,8 +12,8 @@ top of each section. Keep this file current whenever the converter gains or drop
 | 3 | **Delta Lake / Databricks writer with merge-by-key** (insert, update, delete by key columns, table auto-create, new-column drift) | The Databricks Delta Lake destination appears in 4 of the 6 public samples; CDC needs delete-by-key | Generated SQL via SQLAlchemy (`delta_target`), delete-then-insert. `dataframe_to_delta_table` (delta-rs) and `SQLToDatabaseAssetComponent` upsert exist: confirm they cover CDC deletes and a Databricks SQL warehouse target |
 | 4 | **Binlog/CDC micro-batch source** (MySQL binary log; later Oracle, PostgreSQL, SQL Server) that reads from a stored position to "caught up" and stops | CDC is the main thing that keeps pipelines on StreamSets; today those pipelines are tier 1 only | Not translated. No CDC component in the registry. Tests use a stand-in feed (`tests/overrides/cdc_feed.py`) with an assumed record shape |
 | 5 | **StreamSetsWorkspaceComponent: list jobs, job metrics, job-to-pipeline binding, schedules** | Tier 1 for continuous pipelines needs jobs declared by id; a Control Hub export carries pipelines but not their schedules | `jobs:` declared by hand; status only |
-| 6 | **Kafka producer sink** | Kafka destination appears in real estates; no sink | Stub. Registry has Kafka consumer and monitor only |
-| 7 | **GeoIP (MaxMind) lookup transform** | Geolocation processor appears in web-log pipelines | Stub. Registry's `geocoder` is address-based |
+| 6 | **Kafka producer sink** (JSON messages per record, topic expression, key, partitioner, flush per batch) | Kafka destinations are common; the registry has a consumer and monitor only | Interim generated code (`kafka_target`, tested against a fake client only). Still wanted as a registry component |
+| 7 | **GeoIP (MaxMind) lookup transform** (GeoIP2 City/Country `.mmdb`: latitude, longitude, country, city, postal code) | Geolocation processor appears in web-log pipelines | Interim generated code (`geolocation`, tested against a generated `.mmdb`). The registry's `geocoder` is address-based. Still wanted as a registry component |
 | 8 | **JDBC multitable incremental read** (offset columns, per-table offsets, partitioning) | The multitable origin is the usual database-to-warehouse origin | Generated full-table read every run (`jdbc_multitable_origin`). `SlingReplicationAssetComponent` may cover it: confirm incremental keys and table patterns |
 | 9 | **Salesforce SOQL with stored offset** | The Salesforce origin runs `WHERE Id > '${OFFSET}' ORDER BY Id` | Generated `simple_salesforce` loop. `SalesforceIngestionComponent` is dlt-based: confirm custom SOQL and offsets |
 | 10 | **Record transforms with StreamSets semantics**: field type conversion (incl. Java date patterns), rename, order, split, flatten, mask, lookup | Eight processors are generated as record-level Python | Registry has dataframe versions (`type_coercer`, `dynamic_rename`, `data_masking`, `lookup`, `dataframe_flatten_nested_columns`, `filter`); confirm they can replace the record-level ones, or say they cannot (edge semantics differ) |
@@ -31,10 +31,3 @@ top of each section. Keep this file current whenever the converter gains or drop
 ## Resolved
 
 (none yet)
-
-## Dropped from the asks
-
-| Was | Why |
-|---|---|
-| #6 Kafka producer sink | the skill now translates the Kafka producer (against a fake client); a registry sink would still be better |
-| #7 GeoIP lookup | the skill now translates Geolocation with `maxminddb`; a registry transform would still be better |
