@@ -26,6 +26,8 @@ StreamSets pipelines are *record streams*: a pipeline is usually a continuously 
 | 1b. Engine direct (no Control Hub) | `convert --engine-tier1 noop|start` also writes `defs/streamsets_engine/defs.yaml`: the registry `StreamSetsEngineComponent` (0.10.187) with one asset per Data Collector pipeline (`pipeline_id` from the export), a status sensor and a running check. `noop` observes, `start` makes materializing start the pipeline. Fill `STREAMSETS_ENGINE_URL` / `_USERNAME` / `_PASSWORD`. Data Collector only (not Transformer). | The engine runs with no Control Hub in front of it. Loading and asset listing are tested in the component's demo mode; start/stop against a live engine is not run by this skill's tests. |
 | 2. Native | This skill's converter: batch pipelines become Dagster assets | You want Dagster to own execution and to retire the StreamSets pipeline |
 
+When a Data Collector pipeline's only destination is an HTTP Client or Kafka Producer with static settings, tier 2 emits **two assets**: the converted record graph (returns a DataFrame) and the registry `DataframeToHttpComponent` / `DataframeToKafkaComponent` that sends it (own retries, batching, auth). Gate 4 does not run that sink asset in dry mode (it would really send); `sink_components.json` lists it.
+
 ## Hard rules
 
 1. **Stubs must be loud, never quiet.** Every stage is translated, translated with a stated caveat, or a stub. A stub keeps its place in the graph, and a pipeline that holds one **fails before it reads any data** with `SDC-CAVEAT: <stage>: <reason>`. A body that succeeds while skipping a stage is never acceptable.

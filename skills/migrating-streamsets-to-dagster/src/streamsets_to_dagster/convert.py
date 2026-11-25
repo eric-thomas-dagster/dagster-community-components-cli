@@ -1,6 +1,7 @@
 """Estate -> Dagster project. One asset per pipeline; every stage becomes a runtime call, a translated-with-caveat call, or a loud stub."""
 from __future__ import annotations
 
+import re
 import textwrap
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -723,12 +724,64 @@ def _override_call(s: Stage, mod: str) -> str:
             f"{_err(s)}{_pre(s)})")
 
 
+def _split_sink(p: Pipeline, order: list) -> tuple | None:
+    """The one destination a registry component can run on the pipeline's output DataFrame (HTTP Client or Kafka Producer, static settings), as
+    (stage, component class, attributes, notes), or None when the stage must stay in the record graph."""
+    dests = [x for x in order if x.role in ("destination", "executor")]
+    if len(dests) != 1:
+        return None
+    s = dests[0]
+    c = s.conf
+    if s.events or s.outputs or s.preconditions or len(s.inputs) != 1 or (c.get("conf.dataFormat") or "JSON") != "JSON":
+        return None
+    dyn = lambda v: v is not None and ("${" in str(v) or "#{" in str(v))          # noqa: E731
+    env = lambda n: "SDC_SECRET_" + re.sub(r"[^A-Za-z0-9]", "_", s.instance).upper() + "_" + n          # noqa: E731
+    notes = ["runs as a registry component on the pipeline's output DataFrame (a second asset): the component's own retry, batching and failure handling apply, not the stage's",
+             "a record key the pipeline did not set is sent as null (a DataFrame column), not omitted"]
+    if s.cls == "HttpClientDTarget":
+        url, method = c.get("conf.resourceUrl"), c.get("conf.httpMethod") or "GET"
+        hdr = _rows(c.get("conf.headers"))
+        if not url or dyn(url) or method not in ("POST", "PUT") or any(dyn(h.get("value")) or dyn(h.get("key")) for h in hdr):
+            return None
+        if (c.get("conf.pagination.mode") or "NONE") != "NONE" or (c.get("conf.client.authType") or "NONE") not in ("NONE", "BASIC"):
+            return None
+        a = {"url": url, "method": method, "headers": {h["key"]: h.get("value") or "" for h in hdr if h.get("key")} or None, "batch_mode": "per_record", "verify_ssl": True}
+        if c.get("conf.singleRequestPerBatch"):
+            a["batch_mode"] = "batch_array" if (c.get("conf.dataGeneratorFormatConfig.jsonMode") or "MULTIPLE_OBJECTS") == "ARRAY_OBJECTS" else "ndjson"
+        if (c.get("conf.client.authType") or "NONE") == "BASIC":
+            a.update(auth_type="basic", auth_username_env_var=env("USERNAME"), auth_password_env_var=env("PASSWORD"))
+            notes.append(f"basic auth: set {env('USERNAME')} and {env('PASSWORD')}")
+        a = {k: v for k, v in a.items() if v is not None}
+        if c.get("conf.client.useProxy"):
+            notes.append("the stage's proxy setting is not applied; set HTTPS_PROXY/HTTP_PROXY where the code location runs")
+        return s, "DataframeToHttpComponent", a, notes
+    if s.cls == "KafkaDTarget":
+        topic, brokers = c.get("conf.topic"), c.get("conf.metadataBrokerList")
+        if c.get("conf.runtimeTopicResolution") or not topic or not brokers or dyn(topic) or dyn(brokers):
+            return None
+        notes.append("needs the `kafka-python` package; one JSON message per row, no key, PLAINTEXT unless you add `security_protocol` and SASL settings to the component")
+        return s, "DataframeToKafkaComponent", {"bootstrap_servers": brokers, "topic": topic}, notes
+    return None
+
+
 def convert_pipeline(p: Pipeline, items: list[Item], overrides: dict | None = None, files: dict | None = None) -> tuple[str, str, dict]:
     """(asset source, asset name, meta)"""
     name = "ss_" + slug(p.title)
     lines, stubs, caveats, translated, replaced = [], [], [], 0, 0
     order = p.topo()
+    split = _split_sink(p, order) if not any(t == p.title for t, _ in (overrides or {})) else None
+    sink_asset = ""
     for s in order:
+        if split and s is split[0]:
+            sink_asset = f"{name}_{slug(s.instance)}"
+            attrs = {"asset_name": sink_asset, "upstream_asset_key": name, "group_name": "streamsets", **split[2]}
+            import yaml
+            files[f"defs/{slug(p.title)}/{sink_asset}/defs.yaml"] = yaml.safe_dump({"type": f"dagster_community_components.{split[1]}", "attributes": attrs}, sort_keys=False, width=140)
+            translated += 1
+            for t in split[3]:
+                caveats.append(f"{s.instance}: {t}")
+            lines.append(f"    rt.frame_sink(run, {s.instance!r}, inputs={s.inputs!r})")
+            continue
         src = (overrides or {}).get((p.title, s.instance))
         if src is not None:
             mod = f"ov_{slug(p.title)}_{slug(s.instance)}"
@@ -783,8 +836,9 @@ def {name}(context: dg.AssetExecutionContext):
     run = rt.Run(context, {p.title!r}, C, rt.load_offsets(context, dg.AssetKey({name!r})), pid={p.id!r})
 """ + body + """
     stats = run.execute()
-    return dg.MaterializeResult(metadata={"stats": dg.MetadataValue.json(stats), "sdc_offsets": dg.MetadataValue.json(run.offsets_out)})
-""")
+""" + ("""    return dg.Output(rt.frame(run), metadata={"stats": dg.MetadataValue.json(stats), "sdc_offsets": dg.MetadataValue.json(run.offsets_out)})
+""" if sink_asset else """    return dg.MaterializeResult(metadata={"stats": dg.MetadataValue.json(stats), "sdc_offsets": dg.MetadataValue.json(run.offsets_out)})
+"""))
     status = CONVERTED
     if stubs or caveats or streaming:
         status = REVIEW
@@ -803,8 +857,8 @@ def {name}(context: dg.AssetExecutionContext):
                       + "not covered: " + "; ".join(cp["gaps"][:6]) + ("; ..." if len(cp["gaps"]) > 6 else ""))
     items.insert(next((i for i, x in enumerate(items) if x.kind == "stage" and x.artifact == name), len(items)),
                  Item("pipeline", p.title, name, status, "stubs" if stubs else ("caveats" if caveats else ""), notes + caveats + [caveats_cp],
-                      {"asset": name, "deps": []}))
-    return code, name, {"component_plan": cp, "shape": shape, "translated": translated, "stages": stage_count, "stubs": [(s.instance, w) for s, w in stubs], "caveats": caveats,
+                      {"asset": name, "deps": []} if not sink_asset else {"asset": name, "deps": [], "assets": [{"asset": name, "deps": []}, {"asset": sink_asset, "deps": [name]}]}))
+    return code, name, {"sink_component": sink_asset, "component_plan": cp, "shape": shape, "translated": translated, "stages": stage_count, "stubs": [(s.instance, w) for s, w in stubs], "caveats": caveats,
                         "streaming": streaming, "secrets": secrets, "constants": list(consts), "status": status}
 
 
@@ -882,6 +936,11 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
     pipes = result.meta.get("pipelines", {}).values()
     deps = ['"dagster>=1.11"', '"sqlalchemy>=2"']
+    sinks = [m["sink_component"] for m in pipes if m.get("sink_component")]
+    if sinks:
+        deps += ['"dagster-community-components>=0.10.187"', '"pandas"', '"requests"']
+        if any("dataframe_to_kafka" in k or "DataframeToKafka" in v for k, v in result.files.items() for v in [v]):
+            deps += ['"kafka-python"']
     if any(m.get("components") for m in pipes) or result.meta.get("engine_tier1"):
         deps += ['"dagster-community-components>=0.10.187"', '"polars"', '"pandas"', '"pyarrow"']
     if any(m["translated"] for m in pipes if not m.get("components")):
@@ -950,4 +1009,7 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
     mods = sorted(Path(rel).stem for rel in result.files if rel.startswith("overrides/"))
     (root / "overrides" / "__init__.py").write_text("".join(f"from . import {m}  # noqa: F401\n" for m in mods))
     from .manifest import build_manifest
+    if sinks:
+        import json as _json
+        (out_dir / "sink_components.json").write_text(_json.dumps(sinks))
     (out_dir / "MIGRATION.md").write_text(render_report(build_manifest(result)))

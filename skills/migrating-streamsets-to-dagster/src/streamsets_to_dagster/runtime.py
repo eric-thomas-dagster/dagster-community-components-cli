@@ -1520,6 +1520,23 @@ def kafka_origin(run: Run, inst: str, brokers: str, group: str, topics: list[str
     run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
 
 
+def frame_sink(run: Run, inst: str, *, inputs, on_error="TO_ERROR", pre=(), req=()):
+    """Stands in for a destination that a registry component now runs: the records that reach it become the asset's DataFrame (`frame(run)`)."""
+    rows: list = run.__dict__.setdefault("frame_rows", [])
+
+    def go(recs):
+        rows.extend(r.value for r in recs)
+        return {}
+    run.add(Stage(inst, go, inputs=inputs, on_error=on_error, pre=pre, req=req))
+
+
+def frame(run: Run):
+    """The DataFrame for `frame_sink`. A key a record lacks becomes null (not NaN), so a component writing JSON never emits `NaN`."""
+    import pandas as pd
+    df = pd.DataFrame(run.__dict__.get("frame_rows", []))
+    return df.astype(object).where(df.notna(), None) if len(df) else df
+
+
 def kafka_target(run: Run, inst: str, brokers: str, topic_fn, *, inputs, on_error="TO_ERROR", pre=(), req=()):
     """Kafka producer: one JSON message per record to `topic_fn(record)`; flushed at the end of each batch."""
     prod: list = []

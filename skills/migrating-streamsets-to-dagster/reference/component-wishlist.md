@@ -58,7 +58,8 @@ The Transformer (Spark) pipelines convert to `polars_pipeline` steps today (join
 | Component | Status | Why |
 |---|---|---|
 | `streamsets_engine` | **emitted** (`convert --engine-tier1`), loaded in demo mode in tests | whole-pipeline, no dataframe needed |
-| `dataframe_to_http`, `dataframe_to_kafka`, `geoip_lookup`, `mysql_cdc_monitor`, `scd_type_*` | not emitted | Data Collector pipelines run as a record graph inside one asset; these components take a DataFrame asset. Using them means splitting a pipeline at the destination (graph asset -> frame asset -> component). That is a design decision, listed in section 2, not a drop-in swap. Transformer stage class names for Kafka/HTTP/SCD destinations are unverified (no export has them) |
+| `dataframe_to_http`, `dataframe_to_kafka` | **emitted** for the simple case | a pipeline whose only destination is an HTTP Client (POST/PUT, static URL and headers, NONE/BASIC auth, JSON) or a Kafka Producer (static topic and brokers, JSON) is split in two assets: the record graph returns a DataFrame and the component sends it. Tested end to end against a local web server. Anything dynamic stays in the graph |
+| `geoip_lookup`, `mysql_cdc_monitor`, `scd_type_*` | not emitted | Geolocation is a mid-pipeline processor (splitting there is a bigger change); the CDC sensor needs a CDC apply asset; no Transformer export or definition has SCD or the Transformer Kafka/HTTP destinations, so their property names are unverified |
 
 ## 2. Decision for the components session
 

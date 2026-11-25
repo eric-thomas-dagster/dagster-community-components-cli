@@ -98,8 +98,12 @@ pkg_dir = next(p for p in Path("src").iterdir() if (p / "defs").is_dir())
 defs = dg.load_from_defs_folder(path_within_project=pkg_dir)
 job = defs.get_implicit_global_asset_job_def()
 out = {}
+skip = set(json.loads(Path("sink_components.json").read_text())) if Path("sink_components.json").exists() else set()
 for spec in defs.resolve_all_asset_specs():
     key = spec.key
+    if "/".join(key.path) in skip:
+        out["/".join(key.path)] = {"ok": True, "error": "", "cls": "", "skipped": "registry component that sends data: not run in dry mode"}
+        continue
     pd = spec.partitions_def
     pk = None
     if pd is not None:
