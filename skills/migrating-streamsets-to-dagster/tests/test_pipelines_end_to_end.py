@@ -204,3 +204,52 @@ def test_jython_scripts_run_with_the_scripting_objects(tmp_path, monkeypatch, mo
     assert dg.materialize([asset_of(mod)], instance=dg.DagsterInstance.ephemeral()).success
     out = next((tmp_path / "out").iterdir())
     assert [json.loads(x) for x in out.read_text().splitlines()] == [{"a": 1, "total": 2}, {"a": 5, "total": 10}]
+
+
+def test_js_then_vendor_http_destination_through_a_generated_project(tmp_path, monkeypatch):
+    """JDBC -> JavaScript evaluator -> Anodot destination (an HTTP POST of a JSON array), converted and run against a local web server."""
+    import http.server
+    import threading
+    posts = []
+
+    class H(http.server.BaseHTTPRequestHandler):
+        def do_POST(self):
+            posts.append((self.path, json.loads(self.rfile.read(int(self.headers["Content-Length"])))))
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(b"{}")
+
+        def log_message(self, *a):
+            pass
+    srv = http.server.HTTPServer(("127.0.0.1", 0), H)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    def stage(inst, name, lib, ins, outs, conf):
+        return {"instanceName": inst, "stageName": name, "library": lib, "inputLanes": ins, "outputLanes": outs, "eventLanes": [],
+                "configuration": [{"name": k, "value": v} for k, v in conf.items()]}
+    js = "for (var i = 0; i < records.length; i++) { var r = sdcFunctions.createRecord('m'); r.value = {what: 'cpu', value: records[i].value.a * state.k}; output.write(r); }"
+    cfg = {"pipelineConfig": {"pipelineId": "v1", "title": "Vendor demo", "configuration": [
+        {"name": "executionMode", "value": "STANDALONE"}, {"name": "constants", "value": [{"key": "BASE", "value": f"http://127.0.0.1:{srv.server_port}"}]}], "stages": [
+        stage("Src_01", "x_origin_jdbc_TableJdbcDSource", "jdbc-lib", [], ["l1"], {
+            "hikariConfigBean.connectionString": "jdbc:mysql://h/db", "tableJdbcConfigBean.tableConfigs": [{"tablePattern": "t"}]}),
+        stage("Js_01", "x_processor_javascript_JavaScriptDProcessor", "js-lib", ["l1"], ["l2"], {"script": js, "initScript": "state.k = 10;", "processingMode": "BATCH"}),
+        stage("An_01", "anodot_AnodotDTarget", "anodot", ["l2"], [], {
+            "conf.resourceUrl": "${BASE}/api/v1/metrics?protocol=anodot20", "conf.httpMethod": "POST", "conf.dataFormat": "JSON", "conf.singleRequestPerBatch": True,
+            "conf.dataGeneratorFormatConfig.jsonMode": "ARRAY_OBJECTS", "conf.client.authType": "NONE"})]}}
+    (tmp_path / "in").mkdir()
+    (tmp_path / "in" / "p.json").write_text(json.dumps(cfg))
+    res = convert(load(tmp_path / "in"), "e2e_vendor")
+    assert not [i for i in res.items if i.kind == "stage"]
+    write_project(res, tmp_path / "e2e_vendor", "e2e_vendor")
+    sys.path.insert(0, str(tmp_path / "e2e_vendor" / "src"))
+    mod = importlib.import_module("e2e_vendor.defs.streamsets")
+    src = f"sqlite:///{tmp_path / 's.db'}"
+    with sa.create_engine(src).begin() as c:
+        c.execute(sa.text("CREATE TABLE t (a INTEGER)"))
+        c.execute(sa.text("INSERT INTO t VALUES (1),(2)"))
+    monkeypatch.setenv("SDC_SQLALCHEMY_URL_SRC_01", src)
+    try:
+        assert dg.materialize([asset_of(mod)], instance=dg.DagsterInstance.ephemeral()).success
+    finally:
+        srv.shutdown()
+    assert posts == [("/api/v1/metrics?protocol=anodot20", [{"what": "cpu", "value": 10}, {"what": "cpu", "value": 20}])]

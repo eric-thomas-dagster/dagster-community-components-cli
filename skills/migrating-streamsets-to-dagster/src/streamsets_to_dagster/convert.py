@@ -21,14 +21,22 @@ STREAMING_ORIGINS = {
     "TcpServerDSource": "TCP server", "UDPDSource": "UDP source", "CoapServerDSource": "CoAP server",
 }
 # origins that poll forever in StreamSets but can be read as one batch of what exists when the run starts
-BATCHED_CONTINUOUS = {"SpoolDirDSource": "Directory"}
-SCRIPTS = {"GroovyDProcessor": "Groovy", "JythonDProcessor": "Jython", "JavaScriptDProcessor": "JavaScript",
-           "GroovyDSource": "Groovy", "JythonDSource": "Jython", "JavaScriptDSource": "JavaScript"}
+BATCHED_CONTINUOUS = {"SpoolDirDSource": "Directory", "JythonDSource": "Jython scripting"}
+SCRIPTS = {"GroovyDProcessor": "Groovy", "GroovyDSource": "Groovy", "JavaScriptDSource": "JavaScript"}
 SUGGEST = {
     "HdfsDTarget": "write to object storage (fsspec) or load the warehouse directly; Hadoop is usually being retired in the same move",
     "HiveMetadataDProcessor": "Hive drift handling belongs to the warehouse load; replace it with a schema-sync step",
     "HiveMetastoreDTarget": "see HiveMetadataDProcessor", "HiveQueryDExecutor": "run the query through the warehouse resource",
     "KafkaDSource": "use the registry's KafkaToDatabaseAssetComponent with kafka_monitor, or keep the stream in StreamSets",
+    "MultiKafkaDSource": "use the registry's KafkaToDatabaseAssetComponent with kafka_monitor, or keep the stream in StreamSets",
+    "MongoDBDSource": "use the registry's mongodb_reader component",
+    "ElasticsearchDSource": "use the registry's elasticsearch_reader component",
+    "ElasticSearchDTarget": "use the registry's elasticsearch_asset component",
+    "FieldMaskDProcessor": "use the registry's data_masking transform",
+    "JdbcLookupDProcessor": "use the registry's lookup transform, or a join in the warehouse",
+    "HttpClientDSource": "use the registry's REST API Fetcher (rest_api_fetcher) or dlt_rest_api_source",
+    "KafkaDTarget": "no registry Kafka producer sink exists (see reference/component-wishlist.md); write it by hand with --override",
+    "GeolocationDProcessor": "needs a MaxMind GeoIP2 database lookup; no registry component does that (the registry's geocoder is address-based); write it by hand with --override",
 }
 
 
@@ -130,6 +138,63 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
             raise _Stub("script builds its own batches (origin-style API)")
         return (f"rt.jython_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {str(c.get('destroyScript') or '')!r}, "
                 f"{c.get('processingMode') or 'BATCH'!r}, {lanes}, events={s.events!r}{err}{pre})"), n
+    if cls == "JavaScriptDProcessor":
+        if (c.get("processingMode") or "BATCH") != "BATCH" or (c.get("scriptRecordType") or "NATIVE_OBJECTS") != "NATIVE_OBJECTS":
+            raise _Stub("JavaScript is translated for BATCH mode with NATIVE_OBJECTS records")
+        n.append("the script runs in QuickJS, not Nashorn: records cross as JSON (dates and decimals become strings) and Java objects do not exist; review it")
+        return f"rt.js_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {lanes}, events={s.events!r}{err}{pre})", n
+
+    if cls == "JythonDSource":
+        if (c.get("scriptConf.scriptRecordType") or "NATIVE_OBJECTS") != "NATIVE_OBJECTS":
+            raise _Stub("Jython origin with SDC_RECORDS record type is not translated")
+        params = {r.get("key"): r.get("value") for r in _rows(c.get("scriptConf.params")) if r.get("key")}
+        n.append("a scripting origin polls forever in StreamSets; here one run is one poll (the script's loop ends after its first processed batch). Schedule the asset at the script's interval")
+        n.append("the script runs under CPython, not Jython; review it")
+        return f"rt.jython_origin(run, {I}, {str(c.get('script') or '')!r}, {params!r}, outputs={s.outputs!r}, events={s.events!r})", n
+
+    if cls == "LocalLookupDProcessor":
+        table = {str(r.get("key")): r.get("value") for r in _rows(c.get("conf.values"))}
+        lk = [(r.get("keyExpr"), r.get("outputFieldPath")) for r in _rows(c.get("conf.lookups"))]
+        if not lk:
+            raise _Stub("no lookups configured")
+        n.append("a key with no entry sets the output field to null")
+        return f"rt.local_lookup(run, {I}, {table!r}, [{', '.join(f'({_el(a)}, {b!r})' for a, b in lk)}], {lanes}{err}{pre})", n
+
+    if cls in ("HttpDProcessor", "HttpClientDTarget", "AnodotDTarget"):
+        if (c.get("conf.dataFormat") or "JSON") != "JSON":
+            raise _Stub(f"HTTP data format {c.get('conf.dataFormat')} is not translated (JSON is)")
+        method = c.get("conf.httpMethod") or "GET"
+        if method not in ("GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"):
+            raise _Stub(f"HTTP method {method} (an expression or unsupported verb) is not translated")
+        auth = c.get("conf.client.authType") or "NONE"
+        if auth == "BASIC":
+            u, pw = c.get("conf.client.basicAuth.username"), c.get("conf.client.basicAuth.password")
+            afn = (f"lambda: (({translate(u) if u else repr('')}), ({translate(pw) if pw and pw != '<redacted>' else f'rt.stage_secret({s.instance!r}, ' + repr('PASSWORD') + ')'}))")
+        elif auth == "NONE":
+            afn = "lambda: None"
+        else:
+            raise _Stub(f"authentication {auth} is not translated (NONE and BASIC are)")
+        if (c.get("conf.pagination.mode") or "NONE") != "NONE":
+            raise _Stub("pagination is not translated")
+        hdrs = "lambda rec=None, f=None: {" + ", ".join(f"{h['key']!r}: ({translate(h.get('value') or '')})" for h in _rows(c.get("conf.headers")) if h.get("key")) + "}"
+        n.append("retry/backoff, timeout, TLS and logging settings are not applied (requests defaults, 60 s timeout)")
+        if c.get("conf.client.useProxy"):
+            n.append("the stage's proxy setting is not applied; set HTTPS_PROXY/HTTP_PROXY where the code location runs")
+        url = c.get("conf.resourceUrl")
+        if not url:
+            raise _Stub("no resource URL")
+        if cls == "HttpDProcessor":
+            body = c.get("conf.requestBody")
+            n.append("response headers are not captured and an HTTP error status sends the record to the error policy")
+            return (f"rt.http_processor(run, {I}, {_el(url)}, {method!r}, {_el(body) if body else 'None'}, {hdrs}, {afn}, {c.get('conf.outputField') or '/response'!r}, "
+                    f"{lanes}{err}{pre})"), n
+        if cls == "AnodotDTarget":
+            n.append("vendor destination (Anodot): translated as the HTTP POST it sends; the agent offset callback (conf.agentOffsetUrl) is not performed")
+        mode = c.get("conf.dataGeneratorFormatConfig.jsonMode") or "MULTIPLE_OBJECTS"
+        n.append(f"body is JSON ({'an array' if mode == 'ARRAY_OBJECTS' else 'one object per line'}); the response is ignored and an HTTP error status sends the batch's records to the error policy")
+        return (f"rt.http_target(run, {I}, {_el(url)}, {method!r}, {hdrs}, {afn}, {mode!r}, {bool(c.get('conf.singleRequestPerBatch'))}, "
+                f"{_lanes(s).split(', outputs')[0]}{err}{pre})"), n
+
     if cls in SCRIPTS:
         raise _Stub(f"{SCRIPTS[cls]} script evaluator: the script is not translated (script is in the manifest notes)")
     if cls in SUGGEST:
@@ -275,13 +340,21 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         rules = []
         for r in _rows(c.get("fieldTypeConverterConfigs")):
             t = r.get("targetType")
-            if t not in ("BOOLEAN", "BYTE", "SHORT", "INTEGER", "LONG", "FLOAT", "DOUBLE", "DECIMAL", "STRING"):
-                raise _Stub(f"target type {t} is not translated (numbers, boolean, string and decimal are; dates are not)")
+            if t not in ("BOOLEAN", "BYTE", "SHORT", "INTEGER", "LONG", "FLOAT", "DOUBLE", "DECIMAL", "STRING", "DATE", "DATETIME"):
+                raise _Stub(f"target type {t} is not translated (numbers, boolean, string, decimal, date and datetime are)")
             for f in r.get("fields") or []:
-                if "*" in f and f != "/*" or "[" in f:
+                if "*" in f and f != "/*":
                     raise _Stub(f"field pattern {f!r} is not translated (exact paths and /* are)")
-            rules.append((list(r.get("fields") or []), t))
-        n.append("locale, scale and rounding settings are not applied")
+            if t in ("DATE", "DATETIME"):
+                from .runtime import NAMED_DATE_FORMATS
+                df = r.get("dateFormat")
+                jf = r.get("otherDateFormat") if df == "OTHER" else NAMED_DATE_FORMATS.get(df)
+                if not jf:
+                    raise _Stub(f"date format {df} is not translated")
+                rules.append((list(r.get("fields") or []), t, jf))
+            else:
+                rules.append((list(r.get("fields") or []), t))
+        n.append("locale, scale and rounding settings are not applied; DATE and DATETIME both give a datetime (no time zone unless the pattern has one)")
         return f"rt.field_type_converter(run, {I}, {rules!r}, {lanes}{err}{pre})", n
 
     if cls == "FieldRenamerDProcessor":
@@ -289,7 +362,7 @@ def emit(p: Pipeline, s: Stage) -> tuple[str, list[str]]:
         m = []
         for r in _rows(c.get("renameMapping")):
             a, b = r.get("fromFieldExpression", ""), r.get("toFieldExpression", "")
-            if not _re.fullmatch(r"/[A-Za-z0-9_ /.\-]+", a) or is_dynamic(b):
+            if not _re.fullmatch(r"/[^*+?^$|(){}\[\]\\]+", a) or is_dynamic(b):
                 raise _Stub(f"rename {a!r} -> {b!r} uses a regular expression or an expression (literal paths are translated)")
             m.append((a, b))
         miss = c.get("errorHandler.nonExistingFromFieldHandling") or "TO_ERROR"
@@ -425,7 +498,7 @@ def convert_pipeline(p: Pipeline, items: list[Item], overrides: dict | None = No
 @dg.asset(name={name!r}, group_name="streamsets", kinds={{"python"}}, description={desc!r})
 def {name}(context: dg.AssetExecutionContext):
     C = rt.constants(*C_{name})
-    run = rt.Run(context, {p.title!r}, C, rt.load_offsets(context, dg.AssetKey({name!r})))
+    run = rt.Run(context, {p.title!r}, C, rt.load_offsets(context, dg.AssetKey({name!r})), pid={p.id!r})
 """ + body + """
     stats = run.execute()
     return dg.MaterializeResult(metadata={"stats": dg.MetadataValue.json(stats), "sdc_offsets": dg.MetadataValue.json(run.offsets_out)})
@@ -475,7 +548,9 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
     pipes = result.meta.get("pipelines", {}).values()
     deps = ['"dagster>=1.11"', '"sqlalchemy>=2"']
     if any(m["translated"] for m in pipes):
-        deps += ['"fsspec"', '"s3fs"', '"pymysql"', '"simple-salesforce"', '"databricks-sqlalchemy"']
+        deps += ['"fsspec"', '"s3fs"', '"pymysql"', '"simple-salesforce"', '"databricks-sqlalchemy"', '"requests"']
+        if "rt.js_processor" in result.code:
+            deps += ['"quickjs"']
     root = out_dir / "src" / pkg
     (root / "defs").mkdir(parents=True, exist_ok=True)
     (out_dir / "pyproject.toml").write_text(textwrap.dedent(f'''\

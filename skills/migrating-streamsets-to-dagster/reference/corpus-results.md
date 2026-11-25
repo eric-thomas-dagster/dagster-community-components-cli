@@ -17,9 +17,16 @@ Every Delta Lake run writes to SQLite, standing in for Databricks: the generated
 
 ## A second sample: 27 other public exports
 
-27 more pipeline exports from public GitHub repositories (tutorials, demos and a vendor's agent pipelines) were used only to learn real property names and to
-check the converter on shapes the six samples lack. They are not redistributed and were not run. 100 of their 196 stages translate (51%); 19 of the 27 pipelines
-have at least one stub, mostly JavaScript evaluators (25), a vendor destination (14), Jython origins (11), HTTP Client and lookup stages. This is a better guide to a
-real estate than the six samples, and it says plainly that scripting stages and HTTP/REST stages are what an estate will need next.
+27 more pipeline exports from public GitHub repositories (tutorials, demos and one vendor's agent pipelines, 14 of the 27) were used to learn real property
+names and to test shapes the six samples lack. They are not redistributed. Their stages were converted, not run against the sources they name.
+
+| After | Stages translated | Pipelines with a stub |
+|---|---|---|
+| First pass (six samples' stages only) | 100 of 196 (51%) | 19 of 27 |
+| JavaScript, HTTP and vendor HTTP destination, Jython origin, Local Lookup, date conversion, `time:` functions | 174 of 196 (89%) | 19 of 27 (most have one or two left) |
+
+Translated is not correct: a script stage that translates still has to be reviewed (the 25 JavaScript scripts run in QuickJS; 19 ran on a trivial record, 6 raised).
+What is left (22 stages): the SDC_JSON data format (4), JDBC lookup (2), geolocation (2), and one each of MongoDB, Elasticsearch, Kafka consumers and producer,
+file tail, Groovy, Field Mask, HTTP origin and a dev-only source. The vendor's 14 pipelines inflate the JavaScript and HTTP counts: a different customer's mix will differ.
 
 Gates on the six samples' generated project: 1 (compiles), 2 (loads), 3 (units match) pass; gate 4 dry run: 1 ok, 5 fail on a stub as designed, 0 unexpected.

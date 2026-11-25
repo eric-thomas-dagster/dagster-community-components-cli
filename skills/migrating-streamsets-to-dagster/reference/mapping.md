@@ -41,6 +41,11 @@ Translated (stage class = last `_` segment of `stageName`):
 | `SplitterDProcessor` | Separator is a regular expression; TO_LAST_FIELD; keep or remove the original. |
 | `DataParserDProcessor` | JSON string field, first value only. |
 | `JythonDProcessor` | BATCH and RECORD modes, NATIVE_OBJECTS, init/destroy scripts. **Runs unchanged under CPython**, with `sdc.records`, `sdc.output.write(record[, lane])`, `sdc.error.write`, `sdc.state`, `sdc.log` and the globals `records output error log state record`. Python 2 syntax, Java imports and Jython-only calls fail at run time with the interpreter's error. |
+| `JavaScriptDProcessor` | BATCH mode, NATIVE_OBJECTS. Runs in **QuickJS (ES2020), not Nashorn**: `records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions.createRecord/createMap`, `sdc.createEvent/toEvent` (events go to the stage's event lane). Records cross as JSON (dates, decimals become strings); Java objects (`Java.type`, `new java.*`) do not exist and fail at run time. Init script runs once. |
+| `JythonDSource` | Runs under CPython with `sdc.userParams`, `sdc.lastOffsets`, `sdc.createBatch/createRecord`, `batch.add/process`, `sdc.isStopped`. **StreamSets runs the script until the pipeline stops; here one run is one poll** (the loop ends after the first processed batch); offsets are stored. Schedule the asset at the script's interval. |
+| `LocalLookupDProcessor` | Static key/value table; RECORD and BATCH give the same result. A missing key sets the field to null (assumed). |
+| `HttpDProcessor` (HTTP Client processor) | JSON; GET/POST/PUT/PATCH/DELETE/HEAD; EL in URL, headers and body; NONE and BASIC auth; response parsed into the output field. No pagination (stub). Retry/backoff, TLS, proxy and response-header capture are not applied. HTTP error status sends the record to the error policy. |
+| `HttpClientDTarget`, `AnodotDTarget` (vendor) | JSON POST/PUT etc.; one request per batch (ARRAY_OBJECTS: a JSON array; otherwise one object per line) or per record. The response is ignored; an error status sends the batch's records to the error policy. The Anodot stage is translated as the HTTP POST it sends; its agent-offset callback is not performed. |
 | `LocalFileSystemDTarget` | DELIMITED, JSON (one object per line), TEXT. One file per directory per run (`<prefix>_<uuid>`); no rolling, compression or late-record handling. |
 | `DatabricksDeltaLakeDTarget` | SQL writes through SQLAlchemy (`databricks-sqlalchemy`; the URL is derived from the JDBC URL, or set `SDC_SQLALCHEMY_URL_<STAGE>`). Auto-creates the table from the first record, adds columns when drift is on, and in CDC mode applies `sdc.operation.type` by key as delete-then-insert. **StreamSets stages files and runs COPY INTO / MERGE**; this is slow for bulk loads. A CDC stage with no key columns is a stub. |
 
@@ -57,8 +62,8 @@ Stubs with a pointer to the registry (check `dagster-community-components` befor
 | Groovy / JavaScript evaluators | Rewrite as Python and pass it with `--override`. The script text is kept in the manifest notes |
 | Jython evaluator | Translated (runs under CPython); see the catalog |
 
-Other stage types seen in real exports and not translated: HTTP Client (processor and destination), Local Lookup, JDBC Lookup, Geolocation, Kafka producer,
-Jython origin, vendor destinations (Anodot, ...), MongoDB, Elasticsearch, Field Mask, SDC_JSON data format. Also not translated: Transformer/Spark stages
+Other stage types seen in real exports and not translated: JDBC Lookup, Geolocation, Kafka producer and consumers, MongoDB, Elasticsearch, Field Mask, HTTP Client origin,
+the SDC_JSON and LOG data formats, Groovy. Also not translated: Transformer/Spark stages
 , MongoDB, REST client, Kafka producer, ...) have no translation yet and are reported as stubs.
 
 ## Expression language (EL)
@@ -84,6 +89,7 @@ Not verified, so check on a real run before trusting parity:
 - Field Flattener with a root target (`/`) names the flattened fields without the parent's name (`/Data/id` becomes `/id`); with another target it prefixes the parent. The CDC-to-Delta sample only makes sense that way, but it is inferred from the pipeline, not from documentation.
 - The MySQL binary-log origin's record shape (`/Table /Type /Data /OldData`, header `sdc.operation.type`) in `tests/overrides/cdc_feed.py` is assumed from the sample pipeline's field names. No binlog reader is translated.
 - The Delta Lake stage's behaviour beyond the SQL-write translation (null defaults, newline replacement, trimming, COPY INTO atomicity) is not reproduced.
-- Jython scripts run under CPython; whether a given script behaves the same is a per-script review.
+- Jython and JavaScript scripts run under CPython / QuickJS; whether a given script behaves the same is a per-script review. 19 of the 25 JavaScript scripts in the 27-pipeline sample run on a trivial record; the other 6 raise on missing input fields or an unsupported API, so they were not shown to be correct.
+- HTTP: `ARRAY_OBJECTS` is taken from a destination's own `jsonMode`; the `MULTIPLE_OBJECTS` form (one object per line) and the response handling are assumed.
 - Transformer (Spark) pipelines load, but none of their stages is translated, and no real Transformer export was available.
 - Control Hub export archives are read (`.zip` of pipeline JSON); the Control Hub job and schedule objects are not parsed.

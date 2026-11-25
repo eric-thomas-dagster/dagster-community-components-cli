@@ -26,6 +26,9 @@ FUNCS = {
     "file:removeExtension": "file_remove_extension", "f:name": "f_name", "f:value": "f_value", "f:path": "f_path", "f:type": "f_type",
     "f:index": "f_index", "f:parentPath": "f_parent_path", "uuid": "uuid", "YYYY": "yyyy", "MM": "mm", "DD": "dd", "hh": "hh",
     "mm": "minute", "ss": "ss", "emptyMap": "empty_map", "emptyList": "empty_list",
+    "time:dateTimeToMilliseconds": "date_time_to_ms", "time:createDateFromStringTZ": "create_date_from_string_tz",
+    "time:createDateFromString": "create_date_from_string", "time:extractStringFromDate": "extract_string_from_date",
+    "time:millisecondsToDateTime": "ms_to_date_time", "pipeline:id": "pipeline_id", "pipeline:title": "pipeline_title", "pipeline:name": "pipeline_id",
 }
 _TIME_UNITS = {"SECONDS": 1, "MINUTES": 60, "HOURS": 3600, "DAYS": 86400}
 _KEYWORDS = {"true": "True", "false": "False", "null": "None"}

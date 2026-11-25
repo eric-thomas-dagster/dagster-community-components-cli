@@ -35,6 +35,11 @@ def load_offsets(context, asset_key) -> dict:
         return {}
 
 
+def stage_secret(inst: str, name: str) -> str:
+    """A credential literal that was removed from the export: SDC_SECRET_<STAGE>_<NAME>."""
+    return os.environ.get(f"SDC_SECRET_{re.sub(r'[^A-Za-z0-9]', '_', inst).upper()}_{name}", "")
+
+
 def dry_run() -> bool:
     return os.environ.get("SDC_DRY_RUN") == "1"
 
@@ -234,6 +239,32 @@ class fx:
     minute = staticmethod(lambda: f"{_dt.datetime.now(_dt.timezone.utc):%M}")
     ss = staticmethod(lambda: f"{_dt.datetime.now(_dt.timezone.utc):%S}")
     uuid = staticmethod(lambda: str(_uuid.uuid4()))
+    PIPELINE: dict = {"id": "", "title": ""}
+    pipeline_id = staticmethod(lambda: fx.PIPELINE["id"])
+    pipeline_title = staticmethod(lambda: fx.PIPELINE["title"])
+
+    @staticmethod
+    def date_time_to_ms(d):
+        d = d if d.tzinfo else d.replace(tzinfo=_dt.timezone.utc)
+        return int(d.timestamp() * 1000)
+
+    @staticmethod
+    def ms_to_date_time(ms):
+        return _dt.datetime.fromtimestamp(float(ms) / 1000, _dt.timezone.utc)
+
+    @staticmethod
+    def create_date_from_string(s, java_fmt):
+        return parse_date(s, java_fmt)
+
+    @staticmethod
+    def create_date_from_string_tz(s, tz, java_fmt):
+        import zoneinfo
+        d = parse_date(s, java_fmt)
+        return d if d.tzinfo else d.replace(tzinfo=zoneinfo.ZoneInfo(tz))
+
+    @staticmethod
+    def extract_string_from_date(d, java_fmt):
+        return d.strftime(_strptime_format(java_fmt))
     empty_map = staticmethod(lambda: {})
     empty_list = staticmethod(lambda: [])
 
@@ -258,6 +289,41 @@ class fx:
 _MISSING = object()
 
 
+# ---- Java date patterns -> strptime --------------------------------------------------------------------------------------------------------------
+_JAVA = [("yyyy", "%Y"), ("YYYY", "%Y"), ("SSS", "%f"), ("MMMM", "%B"), ("MMM", "%b"), ("MM", "%m"), ("dd", "%d"), ("HH", "%H"), ("mm", "%M"), ("ss", "%S"),
+         ("EEE", "%a"), ("y", "%Y"), ("M", "%m"), ("d", "%d"), ("H", "%H"), ("m", "%M"), ("s", "%S"), ("Z", "%z"), ("z", "%Z"), ("X", "%z")]
+
+
+def _strptime_format(java: str) -> str:
+    out, i = "", 0
+    while i < len(java):
+        if java[i] == "'":
+            j = java.index("'", i + 1)
+            out += java[i + 1:j]
+            i = j + 1
+            continue
+        for tok, py in _JAVA:
+            if java.startswith(tok, i):
+                out += py
+                i += len(tok)
+                break
+        else:
+            out += java[i].replace("%", "%%")
+            i += 1
+    return out
+
+
+# StreamSets' named date formats (Field Type Converter)
+NAMED_DATE_FORMATS = {"YYYY_MM_DD": "yyyy-MM-dd", "YYYY_MM_DD_HH_MM_SS": "yyyy-MM-dd HH:mm:ss", "YYYY_MM_DD_HH_MM_SS_SSS": "yyyy-MM-dd HH:mm:ss.SSS",
+                      "DD_MM_YYYY": "dd-MM-yyyy", "MM_DD_YYYY": "MM-dd-yyyy"}
+
+
+def parse_date(s, java: str):
+    if isinstance(s, _dt.datetime):
+        return s
+    return _dt.datetime.strptime(str(s).strip(), _strptime_format(java))
+
+
 # ---- engine --------------------------------------------------------------------------------------------------------------------------------
 class Stage:
     """A node: `fn(records) -> {lane: [records]}` for processors/targets; origins set `gen` instead."""
@@ -269,8 +335,9 @@ class Stage:
 
 
 class Run:
-    def __init__(self, context, name: str, C: dict, offsets: dict | None = None):
+    def __init__(self, context, name: str, C: dict, offsets: dict | None = None, pid: str = ""):
         self.ctx, self.name, self.C = context, name, C
+        fx.PIPELINE = {"id": pid or name, "title": name}
         self.offsets_in, self.offsets_out = dict(offsets or {}), dict(offsets or {})
         self.stages: list[Stage] = []
         self.counts = {"records_in": {}, "records_out": {}, "errors": {}}
@@ -685,24 +752,28 @@ _CONV = {
 
 
 def field_type_converter(run: Run, inst: str, rules, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
-    """Field Type Converter by field: rules = [([paths], TARGET_TYPE)]; `/*` means every top-level field. DECIMAL keeps full precision."""
+    """Field Type Converter by field: rules = [([paths], TARGET_TYPE[, java date pattern])]; `/*` means every top-level field. DECIMAL keeps full
+    precision; DATE and DATETIME parse with the Java pattern and give a datetime."""
     import decimal
 
-    def conv(t, v):
+    def conv(t, v, fmt=None):
         if v is None:
             return None
         if t == "DECIMAL":
             return decimal.Decimal(str(v).strip())
+        if t in ("DATE", "DATETIME"):
+            return parse_date(v, fmt)
         return _CONV[t](v)
 
     def one(r: Record):
-        for paths, t in rules:
+        for rule in rules:
+            paths, t, fmt = rule[0], rule[1], (rule[2] if len(rule) > 2 else None)
             for p in paths:
                 for q in (list(r.value) and [f"/{k}" for k in r.value]) if p == "/*" else [p]:
                     cur = get_path(r.value, q, _MISSING)
                     if cur is _MISSING:
                         continue
-                    set_path(r.value, q, conv(t, cur))
+                    set_path(r.value, q, conv(t, cur, fmt))
         return r
     _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
 
@@ -852,6 +923,164 @@ def jython_processor(run: Run, inst: str, script: str, init: str, destroy: str, 
             run._err(holder["st"], rec, msg or "script error")
         return sdc.output.out
     holder["st"] = _stage(run, inst, go, inputs=inputs, outputs=outputs, events=events, on_error=on_error, pre=pre, req=req)
+
+
+def local_lookup(run: Run, inst: str, table: dict, lookups, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """Local Lookup: lookups = [(key_fn, output_path)]; the static table maps keys to values. A key with no entry sets the field to null."""
+    def one(r: Record):
+        for key_fn, path in lookups:
+            set_path(r.value, path, table.get(str(key_fn(r))))
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+# ---- HTTP -------------------------------------------------------------------------------------------------------------------------------------
+def _http(run: Run, inst: str, method: str, url: str, *, body=None, headers=None, auth=None):
+    import requests
+    resp = requests.request(method, url, data=body, headers=headers or {}, auth=auth, timeout=60)
+    if resp.status_code >= 400:
+        raise RuntimeError(f"{method} {url.split('?')[0]} returned HTTP {resp.status_code}: {resp.text[:200]}")
+    return resp
+
+
+def http_processor(run: Run, inst: str, url_fn, method: str, body_fn, headers_fn, auth_fn, out_field: str, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
+    """HTTP Client processor (JSON response, no pagination): the response body is parsed and written to `out_field`."""
+    def one(r: Record):
+        if run.dry:
+            run.log(f"[dry run] {inst}: would {method} {str(url_fn(r)).split('?')[0]}")
+            set_path(r.value, out_field, None)
+            return r
+        resp = _http(run, inst, method, url_fn(r), body=body_fn(r) if body_fn else None, headers=headers_fn(r), auth=auth_fn())
+        set_path(r.value, out_field, resp.json() if resp.content else None)
+        return r
+    _map_records(run, inst, one, inputs=inputs, outputs=outputs, on_error=on_error, pre=pre, req=req)
+
+
+def http_target(run: Run, inst: str, url_fn, method: str, headers_fn, auth_fn, json_mode: str, per_batch: bool, *, inputs, on_error="TO_ERROR", pre=(), req=()):
+    """HTTP Client destination, JSON body: one request per batch (ARRAY_OBJECTS: a JSON array; otherwise one object per line) or one per record."""
+    holder: dict = {}
+
+    def send(recs, body):
+        if run.dry:
+            run.log(f"[dry run] {inst}: would {method} {str(url_fn(recs[0])).split('?')[0]} ({len(recs)} record(s))")
+            return
+        _http(run, inst, method, url_fn(recs[0]), body=body, headers={"Content-Type": "application/json", **headers_fn(recs[0])}, auth=auth_fn())
+
+    def go(recs):
+        try:
+            if per_batch:
+                vals = [r.value for r in recs]
+                send(recs, json.dumps(vals if json_mode == "ARRAY_OBJECTS" else None, default=str) if json_mode == "ARRAY_OBJECTS"
+                     else "\n".join(json.dumps(v, default=str) for v in vals))
+            else:
+                for r in recs:
+                    send([r], json.dumps(r.value, default=str))
+        except Exception as e:                                # noqa: BLE001 - a failed send sends its records to the error policy
+            for r in recs:
+                run._err(holder["st"], r, f"{type(e).__name__}: {e}")
+        return {}
+    holder["st"] = _stage(run, inst, go, inputs=inputs, outputs=(), on_error=on_error, pre=pre, req=req)
+
+
+# ---- JavaScript evaluator (QuickJS) -----------------------------------------------------------------------------------------------------------
+_JS_PRELUDE = """
+var __out = [], __err = [];
+var output = {write: function (r) { __out.push(r); }};
+var error = {write: function (r, m) { __err.push([r, String(m)]); }};
+var log = {info: function () {}, warn: function () {}, error: function () {}, debug: function () {}, trace: function () {}};
+var __ev = [];
+var sdc = {log: log, createEvent: function (t, v) { return {value: null, attributes: {}, sourceId: 'event', eventType: t}; }, toEvent: function (e) { __ev.push(e); }};
+var sdcFunctions = {createRecord: function (id) { return {value: null, attributes: {}, sourceId: id}; }, createMap: function () { return {}; }};
+"""
+
+
+def js_processor(run: Run, inst: str, script: str, init: str, *, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
+    """JavaScript Evaluator, BATCH mode, run in QuickJS with `records`, `output.write`, `error.write`, `state`, `log` and `sdcFunctions.createRecord`.
+    Records cross as JSON (dates and decimals become strings). Nashorn/Java objects (`Java.type`, `new java.*`) do not exist and fail at run time."""
+    state: dict = {}
+    holder: dict = {}
+    counter = [0]
+
+    def run_js(src: str, recs: list) -> dict:
+        import quickjs
+        payload = [{"value": r.value, "attributes": r.attrs, "sourceId": f"{inst}:{counter[0] + i}"} for i, r in enumerate(recs)]
+        counter[0] += len(recs)
+        ctx = quickjs.Context()
+        ctx.eval("var state = JSON.parse(%s); var records = JSON.parse(%s);" % (json.dumps(json.dumps(state, default=str)), json.dumps(json.dumps(payload, default=str))) + _JS_PRELUDE)
+        ctx.eval(src)
+        return json.loads(ctx.eval("JSON.stringify({out: __out, err: __err, ev: __ev, state: state})"))
+    started = [False]
+
+    def go(recs):
+        if not started[0]:
+            started[0] = True
+            if init.strip():
+                state.update(run_js(init, [])["state"])
+        res = run_js(script, recs)
+        state.clear()
+        state.update(res["state"])
+        out = []
+        for item in res["out"]:
+            if not isinstance(item.get("value"), dict):
+                run._err(holder["st"], Record({}), "script wrote a record whose value is not a map")
+                continue
+            out.append(Record(item["value"], {k: ("" if v is None else str(v)) for k, v in (item.get("attributes") or {}).items()}))
+        for item, msg in res["err"]:
+            run._err(holder["st"], Record(item.get("value") or {}, {}), msg)
+        lanes = {outputs[0]: out} if outputs else {}
+        if events and res.get("ev"):
+            lanes[events[0]] = [Record(e.get("value") or {}, {}, e.get("eventType")) for e in res["ev"] if isinstance(e.get("value") or {}, dict)]
+        return lanes
+    holder["st"] = _stage(run, inst, go, inputs=inputs, outputs=outputs, events=events, on_error=on_error, pre=pre, req=req)
+
+
+# ---- Jython origin ---------------------------------------------------------------------------------------------------------------------------
+class _Offsets(dict):
+    containsKey = dict.__contains__
+    put = dict.__setitem__
+
+
+class _Batch:
+    def __init__(self, sdc):
+        self.sdc, self.recs = sdc, []
+
+    def add(self, rec):
+        self.recs.append(rec)
+
+    def process(self, entity, offset):
+        self.sdc.batches.append(self.recs)
+        self.sdc.offsets[entity] = offset
+        self.sdc.stopped = True          # one run is one poll iteration: the script's `while not sdc.isStopped()` loop ends after the first batch
+        self.recs = []
+
+
+class _OriginSdc:
+    def __init__(self, params: dict, offsets: dict):
+        import logging
+        self.userParams, self.lastOffsets, self.offsets = params, _Offsets(offsets), dict(offsets)
+        self.batches: list = []
+        self.stopped = False
+        self.log = logging.getLogger("sdc")
+
+    createRecord = staticmethod(lambda rid: Record({}, {}))
+    createBatch = lambda self: _Batch(self)          # noqa: E731
+    isStopped = lambda self: self.stopped            # noqa: E731
+    importLock = importUnlock = staticmethod(lambda: None)
+
+
+def jython_origin(run: Run, inst: str, script: str, params: dict, *, outputs, events=()):
+    """Jython Scripting origin run under CPython with `sdc.userParams`, `sdc.lastOffsets`, `sdc.createBatch/createRecord`, `batch.add`, `batch.process`
+    and `sdc.isStopped`. StreamSets runs the script until the pipeline stops; here it stops after its first processed batch (one poll per run)."""
+    def gen():
+        if run.dry:
+            run.log(f"[dry run] {inst}: would run the origin script once")
+            return
+        sdc = _OriginSdc(params, run.offsets_in.get(inst) or {})
+        exec(compile(script, f"<{inst} script>", "exec"), {"sdc": sdc})
+        run.offsets_out[inst] = sdc.offsets
+        for b in sdc.batches:
+            yield {outputs[0]: b}
+    run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
 
 
 # ---- more origins and destinations -----------------------------------------------------------------------------------------------------------
