@@ -1,4 +1,6 @@
-"""Runtime for generated StreamSets migrations (copied into each generated project as `runtime.py`).
+"""Runtime for generated StreamSets migrations (copied into each generated project as `runtime.py`,
+alongside `record_pipeline.py` -- the framework-agnostic stage/lane/batch/offset/error-policy
+engine this module builds StreamSets-specific stage factories on top of).
 
 StreamSets moves *records* (a value tree plus string attributes) through a graph of stages in batches. This module keeps that model so a
 translated pipeline behaves the way the original stage graph does: origins emit batches (and events), processors and destinations consume
@@ -18,11 +20,39 @@ import json
 import os
 import re
 import uuid as _uuid
-from dataclasses import dataclass, field
+
+from .record_pipeline import (
+    ErrorPolicy,
+    Record,
+    Run as _BaseRun,
+    Stage,
+    UnimplementedStageError,
+    del_path,
+    each as _each,
+    get_path,
+    set_path,
+    truthy as fx_truthy,
+)
 
 
-class SdcCaveat(Exception):
+class SdcCaveat(UnimplementedStageError):
     """A stage that was not translated: raised when the stage receives data, so a gap can never pass as success."""
+
+
+class Run(_BaseRun):
+    """The generic engine's `Run`, wired to this module's StreamSets-specific conventions: dry-run
+    from `SDC_DRY_RUN`, untranslated stages raise `SdcCaveat` with the `SDC-CAVEAT:` prefix every
+    caller (cli.py, validate.py, generated code) greps for, and `fx.PIPELINE` for EL functions
+    (`pipeline_id()`/`pipeline_title()`) that reference the running pipeline by name."""
+
+    def __init__(self, context, name: str, C: dict, offsets: dict | None = None, pid: str = ""):
+        super().__init__(context, name, C, offsets, pid, dry=dry_run(), unimplemented_error=SdcCaveat, unimplemented_prefix="SDC-CAVEAT: ")
+        fx.PIPELINE = {"id": pid or name, "title": name}
+
+
+def stub(run: Run, inst: str, why: str, *, inputs=(), outputs=(), events=(), is_origin=False, pre=()):
+    """A stage that was not translated. It keeps its place in the graph, and the run fails before reading anything, naming the reason."""
+    run.stub(inst, why, inputs=inputs, outputs=outputs, events=events, is_origin=is_origin, pre=pre)
 
 
 def load_offsets(context, asset_key) -> dict:
@@ -54,79 +84,6 @@ def constants(defaults: dict, secrets: list[str]) -> dict:
             v = ""      # resolved lazily: a stage that needs it fails with a clear message when it connects
         out[k] = v or ""
     return out
-
-
-@dataclass
-class Record:
-    value: dict = field(default_factory=dict)
-    attrs: dict = field(default_factory=dict)
-    event: str | None = None
-
-    @property
-    def attributes(self) -> dict:                 # name used by StreamSets scripts
-        return self.attrs
-
-    def copy(self) -> "Record":
-        return Record(json.loads(json.dumps(self.value, default=str)), dict(self.attrs), self.event)
-
-
-# ---- field paths: "/a/b", "/a[0]/b", "/" ------------------------------------------------------------------------------------------------------
-def _parts(path: str) -> list:
-    out = []
-    for seg in [x for x in path.strip().split("/") if x != ""]:
-        seg = seg.strip("'\"")
-        m = re.match(r"^(.*?)((?:\[\d+\])+)$", seg)
-        if m and m.group(1):
-            out.append(m.group(1))
-            out += [int(i) for i in re.findall(r"\[(\d+)\]", m.group(2))]
-        else:
-            out.append(seg)
-    return out
-
-
-def get_path(value, path: str, default=None):
-    cur = value
-    for p in _parts(path):
-        try:
-            cur = cur[p]
-        except (KeyError, IndexError, TypeError):
-            return default
-    return cur
-
-
-def set_path(value: dict, path: str, v) -> None:
-    ps = _parts(path)
-    if not ps:
-        if isinstance(v, dict):
-            value.clear()
-            value.update(v)
-        return
-    cur = value
-    for p in ps[:-1]:
-        cur = cur.setdefault(p, {}) if isinstance(cur, dict) else cur[p]
-    if isinstance(cur, dict):
-        cur[ps[-1]] = v
-    else:
-        cur[ps[-1]] = v
-
-
-def del_path(value: dict, path: str) -> bool:
-    ps = _parts(path)
-    cur = value
-    for p in ps[:-1]:
-        try:
-            cur = cur[p]
-        except (KeyError, IndexError, TypeError):
-            return False
-    try:
-        del cur[ps[-1]]
-        return True
-    except (KeyError, IndexError, TypeError):
-        return False
-
-
-def _truthy(x) -> bool:
-    return bool(x) if not isinstance(x, str) else x.lower() == "true"
 
 
 class fx:
@@ -330,140 +287,7 @@ def parse_date(s, java: str):
     return _dt.datetime.strptime(str(s).strip(), _strptime_format(java))
 
 
-# ---- engine --------------------------------------------------------------------------------------------------------------------------------
-class Stage:
-    """A node: `fn(records) -> {lane: [records]}` for processors/targets; origins set `gen` instead."""
-
-    def __init__(self, instance, fn=None, gen=None, inputs=(), outputs=(), events=(), on_error="TO_ERROR", pre=(), req=()):
-        self.instance, self.fn, self.gen, self.req = instance, fn, gen, list(req)
-        self.inputs, self.outputs, self.events = list(inputs), list(outputs), list(events)
-        self.on_error, self.pre = on_error, list(pre)
-
-
-class Run:
-    def __init__(self, context, name: str, C: dict, offsets: dict | None = None, pid: str = ""):
-        self.ctx, self.name, self.C = context, name, C
-        fx.PIPELINE = {"id": pid or name, "title": name}
-        self.offsets_in, self.offsets_out = dict(offsets or {}), dict(offsets or {})
-        self.stages: list[Stage] = []
-        self.counts = {"records_in": {}, "records_out": {}, "errors": {}}
-        self.dry = dry_run()
-        self.stubs: list[tuple[str, str]] = []
-        self.closers: list = []
-        self.on_success: list = []
-
-    def add(self, stage: Stage) -> None:
-        self.stages.append(stage)
-
-    def log(self, msg: str) -> None:
-        (self.ctx.log.info if self.ctx is not None else print)(msg)
-
-    def _precond(self, st: Stage, recs: list[Record]) -> list[Record]:
-        if not st.pre and not st.req:
-            return recs
-        keep = []
-        for r in recs:
-            if st.req and any(get_path(r.value, f, _MISSING) is _MISSING for f in st.req):
-                self._err(st, r, "required field missing")
-            elif all(fx_truthy(p(r)) for p in st.pre):
-                keep.append(r)
-            else:
-                self._err(st, r, "stageRecordPreconditions not met", drop_ok=True)
-        return keep
-
-    def _err(self, st: Stage, rec: Record, why: str, drop_ok: bool = False) -> None:
-        self.counts["errors"][st.instance] = self.counts["errors"].get(st.instance, 0) + 1
-        if st.on_error == "STOP_PIPELINE":
-            raise RuntimeError(f"{st.instance}: {why}")
-
-    def _deliver(self, lanes: dict, pending: dict) -> None:
-        for lane, recs in lanes.items():
-            if recs:
-                pending.setdefault(lane, []).extend(recs)
-
-    def _push(self, st_index: int, pending: dict, order: list[Stage]) -> None:
-        for st in order[st_index:]:
-            if st.gen is not None:
-                continue
-            recs = [r for ln in st.inputs for r in pending.pop(ln, [])]
-            if not recs:
-                continue
-            recs = self._precond(st, recs)
-            if not recs:
-                continue
-            self.counts["records_in"][st.instance] = self.counts["records_in"].get(st.instance, 0) + len(recs)
-            out = st.fn(recs) or {}
-            for ln, rs in out.items():
-                self.counts["records_out"][st.instance] = self.counts["records_out"].get(st.instance, 0) + len(rs)
-            self._deliver(out, pending)
-
-    def execute(self) -> dict:
-        try:
-            stats = self._execute()
-            for hook in self.on_success:          # e.g. commit Kafka offsets, only once the whole run succeeded
-                hook()
-            return stats
-        finally:
-            for c in self.closers:
-                c()
-
-    def _execute(self) -> dict:
-        if self.stubs:
-            # A stage that was not translated means this graph is not the original pipeline: fail before touching any data, never "succeed".
-            raise SdcCaveat("SDC-CAVEAT: " + "; ".join(f"{i}: {why}" for i, why in self.stubs))
-        order = _topo(self.stages)
-        origins = [s for s in order if s.gen is not None]
-        for o in origins:
-            pending: dict = {}
-            for lanes in o.gen():
-                self.counts["records_out"][o.instance] = self.counts["records_out"].get(o.instance, 0) + sum(len(v) for ln, v in lanes.items() if ln in o.outputs)
-                self._deliver(lanes, pending)
-                self._push(0, pending, order)
-            # origin exhausted: the batch pipeline's "no-more-data" event
-            if o.events:
-                self._deliver({o.events[0]: [Record({}, {"sdc.event.type": "no-more-data"}, "no-more-data")]}, pending)
-                self._push(0, pending, order)
-        return {"records_in": self.counts["records_in"], "records_out": self.counts["records_out"], "error_records": self.counts["errors"]}
-
-
-def fx_truthy(x) -> bool:
-    return _truthy(x)
-
-
-def _topo(stages: list[Stage]) -> list[Stage]:
-    prod = {ln: s.instance for s in stages for ln in [*s.outputs, *s.events]}
-    by = {s.instance: s for s in stages}
-    out, seen = [], set()
-
-    def visit(s: Stage):
-        if s.instance in seen:
-            return
-        seen.add(s.instance)
-        for ln in s.inputs:
-            if ln in prod:
-                visit(by[prod[ln]])
-        out.append(s)
-    for s in stages:
-        visit(s)
-    return out
-
-
 # ---- stage factories ------------------------------------------------------------------------------------------------------------------------
-def _each(st_holder: dict, run: Run, fn):
-    """Apply fn(record)->record|list|None to every record, routing a failure per the stage's error policy."""
-    def go(recs):
-        out = []
-        for r in recs:
-            try:
-                res = fn(r)
-            except Exception as e:                    # noqa: BLE001 - a bad record follows stageOnRecordError
-                run._err(st_holder["st"], r, f"{type(e).__name__}: {e}")
-                continue
-            if res is None:
-                continue
-            out.extend(res if isinstance(res, list) else [res])
-        return out
-    return go
 
 
 def expression(run: Run, inst: str, fields, headers, *, inputs, outputs, on_error="TO_ERROR", pre=(), req=()):
@@ -587,12 +411,6 @@ def null_target(run: Run, inst: str, *, inputs, on_error="TO_ERROR", pre=(), req
 def pipeline_finisher(run: Run, inst: str, *, inputs, on_error="TO_ERROR", pre=(), req=()):
     """Pipeline Finisher: in a batch run the pipeline ends when the origins are exhausted, so receiving the record changes nothing here."""
     run.add(Stage(inst, lambda recs: {}, inputs=inputs, on_error=on_error, pre=pre, req=req))
-
-
-def stub(run: Run, inst: str, why: str, *, inputs, outputs=(), events=(), is_origin=False, pre=()):
-    """A stage that was not translated. It keeps its place in the graph, and the run fails before reading anything, naming the reason."""
-    run.stubs.append((inst, why))
-    run.add(Stage(inst, (lambda recs: {}), gen=(lambda: iter(())) if is_origin else None, inputs=inputs, outputs=outputs, events=events, pre=pre))
 
 
 # ---- JDBC ------------------------------------------------------------------------------------------------------------------------------------

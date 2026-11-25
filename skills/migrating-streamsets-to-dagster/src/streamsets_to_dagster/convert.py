@@ -678,6 +678,7 @@ def convert(est: Estate, pkg: str = "streamsets_migrated", overrides: dict | Non
 
 
 def write_project(result: Result, out_dir: Path, pkg: str) -> None:
+    from . import record_pipeline as _rp
     from . import runtime as _rt
     from .manifest import render_report
     out_dir.mkdir(parents=True, exist_ok=True)
@@ -724,6 +725,7 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
         '''))
     (root / "__init__.py").write_text("")
     (root / "defs" / "__init__.py").write_text("")
+    (root / "record_pipeline.py").write_text(Path(_rp.__file__).read_text())
     (root / "runtime.py").write_text(Path(_rt.__file__).read_text())
     (root / "definitions.py").write_text(textwrap.dedent('''\
         from pathlib import Path
