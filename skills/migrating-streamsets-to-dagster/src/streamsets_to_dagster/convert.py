@@ -865,7 +865,7 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
     pipes = result.meta.get("pipelines", {}).values()
     deps = ['"dagster>=1.11"', '"sqlalchemy>=2"']
     if any(m.get("components") for m in pipes):
-        deps += ['"dagster-community-components>=0.10.179"', '"polars"', '"pandas"', '"pyarrow"']
+        deps += ['"dagster-community-components>=0.10.187"', '"polars"', '"pandas"', '"pyarrow"']
     if any(m["translated"] for m in pipes if not m.get("components")):
         deps += ['"fsspec"', '"s3fs"', '"pymysql"', '"simple-salesforce"', '"databricks-sqlalchemy"', '"requests"']
         if "rt.js_processor" in result.code:
@@ -875,9 +875,9 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
         if "rt.crypto_fields" in result.code or "encrypt_value" in "".join(result.files.values()):
             deps += ['"aws-encryption-sdk"']
         if any(x in result.code for x in ("rt.es_origin", "rt.es_target")):
-            deps += ['"dagster-community-components>=0.10.179"', '"elasticsearch"']
+            deps += ['"dagster-community-components>=0.10.187"', '"elasticsearch"']
         if "rt.mongo_origin" in result.code:
-            deps += ['"dagster-community-components>=0.10.179"', '"pymongo"']
+            deps += ['"dagster-community-components>=0.10.187"', '"pymongo"']
         if "rt.snowflake_url" in result.code:
             deps += ['"snowflake-sqlalchemy"']
         if "rt.geolocation" in result.code:

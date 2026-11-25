@@ -1,78 +1,75 @@
-# Components session tally (StreamSets to Dagster)
+# What the StreamSets skill still needs from the components session
 
-A running list of what to tell the components session so the StreamSets skill can emit registry components instead of generated code. Newest asks at the
-top of each section. Keep this file current whenever the converter gains or drops a stage.
+Checked against `dagster-community-components` **0.10.187**. Everything the earlier tally asked for that now exists is not listed here: HTTP and Kafka sinks, GeoIP lookup and its
+database updater, a MySQL binlog micro-batch sensor, offset reads on the Mongo and Elasticsearch readers, CDC apply (`delete_column`) on the Delta and SQL sinks, Field Hasher modes in
+`data_masking`, `ndjson` / `json` sinks on `polars_pipeline`, the StreamSets engine and workspace components. `scd_type_1` and `scd_type_2` also exist (the skill had missed them).
+Each item below says what is missing and gives the behaviour **verified against a real Data Collector 6.4.1** (and 3.18.1) so it can be built to match.
 
-## Open asks
+## 1. Needed, in order of value
 
-| # | Need | Why the skill needs it | Today |
-|---|---|---|---|
-| 1 | **HTTP/REST destination and per-record call** (POST/PUT a JSON body per record or per batch as an array or newline-delimited; basic/bearer/OAuth2; headers; retry and backoff on status and timeout; optional response written back into the record) | HTTP Client processor and destination are among the most common stages in real estates (6 of 27 sampled pipelines, plus a vendor destination that is the same POST in 14) | The converter generates raw `requests` code (`runtime.py`: `http_processor`, `http_target`). The registry has REST *sources* (`rest_api_fetcher`, `oauth_rest_ingestion`, `dlt_rest_api_source`) but no sink |
-| 2 | **Record-graph runtime as a component** (`RecordPipelineComponent`: stages, lanes, events, batches, offsets, error policy) | Every generated project copies a ~1,000-line `runtime.py`; fixes must be re-applied per project | Generated into each project |
-| 3 | **Delta Lake / Databricks writer with merge-by-key** (insert, update, delete by key columns, table auto-create, new-column drift) | The Databricks Delta Lake destination appears in 4 of the 6 public samples; CDC needs delete-by-key | Generated SQL via SQLAlchemy (`delta_target`), delete-then-insert. `dataframe_to_delta_table` (delta-rs) and `SQLToDatabaseAssetComponent` upsert exist: confirm they cover CDC deletes and a Databricks SQL warehouse target |
-| 4 | **Binlog/CDC micro-batch source** (MySQL binary log; later Oracle, PostgreSQL, SQL Server) that reads from a stored position to "caught up" and stops | CDC is the main thing that keeps pipelines on StreamSets; today those pipelines are tier 1 only | Not translated. No CDC component in the registry. Tests use a stand-in feed (`tests/overrides/cdc_feed.py`) with an assumed record shape |
-| 5 | **StreamSetsWorkspaceComponent: list jobs, job metrics, job-to-pipeline binding, schedules** | Tier 1 for continuous pipelines needs jobs declared by id; a Control Hub export carries pipelines but not their schedules | `jobs:` declared by hand; status only |
-| 6 | **Kafka producer sink** (JSON messages per record, topic expression, key, partitioner, flush per batch) | Kafka destinations are common; the registry has a consumer and monitor only | Interim generated code (`kafka_target`, tested against a fake client only). Still wanted as a registry component |
-| 7 | **MaxMind GeoIP component: a licensed database, kept current, with a lookup transform** (not just a file path). (a) *Acquire*: download GeoLite2 or GeoIP2 editions (City, Country, ASN) with a MaxMind **account ID and license key** from environment variables, a list of edition IDs, and a target directory; GeoLite2 downloads have required a MaxMind account and accepting the EULA since 2019-12-30, and the databases may not be redistributed, so the project cannot ship one. (b) *Refresh*: on a schedule or sensor (MaxMind publishes updates on a regular cadence; the `geoipupdate` tool and the `pygeoipupdate` package are the reference), skipping unchanged builds by checking the release date, and writing the build date and checksum as asset metadata so a lookup is traceable to a database version. (c) *Lookup*: an IP-to-attributes transform (latitude, longitude, country name and ISO code, city, postal code, subdivision, ASN), with a defined result for private, malformed and unknown addresses, IPv4 and IPv6. (d) optional MaxMind web-service client for customers without a local database | The Geolocation processor appears in web-log pipelines; StreamSets stored a file path and left licensing and updating to the operator. A converted pipeline that reads a stale or unlicensed file is a quiet failure | Interim generated code (`geolocation`, tested against a generated `.mmdb`) reads a file path only; the report asks the customer who holds the license and who refreshes the file. The registry's `geocoder` is address-based, not IP-based. Still wanted as a registry component |
-| 8 | **JDBC multitable incremental read** (offset columns, per-table offsets, partitioning) | The multitable origin is the usual database-to-warehouse origin | Generated full-table read every run (`jdbc_multitable_origin`). `SlingReplicationAssetComponent` may cover it: confirm incremental keys and table patterns |
-| 9 | **Salesforce SOQL with stored offset** | The Salesforce origin runs `WHERE Id > '${OFFSET}' ORDER BY Id` | Generated `simple_salesforce` loop. `SalesforceIngestionComponent` is dlt-based: confirm custom SOQL and offsets |
-| 10 | **Record transforms with StreamSets semantics**: field type conversion (incl. Java date patterns), rename, order, split, flatten (incl. whole record), mask, lookup, JDBC lookup, base64, replace-if-null, list pivot, dedup, XML flatten and parse, log parse | Eight processors are generated as record-level Python | Registry has dataframe versions (`type_coercer`, `dynamic_rename`, `data_masking`, `lookup`, `dataframe_flatten_nested_columns`, `filter`); confirm they can replace the record-level ones, or say they cannot (edge semantics differ) |
-| 11 | **Script evaluators**: Jython (runs unchanged under CPython), JavaScript (QuickJS), Groovy (not translated) | 25 JavaScript and 11 Jython-origin stages in the 27-pipeline sample | Generated shims. Nothing to ask of the registry; recorded so the components session knows why a scripting component is not requested |
+### 1.1 `field_encryption`: a StreamSets-compatible mode
+The component says its StreamSets interop is unverified and uses its own plaintext layout (`{"t","v"}` JSON, base64 text, a per-field `field` context entry). It cannot read ciphertext StreamSets
+wrote, and StreamSets cannot read its output. The real layout, observed from the stage in both directions (tests in the skill: `tests/test_sdc_crypto_parity.py`):
 
-| 12 | **Field-level encrypt/decrypt component, StreamSets-compatible** (AWS Encryption SDK; verified layout: provider `JceMasterKeyProvider` with the key id and a Base64 AES key, or AWS KMS; plaintext = the value's UTF-8 text; the field type in the encryption context as `SDC_FIELD_TYPE`; non-committing suite, so `CommitmentPolicy.FORBID_ENCRYPT_ALLOW_DECRYPT` to read and write; key from Vault or Key Vault resources) | The prospect is believed to encrypt and decrypt. The skill now reads and writes StreamSets ciphertext in both directions (checked against Data Collector 6.4.1), but as hand-rolled code in each project's `runtime.py` | `runtime.encrypt_value/decrypt_value/crypto_fields`. The registry has `data_masking` and the Vault resources but no encryption component. Details above are the spec |
-| 13 | **Hashing/masking transforms with StreamSets semantics** (Field Hasher in place/target/record, MURMUR3_128, Field Masker custom) | Hash joins against old hashes need identical output | Generated in-place MD5/SHA family only |
+- an AWS Encryption SDK message; with the **User Supplied Key** provider the key provider id is **`JceMasterKeyProvider`**, the key id is the stage's *Key ID*, the key is the Base64 AES key (16/24/32 bytes);
+- the **plaintext is the value's text in UTF-8** (`42`, `2.5`, `true`; a byte array stays bytes), and the **field type is in the encryption context** as `SDC_FIELD_TYPE` (`STRING`, `INTEGER`, `LONG`, `DOUBLE`, `BOOLEAN`, `DECIMAL`, `BYTE_ARRAY`), next to the user's own context entries;
+- Data Collector writes (and reads) the older non-committing suites, so the Python SDK needs `CommitmentPolicy.FORBID_ENCRYPT_ALLOW_DECRYPT` to read and write it; output is raw bytes, not base64 text;
+- the AWS KMS provider is `StrictAwsKmsMasterKeyProvider` with the same plaintext and context (not exercised: no AWS account).
 
-| 14 | **Offset-based incremental reads for Mongo and Elasticsearch** (stored last-offset on a field, repeat until empty, resume next run) | The skill now uses the registry's `MongoDBResource` and `ElasticsearchResource` for connections, but `mongodb_reader` and `elasticsearch_reader` take a query and a limit with no stored offset, so the skill generates the offset loop itself | Generated `mongo_origin` / `es_origin` on top of the registry resources (tested against mongomock and a fake client). Confirm whether the readers can take an offset field and initial offset |
+Ask: a `compatibility: streamsets` option on the component that does exactly this. Reference implementation: `runtime.encrypt_value / decrypt_value` in the skill.
 
-| 15 | **Script evaluator component, as the fallback** (details learned from a real engine: scripts see **Java collections** for list and map fields, so `list.add/size/get` and `map.put/get/containsKey` must work and `push` need not; a script-parameters map `sdc.userParams`; Jython `/` is integer division; Nashorn semantics in general) (Groovy on a JVM sidecar or container; JavaScript on QuickJS for the scripts the transpiler refuses; Jython-compatible Python). StreamSets scripting objects (`records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions.createRecord`, `sdc.createEvent/toEvent`), BATCH and RECORD modes, init and destroy scripts, `state` persisting across batches **and runs**, error records to a dead-letter output, events to a second output, limits and no file or network access by default | The skill now **transpiles JavaScript to Python** (25 of 25 sampled scripts), so this component is needed mainly for **Groovy** (no transpiler) and for JavaScript that uses Nashorn-only features. The less hand-written override code, the better | Groovy: `groovy_processor` (JVM; not yet run against a JVM). JavaScript fallback: `js_processor` (QuickJS) |
+### 1.2 `data_masking`: type-native hashing and the missing mask modes
+- Field Hasher: StreamSets hashes a field's **native bytes**, not its text: an integer as 4 little-endian bytes (8 past 32 bits), a double as 8, a boolean as 1, a string as UTF-8. Hashes of non-string columns only match old ones if the component does the same (`encoding: streamsets`, taking the width from the dtype). The `algorithm`, `hash_mode` and `field_separator` options are already there.
+- Field Masker modes the README does not show: **regex with groups to show** (`(.*)([0-9]{4})`, show group 2; a value that does not match is **left as it is**), **custom** (`#` shows the character, any other character is the mask), **fixed length** (ten `x`), **variable length** (one `x` per character). Mask character is `x`.
 
-| 16 | **Base64 encode/decode transform** (bytes and strings, standard and URL-safe) | The registry has no base64 component (`text_codec_convert_asset` converts character codecs, not base64) | Hand-rolled `base64_field` |
-| 17 | **Component-graph emission onto `polars_pipeline`, `warehouse_pipeline` and `pyspark_pipeline`** (a decision, then asks of those components). These multi-step components take an ordered `operations:` list (polars: select, drop, rename, cast, filter, with_columns, unique, drop_nulls, fill_null, sort, group_by, head/tail, join, union, sql; warehouse: the same compiled to one CTE/CTAS plan per sink, with sink modes replace, create_if_not_exists, view, incremental, truncate_insert and **merge with merge_keys**), so they are the natural target for chains of stateless StreamSets processors, and `warehouse_pipeline`'s merge sink covers the Delta Lake / JDBC CDC destinations. `polars_pipeline` can return pandas (`output_type: pandas`); the installed registry (0.10.179) has no separate pandas pipeline component, and `dataframe_transformer` consumes pandas frames through an IO manager. The skill already **plans** this (`components_plan.py`; each pipeline's report line says what a pipeline component could run and what is not covered) but generates nothing from it: DataFrame batches replace record streams, so routing lanes, events and per-record error lanes do not map | Hand-rolled stages reimplement ops the registry has. On the six samples 1 of 6 pipelines is fully covered, on the 27 public ones 1 of 27: the gaps below are what stops the rest | Planned only. The record-graph stages are the interim |
-| 18 | **Ops the pipeline components lack for StreamSets semantics** (each is a gap counted by `components_plan.py` on the public pipelines): `to_datetime`/`cast` with a format (Java-style patterns); `hash` (MD5/SHA family incl. SHA-512); `base64`; `explode` (list pivot); `split` and `regex_extract`; nested/struct paths for select, drop and rename (SDC fields are paths like `/a/b`); `coalesce`/per-column `fill_null`; `json_decode`; a **multi-output routing step** (Stream Selector: one frame to several by predicate, with a default); lookup against a static table as a step; sinks other than parquet/csv for `polars_pipeline` (database table, HTTP, Kafka); and EL-to-SQL, which is the skill's job (not a component's) | The biggest gaps on the public pipelines: Expression Evaluator (32 stages, needs EL translated to SQL), scripts (31), lookups (8), Field Order (6) | `components_plan.py` lists them per pipeline |
+### 1.3 `dataframe_to_kafka`: per-row topic and key
+Only a fixed `topic` is documented. The Kafka Producer destination takes a **topic expression** (a topic per record), a message key, and a partitioner. Ask: `topic_column` (or a template), `key_column`, and a partition strategy.
 
+### 1.4 CDC micro-batch sensors beyond MySQL
+`mysql_cdc_monitor` covers MySQL and gives the `_cdc_op` / `before` / `after` contract. Still missing, with the same contract: **PostgreSQL** (logical replication, `wal2json` or `pgoutput`), **SQL Server** (change tracking), **Oracle** (LogMiner). Two of the 14 sample pipelines from a StreamSets trial are Oracle and PostgreSQL CDC, and CDC is the main thing that otherwise keeps a pipeline running in StreamSets.
 
-## Hand-rolled in the skill, and the registry component that already exists
+### 1.5 A base64 transform
+Encode and decode (standard and URL-safe) on bytes and strings. StreamSets' Base64 stage works on **byte arrays only** (a string field is a record error) and 6.x takes a list of (origin, result) field pairs. No registry component does base64 (`text_codec_convert_asset` converts character codecs).
 
-Use the component where one exists (switch the converter to emit it once component-graph emission is chosen); ask only where there is a gap. "Candidate" means the registry component's description matches the stage but its edge semantics are not checked against StreamSets.
+### 1.6 A script evaluator
+Groovy, JavaScript and Jython scripts are customer code. The skill transpiles JavaScript to Python (25 of 25 sampled scripts), runs Jython on CPython and Groovy on the JVM, but a component would own this. Behaviour learned from the real engine:
+- scripts see **Java collections** for list and map fields (`list.add/size/get`, `map.put/get/containsKey`; `list.push` does not exist); Jython `/` on two integers is integer division;
+- a `userParams` map is passed to the script (`sdc.userParams`); `state` persists across batches (and should across runs); records out, error records, and events to a second output; BATCH and RECORD modes; init and destroy scripts; `scriptErrorAsRecordError`.
 
-| Skill's hand-rolled stage | Registry component | Status |
+### 1.7 `polars_pipeline` / `warehouse_pipeline` / `pyspark_pipeline`: ops and sources a StreamSets pipeline needs
+The Transformer (Spark) pipelines convert to `polars_pipeline` steps today (join, aggregate, sort, filter, SQL expressions, CSV/Parquet/JSON sinks). Missing:
+- **inline source** (rows or text in the YAML, for raw-data origins), a **`sql`/JDBC source kind** on `polars_pipeline`, and an **incremental source** (read since the last offset), since `warehouse_pipeline` supports only `upstream_table` ("inline SQL coming");
+- ops: **`explode`**, **`to_datetime` with a Java-style pattern**, nested/struct paths in `select`/`drop`/`rename` (StreamSets fields are paths like `/a/b`), `coalesce`, a **multi-output routing step** (one frame to several by predicate with a default lane);
+- sinks: an **Avro** write (an IBM sample pipeline writes Avro), an **append** write mode, directory/partitioned output (Spark writes a directory of parts);
+- join **prefix/suffix** settings; Spark-SQL function compatibility in `with_columns`/`filter` (e.g. `monotonically_increasing_id()`); `output_type: pandas` should declare its `pyarrow` dependency (it fails with `No module named 'pyarrow'`).
+- No Structured Streaming is needed: Dagster does not run unbounded streams, and most "streaming" pipelines are bounded or pollable.
+
+### 1.8 Per-row HTTP with a request body
+`per_row_http_fetcher` takes a URL from a column and writes the response back, with method and static headers. The StreamSets HTTP Client processor also sends a **request body built from the record** (an expression template), authenticates (basic, bearer, OAuth2 as `dataframe_to_http` does), retries, and writes the parsed response to a chosen field. Ask: `body_template`, the auth modes and retry from `dataframe_to_http`, and a response field path.
+
+### 1.9 Salesforce: arbitrary SOQL with a stored offset
+`salesforce_ingestion` takes `sf_objects`, a `where_clause` and an `incremental_field`. The StreamSets origin takes a **full SOQL query** (`SELECT Id, Name, ... FROM Account WHERE Id > '${OFFSET}' ORDER BY Id`) with an initial offset and offset column. If an explicit field list is not supported, add a `soql_query` with an `${OFFSET}` placeholder. (Subscriptions / push topics are unbounded and out of scope.)
+
+### 1.10 JDBC table-pattern replication with per-table offsets
+`sql_to_database_asset` has `watermark_column` for one table or query. The JDBC Multitable origin takes **table patterns** (`%`) with an offset column per table, discovered at run time. Ask: a `tables:` pattern that fans out to one asset (or one multi-asset) per matching table with its own watermark, or confirm `sling_replication_asset` covers it.
+
+## 2. Decision for the components session
+
+**Should the skill emit components instead of its own record-graph stages for stateless transforms?** It plans this already (`components_plan.py`) but generates only the Transformer route. If yes, each candidate component needs to match the
+behaviour the skill verified; these are the points where StreamSets differs from the obvious implementation:
+
+| StreamSets stage | Verified behaviour | Candidate component |
 |---|---|---|
-| `dedup` (Record Deduplicator) | `unique_dedup`, `warehouse_dedup` | candidate: use it |
-| `field_hasher` (in-place hash) | `hash` (MD5/SHA-1/SHA-256, one or more columns or the row), `pii_hasher` | candidate; confirm SHA-512 and in-place output, and that hex output matches StreamSets (hash joins) |
-| `field_mask` | `data_masking` (hash, partial mask, redact, substitute) | candidate; regex-group masks differ |
-| `field_type_converter` | `type_coercer`, `datetime_parser` | candidate; Java date patterns need checking |
-| `field_renamer`, `field_order` | `dynamic_rename`, `select_columns` | candidate |
-| `field_flattener`, `xml_flatten` | `json_flatten`, `dataframe_flatten_nested_columns`; `xml_parser` (XPath) | candidate for JSON flatten; XML flatten naming differs, so a gap |
-| `list_pivot` | `array_exploder` | candidate: use it |
-| `splitter` | `text_to_columns` | candidate |
-| `log_parser`, regex parse | `regex_parser` | candidate |
-| `json_parser`, JSON path | `json_path_extractor` | candidate |
-| `local_lookup`, `jdbc_lookup` | `lookup`, `find_replace`, `warehouse_join` | candidate |
-| `replace_if_null` | `data_cleansing`, `find_replace` | partial: confirm |
-| `http_processor` (per-record request) | `per_row_http_fetcher` (URL from a column; appends body, status, parsed JSON) | candidate for GET; confirm POST body, headers, auth |
-| `http_target` (batch POST) | `http_webhook_job` (a single POST/GET job) is not per-batch data | **gap: ask #1** |
-| `base64_field` | none | **gap: ask #16** |
-| `crypto_fields` (encrypt/decrypt) | none; `hashicorp_vault` and `key_vault_resource` can supply keys | **gap: ask #12** (keys from those resources) |
-| `geolocation` | none (`geocoder` is address-based) | **gap: ask #7** |
-| `kafka_target` | none (consumer only: `kafka_to_database_asset`) | **gap: ask #6** |
-| `kafka_origin` | `kafka_to_database_asset`, `kafka_monitor` | candidate |
-| `mongo_origin`, `es_origin`, `es_target` | `mongodb_reader`/`MongoDBResource`, `elasticsearch_reader`/`elasticsearch_asset`/`ElasticsearchResource` (resources already used) | readers lack stored offsets: ask #14 |
-| Redis / Cassandra lookups (not translated) | `redis_reader`, `cassandra_reader`/`cassandra_writer` | candidate when needed |
-| Python-callable stage, R scripts | `python_callable_asset`, `r_script` | n/a |
+| Splitter | a value with fewer parts than split fields is a **record error** | `text_to_columns` |
+| Field Flattener | list elements named `l.0`, `l.1`; in-place flattening stays inside the field; root target drops the parent name | `json_flatten`, `dataframe_flatten_nested_columns` |
+| Field Merger | maps or lists only; the source is **moved**; lists append; a map key clash is an error unless overwrite | none |
+| Field Replacer (6.x) | the replacement is an expression with a typed result; missing field: add / continue / error | `find_replace`, `data_cleansing` |
+| List Pivot | the pivoted field moves to the **end** of the record | `array_exploder` |
+| Dedup | first occurrence out, repeats to a second output | `unique_dedup` |
+| Local Lookup | a missing key leaves the field **unset** | `lookup` |
+| Log Parser | Common/Combined formats use grok field names (`clientip`, `verb`, `response`, `bytes`); parsing into `/` **replaces** the record | `regex_parser` |
+| XML Parser | attributes `attr|name`, text `value`, children as lists of maps | `xml_parser` (XPath) |
+| JDBC Lookup | modes FIRST_ONLY / SPLIT_INTO_MULTIPLE_RECORDS / ALL_AS_LIST; missing: pass on or error | `lookup`, `warehouse_join` |
+| Slowly Changing Dimension (Transformer) | types 1 and 2 | `scd_type_1`, `scd_type_2` (exist; the skill does not emit them yet) |
 
-| 19 | **polars_pipeline gaps found converting real Transformer pipelines**: an `scd` op (slowly changing dimension type 1 and type 2: natural keys, version/current-flag/timestamp managed columns), an inline source (rows or text in the YAML, for raw-data origins), `json`/`ndjson` among the sink kinds (the skill uses `dataframe_to_json` as a second asset today), a sink write mode (append versus overwrite) and directory/partitioned output, join column prefixes/suffixes configurable, Spark-SQL function compatibility in `with_columns`/`filter` (e.g. `monotonically_increasing_id()`), and a declared `pyarrow` dependency for `output_type: pandas` (the component fails with `No module named 'pyarrow'` without it) | Retail Inventory converts; Slowly Changing Dimension (2 of 4 Transformer samples) does not | `components_emit.py` emits `polars_pipeline` + `dataframe_to_json`; SCD pipelines fall back to stubs |
-
-| 20 | **Streaming and incremental support on `pyspark_pipeline` / `polars_pipeline`**: `pyspark_pipeline` has file, Delta, table and JDBC sources and sinks and a `checkpoint_dir` of named values across runs, but no Structured Streaming (`readStream` / `writeStream`, triggers, checkpoints), and `polars_pipeline` has no incremental source (read since the last offset). Both would let a StreamSets pipeline in micro-batch mode be a component instead of generated code | Dagster does not run unbounded streams, but many StreamSets jobs only look continuous: an offset-driven incremental read run on a schedule covers them | Generated record-graph stages keep offsets in asset metadata; Transformer pipelines are full re-reads |
-| 21 | **A CDC micro-batch reader as a component** (PostgreSQL logical replication via wal2json/pgoutput, MySQL binlog, SQL Server change tracking, Oracle LogMiner): read from a stored position to caught up, emit the change records, store the position (restates #4, now with the shape the pipelines take: 2 of the 14 IBM trial pipelines are CDC) | CDC is the main unbounded case; a position-based reader run on a schedule turns many of them into polling pipelines | none; these pipelines stay tier 1 |
-
-## Registry components the skill already uses or points customers at (verify each still exists)
-
-Used by generated code: `PolarsPipelineComponent` and `DataframeToJsonComponent` (Transformer pipelines, as YAML); `MongoDBResource` (`resources/mongodb_resource`) and `ElasticsearchResource` (`resources/elasticsearch_resource`), for connections in `mongo_origin`, `es_origin`, `es_target`. Pointed at: 
-
-`StreamSetsWorkspaceComponent` (tier 1), `KafkaToDatabaseAssetComponent` + `kafka_monitor`, `SalesforceIngestionComponent`, `DataframeToDeltaTableComponent`,
-`SlingReplicationAssetComponent`, `S3ToDatabaseAssetComponent` + `s3_monitor`, `data_masking`, `lookup`,
-`rest_api_fetcher`, `dlt_rest_api_source`.
-
-## Resolved
-
-(none yet)
+If the answer is no, the skill keeps generating these as record-graph stages and none of §2 is needed.
