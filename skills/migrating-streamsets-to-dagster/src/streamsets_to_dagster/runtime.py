@@ -1091,6 +1091,84 @@ def js_processor(run: Run, inst: str, script: str, init: str, *, inputs, outputs
     holder["st"] = _stage(run, inst, go, inputs=inputs, outputs=outputs, events=events, on_error=on_error, pre=pre, req=req)
 
 
+def script_native(run: Run, inst: str, module, *, inputs, outputs, events=(), on_error="TO_ERROR", pre=(), req=()):
+    """A JavaScript Evaluator script that was transpiled to Python (`module.init`, `module.run`, with JavaScript semantics from `jsrt`). Same scripting objects and
+    the same JSON boundary as `js_processor` (values are normalised through JSON on the way in and out), so the two behave alike; no JavaScript engine is needed."""
+    from . import jsrt
+    state: dict = {}
+    holder: dict = {}
+    counter = [0]
+    started = [False]
+
+    class _Log:
+        def __getattr__(self, name):
+            return lambda *a, **k: UNDEF_RETURN
+
+    UNDEF_RETURN = jsrt.UNDEF
+
+    class _Out:
+        def __init__(self):
+            self.items: list = []
+
+        def write(self, rec, *_a):
+            self.items.append(rec)
+            return jsrt.UNDEF
+
+    class _Err:
+        def __init__(self):
+            self.items: list = []
+
+        def write(self, rec, msg=""):
+            self.items.append((rec, jsrt.tostr(msg)))
+            return jsrt.UNDEF
+
+    class _Sdc:
+        def __init__(self, log):
+            self.log, self.events = log, []
+
+        def createEvent(self, kind, version=1):
+            return jsrt.JSRecord(None, {}, "event", jsrt.tostr(kind))
+
+        def toEvent(self, e):
+            self.events.append(e)
+            return jsrt.UNDEF
+
+    class _Fns:
+        createRecord = staticmethod(lambda rid="": jsrt.JSRecord(None, {}, jsrt.tostr(rid)))
+        createMap = staticmethod(lambda *_a: {})
+
+    def jin(v):
+        return json.loads(json.dumps(v, default=str))
+
+    def go(recs):
+        log = _Log()
+        sdc = _Sdc(log)
+        if not started[0]:
+            started[0] = True
+            module.init(state, log, sdc, _Fns)
+        jr = [jsrt.JSRecord(jin(r.value), {k: v for k, v in jin(r.attrs).items()}, f"{inst}:{counter[0] + i}") for i, r in enumerate(recs)]
+        counter[0] += len(recs)
+        out, err = _Out(), _Err()
+        module.run(jr, out, err, state, log, sdc, _Fns)
+        norm = jsrt.normalize(dict(state))
+        state.clear()
+        state.update(norm)
+        good = []
+        for rec in out.items:
+            v = jsrt.normalize(rec.value)
+            if not isinstance(v, dict):
+                run._err(holder["st"], Record({}), "script wrote a record whose value is not a map")
+                continue
+            good.append(Record(v, {k: ("" if x is None else str(x)) for k, x in (jsrt.normalize(rec.attributes) or {}).items()}))
+        for rec, msg in err.items:
+            run._err(holder["st"], Record(jsrt.normalize(rec.value) if isinstance(rec.value, dict) else {}, {}), msg)
+        lanes = {outputs[0]: good} if outputs else {}
+        if events and sdc.events:
+            lanes[events[0]] = [Record(jsrt.normalize(e.value) if isinstance(e.value, dict) else {}, {}, e.eventType) for e in sdc.events]
+        return lanes
+    holder["st"] = _stage(run, inst, go, inputs=inputs, outputs=outputs, events=events, on_error=on_error, pre=pre, req=req)
+
+
 # ---- Jython origin ---------------------------------------------------------------------------------------------------------------------------
 class _Offsets(dict):
     containsKey = dict.__contains__

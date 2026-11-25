@@ -34,6 +34,8 @@ The vendor's 14 pipelines inflate the JavaScript and HTTP counts: a different cu
 The 99% counts stages the converter produces code for. Kafka, Geolocation, Elasticsearch, MongoDB, HTTP, Groovy and the scripting stages were run only against fakes, in-memory databases, local servers
 and trivial records, never against the real systems (the Groovy evaluator not yet against a JVM); the Encrypt/Decrypt stage did not appear in any sample and is deliberately not translated.
 
+JavaScript evaluators in the 27-pipeline sample: **25 of 25 transpile to Python** (`jstopy.py`) and match QuickJS on random inputs (see *Scripting* in mapping.md); the stages that used to be QuickJS-only are now plain Python modules.
+
 A further 17 pipelines are Data Collector's own default-config test pipelines (versions 1.1 to 2.2, every stage with its defaults). Converting them is a robustness check, not a coverage number:
 all 17 convert without error and every unconfigured or untranslatable stage becomes a stub with its reason.
 

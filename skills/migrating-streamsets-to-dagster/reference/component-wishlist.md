@@ -24,7 +24,39 @@ top of each section. Keep this file current whenever the converter gains or drop
 
 | 14 | **Offset-based incremental reads for Mongo and Elasticsearch** (stored last-offset on a field, repeat until empty, resume next run) | The skill now uses the registry's `MongoDBResource` and `ElasticsearchResource` for connections, but `mongodb_reader` and `elasticsearch_reader` take a query and a limit with no stored offset, so the skill generates the offset loop itself | Generated `mongo_origin` / `es_origin` on top of the registry resources (tested against mongomock and a fake client). Confirm whether the readers can take an offset field and initial offset |
 
-| 15 | **Script evaluator component** (JavaScript, Jython-compatible Python, Groovy) that runs StreamSets-style scripts: scripting objects (`records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions.createRecord`, `sdc.createEvent/toEvent`), BATCH and RECORD modes, init and destroy scripts, `state` that persists across batches **and across runs** (asset metadata), error records to a dead-letter output, events to a second output. JavaScript in-process on QuickJS (memory and time limits, no file or network access by default); Groovy on a JVM sidecar or container; optional Nashorn compatibility shims (`Java.type` for `java.lang.String/Math/System`, `java.util.HashMap/ArrayList/Date`) so scripts that touch Java types still run; a test helper that feeds sample records through a script | 25 JavaScript, 11 Jython-origin and 1 Groovy stage in the sampled pipelines; every one is customer code that would otherwise be rewritten by hand. The less override code, the better | `js_processor` (QuickJS), `jython_processor`/`jython_origin` (CPython), `groovy_processor` (JVM) in each project's `runtime.py`; JSON marshalling; no limits or sandbox |
+| 15 | **Script evaluator component, as the fallback** (Groovy on a JVM sidecar or container; JavaScript on QuickJS for the scripts the transpiler refuses; Jython-compatible Python). StreamSets scripting objects (`records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions.createRecord`, `sdc.createEvent/toEvent`), BATCH and RECORD modes, init and destroy scripts, `state` persisting across batches **and runs**, error records to a dead-letter output, events to a second output, limits and no file or network access by default | The skill now **transpiles JavaScript to Python** (25 of 25 sampled scripts), so this component is needed mainly for **Groovy** (no transpiler) and for JavaScript that uses Nashorn-only features. The less hand-written override code, the better | Groovy: `groovy_processor` (JVM; not yet run against a JVM). JavaScript fallback: `js_processor` (QuickJS) |
+
+| 16 | **Base64 encode/decode transform** (bytes and strings, standard and URL-safe) | The registry has no base64 component (`text_codec_convert_asset` converts character codecs, not base64) | Hand-rolled `base64_field` |
+| 17 | **Component-graph emission** (a decision, then an ask of each covered component): emit a pipeline as an asset graph of registry components instead of one record-graph asset. Registry transforms are DataFrame-asset components whose logic lives inside `build_defs` closures, so the skill cannot call them as libraries; the only way to use them is to emit their YAML. Each covered component should accept an upstream asset and the StreamSets stage options (see the table below) | Hand-rolled stages reimplement what the registry already has. Emitting components is more idiomatic (per-step assets, lineage, retries) but changes the shape from record streams to DataFrame batches, so it fits stateless record transforms and not record routing, events or per-record error lanes | Not built. The skill's record-graph stages are the interim |
+
+## Hand-rolled in the skill, and the registry component that already exists
+
+Use the component where one exists (switch the converter to emit it once component-graph emission is chosen); ask only where there is a gap. "Candidate" means the registry component's description matches the stage but its edge semantics are not checked against StreamSets.
+
+| Skill's hand-rolled stage | Registry component | Status |
+|---|---|---|
+| `dedup` (Record Deduplicator) | `unique_dedup`, `warehouse_dedup` | candidate: use it |
+| `field_hasher` (in-place hash) | `hash` (MD5/SHA-1/SHA-256, one or more columns or the row), `pii_hasher` | candidate; confirm SHA-512 and in-place output, and that hex output matches StreamSets (hash joins) |
+| `field_mask` | `data_masking` (hash, partial mask, redact, substitute) | candidate; regex-group masks differ |
+| `field_type_converter` | `type_coercer`, `datetime_parser` | candidate; Java date patterns need checking |
+| `field_renamer`, `field_order` | `dynamic_rename`, `select_columns` | candidate |
+| `field_flattener`, `xml_flatten` | `json_flatten`, `dataframe_flatten_nested_columns`; `xml_parser` (XPath) | candidate for JSON flatten; XML flatten naming differs, so a gap |
+| `list_pivot` | `array_exploder` | candidate: use it |
+| `splitter` | `text_to_columns` | candidate |
+| `log_parser`, regex parse | `regex_parser` | candidate |
+| `json_parser`, JSON path | `json_path_extractor` | candidate |
+| `local_lookup`, `jdbc_lookup` | `lookup`, `find_replace`, `warehouse_join` | candidate |
+| `replace_if_null` | `data_cleansing`, `find_replace` | partial: confirm |
+| `http_processor` (per-record request) | `per_row_http_fetcher` (URL from a column; appends body, status, parsed JSON) | candidate for GET; confirm POST body, headers, auth |
+| `http_target` (batch POST) | `http_webhook_job` (a single POST/GET job) is not per-batch data | **gap: ask #1** |
+| `base64_field` | none | **gap: ask #16** |
+| `crypto_fields` (encrypt/decrypt) | none; `hashicorp_vault` and `key_vault_resource` can supply keys | **gap: ask #12** (keys from those resources) |
+| `geolocation` | none (`geocoder` is address-based) | **gap: ask #7** |
+| `kafka_target` | none (consumer only: `kafka_to_database_asset`) | **gap: ask #6** |
+| `kafka_origin` | `kafka_to_database_asset`, `kafka_monitor` | candidate |
+| `mongo_origin`, `es_origin`, `es_target` | `mongodb_reader`/`MongoDBResource`, `elasticsearch_reader`/`elasticsearch_asset`/`ElasticsearchResource` (resources already used) | readers lack stored offsets: ask #14 |
+| Redis / Cassandra lookups (not translated) | `redis_reader`, `cassandra_reader`/`cassandra_writer` | candidate when needed |
+| Python-callable stage, R scripts | `python_callable_asset`, `r_script` | n/a |
 
 ## Registry components the skill already uses or points customers at (verify each still exists)
 

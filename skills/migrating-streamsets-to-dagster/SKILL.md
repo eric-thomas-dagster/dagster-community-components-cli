@@ -82,7 +82,7 @@ streamsets-to-dagster status summary out/migration_manifest.json
 ## Do not
 
 - Do not say a pipeline is migrated because the project loads. Gates 1-4 prove structure; only a parallel run proves behavior.
-- Do not translate a Groovy or JavaScript evaluator by guessing; read the script (it is in the manifest notes), rewrite it in Python with a test, and pass it with `--override`. A Jython evaluator runs as written under CPython: still read it.
+- JavaScript evaluators are transpiled to Python automatically (`scripts/<stage>.py`); read the generated module before trusting it. Do not translate a Groovy evaluator by guessing: it runs on a JVM, or you read the script (in the manifest notes), rewrite it in Python with a test, and pass it with `--override`. A Jython evaluator runs as written under CPython: still read it.
 - - Do not translate an Encrypt and Decrypt Fields stage by guessing its properties or its ciphertext layout: ask the customer the questions in the report, and build it with `--override` and `runtime.crypto_fields` once they are answered.
 - Do not run a continuous pipeline as a scheduled batch without the customer's decision on lag and ordering.
 

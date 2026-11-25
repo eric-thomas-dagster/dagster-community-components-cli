@@ -41,7 +41,7 @@ Translated (stage class = last `_` segment of `stageName`):
 | `SplitterDProcessor` | Separator is a regular expression; TO_LAST_FIELD; keep or remove the original. |
 | `DataParserDProcessor` | JSON string field, first value only. |
 | `JythonDProcessor` | BATCH and RECORD modes, NATIVE_OBJECTS, init/destroy scripts. **Runs unchanged under CPython**, with `sdc.records`, `sdc.output.write(record[, lane])`, `sdc.error.write`, `sdc.state`, `sdc.log` and the globals `records output error log state record`. Python 2 syntax, Java imports and Jython-only calls fail at run time with the interpreter's error. |
-| `JavaScriptDProcessor` | BATCH mode, NATIVE_OBJECTS. Runs in **QuickJS (ES2020), not Nashorn**: `records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions.createRecord/createMap`, `sdc.createEvent/toEvent` (events go to the stage's event lane). Records cross as JSON (dates, decimals become strings); Java objects (`Java.type`, `new java.*`) do not exist and fail at run time. Init script runs once. |
+| `JavaScriptDProcessor` | BATCH mode, NATIVE_OBJECTS. **Transpiled to Python** (see *Scripting*); if the transpiler refuses, runs in **QuickJS (ES2020), not Nashorn**: `records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions.createRecord/createMap`, `sdc.createEvent/toEvent` (events go to the stage's event lane). Records cross as JSON (dates, decimals become strings); Java objects (`Java.type`, `new java.*`) do not exist and fail at run time. Init script runs once. |
 | `JythonDSource` | Runs under CPython with `sdc.userParams`, `sdc.lastOffsets`, `sdc.createBatch/createRecord`, `batch.add/process`, `sdc.isStopped`. **StreamSets runs the script until the pipeline stops; here one run is one poll** (the loop ends after the first processed batch); offsets are stored. Schedule the asset at the script's interval. |
 | `LocalLookupDProcessor` | Static key/value table; RECORD and BATCH give the same result. A missing key sets the field to null (assumed). |
 | `HttpDProcessor` (HTTP Client processor) | JSON; GET/POST/PUT/PATCH/DELETE/HEAD; EL in URL, headers and body; NONE and BASIC auth; response parsed into the output field. No pagination (stub). Retry/backoff, TLS, proxy and response-header capture are not applied. HTTP error status sends the record to the error policy. |
@@ -97,14 +97,20 @@ Any other function raises Untranslatable and the stage becomes a stub.
 
 ## Scripting: JavaScript, Jython and Groovy
 
-| Evaluator | Runs on | What differs from StreamSets |
-|---|---|---|
-| JavaScript | QuickJS (in process, `pip install quickjs`; ES2020) | StreamSets uses Nashorn (ES5.1 on the JVM). Records cross as JSON, so dates, decimals and bytes arrive as strings; Java objects (`Java.type`, `new java.*`) do not exist. 19 of the 25 sampled scripts ran on a trivial record; none of them used Java interop. |
-| Jython | CPython (in process) | Python 2 syntax and Java imports fail. |
-| Groovy | the JVM: the `groovy` command | Real Groovy, so the language matches; a JDK and Apache Groovy must be installed where the code location runs; one process per batch. Records cross as JSON. |
+Order of preference: **transpile to Python**, then a native component, then run the script in an engine.
 
-All three get the scripting objects (`records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions` / `sdc.createRecord`) and keep `state` across batches within a run.
-A registry script-evaluator component (ask #15) would own this runtime instead of each generated project carrying it.
+| Evaluator | What the converter does | Fallback |
+|---|---|---|
+| JavaScript | **Transpiled to a Python module** (`scripts/<stage>.py`, via `jstopy.py`; JavaScript semantics such as truthiness, `+`, `==` versus `===`, `undefined` versus `null`, string and array methods come from `jsrt.py`). No JavaScript engine at run time. A construct the transpiler does not handle (`this`, getters, destructuring, labels, `new Date`, `x++` inside an expression, ...) raises *Unsupported* and the stage runs in QuickJS instead, with the reason in the report. | QuickJS (in process). StreamSets uses Nashorn (ES5.1); records cross as JSON, so dates, decimals and bytes arrive as strings; Java objects do not exist. |
+| Jython | Runs under CPython (Python 2 syntax and Java imports fail). | none |
+| Groovy | Runs on the real Groovy (JVM): `groovy` on PATH or `SDC_GROOVY`. There is no Groovy transpiler: it could not be validated without a JVM. | the script-evaluator component (ask #15) |
+| Custom Java stages | Not translatable. | rebuild by hand |
+
+How the JavaScript transpiler is checked: `tests/test_js_transpile.py` runs 33 snippets in QuickJS and as transpiled Python and compares output records, error counts, events and state; 40 tests in all.
+With `SDC_JS_CORPUS=<folder of exports>` it also compares every real script that transpiles on random inputs: **all 25 scripts in the 27-pipeline sample transpile, and all 25 match QuickJS** (on random inputs only 11 produced output records and 9 produced error records, so this is
+evidence, not proof). The generated Python is meant to be read and kept: review it like inherited code.
+
+All evaluators get the scripting objects (`records`, `output.write`, `error.write`, `state`, `log`, `sdcFunctions` / `sdc.createRecord`, `sdc.createEvent/toEvent`) and keep `state` across batches within a run.
 
 ## Encryption, decryption and hashing
 
