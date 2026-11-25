@@ -42,8 +42,6 @@ def test_the_converter_gives_the_component_the_documented_xbp_status_codes():
     assert "F" in attrs["success_statuses"] and "A" in attrs["failure_statuses"]
 
 
-@pytest.mark.xfail(strict=True, reason="registry 0.10.177 calls BAPI_XBP_JOB_ADD_STEP / PROGRAM / START_IMMEDIATELY=X and omits EXTCOMPANY, EXTPRODUCT, "
-                                       "EXTERNAL_USER_NAME, which SAP's XBP documentation does not have or requires; see component-wishlist.md")
 def test_a_job_runs_to_completion_against_the_documented_interface(monkeypatch):
     system = FakeXbpSystem(statuses=["S", "R", "F"])
     result = _run(system, monkeypatch)
@@ -51,16 +49,13 @@ def test_a_job_runs_to_completion_against_the_documented_interface(monkeypatch):
     assert system.names()[:2] == ["BAPI_XMI_LOGON", "BAPI_XBP_JOB_OPEN"] and system.names()[-1] == "BAPI_XMI_CLOSE"
 
 
-def test_the_component_fails_at_logon_today_and_the_undocumented_calls_are_listed(monkeypatch):
-    """Records where the registry component and SAP's XBP documentation disagree (registry 0.10.177). Update it when the component changes."""
+def test_the_component_uses_only_documented_xbp_calls(monkeypatch):
+    """Registry 0.10.188 uses only calls SAP's XBP documentation has (0.10.177 did not: it called BAPI_XBP_JOB_ADD_STEP and others and failed at logon)."""
     import inspect
     import re
 
     from xbp_fake import DOCUMENTED
 
-    system = FakeXbpSystem()
-    result = _run(system, monkeypatch)
-    assert not result.success and system.names() == ["BAPI_XMI_LOGON", "BAPI_XMI_CLOSE"]            # EXTCOMPANY and EXTPRODUCT are required and not sent
     _, mod, _ = _converted_sap_component()
     used = set(re.findall(r'conn\.call\(\s*"(BAPI_XBP_\w+|BAPI_XMI_\w+)"', inspect.getsource(mod)))
-    assert used - set(DOCUMENTED) == {"BAPI_XBP_JOB_ADD_STEP", "BAPI_XBP_JOB_START_IMMEDIATE", "BAPI_XBP_JOB_READ_JOBLOG"}
+    assert used and used - set(DOCUMENTED) == set()
