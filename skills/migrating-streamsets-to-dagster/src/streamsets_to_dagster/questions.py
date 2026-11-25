@@ -11,7 +11,10 @@ def build_questions(est, res) -> dict:
         if not meta:
             continue
         qs = []
-        if meta["streaming"]:
+        if meta.get("shape") == "unbounded":
+            qs.append("This pipeline is an unbounded stream (" + ", ".join(meta["streaming"]) + "). Dagster runs batches, so it should stay running in StreamSets and be observed (tier 1), "
+                      "or be redesigned as micro-batches if the lag allows. What latency does the downstream need?")
+        elif meta["streaming"]:
             qs.append("This pipeline starts from a continuous origin (" + ", ".join(meta["streaming"]) + "). A Dagster run is a batch: "
                       "(a) keep it running in StreamSets and observe it with the registry StreamSetsWorkspaceComponent (tier 1), "
                       "(b) replace it with a micro-batch asset on a schedule, or (c) move the source to a streaming platform. Which?")

@@ -152,10 +152,24 @@ The first run found **six real differences, all fixed**, and confirmed a number 
 | Local Lookup: a key with no entry leaves the field **unset** (not null) | yes |
 | Log formats: Common and Combined Log Format use the **grok field names** (`clientip, ident, auth, timestamp, verb, request, httpversion, rawrequest, response, bytes`; combined adds `referrer`, `agent`, quotes included); parsing into `/` **replaces** the record; a group that did not match is null. The 6.x service property names are `logParserServiceConfig.*` (grok patterns in `grokPatternList`) | yes |
 | Scripting stages: `userParams` (script parameters, `sdc.userParams`) exists on Jython, JavaScript and Groovy; in JavaScript (Nashorn) **record lists and maps are Java collections** (`list.add`, `size`, `get`; `map.put`, `get`, `containsKey`) and `list.push` does not exist; in Jython `/` on two integers is **integer division** | yes (all three supported; the Jython division is emulated by rewriting `/`) |
+| **JDBC and S3 stages against real Postgres and MinIO** (5 cases): the multitable origin, JDBC Lookup (mappings `columnName`/`field`, FIRST_ONLY / SPLIT_INTO_MULTIPLE_RECORDS / ALL_AS_LIST, SEND_TO_ERROR / PASS_RECORD_ON), the JDBC destination (columns matched by name, extra fields dropped) and the JDBC Query executor give the same rows and side effects; the S3 origin reports `Name` as the full object key, sets the object's metadata as record attributes (`ETag`, `Content-Length`, `Content-Type`, `Last-Modified`) and emits `new-file` and `finished-file` events | yes (attributes and events aligned; custom endpoints and path-style addressing added) |
+| **6.x property names moved**: JDBC connection settings are `hikariConfigBean.connection.connectionString / .username / .password` (older: `hikariConfigBean.connectionString`); JDBC destination, lookup and executor settings sit under `jdbcTargetConfigBean.*`, `jdbcLookupProcessorConfigBean.*` and `config.*`; S3 credentials and endpoint under `s3ConfigBean.s3Config.connection.awsConfig.*` / `awsRegionConfig.nonRegionalEndpoint`; Databricks under `config.destinationConfig.connection.*`; Base64 `fieldsToEncode` / `fieldsToDecode`; Field Hasher `hasherConfig.*`; Field Replacer `conf.rules`. The translators read both generations | yes (the first IBM trial export showed a 6.x JDBC stage being refused for exactly this) |
 | Confirmed: Expression Evaluator arithmetic, `/` versus `div`, string concatenation with null, ternary, `substring`, `record:exists`, missing fields, header attributes; `str:matches` and `str:regExCapture` are **whole-string** matches; Field Remover (KEEP/REMOVE, nested paths), Field Renamer, Field Type Converter (numbers, boolean, long), Stream Selector with a default lane, Field Order, Dedup, JSON Parser, Masker (variable, fixed, custom) | n/a |
 
 Data Collector also publishes its own **stage definitions** (`/rest/v1/definitions`, readable without activation): every property name, default and enumeration of every installed stage and the full
 EL function catalog (299 functions). Property names in the translators were checked against it for the stages installed in the 6.4.1 image, which found the Field Hasher schema change. `docs/PARITY.md` has the setup.
+
+## Which pipelines can run in Dagster at all
+
+Each pipeline is classified in the report (`workload:` line, and `shape` in the manifest):
+
+| Shape | Meaning | What happens |
+|---|---|---|
+| **batch** | bounded origins (files, tables, queries); a Transformer pipeline in STREAMING mode over file origins counts | converts and runs as a Dagster run |
+| **polling** | continuous in StreamSets but readable as micro-batches: Directory, File Tail, Kafka consumer, Elasticsearch, MongoDB, HTTP polling, Jython origin | converts; schedule the asset at the polling interval |
+| **unbounded** | a stream that never ends with no micro-batch reader here: CDC (Oracle, PostgreSQL, SQL Server, MySQL binlog), HTTP/TCP/UDP/WebSocket servers, queues | stays in StreamSets (tier 1, observe it) or is redesigned; a Dagster run is a batch |
+
+On the 14 IBM trial pipelines: 10 batch, 1 polling, 2 unbounded (both CDC); three of the four Transformer pipelines are in BATCH mode and the fourth reads files. Most "streaming" estates are mostly batch or polling.
 
 ## Transformer (Spark) pipelines: registry components
 

@@ -710,7 +710,7 @@ def _like(pattern: str, name: str) -> bool:
 
 
 def s3_origin(run: Run, inst: str, bucket_fn, prefix_fn, pattern: str, fmt: str, *, header: bool, delimiter: str, outputs, events, batch: int = 1000,
-              key_fn=None, secret_fn=None, region: str = ""):
+              key_fn=None, secret_fn=None, region: str = "", endpoint_fn=None, path_style: bool = False):
     """Amazon S3 origin for DELIMITED (CSV) and JSON: lists `<bucket>/<prefix>` matching `pattern`, emits batches, and a finished-file event per object."""
     def gen():
         if run.dry:
@@ -720,6 +720,11 @@ def s3_origin(run: Run, inst: str, bucket_fn, prefix_fn, pattern: str, fmt: str,
         kw = {}
         if key_fn and key_fn():
             kw = {"key": key_fn(), "secret": secret_fn()}
+        ep = os.environ.get("SDC_S3_ENDPOINT") or (endpoint_fn() if endpoint_fn else "")
+        if ep:                                          # an S3-compatible store (MinIO, Ceph, ...): custom endpoint, path-style addressing
+            kw["client_kwargs"] = {"endpoint_url": ep}
+        if ep or path_style:
+            kw["config_kwargs"] = {"s3": {"addressing_style": "path"}}
         fs = fsspec.filesystem("s3", **kw)
         base = f"{bucket_fn()}/{prefix_fn().strip('/')}"
         mark = run.offsets_in.get(inst, "")
@@ -728,7 +733,13 @@ def s3_origin(run: Run, inst: str, bucket_fn, prefix_fn, pattern: str, fmt: str,
             run.offsets_out[inst] = max(run.offsets_out.get(inst, ""), stamp)
             n = 0
             key = path.lstrip("/").split("/", 1)[-1]          # the object key (prefix included), which is what SDC reports as `Name`
-            meta = {"Name": key, "s3.bucket": bucket_fn(), "s3.object.key": key}
+            info = fs.info(path)
+            lm = info.get("LastModified")
+            meta = {"Name": key, "ETag": str(info.get("ETag") or "").strip('"'), "Content-Length": str(info.get("size", "")), "Content-Type": str(info.get("ContentType") or "binary/octet-stream")}
+            if lm is not None and hasattr(lm, "strftime"):
+                meta["Last-Modified"] = lm.strftime("%a %b %d %H:%M:%S GMT %Y")        # java.util.Date.toString, as Data Collector reports it
+            if events:
+                yield {events[0]: [Record({"filepath": key}, {"sdc.event.type": "new-file"}, "new-file")]}
             with fs.open(path, "rt", newline="") as fh:
                 rows = _parse(fh, fmt, header, delimiter)
                 buf = []
@@ -741,7 +752,7 @@ def s3_origin(run: Run, inst: str, bucket_fn, prefix_fn, pattern: str, fmt: str,
                 if buf:
                     yield {outputs[0]: buf}
             if events:
-                yield {events[0]: [Record({"filepath": key, "filename": key.rsplit("/", 1)[-1], "record-count": n, "error-count": 0}, dict(meta), "finished-file")]}
+                yield {events[0]: [Record({"filepath": key, "error-count": 0, "record-count": n}, {"sdc.event.type": "finished-file"}, "finished-file")]}
     run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
 
 
@@ -2106,6 +2117,16 @@ def salesforce_origin(run: Run, inst: str, creds_fn, soql_fn, offset_col: str, i
             offset = last[offset_col]
             run.offsets_out[inst] = offset
     run.add(Stage(inst, gen=gen, outputs=outputs, events=events))
+
+
+def snowflake_url(inst: str, account: str, user: str, password: str, database: str = "", schema: str = "", warehouse: str = "") -> str:
+    """SQLAlchemy URL for Snowflake (needs snowflake-sqlalchemy); SDC_SQLALCHEMY_URL_<STAGE> overrides it."""
+    env = os.environ.get(f"SDC_SQLALCHEMY_URL_{re.sub(r'[^A-Za-z0-9]', '_', inst).upper()}")
+    if env:
+        return env
+    from urllib.parse import quote
+    path = "/".join(x for x in (database, schema) if x)
+    return f"snowflake://{quote(user)}:{quote(password)}@{account}/{path}" + (f"?warehouse={warehouse}" if warehouse else "")
 
 
 def delta_url(inst: str, jdbc_url: str, token: str = "") -> str:

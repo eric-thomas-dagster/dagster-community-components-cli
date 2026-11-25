@@ -123,13 +123,18 @@ def _err(s: Stage) -> str:
     return f", on_error={s.on_error or 'TO_ERROR'!r}"
 
 
+def _conn(c: dict, prefix: str, name: str):
+    """A JDBC connection property: Data Collector 6.x writes `<prefix>.connection.<name>`, older versions `<prefix>.<name>`."""
+    return c.get(f"{prefix}.connection.{name}") or c.get(f"{prefix}.{name}")
+
+
 def _url(s: Stage, prefix: str) -> str:
     c = s.conf
-    url = c.get(f"{prefix}.connectionString") or c.get(f"{prefix}.connectionString".replace("hikariConfigBean", "hikariConfigBean"))
-    user, pw = c.get(f"{prefix}.username") or "", c.get(f"{prefix}.password") or ""
+    url = _conn(c, prefix, "connectionString")
+    user, pw = _conn(c, prefix, "username") or "", _conn(c, prefix, "password") or ""
     if not url:
         raise _Stub("no JDBC connection string in the stage configuration")
-    return f"lambda: rt.sa_url({s.instance!r}, ({translate(url)}), ({translate(user) if user else repr('')}), ({translate(pw) if pw else repr('')}))"
+    return f"lambda: rt.sa_url({s.instance!r}, ({translate(url)}), ({translate(user) if user else repr('')}), ({translate(pw) if pw and pw != '<redacted>' else 'rt.stage_secret(' + repr(s.instance) + ', ' + repr('PASSWORD') + ')' if pw else repr('')}))"
 
 
 def _rows(v):
@@ -227,26 +232,30 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         raise _Stub(f"{cls} is not translated; {SUGGEST[cls]}")
 
     if cls == "AmazonS3DSource":
-        fmt = c.get("dataFormat") or "DELIMITED"
+        fmt = _pick(c, "dataFormat") or "DELIMITED"
         if fmt not in ("DELIMITED", "JSON"):
             raise _Stub(f"data format {fmt} is not translated (DELIMITED and JSON are)")
-        ff = c.get("dataFormatConfig.csvFileFormat") or "CSV"
-        delim = {"CSV": ",", "TDF": "\t", "CUSTOM": c.get("dataFormatConfig.csvCustomDelimiter") or ","}.get(ff)
+        ff = _pick(c, "csvFileFormat") or "CSV"
+        delim = {"CSV": ",", "TDF": "\t", "CUSTOM": _pick(c, "csvCustomDelimiter") or ","}.get(ff)
         if delim is None:
             raise _Stub(f"CSV file format {ff} is not translated")
-        if (c.get("s3ConfigBean.postProcessingConfig.postProcessing") or "NONE") != "NONE":
+        if (_pick(c, "postProcessing") or "NONE") != "NONE":
             n.append("post-processing (archive/delete after reading) is not performed")
         n.append("objects are read in LastModified order and each run continues after the last object of the previous run (stored as asset metadata)")
-        if c.get("s3ConfigBean.s3Config.endpoint"):
-            n.append("custom S3 endpoint is not applied")
-        key = c.get("s3ConfigBean.s3Config.awsConfig.awsAccessKeyId")
-        sec = c.get("s3ConfigBean.s3Config.awsConfig.awsSecretAccessKey")
+        ep = _pick(c, "nonRegionalEndpoint") or _pick(c, "regionalEndpoint") or c.get("s3ConfigBean.s3Config.endpoint")
+        if ep:
+            n.append("custom S3 endpoint with path-style addressing (checked against MinIO)")
+        key, sec = _pick(c, "awsAccessKeyId"), _pick(c, "awsSecretAccessKey")
         keyfn = f", key_fn={_el(key)}, secret_fn={_el(sec)}" if key and key != "<redacted>" and sec else ""
-        prefix = c.get("s3ConfigBean.s3Config.commonPrefix") or "/"
+        if key == "<redacted>" or (sec == "<redacted>"):
+            keyfn = f", key_fn=lambda rec=None, f=None: rt.stage_secret({s.instance!r}, 'KEY'), secret_fn=lambda rec=None, f=None: rt.stage_secret({s.instance!r}, 'SECRET')"
+            n.append("the access key and secret were removed from the export: set SDC_SECRET_" + __import__("re").sub(r"[^A-Za-z0-9]", "_", s.instance).upper() + "_KEY and _SECRET")
+        epfn = f", endpoint_fn={_el(ep)}, path_style={bool(_pick(c, 'usePathAddressModel'))}" if ep else (f", path_style={bool(_pick(c, 'usePathAddressModel'))}" if _pick(c, "usePathAddressModel") else "")
+        prefix = _pick(c, "commonPrefix") or "/"
         ev = f", events={s.events!r}" if s.events else ", events=[]"
-        return (f"rt.s3_origin(run, {I}, {_el(c.get('s3ConfigBean.s3Config.bucket'))}, {_el(prefix)}, {c.get('s3ConfigBean.s3FileConfig.prefixPattern') or '*'!r}, "
-                f"{fmt!r}, header={(c.get('dataFormatConfig.csvHeader') or '') == 'WITH_HEADER'}, delimiter={delim!r}, outputs={s.outputs!r}{ev}"
-                f", batch={int(c.get('s3ConfigBean.basicConfig.maxBatchSize') or 1000)}{keyfn})"), n
+        return (f"rt.s3_origin(run, {I}, {_el(_pick(c, 'bucket'))}, {_el(prefix)}, {_pick(c, 'prefixPattern') or '*'!r}, "
+                f"{fmt!r}, header={(_pick(c, 'csvHeader') or '') == 'WITH_HEADER'}, delimiter={delim!r}, outputs={s.outputs!r}{ev}"
+                f", batch={int(_pick(c, 'maxBatchSize') or 1000)}{keyfn}{epfn})"), n
 
     if cls == "TableJdbcDSource":
         tcs = _rows(c.get("tableJdbcConfigBean.tableConfigs"))
@@ -316,15 +325,15 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         return f"rt.jdbc_query_executor(run, {I}, {_url(s, 'config.hikariConfigBean')}, [{', '.join(_el(q) for q in qs)}], {_lanes(s).split(', outputs')[0]}{err}{pre})", n
 
     if cls == "JdbcDTarget":
-        if (c.get("changeLogFormat") or "NONE") != "NONE":
-            raise _Stub(f"change-log format {c.get('changeLogFormat')} (CDC) is not translated")
-        op = c.get("defaultOperation") or "INSERT"
+        if (_pick(c, "changeLogFormat") or "NONE") != "NONE":
+            raise _Stub(f"change-log format {_pick(c, 'changeLogFormat')} (CDC) is not translated")
+        op = _pick(c, "defaultOperation") or "INSERT"
         if op != "INSERT":
             raise _Stub(f"default operation {op} is not translated (INSERT is)")
-        if _rows(c.get("columnNames")) or c.get("fieldToColumnMapping"):
+        if any(r.get("columnName") for r in _rows(_pick(c, "columnNames"))) or c.get("fieldToColumnMapping"):
             n.append("explicit field-to-column mappings are not applied: fields are matched to columns by name")
         n.append("fields with no matching column are dropped")
-        return f"rt.jdbc_target(run, {I}, {_url(s, 'hikariConfigBean')}, {_el(c.get('tableNameTemplate'))}, {op!r}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
+        return f"rt.jdbc_target(run, {I}, {_url(s, 'hikariConfigBean')}, {_el(_pick(c, 'tableNameTemplate'))}, {op!r}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
 
     if cls in ("NullDTarget", "ToErrorNullDTarget", "TrashDTarget"):
         return f"rt.null_target(run, {I}, {_lanes(s).split(', outputs')[0]}{err}{pre})", n
@@ -375,21 +384,21 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         return f"rt.groovy_processor(run, {I}, {str(c.get('script') or '')!r}, {str(c.get('initScript') or '')!r}, {c.get('processingMode') or 'BATCH'!r}, user_params={_uparams(c)!r}, {lanes}, events={s.events!r}{err}{pre})", n
 
     if cls == "JdbcLookupDProcessor":
-        q = c.get("query")
+        q = _pick(c, "query")
         if not q:
             raise _Stub("no lookup query")
-        rows = _rows(c.get("columnMappings"))
+        rows = _rows(_pick(c, "columnMappings"))
         maps = []
         for r in rows:
             if r.get("columnName") or r.get("field"):
                 if not (r.get("columnName") and r.get("field")):
                     raise _Stub("a column mapping without both a column and a field is not translated")
                 maps.append((r["columnName"], r["field"]))
-        multi = c.get("multipleValuesBehavior") or "FIRST_ONLY"
-        miss = c.get("missingValuesBehavior") or "PASS_RECORD_ON"
+        multi = _pick(c, "multipleValuesBehavior") or "FIRST_ONLY"
+        miss = _pick(c, "missingValuesBehavior") or "PASS_RECORD_ON"
         if multi not in ("FIRST_ONLY", "SPLIT_INTO_MULTIPLE_RECORDS", "ALL_AS_LIST") or miss not in ("PASS_RECORD_ON", "SEND_TO_ERROR"):
             raise _Stub(f"lookup behaviors {multi}/{miss} are not translated")
-        n.append("the column mapping property names (columnName, field) and the all-columns default are not verified against an export that has mappings; compare one looked-up record with your Data Collector's")
+        n.append("column mappings use columnName and field (property names checked against Data Collector 6.4.1); no mapping means every column to a same-named field")
         n.append("record values are substituted into the SQL text, exactly as StreamSets does: the query is only as safe as its inputs. A cache setting is not applied")
         return f"rt.jdbc_lookup(run, {I}, {_url(s, 'hikariConfigBean')}, {_el(q)}, {maps!r}, {multi!r}, {miss!r}, {lanes}{err}{pre})", n
 
@@ -635,8 +644,31 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
                 f"header={(_pick(c, 'csvHeader') or 'NO_HEADER') == 'WITH_HEADER'}, delimiter={delim!r}, text_path={_pick(c, 'textFieldPath') or '/text'!r}, "
                 f"{_lanes(s).split(', outputs')[0]}{err}{pre})"), n
 
+    if cls == "SnowflakeDTarget":
+        beans = _rows(c.get("config.data.tableKeyBeans"))
+        cdc = bool(c.get("config.data.cdcData"))
+        keyed = [b for b in beans if b.get("keyColumns")]
+        if cdc and not keyed:
+            raise _Stub("CDC mode without key columns")
+        acct = c.get("config.snowflake.snowflakeConnection.account")
+        if not acct or not c.get("config.snowflake.table"):
+            raise _Stub("Snowflake destination needs an account and a table")
+        user, pw = c.get("config.snowflake.snowflakeConnection.user") or "", c.get("config.snowflake.snowflakeConnection.password")
+        keys = "None"
+        if cdc:
+            keys = "lambda full: dict([" + ", ".join(f"(({translate(b.get('table', ''))}), {list(b['keyColumns'])!r})" for b in keyed) + "]).get(full, [])"
+        sfdb, sfsc = c.get("config.snowflake.database"), c.get("config.snowflake.schema")
+        n.append("Snowflake: records are written with SQL through snowflake-sqlalchemy (StreamSets stages files and uses Snowpipe or COPY); new tables and columns are created as in the Delta Lake destination; "
+                 "NOT exercised against a Snowflake account")
+        n.append("the user's password was removed from the export: set SDC_SECRET_" + __import__("re").sub(r"[^A-Za-z0-9]", "_", s.instance).upper() + "_PASSWORD")
+        pwfn = f"({translate(pw)})" if pw and pw != "<redacted>" and is_dynamic(pw) else f"rt.stage_secret({s.instance!r}, 'PASSWORD')"
+        table = c.get("config.snowflake.table")
+        return (f"rt.delta_target(run, {I}, lambda: rt.snowflake_url({I}, ({translate(acct)}), ({translate(user) if user else repr('')}), {pwfn}, ({translate(sfdb) if sfdb else repr('')}), "
+                f"({translate(sfsc) if sfsc else repr('')}), ({translate(c.get('config.snowflake.warehouse') or '')})), {_el(table)}, auto_create=True, drift=bool(True), keys_fn={keys}, cdc={cdc}, "
+                f"{_lanes(s).split(', outputs')[0]}{err}{pre})"), n
+
     if cls == "DatabricksDeltaLakeDTarget":
-        d = c.get("config.destinationConfig.connectionString")
+        d = c.get("config.destinationConfig.connection.connectionString") or c.get("config.destinationConfig.connectionString")      # 6.x nests it under `connection`
         if not d:
             raise _Stub("no connection string")
         cdc = bool(c.get("config.data.cdcData"))
@@ -653,12 +685,30 @@ def emit(p: Pipeline, s: Stage, files: dict | None = None) -> tuple[str, list[st
         n.append("null-value defaults, newline replacement and space trimming are not applied")
         if cdc:
             n.append("CDC operations are applied by key as delete then insert (the stage uses MERGE INTO)")
-        tok = c.get("config.destinationConfig.password")
+        tok = c.get("config.destinationConfig.connection.password") or c.get("config.destinationConfig.password")
         return (f"rt.delta_target(run, {I}, lambda: rt.delta_url({I}, ({translate(d)}), ({translate(tok) if tok else repr('')})), {_el(c.get('config.destinationConfig.table'))}, "
                 f"auto_create={bool(c.get('config.destinationConfig.tableAutoCreate'))}, drift={bool(c.get('config.data.dataDriftEnabled'))}, keys_fn={keys}, cdc={cdc}, "
                 f"{_lanes(s).split(', outputs')[0]}{err}{pre})"), n
 
     raise _Stub(f"stage type {cls} ({s.library}) has no translation yet")
+
+
+
+def workload_shape(p: Pipeline) -> tuple[str, str]:
+    """(shape, sentence) for the report. batch: runs to completion and fits a Dagster run as it is. polling: a continuous origin that can be read as micro-batches (Directory,
+    File Tail, Kafka consumer, Elasticsearch, MongoDB, HTTP polling, Jython origin): schedule it. unbounded: a stream that never ends and has no micro-batch reader here (CDC,
+    HTTP/TCP/UDP servers, queues, push origins): keep it running in StreamSets (tier 1) or redesign it. Transformer pipelines in STREAMING mode over file origins are bounded."""
+    origins = [s for s in p.stages if s.role == "origin"]
+    mode = (p.execution_mode or "").upper()
+    unbounded = [STREAMING_ORIGINS[s.cls] for s in origins if s.cls in STREAMING_ORIGINS]
+    polling = [BATCHED_CONTINUOUS[s.cls] for s in origins if s.cls in BATCHED_CONTINUOUS]
+    if unbounded:
+        return "unbounded", "unbounded stream (" + ", ".join(unbounded) + "): not a Dagster run; keep it in StreamSets with the registry StreamSetsWorkspaceComponent (tier 1) or redesign it"
+    if polling:
+        return "polling", "continuous in StreamSets but readable as micro-batches (" + ", ".join(polling) + "): schedule the asset at the polling interval"
+    if p.product == "transformer" and mode.endswith("STREAMING"):
+        return "batch", "Transformer STREAMING mode, but every origin is bounded (files or tables), so it runs as a batch here"
+    return "batch", "bounded: runs to completion, fits a Dagster run"
 
 
 def _stub_call(s: Stage, why: str) -> str:
@@ -740,7 +790,8 @@ def {name}(context: dg.AssetExecutionContext):
         status = REVIEW
     if not origin or any(s.role == "origin" for s, _ in stubs):
         status = UNMAPPED
-    notes = [f"{translated}/{stage_count} stages translated" + (f", {replaced} replaced by hand-written code" if replaced else "")]
+    shape, shape_note = workload_shape(p)
+    notes = [f"workload: {shape_note}", f"{translated}/{stage_count} stages translated" + (f", {replaced} replaced by hand-written code" if replaced else "")]
     if streaming:
         notes.append("continuous origin: " + ", ".join(streaming))
     from .components_plan import plan as _plan
@@ -753,7 +804,7 @@ def {name}(context: dg.AssetExecutionContext):
     items.insert(next((i for i, x in enumerate(items) if x.kind == "stage" and x.artifact == name), len(items)),
                  Item("pipeline", p.title, name, status, "stubs" if stubs else ("caveats" if caveats else ""), notes + caveats + [caveats_cp],
                       {"asset": name, "deps": []}))
-    return code, name, {"component_plan": cp, "translated": translated, "stages": stage_count, "stubs": [(s.instance, w) for s, w in stubs], "caveats": caveats,
+    return code, name, {"component_plan": cp, "shape": shape, "translated": translated, "stages": stage_count, "stubs": [(s.instance, w) for s, w in stubs], "caveats": caveats,
                         "streaming": streaming, "secrets": secrets, "constants": list(consts), "status": status}
 
 
@@ -790,12 +841,12 @@ def convert(est: Estate, pkg: str = "streamsets_migrated", overrides: dict | Non
                     if len(docs) > 1:
                         comp_assets.append({"asset": aname + "_frame", "deps": []})
                 res.items.append(Item("pipeline", title, ", ".join(names), REVIEW, "components",
-                                      [f"Transformer pipeline emitted as registry components ({len(built['assets'])} destination(s)): polars_pipeline steps"
+                                      [f"workload: {workload_shape(p)[1]}", f"Transformer pipeline emitted as registry components ({len(built['assets'])} destination(s)): polars_pipeline steps"
                                        + (" and dataframe_to_json" if any(len(d) > 1 for d in built['assets'].values()) else "")] + built["notes"],
                                       {"assets": comp_assets}))
                 res.meta.setdefault("pipelines", {})[title] = {"translated": len(p.stages), "stages": len(p.stages), "stubs": [], "caveats": built["notes"], "streaming": [],
                                                                "secrets": list(p.secret_constants), "constants": list(p.constants), "status": REVIEW, "asset": ", ".join(names),
-                                                               "component_plan": {"ready": True, "gaps": [], "ops": [], "origin": "", "destinations": []}, "components": True}
+                                                               "component_plan": {"ready": True, "gaps": [], "ops": [], "origin": "", "destinations": []}, "components": True, "shape": workload_shape(p)[0]}
                 continue
             res.meta.setdefault("component_gap", {})[title] = gap
         code, name, meta = convert_pipeline(p, res.items, overrides, res.files)
@@ -827,6 +878,8 @@ def write_project(result: Result, out_dir: Path, pkg: str) -> None:
             deps += ['"dagster-community-components>=0.10.179"', '"elasticsearch"']
         if "rt.mongo_origin" in result.code:
             deps += ['"dagster-community-components>=0.10.179"', '"pymongo"']
+        if "rt.snowflake_url" in result.code:
+            deps += ['"snowflake-sqlalchemy"']
         if "rt.geolocation" in result.code:
             deps += ['"maxminddb"']
     root = out_dir / "src" / pkg

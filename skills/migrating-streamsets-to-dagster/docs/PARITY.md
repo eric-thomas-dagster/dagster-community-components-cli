@@ -33,6 +33,20 @@ print(dep.install_script())          # a `docker run` with the deployment id and
 Then `SDC_PARITY_COMPONENT_ID=<credential id> SDC_PARITY_TOKEN=<token> SDC_PARITY_URL=http://localhost:18640 uv run --extra dev pytest tests/test_sdc_parity.py tests/test_sdc_crypto_parity.py`.
 `--ulimit nofile=65536:65536` is needed or the engine refuses to start; the 6.x image is 3 GB on disk. Delete the deployment in Control Hub when you are done, and rotate the API credential.
 
+## JDBC and S3 (Postgres and MinIO)
+
+`tests/test_sdc_parity_io.py` needs real services on one Docker network with the engine attached (the engine reaches them by container name, the test process by `localhost`):
+
+```
+docker network create sdcnet
+docker run -d --name sdc-pg --network sdcnet -p 15432:5432 -e POSTGRES_PASSWORD=parity -e POSTGRES_DB=parity debezium/postgres:15 postgres -c wal_level=logical -c max_replication_slots=4 -c max_wal_senders=4
+docker run -d --name sdc-minio --network sdcnet -p 19000:9000 -e MINIO_ROOT_USER=parity -e MINIO_ROOT_PASSWORD=parity-secret bitnamilegacy/minio:latest
+docker network connect sdcnet <the Data Collector container>
+SDC_PARITY_URL=http://localhost:18640 SDC_PARITY_PG='postgresql+psycopg2://postgres:parity@localhost:15432/parity' uv run --extra dev pytest tests/test_sdc_parity_io.py
+```
+
+The 6.x engine's JDBC library already bundles the PostgreSQL driver. (`minio/minio` on Docker Hub and Quay were not pullable without a login; the Bitnami legacy image works.)
+
 ## The harness
 
 `tests/sdc_client.py` creates a throw-away pipeline (a Dev Raw Data origin, the stage under test, Trash targets) through the REST API, previews one batch, and returns each stage's output as plain values (typed JSON converted: integers,
@@ -40,5 +54,5 @@ doubles, ordered LIST_MAP, header attributes from `header.values`). Add a case w
 
 ## Done and still to verify
 
-Done against 6.4.1: 31 parity cases (the 14 original processor cases also on 3.18.1; Field Merger, XML Parser, Field Replacer, Local Lookup, Log Parser in three modes, 6 JavaScript and 4 Jython script cases) and Encrypt and Decrypt Fields in both directions. Still to verify (the JDBC, AWS and Groovy libraries are installed on the 6.4.1 engine, so these are possible): JDBC Lookup column mappings, the S3, JDBC multitable, Directory and File Tail origins and the JDBC destination, Groovy scripts compared with a local Groovy (the engine runs them, but this machine has no JVM to run ours against), and the EL functions outside the sampled set. The customer's own pipeline on a sample of
+Done against 6.4.1: 36 parity cases, including the JDBC multitable origin, JDBC Lookup, JDBC destination, JDBC Query executor and S3 origin against real Postgres and MinIO; of the 31 processor and script cases (the 14 original processor cases also on 3.18.1; Field Merger, XML Parser, Field Replacer, Local Lookup, Log Parser in three modes, 6 JavaScript and 4 Jython script cases) and Encrypt and Decrypt Fields in both directions. Still to verify: the Directory and File Tail origins, a CDC origin (PostgreSQL logical replication is possible with the debezium image), the Kafka, Elasticsearch and MongoDB stages (need those services), Groovy scripts compared with a local Groovy (the engine runs them, but this machine has no JVM to run ours against), and the EL functions outside the sampled set. The customer's own pipeline on a sample of
 their data remains the proof that matters: this is Phase 4 of the workflow in `SKILL.md`.

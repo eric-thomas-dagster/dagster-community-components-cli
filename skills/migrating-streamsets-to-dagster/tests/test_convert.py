@@ -22,7 +22,7 @@ def test_every_pipeline_gets_one_unit(result):
 
 def test_fully_translated_pipeline_is_review_with_caveats_not_converted(result):
     i = by_source(result, "pipeline")["AWS Marketplace Data - Disbursed"]
-    assert i.status == REVIEW and "7/7 stages translated" in i.notes[0]
+    assert i.status == REVIEW and any("7/7 stages translated" in n for n in i.notes)
     assert any("LastModified" in n for n in i.notes)          # offset semantics are stated, not hidden
 
 

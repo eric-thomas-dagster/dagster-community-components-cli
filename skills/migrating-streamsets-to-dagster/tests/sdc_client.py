@@ -52,7 +52,7 @@ class Sdc:
                 "configuration": [{"name": k, "value": v} for k, v in cfg.items()], "uiInfo": {"label": instance, "xPos": 60, "yPos": 50, "stageType": sd["type"]},
                 "inputLanes": list(inputs), "outputLanes": list(outputs), "eventLanes": list(events), "services": services}
 
-    def preview(self, stages, batch_size=100, timeout=60000):
+    def preview(self, stages, batch_size=100, timeout=60000, write=False):
         """Create a throw-away pipeline from the stage list, preview one batch, return {instanceName: {"output": {lane: [records]}, "errors": [...], "events": [...]}}."""
         pid = "parity_" + uuid.uuid4().hex[:8]
         r = self.s.put(f"{self.b}/pipeline/{pid}", params={"pipelineType": "STANDALONE", "description": "parity"})
@@ -67,7 +67,7 @@ class Sdc:
         saved = r.json()
         if saved.get("issues", {}).get("issueCount"):
             raise RuntimeError("pipeline has issues: " + json.dumps(saved["issues"])[:800])
-        r = self.s.post(f"{self.b}/pipeline/{pid}/preview", params={"batchSize": batch_size, "batches": 1, "skipTargets": "false", "skipLifecycleEvents": "true", "timeout": timeout},
+        r = self.s.post(f"{self.b}/pipeline/{pid}/preview", params={"batchSize": batch_size, "batches": 1, "skipTargets": "false", "writeToDestinations": "true" if write else "false", "skipLifecycleEvents": "true", "timeout": timeout},
                         json=[])
         r.raise_for_status()
         prev = r.json()["previewerId"]
