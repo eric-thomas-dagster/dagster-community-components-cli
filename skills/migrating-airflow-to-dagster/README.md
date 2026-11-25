@@ -2,6 +2,8 @@
 
 Migrate Apache Airflow DAGs to Dagster. The skill (`SKILL.md`) is the method: pick a tier (observe, bridge or native), inventory the Airflow project, convert what has a mechanical mapping by code, hand-convert the rest, then check behavior against Airflow before cutover. The scripts in `scripts/` do the deterministic parts: a static scanner, a runtime extractor, a converter that writes Dagster code, a manifest with a completeness gate, and parity harnesses.
 
+**Two routes into tier 3.** The tiers are where the work runs (observe, bridge, native); inside native there are two routes for how the code gets written: the deterministic **converter** (the mechanical bulk, the default) and the **rewrite** route, a generated spec and prompt from which Claude writes idiomatic Dagster, gated like the converter's output (for DAGs the converter stubbed or deferred, redesign-heavy DAGs and pilots). It is expected to be more idiomatic and to cover more operators; the evidence is in [reference/rewrite-route.md](reference/rewrite-route.md), and it costs model effort per DAG.
+
 **Status: scripts, not a packaged CLI.** There is no `pyproject.toml` and no installed command; each step is a Python script run from `scripts/`. Conversion covers Python, Bash, S3 and Snowflake tasks, the provider operators in the table below (HTTP, SQL, Kubernetes pods, email, Slack webhook, dbt Cloud, Airbyte, Fivetran, Databricks), plus the scheduling, branching, mapping and partition constructs. Astronomer Cosmos DAGs (`DbtDag`, `DbtTaskGroup`, the dbt operators) convert to Dagster's dbt component. Other provider operators become loud stubs. The skill also plans the migration in waves before conversion and writes a cutover checklist per DAG after it. Nothing here has run against a live Airflow deployment, real S3, Snowflake, Kubernetes, dbt Cloud, Airbyte, Fivetran or Databricks; each provider mapping says how far it was checked in [reference/conversion.md](reference/conversion.md).
 
 ## Quick start
@@ -30,6 +32,11 @@ python3 scripts/status.py defer manifest.json A031 --reason "custom timetable"
 
 # 4b. Connections: names only, never a value (delete the export afterwards)
 python3 scripts/connections_to_resources.py connections.json --out-dir connections_out
+
+# 4c. The rewrite route for a DAG the converter stubbed or deferred (see SKILL.md, "When to use the rewrite route")
+python3 scripts/dag_spec.py ir.json --report report.json --manifest manifest.json --out-dir rewrite
+python3 scripts/rewrite_prompt.py rewrite/<dag>.spec.json --converter-module defs/<dag>.py --out-dir rewrite   # give rewrite/<dag>.prompt.md to Claude
+python3 scripts/accept_rewrite.py --spec rewrite/<dag>.spec.json --module <pkg>.defs.<dag> --project . --manifest manifest.json
 
 # 5. Cutover checklists, one per converted DAG (writes markdown; pauses and deletes nothing)
 python3 scripts/cutover.py manifest.json report.json --ir ir.json --parity-state parity_state --out-dir cutover
@@ -92,9 +99,9 @@ Measured results are recorded in [reference/conversion.md](reference/conversion.
 ## Layout
 
 - `SKILL.md`: the workflow (phases 0 to 7), hard rules, the tier choice.
-- `scripts/`: `inventory.py`, `airflow_ir.py`, `provider_ops.py` (provider operator mappings), `cosmos_ops.py` (Cosmos mapping), `plan.py` (wave plan), `cutover.py` (cutover checklists), `connections.py` and `connections_to_resources.py` (Airflow connections to resources and variable names, no values), `airflow_truth.py`, `reconcile.py`, `convert_ir.py`, `apply_conversion.py`, `validate_defs.py`, `status.py`, `parity_incremental.py`, `parity/` (both sides and the comparer), `tests/`.
-- `reference/`: `tiers.md`, `mapping.md`, `conversion.md`, `parity.md`, `factories.md`, `dynamic-mapping.md`, `partitions.md`, `compatibility.md`, `component-wishlist.md`, `airlift.md` (peer, observe, proxy; the Airflow 3 limitation), `hosted-airflow.md` (MWAA, Composer, Astro), `cutover-checklist.md`.
-- `examples/`: `three_dags/` (a completed trial with equivalence rows), `s3_to_snowflake_factories/`, `dagfactory_family/`, `runtime_conversion/` (converted repo and parity harness), `migration_plan/` (a wave plan and cutover checklists), `granularity/` (task versus product output for one DAG), `airflow_release_matrix/` (18 one-construct DAG files run across Airflow releases).
+- `scripts/`: `inventory.py`, `airflow_ir.py`, `provider_ops.py` (provider operator mappings), `cosmos_ops.py` (Cosmos mapping), `plan.py` (wave plan), `cutover.py` (cutover checklists), `dag_spec.py`, `rewrite_prompt.py` and `accept_rewrite.py` (the rewrite route), `connections.py` and `connections_to_resources.py` (Airflow connections to resources and variable names, no values), `airflow_truth.py`, `reconcile.py`, `convert_ir.py`, `apply_conversion.py`, `validate_defs.py`, `status.py`, `parity_incremental.py`, `parity/` (both sides and the comparer), `tests/`.
+- `reference/`: `tiers.md`, `mapping.md`, `conversion.md`, `parity.md`, `factories.md`, `dynamic-mapping.md`, `partitions.md`, `compatibility.md`, `component-wishlist.md`, `rewrite-route.md` (the rewrite route and its measured results), `airlift.md` (peer, observe, proxy; the Airflow 3 limitation), `hosted-airflow.md` (MWAA, Composer, Astro), `cutover-checklist.md`.
+- `examples/`: `three_dags/` (a completed trial with equivalence rows), `s3_to_snowflake_factories/`, `dagfactory_family/`, `runtime_conversion/` (converted repo and parity harness), `migration_plan/` (a wave plan and cutover checklists), `granularity/` (task versus product output for one DAG), `rewrite/` (the rewrite route on two DAGs), `airflow_release_matrix/` (18 one-construct DAG files run across Airflow releases).
 
 ## Tests
 
@@ -108,7 +115,7 @@ uv run --no-project --with pytest --with pyyaml --with dagster --with dagster-aw
   python -m pytest -q scripts/tests
 ```
 
-259 tests pass with the packages above installed (`test_convert_ir.py`, `test_inventory.py`, `test_provider_ops.py`, and new: `test_cosmos.py` 29, `test_plan.py` 7, `test_cutover.py` 8, `test_airlift.py` 3, `test_generated_tests.py` 6, `test_granularity.py` 7, `test_connections.py` 7, `test_provider_ops_more.py` 12; the suite was 180 before the Cosmos, planning, cutover and Airlift work). Tests that need a package skip when it is missing: without `dagster-dbt`, `duckdb` and `dbt-duckdb` the Cosmos tests that load and run dbt skip, and without `dagster-airlift` the Airlift tests skip. Without `dagster` and `jinja2` installed, many tests skip or fail on import, so install them. The tests do not need Airflow; the extractor (`airflow_ir.py`) and the parity harness do (`tests/fixtures_cosmos/ir.json` was extracted with Airflow 2.10.5 and astronomer-cosmos 1.15.1; `regenerate.sh` shows how).
+267 tests pass with the packages above installed (`test_convert_ir.py`, `test_inventory.py`, `test_provider_ops.py`, and new: `test_cosmos.py` 29, `test_plan.py` 7, `test_cutover.py` 8, `test_airlift.py` 3, `test_generated_tests.py` 6, `test_granularity.py` 7, `test_connections.py` 7, `test_provider_ops_more.py` 12, `test_rewrite_route.py` 8; the suite was 180 before the Cosmos, planning, cutover and Airlift work). Tests that need a package skip when it is missing: without `dagster-dbt`, `duckdb` and `dbt-duckdb` the Cosmos tests that load and run dbt skip, and without `dagster-airlift` the Airlift tests skip. Without `dagster` and `jinja2` installed, many tests skip or fail on import, so install them. The tests do not need Airflow; the extractor (`airflow_ir.py`) and the parity harness do (`tests/fixtures_cosmos/ir.json` was extracted with Airflow 2.10.5 and astronomer-cosmos 1.15.1; `regenerate.sh` shows how).
 
 ## Limitations
 

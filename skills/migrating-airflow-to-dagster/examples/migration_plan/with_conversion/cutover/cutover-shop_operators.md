@@ -76,6 +76,7 @@ airflow dags pause shop_operators
   - no `--parity-state` was passed, so parity evidence is not known to this checklist: attach it by hand
 - Generated tests: `tests/test_shop_operators.py` (run `pytest tests/test_shop_operators.py`): load, shape (keys, dependencies, pool, retries), job and schedule, checks
   - the materialize test is a visible skip: the DAG runs dbt (Cosmos) against a warehouse
+- Route that produced the code: **converter**
 - Structural asset checks: none generated for this DAG (dbt tests, if any, are asset checks of the dbt models)
 - [ ] For anything a parity run cannot cover (external systems, sensors on them, durations, failure behaviour, data volume): a side-by-side run on the same logical window, with row counts or checksums compared: ______
 

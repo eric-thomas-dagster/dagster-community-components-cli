@@ -458,6 +458,9 @@ def _task_ir(task: Any) -> dict[str, Any]:
         # and the converter can refuse an operator whose behavior depends on one instead of silently dropping it
         t["callable_args"] = {n: f"{getattr(getattr(task, n), '__module__', '')}.{getattr(getattr(task, n), '__qualname__', type(getattr(task, n)).__name__)}"
                               for n in sorted(own) if getattr(task, n, None) is not None and callable(getattr(task, n, None))}
+        # the source of those functions too (a sensor's `response_check`, an HTTP `response_filter`, ...): the converter refuses such an operator, but the rewrite route needs the logic
+        t["callable_arg_info"] = {n: info for n in sorted(own) if getattr(task, n, None) is not None and callable(getattr(task, n, None))
+                                  for info in [_callable_info(getattr(task, n))] if "site-packages" not in (info or {}).get("file", "")}      # the user's functions, not the library's defaults
     except (TypeError, ValueError):
         t["args"] = {}
         t["callable_args"] = {}

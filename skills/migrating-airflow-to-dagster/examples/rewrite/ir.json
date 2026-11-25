@@ -1,0 +1,756 @@
+{
+ "airflow_version": "2.10.5",
+ "dags": [
+  {
+   "dag_id": "partner_ingest",
+   "file": "partner_ingest.py",
+   "description": null,
+   "tags": [
+    "ingest",
+    "partner"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-01-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "CronDataIntervalTimetable",
+    "cron": "0 */6 * * *",
+    "timezone": "UTC",
+    "summary": "0 */6 * * *",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10af8aa50>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10af8aa50>",
+    "kind": "cron_data_interval"
+   },
+   "default_args": {
+    "owner": "data-eng",
+    "retries": 2,
+    "retry_delay": {
+     "seconds": 600.0
+    }
+   },
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "wait_for_export",
+     "type": "HttpSensor",
+     "module": "airflow.providers.http.sensors.http",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "fetch_export"
+     ],
+     "retries": 2,
+     "retry_delay_s": 600.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": {
+      "poke_interval": 120.0,
+      "timeout": 21600.0,
+      "mode": "poke",
+      "soft_fail": false,
+      "exponential_backoff": false,
+      "silent_fail": false,
+      "never_fail": false
+     },
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "data-eng",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "endpoint": "export/status",
+      "request_params": {},
+      "headers": {}
+     },
+     "args": {
+      "deferrable": false,
+      "endpoint": "export/status",
+      "extra_options": {},
+      "headers": {},
+      "http_conn_id": "partner_api",
+      "method": "GET",
+      "request_kwargs": {},
+      "request_params": {},
+      "response_error_codes_allowlist": [
+       "404"
+      ],
+      "tcp_keep_alive": true,
+      "tcp_keep_alive_count": 20,
+      "tcp_keep_alive_idle": 120,
+      "tcp_keep_alive_interval": 30
+     },
+     "callable_args": {
+      "response_check": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest._export_ready"
+     },
+     "callable_arg_info": {
+      "response_check": {
+       "name": "_export_ready",
+       "module": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest",
+       "source": "def _export_ready(response) -> bool:\n    return response.json().get(\"status\") == \"ready\"\n",
+       "file": "/opt/airflow/dags/partner_ingest.py",
+       "params": [
+        "response"
+       ]
+      }
+     }
+    },
+    {
+     "task_id": "remove_tmp",
+     "type": "BashOperator",
+     "module": "airflow.operators.bash",
+     "group": null,
+     "upstream": [
+      "publish"
+     ],
+     "downstream": [],
+     "retries": 2,
+     "retry_delay_s": 600.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "data-eng",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "bash_command": "rm -rf /tmp/partner_export_tmp",
+      "env": null,
+      "cwd": null
+     },
+     "args": {
+      "append_env": false,
+      "bash_command": "rm -rf /tmp/partner_export_tmp",
+      "cwd": null,
+      "env": null,
+      "output_encoding": "utf-8",
+      "skip_on_exit_code": [
+       99
+      ]
+     },
+     "callable_args": {
+      "output_processor": "airflow.operators.bash.BashOperator.<lambda>"
+     },
+     "callable_arg_info": {}
+    },
+    {
+     "task_id": "fetch_export",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [
+      "wait_for_export"
+     ],
+     "downstream": [
+      "reshape"
+     ],
+     "retries": 2,
+     "retry_delay_s": 600.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "data-eng",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest.partner_ingest.<locals>.fetch_export"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "fetch_export",
+       "module": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest",
+       "source": "@task\ndef fetch_export() -> list[dict]:\n    conn = BaseHook.get_connection(\"partner_api\")\n    resp = requests.get(f\"{conn.host}/export/latest\", headers={\"Authorization\": f\"Bearer {conn.password}\"}, timeout=60)\n    resp.raise_for_status()\n    return resp.json()[\"rows\"]\n",
+       "file": "/opt/airflow/dags/partner_ingest.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "fetch_export",
+      "module": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest",
+      "source": "@task\ndef fetch_export() -> list[dict]:\n    conn = BaseHook.get_connection(\"partner_api\")\n    resp = requests.get(f\"{conn.host}/export/latest\", headers={\"Authorization\": f\"Bearer {conn.password}\"}, timeout=60)\n    resp.raise_for_status()\n    return resp.json()[\"rows\"]\n",
+      "file": "/opt/airflow/dags/partner_ingest.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "reshape",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [
+      "fetch_export"
+     ],
+     "downstream": [
+      "publish"
+     ],
+     "retries": 2,
+     "retry_delay_s": 600.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "data-eng",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [
+       {
+        "xcom_from": "fetch_export",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [
+       {
+        "xcom_from": "fetch_export",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest.partner_ingest.<locals>.reshape"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "reshape",
+       "module": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest",
+       "source": "@task\ndef reshape(rows: list[dict]) -> dict:\n    \"\"\"One record per customer, amounts summed, rows without an id dropped.\"\"\"\n    out: dict[str, float] = {}\n    for r in rows:\n        if r.get(\"customer_id\"):\n            out[r[\"customer_id\"]] = out.get(r[\"customer_id\"], 0.0) + float(r.get(\"amount\", 0))\n    return {\"customers\": len(out), \"total\": round(sum(out.values()), 2), \"by_customer\": out}\n",
+       "file": "/opt/airflow/dags/partner_ingest.py",
+       "params": [
+        "rows"
+       ]
+      }
+     },
+     "callable": {
+      "name": "reshape",
+      "module": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest",
+      "source": "@task\ndef reshape(rows: list[dict]) -> dict:\n    \"\"\"One record per customer, amounts summed, rows without an id dropped.\"\"\"\n    out: dict[str, float] = {}\n    for r in rows:\n        if r.get(\"customer_id\"):\n            out[r[\"customer_id\"]] = out.get(r[\"customer_id\"], 0.0) + float(r.get(\"amount\", 0))\n    return {\"customers\": len(out), \"total\": round(sum(out.values()), 2), \"by_customer\": out}\n",
+      "file": "/opt/airflow/dags/partner_ingest.py",
+      "params": [
+       "rows"
+      ]
+     },
+     "op_args": [
+      {
+       "xcom_from": "fetch_export",
+       "key": "return_value"
+      }
+     ],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "publish",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [
+      "reshape"
+     ],
+     "downstream": [
+      "remove_tmp"
+     ],
+     "retries": 2,
+     "retry_delay_s": 600.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "data-eng",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [
+       {
+        "xcom_from": "reshape",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [
+       {
+        "xcom_from": "reshape",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest.partner_ingest.<locals>.publish"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "publish",
+       "module": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest",
+       "source": "@task\ndef publish(summary: dict) -> str:\n    line = f\"partner export: {summary['customers']} customers, total {summary['total']}\"\n    print(line)\n    return line\n",
+       "file": "/opt/airflow/dags/partner_ingest.py",
+       "params": [
+        "summary"
+       ]
+      }
+     },
+     "callable": {
+      "name": "publish",
+      "module": "unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest",
+      "source": "@task\ndef publish(summary: dict) -> str:\n    line = f\"partner export: {summary['customers']} customers, total {summary['total']}\"\n    print(line)\n    return line\n",
+      "file": "/opt/airflow/dags/partner_ingest.py",
+      "params": [
+       "summary"
+      ]
+     },
+     "op_args": [
+      {
+       "xcom_from": "reshape",
+       "key": "return_value"
+      }
+     ],
+     "op_kwargs": {}
+    }
+   ]
+  },
+  {
+   "dag_id": "simple_sequential_pipeline",
+   "file": "simple_sequential.py",
+   "description": null,
+   "tags": [
+    "example",
+    "sequential"
+   ],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-01-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "CronDataIntervalTimetable",
+    "cron": "0 9 * * *",
+    "timezone": "UTC",
+    "summary": "0 9 * * *",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10af8aa50>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10af8aa50>",
+    "kind": "cron_data_interval"
+   },
+   "default_args": {
+    "retries": 3,
+    "retry_delay": {
+     "seconds": 300.0
+    }
+   },
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "fetch_data",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "process_data"
+     ],
+     "retries": 3,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential.fetch_data"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "fetch_data",
+       "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+       "source": "@task\ndef fetch_data(source: str = \"api\") -> dict:\n    \"\"\"Fetch data from a source.\"\"\"\n    print(f\"Fetching data from {source}\")\n    return {\"source\": source, \"data\": [1, 2, 3, 4, 5]}\n",
+       "file": "/opt/airflow/dags/simple_sequential.py",
+       "params": [
+        "source"
+       ]
+      }
+     },
+     "callable": {
+      "name": "fetch_data",
+      "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+      "source": "@task\ndef fetch_data(source: str = \"api\") -> dict:\n    \"\"\"Fetch data from a source.\"\"\"\n    print(f\"Fetching data from {source}\")\n    return {\"source\": source, \"data\": [1, 2, 3, 4, 5]}\n",
+      "file": "/opt/airflow/dags/simple_sequential.py",
+      "params": [
+       "source"
+      ]
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "process_data",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [
+      "fetch_data"
+     ],
+     "downstream": [
+      "save_results"
+     ],
+     "retries": 3,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [
+       {
+        "xcom_from": "fetch_data",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [
+       {
+        "xcom_from": "fetch_data",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential.process_data"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "process_data",
+       "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+       "source": "@task\ndef process_data(data: dict) -> dict:\n    \"\"\"Process the fetched data.\"\"\"\n    print(f\"Processing data from {data['source']}\")\n    processed = {\n        \"source\": data[\"source\"],\n        \"processed\": [x * 2 for x in data[\"data\"]]\n    }\n    return processed\n",
+       "file": "/opt/airflow/dags/simple_sequential.py",
+       "params": [
+        "data"
+       ]
+      }
+     },
+     "callable": {
+      "name": "process_data",
+      "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+      "source": "@task\ndef process_data(data: dict) -> dict:\n    \"\"\"Process the fetched data.\"\"\"\n    print(f\"Processing data from {data['source']}\")\n    processed = {\n        \"source\": data[\"source\"],\n        \"processed\": [x * 2 for x in data[\"data\"]]\n    }\n    return processed\n",
+      "file": "/opt/airflow/dags/simple_sequential.py",
+      "params": [
+       "data"
+      ]
+     },
+     "op_args": [
+      {
+       "xcom_from": "fetch_data",
+       "key": "return_value"
+      }
+     ],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "save_results",
+     "type": "_PythonDecoratedOperator",
+     "module": "airflow.decorators.python",
+     "group": null,
+     "upstream": [
+      "process_data"
+     ],
+     "downstream": [],
+     "retries": 3,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [
+       {
+        "xcom_from": "process_data",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [
+       {
+        "xcom_from": "process_data",
+        "key": "return_value"
+       }
+      ],
+      "op_kwargs": {}
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential.save_results"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "save_results",
+       "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+       "source": "@task\ndef save_results(processed: dict) -> str:\n    \"\"\"Save the processed results.\"\"\"\n    result = f\"Saved {len(processed['processed'])} items from {processed['source']}\"\n    print(result)\n    return result\n",
+       "file": "/opt/airflow/dags/simple_sequential.py",
+       "params": [
+        "processed"
+       ]
+      }
+     },
+     "callable": {
+      "name": "save_results",
+      "module": "unusual_prefix_16536bf44ed5fd4293873c6b267ff3e3f7dfafda_simple_sequential",
+      "source": "@task\ndef save_results(processed: dict) -> str:\n    \"\"\"Save the processed results.\"\"\"\n    result = f\"Saved {len(processed['processed'])} items from {processed['source']}\"\n    print(result)\n    return result\n",
+      "file": "/opt/airflow/dags/simple_sequential.py",
+      "params": [
+       "processed"
+      ]
+     },
+     "op_args": [
+      {
+       "xcom_from": "process_data",
+       "key": "return_value"
+      }
+     ],
+     "op_kwargs": {}
+    }
+   ]
+  }
+ ],
+ "import_errors": {}
+}

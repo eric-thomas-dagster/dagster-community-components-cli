@@ -1,5 +1,7 @@
 # Tiers: observe, bridge, native
 
+The tiers are **where the work runs**: 1 observe, 2 bridge (Airlift keeps Airflow running), 3 native (Dagster owns the code). Inside tier 3 there are two **routes** for **how the code gets written**: **convert** (the deterministic converter, a near like-for-like conversion; the default and the mechanical bulk) and **rewrite** (a generated spec and prompt that has Claude write idiomatic Dagster from scratch with `dagster-expert` and `dagster-community-components`, accepted through the same kind of gates). Choose rewrite for DAGs the converter deferred or stubbed, redesign-heavy DAGs, pilot DAGs and the last wave; the converter output is the reference draft and the fallback. See `SKILL.md` and `reference/rewrite-route.md`.
+
 ## Tier 1: Observe (Airlift)
 
 `dagster-airlift` peers an Airflow instance with a Dagster code location through the Airflow REST API. Every Airflow DAG loads as an asset definition and a sensor polls Airflow for run history. No Airflow changes are needed. You then map tasks to the assets they produce (`assets_with_task_mappings`) so lineage reflects the data, not the tasks. Expect a delay between a task finishing in Airflow and the asset materializing in Dagster (the sensor's polling interval).

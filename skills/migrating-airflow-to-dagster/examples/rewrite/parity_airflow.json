@@ -1,0 +1,19 @@
+{
+ "simple_sequential_pipeline": {
+  "state": "success",
+  "tasks": {
+   "fetch_data": {
+    "state": "success",
+    "value": "{'source': 'api', 'data': [1, 2, 3, 4, 5]}"
+   },
+   "process_data": {
+    "state": "success",
+    "value": "{'source': 'api', 'processed': [2, 4, 6, 8, 10]}"
+   },
+   "save_results": {
+    "state": "success",
+    "value": "'Saved 5 items from api'"
+   }
+  }
+ }
+}

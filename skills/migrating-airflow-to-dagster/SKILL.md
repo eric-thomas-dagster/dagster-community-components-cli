@@ -19,6 +19,15 @@ There are three ways in, and one project often uses more than one. See `referenc
 | 2. Bridge | Existing DAG code keeps running, orchestrated by Dagster (Airlift proxying, `reference/airlift.md`, or the script-orchestrator component) | You need to move scheduling off Airflow before rewriting the code |
 | 3. Native | DAGs are rewritten as Dagster assets, components, schedules and sensors | You want the asset model, lineage, and to retire the Airflow code |
 
+The tiers are **where the work runs**: 1 observe, 2 bridge (Airlift keeps Airflow running), 3 native (Dagster owns the code). Inside tier 3 there are two **routes** for **how the code gets written**:
+
+| Route | What it is | Choose it for |
+|---|---|---|
+| **convert** | the deterministic converter (`convert_ir.py`): a near like-for-like conversion of what Airflow built, task by task (or `--granularity product`) | the mechanical bulk; it is the default |
+| **rewrite** | a generated spec (`dag_spec.py`) and prompt (`rewrite_prompt.py`): Claude writes the Dagster code from scratch with `dagster-expert` and `dagster-community-components`, accepted by `accept_rewrite.py` through the same kind of gates | DAGs the converter deferred or stubbed, redesign-heavy DAGs, pilot DAGs where idiomatic output matters, anything `plan.py` puts in the last wave |
+
+The rewrite is expected to be more idiomatic (one asset per data product, glue folded, registry components) and to cover operators the converter stubs; the evidence so far is `examples/rewrite/` and `reference/rewrite-route.md`, not a claim that it is better. The converter's output is the reference draft and the fallback for every rewrite. The rewrite route spends model effort on every DAG.
+
 The scanner, manifest and gates below are for tier 3 and for deciding what stays in tiers 1-2. **Airflow 3 source:** `dagster-airlift` 0.29.31 cannot read an Airflow 3 REST API (`/api/v2`), so tier 3 with the converter is the route; the extractor runs the DAG files and does not use the REST API (`reference/airlift.md`).
 
 ## Companion skills
@@ -107,6 +116,17 @@ Migrate two or three representative DAGs end to end through the gates before fan
 
 ### Phase 4: Migrate, domain by domain
 
+**When to use the rewrite route.** Use it for a DAG when the converter deferred it or left a stub in it, when it is redesign-heavy (branching, dynamic mapping, custom timetables) or in the plan's last wave, and for the pilot DAGs where idiomatic output matters while the mapping is being learned. Keep the converter for the mechanical bulk. To rewrite a DAG:
+
+```
+python3 scripts/dag_spec.py ir.json --report report.json --manifest manifest.json [--parity af_results.json] --out-dir rewrite   # facts only: rewrite/<dag>.spec.{md,json}
+python3 scripts/rewrite_prompt.py rewrite/<dag>.spec.json --converter-module <the converter's module> --project <name> --package <pkg>   # rewrite/<dag>.prompt.md
+# give the prompt to Claude (with dagster-expert and dagster-community-components loaded); it writes src/<pkg>/defs/<dag>.py
+python3 scripts/accept_rewrite.py --spec rewrite/<dag>.spec.json --module <pkg>.defs.<dag> --project <root> [--parity af_results.json] --manifest manifest.json
+```
+
+The gates are `dg check defs`, a generated pytest, asset checks present, parity where there is an Airflow baseline, no secret values, no invented APIs, and every Airflow task accounted for in the header. The manifest records `route: rewrite` and the gate results for each unit; a rewrite that fails stays deferred with the failure and the converter output remains the fallback. Never mark a rewritten unit complete without the gates.
+
 **Convert the mechanical units by code, first.** Run `airflow_ir.py` then `convert_ir.py` (see `reference/conversion.md`): every DAG built from Python, Bash, S3, Snowflake, EmptyOperator and the provider operators listed in `reference/conversion.md` (HTTP, SQL, Kubernetes pods, email, Slack webhook, dbt Cloud, Airbyte, Fivetran, Databricks) tasks, cron or asset-triggered, converts without hand work (the provider mappings that were not run against a live service carry an UNVERIFIED caveat: confirm them in the side-by-side run), and each unconverted DAG comes with the reason and the integration or component that fits. Cosmos DAGs (`DbtDag`, `DbtTaskGroup`, `DbtRunLocalOperator` and the others) convert to one `dagster_dbt.DbtProjectComponent` per group, with per-model assets, asset checks and the surrounding tasks kept as asset dependencies; the dbt project itself is copied by you (the report says where). Every Cosmos execution mode (local, virtualenv and the container modes) converts the same way, because dbt runs in the code location's environment in Dagster; the dbt project is used unchanged; a container that runs something other than dbt stays a loud stub. Extracting the IR needs `astronomer-cosmos` and a dbt that can render the project in the extraction environment (`reference/conversion.md`, "Astronomer Cosmos"). `--granularity product` (opt-in) folds steps into the asset they feed, one asset per data product (`reference/conversion.md`, "Choosing granularity"; the default stays one asset per task). Each converted DAG also gets a generated `tests/test_<dag>.py` and, where the source shows something checkable, non-blocking structural asset checks (`reference/conversion.md`, "Generated tests and structural asset checks"); run them, then run the parity harness on the converted DAGs (`examples/runtime_conversion/`): loading proves nothing about behavior. Then hand-convert what the report defers, using the other references.
 
 
@@ -159,6 +179,7 @@ Writes `cutover-<dag_id>.md` for each converted DAG (pause plan, catchup and bac
 | MWAA, Cloud Composer, Astro: DAG files, Airflow version, packages, REST API access, Connection and Variable names, limits | `reference/hosted-airflow.md` |
 | The cutover checklist and what each section is for | `reference/cutover-checklist.md` |
 | A worked wave plan and cutover checklists | `examples/migration_plan/` |
+| The rewrite route on two DAGs (one the converter handles, one it stubs), with the spec, prompt and gates | `examples/rewrite/`, `reference/rewrite-route.md` |
 
 ## Scripts
 
@@ -168,6 +189,9 @@ Writes `cutover-<dag_id>.md` for each converted DAG (pause plan, catchup and bac
 | `scripts/airflow_ir.py` | Extract every DAG as Airflow built it (expanded loops, factories, resolved arguments, callable source) into an IR (executes DAG code; sandbox only) |
 | `scripts/convert_ir.py` | Generate Dagster code for the mechanical constructs; defer everything else with the reason |
 | `scripts/convert_ir.py --output components` | The same conversion, writing registry components (YAML) for DAGs whose tasks all have one (see `reference/conversion.md`) |
+| `scripts/dag_spec.py` | Facts-only specification of each DAG from the IR (rewrite route); no secret value |
+| `scripts/rewrite_prompt.py` | The self-contained prompt that has Claude write one DAG from its spec (rewrite route) |
+| `scripts/accept_rewrite.py` | The gates for a rewrite, and the manifest record of which route produced each unit |
 | `scripts/plan.py` | Wave plan from the manifest (and IR and report): pattern, complexity, path, wave, coarse effort, pilot; heuristic and deterministic |
 | `scripts/cosmos_ops.py` | The Cosmos mapping `convert_ir.py` uses (dbt component, dbt steps, profiles) |
 | `scripts/cutover.py` | One cutover checklist per converted DAG; writes markdown and prints commands, acts on nothing |

@@ -87,6 +87,9 @@ def apply(manifest: dict, ir: dict, report: dict) -> dict[str, int]:
                     deps |= {i_key(x) for x in rep.get("triggers", [])}
                 u["target"] = {"assets": [key], "deps": {key: sorted(deps)}}
             stats["tasks_planned"] += 1
+    for u in units:                                            # which route produced the unit: the deterministic converter (accept_rewrite.py sets `rewrite` for a rewritten DAG)
+        if not u.get("route") and (u.get("target") or str(u.get("reason", "")).startswith(("AIRFLOW-CAVEAT", "convert_ir deferred"))):
+            u["route"] = "converter"
     stats["left_pending"] = sum(1 for u in units if u["status"] == "pending" and not u.get("target"))
     return stats
 

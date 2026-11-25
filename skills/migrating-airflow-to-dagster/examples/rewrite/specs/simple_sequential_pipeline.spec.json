@@ -1,0 +1,382 @@
+{
+ "acceptable_differences": [
+  "asset keys and the grouping of tasks into data products (one asset per data product is the target; several tasks may become one asset)",
+  "per-task run records, durations and logs are replaced by per-asset runs and materializations",
+  "XCom is replaced by asset values (IO manager) or by plain function calls inside an asset",
+  "the Airflow UI, task instances and `dag_run` objects have no counterpart",
+  "notification, wait and glue tasks may become sensors, hooks, run-status sensors or be folded into the producing asset",
+  "operators may be replaced by an official integration or a registry component with the same effect"
+ ],
+ "airflow_version": "2.10.5",
+ "assets_in": [],
+ "assets_out": [],
+ "connections": [],
+ "converter": {
+  "asset_checks": [
+   {
+    "asset": "simple_sequential_pipeline/fetch_data",
+    "kind": "returned_value",
+    "name": "returned_value_present"
+   },
+   {
+    "asset": "simple_sequential_pipeline/process_data",
+    "kind": "returned_value",
+    "name": "returned_value_present"
+   }
+  ],
+  "caveats": [],
+  "generated_tests": {
+   "file": "tests/test_simple_sequential_pipeline.py",
+   "functions": 5,
+   "materialize_skip_reason": null,
+   "materializes": true,
+   "needs_shell": false
+  },
+  "keys": [
+   "simple_sequential_pipeline/fetch_data",
+   "simple_sequential_pipeline/process_data",
+   "simple_sequential_pipeline/save_results"
+  ],
+  "notes": [],
+  "output": "python",
+  "reason": null,
+  "status": "converted",
+  "stubbed": [],
+  "task_keys": {
+   "fetch_data": "simple_sequential_pipeline/fetch_data",
+   "process_data": "simple_sequential_pipeline/process_data",
+   "save_results": "simple_sequential_pipeline/save_results"
+  }
+ },
+ "cosmos_groups": [],
+ "dag_id": "simple_sequential_pipeline",
+ "default_args": {
+  "retries": 3,
+  "retry_delay": {
+   "seconds": 300.0
+  }
+ },
+ "description": null,
+ "edges": [
+  [
+   "fetch_data",
+   "process_data"
+  ],
+  [
+   "process_data",
+   "save_results"
+  ]
+ ],
+ "file": "simple_sequential.py",
+ "manifest_units": [
+  {
+   "class": "JUDG",
+   "id": "A007",
+   "status": "pending",
+   "task_id": null
+  },
+  {
+   "class": "MECH",
+   "id": "A008",
+   "status": "pending",
+   "task_id": "fetch_data"
+  },
+  {
+   "class": "JUDG",
+   "id": "A009",
+   "status": "pending",
+   "task_id": "process_data"
+  },
+  {
+   "class": "JUDG",
+   "id": "A010",
+   "status": "pending",
+   "task_id": "save_results"
+  }
+ ],
+ "must_preserve": [
+  "the dependencies between tasks (what must finish before what), including trigger rules and which branch or skip decisions are taken",
+  "the schedule (cron or interval) and its timezone, and what `catchup` and `start_date` meant for missed intervals",
+  "retries, retry delay and backoff, pools and concurrency limits, execution timeouts",
+  "every value that one task passes to another, and every output a task persists (outlets / assets, files, tables, keys)",
+  "the failure behaviour of each step (what fails the run, what is skipped, what continues)",
+  "the connections and Variables used, by name (values come from the environment, never from the code)",
+  "the result of each external side effect (the file written, the message sent, the job started) for the same inputs"
+ ],
+ "owners": [
+  "airflow"
+ ],
+ "params": {},
+ "parity_baseline": {
+  "note": "Airflow's own outcome from dag.test(); a value is a repr truncated to 120 characters and may contain data",
+  "state": "success",
+  "tasks": {
+   "fetch_data": {
+    "state": "success",
+    "value": "{'source': 'api', 'data': [1, 2, 3, 4, 5]}"
+   },
+   "process_data": {
+    "state": "success",
+    "value": "{'source': 'api', 'processed': [2, 4, 6, 8, 10]}"
+   },
+   "save_results": {
+    "state": "success",
+    "value": "'Saved 5 items from api'"
+   }
+  }
+ },
+ "purpose": [
+  {
+   "basis": "the task list",
+   "inferred": "no",
+   "statement": "a 3-task DAG using _PythonDecoratedOperator"
+  },
+  {
+   "basis": "tasks with no downstream task",
+   "inferred": "no",
+   "statement": "its final step(s) are save_results"
+  },
+  {
+   "basis": "no outlets, no connection ids",
+   "inferred": "yes",
+   "statement": "it has no persisted output and uses no connection, so it may be a demonstration or a local computation"
+  }
+ ],
+ "schedule": {
+  "asset_logic": null,
+  "assets": null,
+  "catchup": false,
+  "cron": "0 9 * * *",
+  "has_dag_callbacks": false,
+  "interval_seconds": null,
+  "kind": "cron_data_interval",
+  "max_active_runs": 16,
+  "settings": {
+   "concurrency": 16,
+   "fail_stop": false,
+   "max_active_runs": 16,
+   "max_active_tasks": 16,
+   "max_consecutive_failed_dag_runs": 0,
+   "render_template_as_native_obj": false
+  },
+  "start_date": "2024-01-01 00:00:00+00:00",
+  "timezone": "UTC"
+ },
+ "tags": [
+  "example",
+  "sequential"
+ ],
+ "tasks": [
+  {
+   "arguments": {
+    "op_args": [],
+    "op_kwargs": {},
+    "templates_dict": null
+   },
+   "callable": {
+    "name": "fetch_data",
+    "params": [
+     "source"
+    ],
+    "source": "@task\ndef fetch_data(source: str = \"api\") -> dict:\n    \"\"\"Fetch data from a source.\"\"\"\n    print(f\"Fetching data from {source}\")\n    return {\"source\": source, \"data\": [1, 2, 3, 4, 5]}\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "fetch_data",
+     "source": "@task\ndef fetch_data(source: str = \"api\") -> dict:\n    \"\"\"Fetch data from a source.\"\"\"\n    print(f\"Fetching data from {source}\")\n    return {\"source\": source, \"data\": [1, 2, 3, 4, 5]}\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [
+    "process_data"
+   ],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "airflow",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [],
+   "retries": 3,
+   "retry_delay_s": 300.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "fetch_data",
+   "trigger_rule": "all_success",
+   "upstream": [],
+   "variables": [],
+   "wait_for_downstream": false
+  },
+  {
+   "arguments": {
+    "op_args": [
+     {
+      "key": "<redacted: a credential-like argument; its value is not recorded>",
+      "xcom_from": "fetch_data"
+     }
+    ],
+    "op_kwargs": {},
+    "templates_dict": null
+   },
+   "callable": {
+    "name": "process_data",
+    "params": [
+     "data"
+    ],
+    "source": "@task\ndef process_data(data: dict) -> dict:\n    \"\"\"Process the fetched data.\"\"\"\n    print(f\"Processing data from {data['source']}\")\n    processed = {\n        \"source\": data[\"source\"],\n        \"processed\": [x * 2 for x in data[\"data\"]]\n    }\n    return processed\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "process_data",
+     "source": "@task\ndef process_data(data: dict) -> dict:\n    \"\"\"Process the fetched data.\"\"\"\n    print(f\"Processing data from {data['source']}\")\n    processed = {\n        \"source\": data[\"source\"],\n        \"processed\": [x * 2 for x in data[\"data\"]]\n    }\n    return processed\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [
+    "save_results"
+   ],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [
+    {
+     "key": "<redacted: a credential-like argument; its value is not recorded>",
+     "xcom_from": "fetch_data"
+    }
+   ],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "airflow",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [
+    "fetch_data"
+   ],
+   "retries": 3,
+   "retry_delay_s": 300.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "process_data",
+   "trigger_rule": "all_success",
+   "upstream": [
+    "fetch_data"
+   ],
+   "variables": [],
+   "wait_for_downstream": false
+  },
+  {
+   "arguments": {
+    "op_args": [
+     {
+      "key": "<redacted: a credential-like argument; its value is not recorded>",
+      "xcom_from": "process_data"
+     }
+    ],
+    "op_kwargs": {},
+    "templates_dict": null
+   },
+   "callable": {
+    "name": "save_results",
+    "params": [
+     "processed"
+    ],
+    "source": "@task\ndef save_results(processed: dict) -> str:\n    \"\"\"Save the processed results.\"\"\"\n    result = f\"Saved {len(processed['processed'])} items from {processed['source']}\"\n    print(result)\n    return result\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "save_results",
+     "source": "@task\ndef save_results(processed: dict) -> str:\n    \"\"\"Save the processed results.\"\"\"\n    result = f\"Saved {len(processed['processed'])} items from {processed['source']}\"\n    print(result)\n    return result\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [
+    {
+     "key": "<redacted: a credential-like argument; its value is not recorded>",
+     "xcom_from": "process_data"
+    }
+   ],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "airflow",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [
+    "process_data"
+   ],
+   "retries": 3,
+   "retry_delay_s": 300.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "save_results",
+   "trigger_rule": "all_success",
+   "upstream": [
+    "process_data"
+   ],
+   "variables": [],
+   "wait_for_downstream": false
+  }
+ ],
+ "value_flow": [
+  [
+   "fetch_data",
+   "process_data"
+  ],
+  [
+   "process_data",
+   "save_results"
+  ]
+ ],
+ "variables": []
+}

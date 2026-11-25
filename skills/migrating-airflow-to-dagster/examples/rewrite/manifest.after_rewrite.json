@@ -1,0 +1,565 @@
+{
+  "version": 1,
+  "root": "airflow_src",
+  "units": [
+    {
+      "id": "A001",
+      "kind": "dag",
+      "dag_id": "partner_ingest",
+      "file": "partner_ingest.py",
+      "line": 20,
+      "schedule": {
+        "kind": "cron",
+        "raw": "0 */6 * * *",
+        "cron": "0 */6 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": [
+        "partner",
+        "ingest"
+      ],
+      "default_args": {
+        "owner": "data-eng",
+        "retries": 2,
+        "retry_delay": "timedelta(minutes=10)"
+      },
+      "edges": [
+        [
+          "fetch_export",
+          "reshape"
+        ],
+        [
+          "publish",
+          "remove_tmp"
+        ],
+        [
+          "reshape",
+          "publish"
+        ],
+        [
+          "wait_for_export",
+          "fetch_export"
+        ]
+      ],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {
+        "connection_id": 1,
+        "airflow_connection": 1
+      },
+      "task_ids": [
+        "fetch_export",
+        "publish",
+        "remove_tmp",
+        "reshape",
+        "wait_for_export"
+      ],
+      "task_classes": {
+        "JUDG": 3,
+        "MECH": 2
+      },
+      "classification": "JUDG",
+      "classification_reason": "Airflow Variables/Connections: map to env vars, secrets and resources (Phase 5); tasks: 3 JUDG, 2 MECH",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {
+        "jobs": [
+          "partner_ingest"
+        ],
+        "schedules": [
+          {
+            "name": "partner_ingest_schedule",
+            "cron": "0 */6 * * *"
+          }
+        ]
+      },
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A002",
+      "kind": "task",
+      "dag_id": "partner_ingest",
+      "task_id": "wait_for_export",
+      "file": "partner_ingest.py",
+      "line": 21,
+      "operator": "HttpSensor",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "connection_id": 1,
+        "airflow_connection": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "sensor: Dagster sensor or declarative automation (eager/on_cron); check the registry for the service",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {},
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A003",
+      "kind": "task",
+      "dag_id": "partner_ingest",
+      "task_id": "remove_tmp",
+      "file": "partner_ingest.py",
+      "line": 45,
+      "operator": "BashOperator",
+      "style": "operator",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "publish"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "connection_id": 1,
+        "airflow_connection": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "shell command: asset running the command (Pipes subprocess or component)",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "partner_ingest/remove_tmp"
+        ],
+        "deps": {
+          "partner_ingest/remove_tmp": [
+            "partner_ingest/publish"
+          ]
+        }
+      },
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A004",
+      "kind": "task",
+      "dag_id": "partner_ingest",
+      "task_id": "fetch_export",
+      "file": "partner_ingest.py",
+      "line": 46,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [
+        "wait_for_export"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "connection_id": 1,
+        "airflow_connection": 1
+      },
+      "classification": "MECH",
+      "classification_reason": "TaskFlow task: asset or op running the same function",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {},
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A005",
+      "kind": "task",
+      "dag_id": "partner_ingest",
+      "task_id": "reshape",
+      "file": "partner_ingest.py",
+      "line": 47,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "fetch_export"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "connection_id": 1,
+        "airflow_connection": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "partner_ingest/reshape"
+        ],
+        "deps": {
+          "partner_ingest/reshape": [
+            "partner_ingest/fetch_export"
+          ]
+        }
+      },
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A006",
+      "kind": "task",
+      "dag_id": "partner_ingest",
+      "task_id": "publish",
+      "file": "partner_ingest.py",
+      "line": 47,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "reshape"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {
+        "connection_id": 1,
+        "airflow_connection": 1
+      },
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "partner_ingest/publish"
+        ],
+        "deps": {
+          "partner_ingest/publish": [
+            "partner_ingest/reshape"
+          ]
+        }
+      },
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A007",
+      "kind": "dag",
+      "dag_id": "simple_sequential_pipeline",
+      "file": "simple_sequential.py",
+      "line": 46,
+      "schedule": {
+        "kind": "cron",
+        "raw": "0 9 * * *",
+        "cron": "0 9 * * *"
+      },
+      "catchup": false,
+      "max_active_runs": null,
+      "tags": [
+        "example",
+        "sequential"
+      ],
+      "default_args": {
+        "retries": 3,
+        "retry_delay": "timedelta(minutes=5)"
+      },
+      "edges": [
+        [
+          "fetch_data",
+          "process_data"
+        ],
+        [
+          "process_data",
+          "save_results"
+        ]
+      ],
+      "dynamic_dag_id": false,
+      "factory": null,
+      "signals": {},
+      "task_ids": [
+        "fetch_data",
+        "process_data",
+        "save_results"
+      ],
+      "task_classes": {
+        "MECH": 1,
+        "JUDG": 2
+      },
+      "classification": "JUDG",
+      "classification_reason": "tasks: 2 JUDG, 1 MECH",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {
+        "jobs": [
+          "simple_sequential_pipeline"
+        ],
+        "schedules": [
+          {
+            "name": "simple_sequential_pipeline_schedule",
+            "cron": "0 9 * * *"
+          }
+        ]
+      },
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A008",
+      "kind": "task",
+      "dag_id": "simple_sequential_pipeline",
+      "task_id": "fetch_data",
+      "file": "simple_sequential.py",
+      "line": 48,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": false,
+      "upstream": [],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "MECH",
+      "classification_reason": "TaskFlow task: asset or op running the same function",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "simple_sequential_pipeline/fetch_data"
+        ],
+        "deps": {
+          "simple_sequential_pipeline/fetch_data": []
+        }
+      },
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A009",
+      "kind": "task",
+      "dag_id": "simple_sequential_pipeline",
+      "task_id": "process_data",
+      "file": "simple_sequential.py",
+      "line": 49,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "fetch_data"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "simple_sequential_pipeline/process_data"
+        ],
+        "deps": {
+          "simple_sequential_pipeline/process_data": [
+            "simple_sequential_pipeline/fetch_data"
+          ]
+        }
+      },
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    },
+    {
+      "id": "A010",
+      "kind": "task",
+      "dag_id": "simple_sequential_pipeline",
+      "task_id": "save_results",
+      "file": "simple_sequential.py",
+      "line": 50,
+      "operator": "@task",
+      "style": "python",
+      "pool": null,
+      "retries": null,
+      "trigger_rule": null,
+      "mapped": false,
+      "dynamic_id": false,
+      "in_loop": false,
+      "implicit_xcom": true,
+      "upstream": [
+        "process_data"
+      ],
+      "outlets": "",
+      "inlets": "",
+      "signals": {},
+      "classification": "JUDG",
+      "classification_reason": "TaskFlow task: asset or op running the same function; receives an upstream task's return value (implicit XCom): decide per edge between fusing, explicit storage or an IO manager",
+      "status": "complete",
+      "evidence": "rewrite route: all gates passed (definitions_load, generated_tests, asset_checks_present, parity, no_secret_values, no_invented_apis, tasks_accounted_for)",
+      "reason": "",
+      "target": {
+        "assets": [
+          "simple_sequential_pipeline/save_results"
+        ],
+        "deps": {
+          "simple_sequential_pipeline/save_results": [
+            "simple_sequential_pipeline/process_data"
+          ]
+        }
+      },
+      "route": "rewrite",
+      "gates": {
+        "passed": true,
+        "gates": {
+          "definitions_load": true,
+          "generated_tests": true,
+          "asset_checks_present": true,
+          "parity": true,
+          "no_secret_values": true,
+          "no_invented_apis": true,
+          "tasks_accounted_for": true
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,198 @@
+{
+ "airflow_version": "2.10.5",
+ "dataset_keys": "path",
+ "dags": {
+  "partner_ingest": {
+   "status": "converted",
+   "assets": 5,
+   "elided": 0,
+   "schedule": "0 */6 * * *",
+   "timezone": "UTC",
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "provider_connections": {},
+   "shims": [],
+   "notes": [],
+   "caveats": [
+    {
+     "task": "wait_for_export",
+     "kind": "stub",
+     "reason": "HttpSensor: response_check is a function (unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest._export_ready); the converter does not carry it into the step"
+    },
+    {
+     "task": "fetch_export",
+     "kind": "stub",
+     "reason": "callable depends on an Airflow import (airflow.hooks.base)"
+    }
+   ],
+   "catalog_keys": [],
+   "local_modules": [],
+   "requirements": [],
+   "external": [],
+   "keys": [
+    [
+     "partner_ingest",
+     "wait_for_export"
+    ],
+    [
+     "partner_ingest",
+     "remove_tmp"
+    ],
+    [
+     "partner_ingest",
+     "fetch_export"
+    ],
+    [
+     "partner_ingest",
+     "reshape"
+    ],
+    [
+     "partner_ingest",
+     "publish"
+    ]
+   ],
+   "cosmos": [],
+   "cosmos_steps": [],
+   "cosmos_files": [],
+   "cosmos_tasks": {},
+   "cosmos_sinks": {},
+   "uses_context": false,
+   "run_timeout_s": null,
+   "partitions": null,
+   "mapping": null,
+   "max_active_runs": null,
+   "max_active_tasks": null,
+   "pools": {},
+   "task_keys": {
+    "wait_for_export": "partner_ingest/wait_for_export",
+    "remove_tmp": "partner_ingest/remove_tmp",
+    "fetch_export": "partner_ingest/fetch_export",
+    "reshape": "partner_ingest/reshape",
+    "publish": "partner_ingest/publish"
+   },
+   "folded": {},
+   "granularity": null,
+   "asset_checks": [
+    {
+     "name": "returned_value_present",
+     "asset": "partner_ingest/fetch_export",
+     "kind": "returned_value"
+    },
+    {
+     "name": "returned_value_present",
+     "asset": "partner_ingest/reshape",
+     "kind": "returned_value"
+    }
+   ],
+   "output": "python",
+   "generated_tests": {
+    "file": "tests/test_partner_ingest.py",
+    "functions": 5,
+    "materializes": false,
+    "materialize_skip_reason": "the DAG contains a loud stub (AIRFLOW-CAVEAT), which fails when it runs by design",
+    "needs_shell": true
+   }
+  },
+  "simple_sequential_pipeline": {
+   "status": "converted",
+   "assets": 3,
+   "elided": 0,
+   "schedule": "0 9 * * *",
+   "timezone": "UTC",
+   "triggers": [],
+   "resources": [],
+   "snowflake_resources": [],
+   "provider_connections": {},
+   "shims": [],
+   "notes": [],
+   "caveats": [],
+   "catalog_keys": [],
+   "local_modules": [],
+   "requirements": [],
+   "external": [],
+   "keys": [
+    [
+     "simple_sequential_pipeline",
+     "fetch_data"
+    ],
+    [
+     "simple_sequential_pipeline",
+     "process_data"
+    ],
+    [
+     "simple_sequential_pipeline",
+     "save_results"
+    ]
+   ],
+   "cosmos": [],
+   "cosmos_steps": [],
+   "cosmos_files": [],
+   "cosmos_tasks": {},
+   "cosmos_sinks": {},
+   "uses_context": false,
+   "run_timeout_s": null,
+   "partitions": null,
+   "mapping": null,
+   "max_active_runs": null,
+   "max_active_tasks": null,
+   "pools": {},
+   "task_keys": {
+    "fetch_data": "simple_sequential_pipeline/fetch_data",
+    "process_data": "simple_sequential_pipeline/process_data",
+    "save_results": "simple_sequential_pipeline/save_results"
+   },
+   "folded": {},
+   "granularity": null,
+   "asset_checks": [
+    {
+     "name": "returned_value_present",
+     "asset": "simple_sequential_pipeline/fetch_data",
+     "kind": "returned_value"
+    },
+    {
+     "name": "returned_value_present",
+     "asset": "simple_sequential_pipeline/process_data",
+     "kind": "returned_value"
+    }
+   ],
+   "output": "python",
+   "generated_tests": {
+    "file": "tests/test_simple_sequential_pipeline.py",
+    "functions": 5,
+    "materializes": true,
+    "materialize_skip_reason": null,
+    "needs_shell": false
+   }
+  }
+ },
+ "generated": {
+  "test_files": 2,
+  "test_functions": 10,
+  "materialize_tests": 1,
+  "materialize_skipped": 1,
+  "asset_checks": 4
+ },
+ "operators": {
+  "_PythonDecoratedOperator": {
+   "tasks": 6,
+   "mapped_by_converter": true
+  },
+  "HttpSensor": {
+   "tasks": 1,
+   "mapped_by_converter": true,
+   "registry": [
+    "http_poll_sensor"
+   ],
+   "gap": "http_poll_sensor starts a run when a response changes; it does not hold a pipeline step open until an endpoint answers"
+  },
+  "BashOperator": {
+   "tasks": 1,
+   "mapped_by_converter": true,
+   "registry": [
+    "shell_command_asset"
+   ],
+   "gap": "no retries, pool, multi-part asset key, automation condition or metadata attributes"
+  }
+ }
+}

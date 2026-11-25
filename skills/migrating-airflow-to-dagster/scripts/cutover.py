@@ -261,6 +261,9 @@ def build_checklist(dag_id: str, manifest: dict[str, Any], rep: dict[str, Any], 
     if gt:
         L += [f"- Generated tests: `{gt['file']}` (run `pytest {gt['file']}`): load, shape (keys, dependencies, pool, retries), job and schedule, checks" + (", and a materialize run" if gt["materializes"] else ""),
               ("  - the materialize test is a visible skip: " + str(gt["materialize_skip_reason"])) if not gt["materializes"] else ("  - the materialize test runs shell commands only with `CONVERTED_TESTS_RUN_SHELL=1`" if gt.get("needs_shell") else "  - the materialize test runs the whole DAG and every structural check")]
+    routes = sorted({u.get("route") or "converter" for u in ([dag_unit] if dag_unit else []) + tasks})
+    gated = [u for u in ([dag_unit] if dag_unit else []) + tasks if u.get("gates")]
+    L += [f"- Route that produced the code: **{' and '.join(routes) or 'converter'}**" + (f"; rewrite gates: {', '.join(k for k, v in gated[0]['gates']['gates'].items() if v)} passed" + (f", failed: {', '.join(k for k, v in gated[0]['gates']['gates'].items() if not v)}" if not all(gated[0]['gates']['gates'].values()) else "") if gated else "")]
     chk = rep.get("asset_checks") or []
     L += ([f"- Structural asset checks (non-blocking; not business checks): " + ", ".join(f"`{c['name']}` on `{c['asset']}`" for c in chk)] if chk else ["- Structural asset checks: none generated for this DAG (dbt tests, if any, are asset checks of the dbt models)"])
     L += ["- [ ] For anything a parity run cannot cover (external systems, sensors on them, durations, failure behaviour, data volume): a side-by-side run on the same logical window, with row counts or checksums compared: ______", ""]

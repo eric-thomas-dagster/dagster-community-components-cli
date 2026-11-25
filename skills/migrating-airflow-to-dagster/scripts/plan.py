@@ -186,15 +186,29 @@ def build(manifest: dict[str, Any], ir: dict[str, Any] | None, report: dict[str,
     rows = [r for r in rows if not (r["dag_id"] in seen or seen.add(r["dag_id"]))]
     for r in rows:
         r["wave"] = wave_of(r)
+        r["route"], r["route_why"] = None, None
     rows.sort(key=lambda r: (r["wave"], r["score"], r["dag_id"]))
     waves: dict[int, dict[str, Any]] = {}
     for r in rows:
         w = waves.setdefault(r["wave"], {"wave": r["wave"], "dags": [], "effort_days": 0.0})
         w["dags"].append(r["dag_id"])
         w["effort_days"] += r["effort_days"]
+    pilot = pilots(rows, RULES["pilot_size"])
+    pilot_ids = {c["dag_id"] for c in pilot}
+    for r in rows:                                                      # the route inside tier 3 (how the code is written): convert (the converter) or rewrite (spec and prompt)
+        if r["path"] != "native rewrite":
+            r["route"], r["route_why"] = "n/a", "not a tier 3 (native) DAG yet: " + r["path"]
+        elif r["stubs"] or r["conversion"] == "deferred":
+            r["route"], r["route_why"] = "rewrite", "the converter stubbed or deferred part of it"
+        elif r["effective_bucket"] == "redesign" or r["wave"] == 4:
+            r["route"], r["route_why"] = "rewrite", "redesign-heavy (last wave)"
+        elif r["dag_id"] in pilot_ids:
+            r["route"], r["route_why"] = "rewrite", "pilot: idiomatic output matters while the mapping is being learned (the converter output is the reference draft and fallback)"
+        else:
+            r["route"], r["route_why"] = "convert", "mechanical bulk: the converter's output, gated"
     return {"heuristic": True, "rules": {k: (v if k != "size_days" else [list(x) for x in v]) for k, v in RULES.items()},
             "inputs": {"manifest": True, "ir": ir is not None, "report": report is not None}, "dags": rows, "waves": [waves[k] for k in sorted(waves)],
-            "pilot": pilots(rows, RULES["pilot_size"]), "total_effort_days": sum(r["effort_days"] for r in rows),
+            "pilot": pilot, "by_route": dict(sorted(Counter(r["route"] for r in rows).items())), "total_effort_days": sum(r["effort_days"] for r in rows),
             "by_pattern": dict(sorted(Counter(r["pattern"] for r in rows).items())), "by_path": dict(sorted(Counter(r["path"] for r in rows).items()))}
 
 
@@ -212,11 +226,11 @@ def render(p: dict[str, Any]) -> str:
     out += ["", "## Waves", ""]
     for w in p["waves"]:
         out += [f"### Wave {w['wave']}: {WAVE_NAMES[w['wave']]}", "", f"{len(w['dags'])} DAGs, about {w['effort_days']:g} person-days.", "",
-                "| DAG | Pattern | Complexity | Path | Effort | Score | Why |", "|---|---|---|---|---|---|---|"]
+                "| DAG | Pattern | Complexity | Path | Route | Effort | Score | Why |", "|---|---|---|---|---|---|---|---|"]
         for d in p["dags"]:
             if d["wave"] == w["wave"]:
                 cx = d["bucket"] if d["bucket"] == d["effective_bucket"] else f"{d['bucket']} (converter: {d['effective_bucket']})"
-                out.append(f"| `{d['dag_id']}` | {d['pattern'].replace('_', ' ')} | {cx} | {d['path']} | {d['size']} ({d['effort_days']:g} d) | {d['score']} | {d['path_why']}; {d['pattern_why']} |")
+                out.append(f"| `{d['dag_id']}` | {d['pattern'].replace('_', ' ')} | {cx} | {d['path']} | {d['route']} | {d['size']} ({d['effort_days']:g} d) | {d['score']} | {d['path_why']}; {d['pattern_why']} |")
         out.append("")
     out += ["## How this was computed", "",
             "**Pattern** (first match wins, by the share of the DAG's tasks whose operator matches): dbt or Cosmos, containers/Spark, ELT/transfer, SQL, sensor-driven, ops/notification; otherwise Python ETL.", "",
@@ -231,9 +245,10 @@ def render(p: dict[str, Any]) -> str:
             "**Path.** Native rewrite: mechanical, or needs-care with a mapping. Observe/bridge with airlift (`reference/tiers.md`, `reference/airlift.md`): redesign DAGs that are scheduled or have high lineage value, so Dagster sees them while the redesign is done. "
             "Defer: redesign with no schedule and no lineage value.", "",
             "**Wave** (fixed numbers; a wave with no DAG is not listed). " + " ".join(f"{n}: {t}." for n, t in WAVE_NAMES.items()) + " Lineage value is high for dbt, ELT/transfer and SQL DAGs, medium for Python ETL, containers/Spark and sensor-driven ones, low for ops/notification.", "",
+            "**Route** (how the tier 3 code gets written; see `SKILL.md`, \"When to use the rewrite route\"): `rewrite` (the generated spec and prompt, `scripts/dag_spec.py` and `rewrite_prompt.py`) for DAGs the converter stubbed or deferred, redesign-heavy DAGs and the last wave, and the pilot DAGs; `convert` (the deterministic converter) for the mechanical bulk; `n/a` where the path is not yet native. The rewrite route spends model effort on every DAG it is used for, and the effort estimate above does not include it. The converter's output is the reference draft and the fallback for every rewrite.", "",
             "**Pilot.** The lowest-score native-rewrite DAG for each of: a plain scheduled DAG, a sensor or dataset trigger, XCom/branching/mapping; then the next lowest until there are three.", "",
             "## Totals", "", "| Pattern | DAGs |", "|---|---|"] + [f"| {k.replace('_', ' ')} | {v} |" for k, v in p["by_pattern"].items()] + ["", "| Path | DAGs |", "|---|---|"] \
-        + [f"| {k} | {v} |" for k, v in p["by_path"].items()] + [""]
+        + [f"| {k} | {v} |" for k, v in p["by_path"].items()] + ["", "| Route | DAGs |", "|---|---|"] + [f"| {k} | {v} |" for k, v in p["by_route"].items()] + [""]
     return "\n".join(out)
 
 

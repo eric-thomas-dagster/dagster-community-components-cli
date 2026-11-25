@@ -5,6 +5,9 @@
   "by_pattern": {
     "dbt": 3
   },
+  "by_route": {
+    "rewrite": 3
+  },
   "dags": [
     {
       "bucket": "needs-care",
@@ -27,6 +30,8 @@
       "path_why": "mechanical: the converter or a short manual pass covers it",
       "pattern": "dbt",
       "pattern_why": "Cosmos DbtDag / DbtTaskGroup / dbt operators",
+      "route": "rewrite",
+      "route_why": "pilot: idiomatic output matters while the mapping is being learned (the converter output is the reference draft and fallback)",
       "schedule": "cron",
       "score": 2,
       "signals": [
@@ -60,6 +65,8 @@
       "path_why": "mechanical: the converter or a short manual pass covers it",
       "pattern": "dbt",
       "pattern_why": "Cosmos DbtDag / DbtTaskGroup / dbt operators",
+      "route": "rewrite",
+      "route_why": "pilot: idiomatic output matters while the mapping is being learned (the converter output is the reference draft and fallback)",
       "schedule": "cron",
       "score": 4,
       "signals": [
@@ -93,6 +100,8 @@
       "path_why": "mechanical: the converter or a short manual pass covers it",
       "pattern": "dbt",
       "pattern_why": "Cosmos DbtDag / DbtTaskGroup / dbt operators",
+      "route": "rewrite",
+      "route_why": "pilot: idiomatic output matters while the mapping is being learned (the converter output is the reference draft and fallback)",
       "schedule": "manual",
       "score": 6,
       "signals": [

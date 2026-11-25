@@ -18,29 +18,29 @@ Migrate these first, end to end through the gates (`SKILL.md`, Phase 3); what th
 
 5 DAGs, about 13 person-days.
 
-| DAG | Pattern | Complexity | Path | Effort | Score | Why |
-|---|---|---|---|---|---|---|
-| `orders_dbt` | dbt | needs-care | native rewrite | M (2 d) | 2 | needs care (judgment calls, each recorded) but has a mapping; Cosmos DbtDag / DbtTaskGroup / dbt operators |
-| `feature_build` | containers spark | needs-care | native rewrite | M (2.5 d) | 3 | needs care (judgment calls, each recorded) but has a mapping; 1 of 1 tasks are containers spark operators |
-| `nightly_reports` | python etl | needs-care | native rewrite | M (2.5 d) | 4 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are Python or Bash |
-| `partner_drop` | sensor driven | needs-care | native rewrite | M (3 d) | 7 | needs care (judgment calls, each recorded) but has a mapping; 2 of 3 tasks are sensor driven operators |
-| `s3_to_warehouse` | elt transfer | needs-care | native rewrite | M (3 d) | 8 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are elt transfer operators |
+| DAG | Pattern | Complexity | Path | Route | Effort | Score | Why |
+|---|---|---|---|---|---|---|---|
+| `orders_dbt` | dbt | needs-care | native rewrite | rewrite | M (2 d) | 2 | needs care (judgment calls, each recorded) but has a mapping; Cosmos DbtDag / DbtTaskGroup / dbt operators |
+| `feature_build` | containers spark | needs-care | native rewrite | rewrite | M (2.5 d) | 3 | needs care (judgment calls, each recorded) but has a mapping; 1 of 1 tasks are containers spark operators |
+| `nightly_reports` | python etl | needs-care | native rewrite | convert | M (2.5 d) | 4 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are Python or Bash |
+| `partner_drop` | sensor driven | needs-care | native rewrite | rewrite | M (3 d) | 7 | needs care (judgment calls, each recorded) but has a mapping; 2 of 3 tasks are sensor driven operators |
+| `s3_to_warehouse` | elt transfer | needs-care | native rewrite | convert | M (3 d) | 8 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are elt transfer operators |
 
 ### Wave 3: remaining needs-care
 
 1 DAGs, about 2.5 person-days.
 
-| DAG | Pattern | Complexity | Path | Effort | Score | Why |
-|---|---|---|---|---|---|---|
-| `slack_digest` | ops notification | needs-care | native rewrite | M (2.5 d) | 4 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are ops notification operators |
+| DAG | Pattern | Complexity | Path | Route | Effort | Score | Why |
+|---|---|---|---|---|---|---|---|
+| `slack_digest` | ops notification | needs-care | native rewrite | convert | M (2.5 d) | 4 | needs care (judgment calls, each recorded) but has a mapping; 2 of 2 tasks are ops notification operators |
 
 ### Wave 4: redesign-heavy, deferred and bridged
 
 1 DAGs, about 6.5 person-days.
 
-| DAG | Pattern | Complexity | Path | Effort | Score | Why |
-|---|---|---|---|---|---|---|
-| `route_by_region` | python etl | redesign | observe/bridge with airlift | XL (6.5 d) | 15 | needs a design decision: observe it (and proxy it when ready) while the redesign is done; 3 of 4 tasks are Python or Bash |
+| DAG | Pattern | Complexity | Path | Route | Effort | Score | Why |
+|---|---|---|---|---|---|---|---|
+| `route_by_region` | python etl | redesign | observe/bridge with airlift | n/a | XL (6.5 d) | 15 | needs a design decision: observe it (and proxy it when ready) while the redesign is done; 3 of 4 tasks are Python or Bash |
 
 ## How this was computed
 
@@ -55,6 +55,8 @@ Migrate these first, end to end through the gates (`SKILL.md`, Phase 3); what th
 **Path.** Native rewrite: mechanical, or needs-care with a mapping. Observe/bridge with airlift (`reference/tiers.md`, `reference/airlift.md`): redesign DAGs that are scheduled or have high lineage value, so Dagster sees them while the redesign is done. Defer: redesign with no schedule and no lineage value.
 
 **Wave** (fixed numbers; a wave with no DAG is not listed). 1: mechanical, high lineage value (dbt, ELT, SQL). 2: other mechanical, and needs-care with medium or high lineage value. 3: remaining needs-care. 4: redesign-heavy, deferred and bridged. Lineage value is high for dbt, ELT/transfer and SQL DAGs, medium for Python ETL, containers/Spark and sensor-driven ones, low for ops/notification.
+
+**Route** (how the tier 3 code gets written; see `SKILL.md`, "When to use the rewrite route"): `rewrite` (the generated spec and prompt, `scripts/dag_spec.py` and `rewrite_prompt.py`) for DAGs the converter stubbed or deferred, redesign-heavy DAGs and the last wave, and the pilot DAGs; `convert` (the deterministic converter) for the mechanical bulk; `n/a` where the path is not yet native. The rewrite route spends model effort on every DAG it is used for, and the effort estimate above does not include it. The converter's output is the reference draft and the fallback for every rewrite.
 
 **Pilot.** The lowest-score native-rewrite DAG for each of: a plain scheduled DAG, a sensor or dataset trigger, XCom/branching/mapping; then the next lowest until there are three.
 
@@ -73,3 +75,9 @@ Migrate these first, end to end through the gates (`SKILL.md`, Phase 3); what th
 |---|---|
 | native rewrite | 6 |
 | observe/bridge with airlift | 1 |
+
+| Route | DAGs |
+|---|---|
+| convert | 3 |
+| n/a | 1 |
+| rewrite | 3 |

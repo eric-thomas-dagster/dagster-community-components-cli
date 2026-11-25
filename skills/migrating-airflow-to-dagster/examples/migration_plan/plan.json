@@ -11,6 +11,11 @@
     "python_etl": 2,
     "sensor_driven": 1
   },
+  "by_route": {
+    "convert": 3,
+    "n/a": 1,
+    "rewrite": 3
+  },
   "dags": [
     {
       "bucket": "needs-care",
@@ -32,6 +37,8 @@
       "path_why": "needs care (judgment calls, each recorded) but has a mapping",
       "pattern": "dbt",
       "pattern_why": "Cosmos DbtDag / DbtTaskGroup / dbt operators",
+      "route": "rewrite",
+      "route_why": "pilot: idiomatic output matters while the mapping is being learned (the converter output is the reference draft and fallback)",
       "schedule": "cron",
       "score": 2,
       "signals": [
@@ -64,6 +71,8 @@
       "path_why": "needs care (judgment calls, each recorded) but has a mapping",
       "pattern": "containers_spark",
       "pattern_why": "1 of 1 tasks are containers spark operators",
+      "route": "rewrite",
+      "route_why": "pilot: idiomatic output matters while the mapping is being learned (the converter output is the reference draft and fallback)",
       "schedule": "cron",
       "score": 3,
       "signals": [],
@@ -94,6 +103,8 @@
       "path_why": "needs care (judgment calls, each recorded) but has a mapping",
       "pattern": "python_etl",
       "pattern_why": "2 of 2 tasks are Python or Bash",
+      "route": "convert",
+      "route_why": "mechanical bulk: the converter's output, gated",
       "schedule": "cron",
       "score": 4,
       "signals": [],
@@ -124,6 +135,8 @@
       "path_why": "needs care (judgment calls, each recorded) but has a mapping",
       "pattern": "sensor_driven",
       "pattern_why": "2 of 3 tasks are sensor driven operators",
+      "route": "rewrite",
+      "route_why": "pilot: idiomatic output matters while the mapping is being learned (the converter output is the reference draft and fallback)",
       "schedule": "cron",
       "score": 7,
       "signals": [],
@@ -154,6 +167,8 @@
       "path_why": "needs care (judgment calls, each recorded) but has a mapping",
       "pattern": "elt_transfer",
       "pattern_why": "2 of 2 tasks are elt transfer operators",
+      "route": "convert",
+      "route_why": "mechanical bulk: the converter's output, gated",
       "schedule": "cron",
       "score": 8,
       "signals": [
@@ -186,6 +201,8 @@
       "path_why": "needs care (judgment calls, each recorded) but has a mapping",
       "pattern": "ops_notification",
       "pattern_why": "2 of 2 tasks are ops notification operators",
+      "route": "convert",
+      "route_why": "mechanical bulk: the converter's output, gated",
       "schedule": "cron",
       "score": 4,
       "signals": [],
@@ -216,6 +233,8 @@
       "path_why": "needs a design decision: observe it (and proxy it when ready) while the redesign is done",
       "pattern": "python_etl",
       "pattern_why": "3 of 4 tasks are Python or Bash",
+      "route": "n/a",
+      "route_why": "not a tier 3 (native) DAG yet: observe/bridge with airlift",
       "schedule": "cron",
       "score": 15,
       "signals": [

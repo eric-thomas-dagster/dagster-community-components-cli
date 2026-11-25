@@ -18,11 +18,11 @@ Migrate these first, end to end through the gates (`SKILL.md`, Phase 3); what th
 
 3 DAGs, about 1.5 person-days.
 
-| DAG | Pattern | Complexity | Path | Effort | Score | Why |
-|---|---|---|---|---|---|---|
-| `shop_dbt_dag` | dbt | needs-care (converter: mechanical) | native rewrite | XS (0.5 d) | 2 | mechanical: the converter or a short manual pass covers it; Cosmos DbtDag / DbtTaskGroup / dbt operators |
-| `shop_mixed` | dbt | mechanical | native rewrite | XS (0.5 d) | 4 | mechanical: the converter or a short manual pass covers it; Cosmos DbtDag / DbtTaskGroup / dbt operators |
-| `shop_operators` | dbt | mechanical | native rewrite | XS (0.5 d) | 6 | mechanical: the converter or a short manual pass covers it; Cosmos DbtDag / DbtTaskGroup / dbt operators |
+| DAG | Pattern | Complexity | Path | Route | Effort | Score | Why |
+|---|---|---|---|---|---|---|---|
+| `shop_dbt_dag` | dbt | needs-care (converter: mechanical) | native rewrite | rewrite | XS (0.5 d) | 2 | mechanical: the converter or a short manual pass covers it; Cosmos DbtDag / DbtTaskGroup / dbt operators |
+| `shop_mixed` | dbt | mechanical | native rewrite | rewrite | XS (0.5 d) | 4 | mechanical: the converter or a short manual pass covers it; Cosmos DbtDag / DbtTaskGroup / dbt operators |
+| `shop_operators` | dbt | mechanical | native rewrite | rewrite | XS (0.5 d) | 6 | mechanical: the converter or a short manual pass covers it; Cosmos DbtDag / DbtTaskGroup / dbt operators |
 
 ## How this was computed
 
@@ -38,6 +38,8 @@ Migrate these first, end to end through the gates (`SKILL.md`, Phase 3); what th
 
 **Wave** (fixed numbers; a wave with no DAG is not listed). 1: mechanical, high lineage value (dbt, ELT, SQL). 2: other mechanical, and needs-care with medium or high lineage value. 3: remaining needs-care. 4: redesign-heavy, deferred and bridged. Lineage value is high for dbt, ELT/transfer and SQL DAGs, medium for Python ETL, containers/Spark and sensor-driven ones, low for ops/notification.
 
+**Route** (how the tier 3 code gets written; see `SKILL.md`, "When to use the rewrite route"): `rewrite` (the generated spec and prompt, `scripts/dag_spec.py` and `rewrite_prompt.py`) for DAGs the converter stubbed or deferred, redesign-heavy DAGs and the last wave, and the pilot DAGs; `convert` (the deterministic converter) for the mechanical bulk; `n/a` where the path is not yet native. The rewrite route spends model effort on every DAG it is used for, and the effort estimate above does not include it. The converter's output is the reference draft and the fallback for every rewrite.
+
 **Pilot.** The lowest-score native-rewrite DAG for each of: a plain scheduled DAG, a sensor or dataset trigger, XCom/branching/mapping; then the next lowest until there are three.
 
 ## Totals
@@ -49,3 +51,7 @@ Migrate these first, end to end through the gates (`SKILL.md`, Phase 3); what th
 | Path | DAGs |
 |---|---|
 | native rewrite | 3 |
+
+| Route | DAGs |
+|---|---|
+| rewrite | 3 |

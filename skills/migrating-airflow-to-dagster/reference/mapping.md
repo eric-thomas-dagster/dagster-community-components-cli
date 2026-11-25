@@ -2,6 +2,10 @@
 
 Class: MECH = translation is mechanical; JUDG = needs a judgment call or confirmation; REDESIGN = needs a design decision. "Verify" means check the current Dagster API with `dagster-expert` or `dg` before relying on the exact name.
 
+## Choosing granularity
+
+One asset per data product, with the steps that only help to produce it inside that asset: a data product is a task whose output is persisted (table, file, S3 key, dbt model) or whose returned value is consumed by more than the next step. Steps become plain Python inside the asset when no restart point is needed, and ops inside a graph-backed asset (`@dg.graph_asset` / `@dg.graph_multi_asset`) when a step has retries, a long runtime or an expensive external call; a failed op retries and restarts as an op, a plain-Python step restarts from the start of the asset. A chain of dataframe or SQL transformations is one registry pipeline component asset (`polars_pipeline`, `pandas_pipeline`, `warehouse_pipeline`, `pyspark_pipeline`) when the steps map to its ops. Notification, wait and cleanup tasks are not assets: they become sensors, hooks or run-status sensors, or fold into the producing asset. The converter applies part of this with `--granularity product` (`reference/conversion.md`, "Choosing granularity"); the rewrite route applies all of it (`reference/rewrite-route.md`).
+
 ## Structure
 
 | Airflow | Dagster | Class | Notes |

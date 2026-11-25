@@ -1,0 +1,536 @@
+{
+ "acceptable_differences": [
+  "asset keys and the grouping of tasks into data products (one asset per data product is the target; several tasks may become one asset)",
+  "per-task run records, durations and logs are replaced by per-asset runs and materializations",
+  "XCom is replaced by asset values (IO manager) or by plain function calls inside an asset",
+  "the Airflow UI, task instances and `dag_run` objects have no counterpart",
+  "notification, wait and glue tasks may become sensors, hooks, run-status sensors or be folded into the producing asset",
+  "operators may be replaced by an official integration or a registry component with the same effect"
+ ],
+ "airflow_version": "2.10.5",
+ "assets_in": [],
+ "assets_out": [],
+ "connections": [
+  "partner_api"
+ ],
+ "converter": {
+  "asset_checks": [
+   {
+    "asset": "partner_ingest/fetch_export",
+    "kind": "returned_value",
+    "name": "returned_value_present"
+   },
+   {
+    "asset": "partner_ingest/reshape",
+    "kind": "returned_value",
+    "name": "returned_value_present"
+   }
+  ],
+  "caveats": [
+   {
+    "kind": "stub",
+    "reason": "HttpSensor: response_check is a function (unusual_prefix_fe4965ea2b0dd5558582e422850ae884dbae0f18_partner_ingest._export_ready); the converter does not carry it into the step",
+    "task": "wait_for_export"
+   },
+   {
+    "kind": "stub",
+    "reason": "callable depends on an Airflow import (airflow.hooks.base)",
+    "task": "fetch_export"
+   }
+  ],
+  "generated_tests": {
+   "file": "tests/test_partner_ingest.py",
+   "functions": 5,
+   "materialize_skip_reason": "the DAG contains a loud stub (AIRFLOW-CAVEAT), which fails when it runs by design",
+   "materializes": false,
+   "needs_shell": true
+  },
+  "keys": [
+   "partner_ingest/wait_for_export",
+   "partner_ingest/remove_tmp",
+   "partner_ingest/fetch_export",
+   "partner_ingest/reshape",
+   "partner_ingest/publish"
+  ],
+  "notes": [],
+  "output": "python",
+  "reason": null,
+  "status": "converted",
+  "stubbed": [
+   "fetch_export",
+   "wait_for_export"
+  ],
+  "task_keys": {
+   "fetch_export": "partner_ingest/fetch_export",
+   "publish": "partner_ingest/publish",
+   "remove_tmp": "partner_ingest/remove_tmp",
+   "reshape": "partner_ingest/reshape",
+   "wait_for_export": "partner_ingest/wait_for_export"
+  }
+ },
+ "cosmos_groups": [],
+ "dag_id": "partner_ingest",
+ "default_args": {
+  "owner": "data-eng",
+  "retries": 2,
+  "retry_delay": {
+   "seconds": 600.0
+  }
+ },
+ "description": null,
+ "edges": [
+  [
+   "fetch_export",
+   "reshape"
+  ],
+  [
+   "publish",
+   "remove_tmp"
+  ],
+  [
+   "reshape",
+   "publish"
+  ],
+  [
+   "wait_for_export",
+   "fetch_export"
+  ]
+ ],
+ "file": "partner_ingest.py",
+ "manifest_units": [
+  {
+   "class": "JUDG",
+   "id": "A001",
+   "status": "pending",
+   "task_id": null
+  },
+  {
+   "class": "JUDG",
+   "id": "A002",
+   "status": "deferred",
+   "task_id": "wait_for_export"
+  },
+  {
+   "class": "MECH",
+   "id": "A003",
+   "status": "pending",
+   "task_id": "remove_tmp"
+  },
+  {
+   "class": "MECH",
+   "id": "A004",
+   "status": "deferred",
+   "task_id": "fetch_export"
+  },
+  {
+   "class": "JUDG",
+   "id": "A005",
+   "status": "pending",
+   "task_id": "reshape"
+  },
+  {
+   "class": "JUDG",
+   "id": "A006",
+   "status": "pending",
+   "task_id": "publish"
+  }
+ ],
+ "must_preserve": [
+  "the dependencies between tasks (what must finish before what), including trigger rules and which branch or skip decisions are taken",
+  "the schedule (cron or interval) and its timezone, and what `catchup` and `start_date` meant for missed intervals",
+  "retries, retry delay and backoff, pools and concurrency limits, execution timeouts",
+  "every value that one task passes to another, and every output a task persists (outlets / assets, files, tables, keys)",
+  "the failure behaviour of each step (what fails the run, what is skipped, what continues)",
+  "the connections and Variables used, by name (values come from the environment, never from the code)",
+  "the result of each external side effect (the file written, the message sent, the job started) for the same inputs"
+ ],
+ "owners": [
+  "data-eng"
+ ],
+ "params": {},
+ "parity_baseline": null,
+ "purpose": [
+  {
+   "basis": "the task list",
+   "inferred": "no",
+   "statement": "a 5-task DAG using BashOperator, HttpSensor, _PythonDecoratedOperator"
+  },
+  {
+   "basis": "tasks with no downstream task",
+   "inferred": "no",
+   "statement": "its final step(s) are remove_tmp"
+  },
+  {
+   "basis": "a sensor task",
+   "inferred": "yes",
+   "statement": "it waits for an external condition before processing"
+  }
+ ],
+ "schedule": {
+  "asset_logic": null,
+  "assets": null,
+  "catchup": false,
+  "cron": "0 */6 * * *",
+  "has_dag_callbacks": false,
+  "interval_seconds": null,
+  "kind": "cron_data_interval",
+  "max_active_runs": 16,
+  "settings": {
+   "concurrency": 16,
+   "fail_stop": false,
+   "max_active_runs": 16,
+   "max_active_tasks": 16,
+   "max_consecutive_failed_dag_runs": 0,
+   "render_template_as_native_obj": false
+  },
+  "start_date": "2024-01-01 00:00:00+00:00",
+  "timezone": "UTC"
+ },
+ "tags": [
+  "ingest",
+  "partner"
+ ],
+ "tasks": [
+  {
+   "arguments": {
+    "op_args": [],
+    "op_kwargs": {},
+    "templates_dict": null
+   },
+   "callable": {
+    "name": "fetch_export",
+    "params": [],
+    "source": "@task\ndef fetch_export() -> list[dict]:\n    conn = BaseHook.get_connection(\"partner_api\")\n    resp = requests.get(f\"{conn.host}/export/latest\", headers={\"Authorization\": f\"Bearer {conn.password}\"}, timeout=60)\n    resp.raise_for_status()\n    return resp.json()[\"rows\"]\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "fetch_export",
+     "source": "@task\ndef fetch_export() -> list[dict]:\n    conn = BaseHook.get_connection(\"partner_api\")\n    resp = requests.get(f\"{conn.host}/export/latest\", headers={\"Authorization\": f\"Bearer {conn.password}\"}, timeout=60)\n    resp.raise_for_status()\n    return resp.json()[\"rows\"]\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [
+    "partner_api"
+   ],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [
+    "reshape"
+   ],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "data-eng",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [],
+   "retries": 2,
+   "retry_delay_s": 600.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "fetch_export",
+   "trigger_rule": "all_success",
+   "upstream": [
+    "wait_for_export"
+   ],
+   "variables": [],
+   "wait_for_downstream": false
+  },
+  {
+   "arguments": {
+    "op_args": [
+     {
+      "key": "<redacted: a credential-like argument; its value is not recorded>",
+      "xcom_from": "reshape"
+     }
+    ],
+    "op_kwargs": {},
+    "templates_dict": null
+   },
+   "callable": {
+    "name": "publish",
+    "params": [
+     "summary"
+    ],
+    "source": "@task\ndef publish(summary: dict) -> str:\n    line = f\"partner export: {summary['customers']} customers, total {summary['total']}\"\n    print(line)\n    return line\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "publish",
+     "source": "@task\ndef publish(summary: dict) -> str:\n    line = f\"partner export: {summary['customers']} customers, total {summary['total']}\"\n    print(line)\n    return line\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [
+    "remove_tmp"
+   ],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [
+    {
+     "key": "<redacted: a credential-like argument; its value is not recorded>",
+     "xcom_from": "reshape"
+    }
+   ],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "data-eng",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [
+    "reshape"
+   ],
+   "retries": 2,
+   "retry_delay_s": 600.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "publish",
+   "trigger_rule": "all_success",
+   "upstream": [
+    "reshape"
+   ],
+   "variables": [],
+   "wait_for_downstream": false
+  },
+  {
+   "arguments": {
+    "append_env": false,
+    "bash_command": "rm -rf /tmp/partner_export_tmp",
+    "cwd": null,
+    "env": null,
+    "output_encoding": "utf-8",
+    "skip_on_exit_code": [
+     99
+    ]
+   },
+   "callable": null,
+   "callable_arg_sources": {},
+   "callable_args": [
+    "output_processor"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {},
+   "operator": "BashOperator",
+   "outlets": [],
+   "owner": "data-eng",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [],
+   "retries": 2,
+   "retry_delay_s": 600.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "remove_tmp",
+   "trigger_rule": "all_success",
+   "upstream": [
+    "publish"
+   ],
+   "variables": [],
+   "wait_for_downstream": false
+  },
+  {
+   "arguments": {
+    "op_args": [
+     {
+      "key": "<redacted: a credential-like argument; its value is not recorded>",
+      "xcom_from": "fetch_export"
+     }
+    ],
+    "op_kwargs": {},
+    "templates_dict": null
+   },
+   "callable": {
+    "name": "reshape",
+    "params": [
+     "rows"
+    ],
+    "source": "@task\ndef reshape(rows: list[dict]) -> dict:\n    \"\"\"One record per customer, amounts summed, rows without an id dropped.\"\"\"\n    out: dict[str, float] = {}\n    for r in rows:\n        if r.get(\"customer_id\"):\n            out[r[\"customer_id\"]] = out.get(r[\"customer_id\"], 0.0) + float(r.get(\"amount\", 0))\n    return {\"customers\": len(out), \"total\": round(sum(out.values()), 2), \"by_customer\": out}\n"
+   },
+   "callable_arg_sources": {
+    "python_callable": {
+     "name": "reshape",
+     "source": "@task\ndef reshape(rows: list[dict]) -> dict:\n    \"\"\"One record per customer, amounts summed, rows without an id dropped.\"\"\"\n    out: dict[str, float] = {}\n    for r in rows:\n        if r.get(\"customer_id\"):\n            out[r[\"customer_id\"]] = out.get(r[\"customer_id\"], 0.0) + float(r.get(\"amount\", 0))\n    return {\"customers\": len(out), \"total\": round(sum(out.values()), 2), \"by_customer\": out}\n"
+    }
+   },
+   "callable_args": [
+    "python_callable"
+   ],
+   "callbacks": [],
+   "connections": [],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [
+    "publish"
+   ],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [
+    {
+     "key": "<redacted: a credential-like argument; its value is not recorded>",
+     "xcom_from": "fetch_export"
+    }
+   ],
+   "op_kwargs": {},
+   "operator": "_PythonDecoratedOperator",
+   "outlets": [],
+   "owner": "data-eng",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [
+    "fetch_export"
+   ],
+   "retries": 2,
+   "retry_delay_s": 600.0,
+   "retry_exponential_backoff": false,
+   "sensor": null,
+   "sla_s": null,
+   "task_id": "reshape",
+   "trigger_rule": "all_success",
+   "upstream": [
+    "fetch_export"
+   ],
+   "variables": [],
+   "wait_for_downstream": false
+  },
+  {
+   "arguments": {
+    "deferrable": false,
+    "endpoint": "export/status",
+    "extra_options": {},
+    "headers": {},
+    "http_conn_id": "partner_api",
+    "method": "GET",
+    "request_kwargs": {},
+    "request_params": {},
+    "response_error_codes_allowlist": [
+     "404"
+    ],
+    "tcp_keep_alive": true,
+    "tcp_keep_alive_count": 20,
+    "tcp_keep_alive_idle": 120,
+    "tcp_keep_alive_interval": 30
+   },
+   "callable": null,
+   "callable_arg_sources": {
+    "response_check": {
+     "name": "_export_ready",
+     "source": "def _export_ready(response) -> bool:\n    return response.json().get(\"status\") == \"ready\"\n"
+    }
+   },
+   "callable_args": [
+    "response_check"
+   ],
+   "callbacks": [],
+   "connections": [
+    "partner_api"
+   ],
+   "cosmos": null,
+   "depends_on_past": false,
+   "downstream": [
+    "fetch_export"
+   ],
+   "execution_timeout_s": null,
+   "expand": null,
+   "group": null,
+   "inlets": [],
+   "is_mapped": false,
+   "is_setup": false,
+   "is_teardown": false,
+   "max_active_tis_per_dag": null,
+   "op_args": [],
+   "op_kwargs": {},
+   "operator": "HttpSensor",
+   "outlets": [],
+   "owner": "data-eng",
+   "pool": null,
+   "pool_slots": 1,
+   "produces_value": true,
+   "queue": null,
+   "reads_value_from": [],
+   "retries": 2,
+   "retry_delay_s": 600.0,
+   "retry_exponential_backoff": false,
+   "sensor": {
+    "exponential_backoff": false,
+    "mode": "poke",
+    "never_fail": false,
+    "poke_interval": 120.0,
+    "silent_fail": false,
+    "soft_fail": false,
+    "timeout": 21600.0
+   },
+   "sla_s": null,
+   "task_id": "wait_for_export",
+   "trigger_rule": "all_success",
+   "upstream": [],
+   "variables": [],
+   "wait_for_downstream": false
+  }
+ ],
+ "value_flow": [
+  [
+   "fetch_export",
+   "reshape"
+  ],
+  [
+   "reshape",
+   "publish"
+  ]
+ ],
+ "variables": []
+}
