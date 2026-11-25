@@ -136,7 +136,15 @@
    "max_active_tasks": null,
    "pools": {},
    "task_keys": {},
-   "output": "python"
+   "asset_checks": [],
+   "output": "python",
+   "generated_tests": {
+    "file": "tests/test_shop_dbt_dag.py",
+    "functions": 5,
+    "materializes": false,
+    "materialize_skip_reason": "the DAG runs dbt (Cosmos) against a warehouse",
+    "needs_shell": false
+   }
   },
   "shop_operators": {
    "status": "converted",
@@ -289,7 +297,15 @@
     "build_totals": "shop_operators/build_totals",
     "test_all": "shop_operators/test_all"
    },
-   "output": "python"
+   "asset_checks": [],
+   "output": "python",
+   "generated_tests": {
+    "file": "tests/test_shop_operators.py",
+    "functions": 5,
+    "materializes": false,
+    "materialize_skip_reason": "the DAG runs dbt (Cosmos) against a warehouse",
+    "needs_shell": false
+   }
   },
   "shop_mixed": {
    "status": "converted",
@@ -427,8 +443,23 @@
     "extract": "shop_mixed/extract",
     "publish": "shop_mixed/publish"
    },
-   "output": "python"
+   "asset_checks": [],
+   "output": "python",
+   "generated_tests": {
+    "file": "tests/test_shop_mixed.py",
+    "functions": 5,
+    "materializes": false,
+    "materialize_skip_reason": "the DAG runs dbt (Cosmos) against a warehouse",
+    "needs_shell": true
+   }
   }
+ },
+ "generated": {
+  "test_files": 3,
+  "test_functions": 15,
+  "materialize_tests": 0,
+  "materialize_skipped": 3,
+  "asset_checks": 0
  },
  "dbt": {
   "projects": {

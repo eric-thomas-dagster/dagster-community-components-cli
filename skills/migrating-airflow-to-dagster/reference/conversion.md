@@ -113,6 +113,29 @@ The group becomes assets only when Cosmos's own rendering is faithful to dbt's g
 
 **How it was checked.** `tests/fixtures_cosmos/ir.json` is a real IR: `airflow_ir.py` run on `tests/fixtures_cosmos/dags/cosmos_shop.py` with Airflow 2.10.5 and astronomer-cosmos 1.15.1 (a `DbtDag`, a `DbtTaskGroup` between a Python task and a Bash task, and four per-task operators over a small dbt project). The tests convert it, load the result with `dagster.components.load_defs` (the dbt component refreshes its manifest with a real `dbt parse`), compare every asset's dependencies, and execute the jobs: `dbt seed`, `run`, `build --vars` and `test` run through the generated steps, and `dbt build` through the component, against DuckDB, with the three dbt tests of the `DbtDag` passing as asset checks (six checks are defined across the two groups). **Container modes** were checked on a synthetic edit of that IR (every Cosmos task set to kubernetes, docker and the other modes, with pod settings named): the conversion and the component load were run, no container was. **Documentation only, not run:** other warehouses and dbt adapters, `profile_mapping` classes (the generated `profiles.yml` was checked for structure and for the absence of values, not against Snowflake, BigQuery or any real connection), `dbt deps` / packages, `load_method=dbt_manifest` and `custom` extraction, Cosmos 1.x versions other than 1.15.1, Airflow 3 with Cosmos, the watcher and airflow_async modes, a real Cosmos container operator, Cosmos source rendering, and a real Airflow schedule.
 
+## Generated tests and structural asset checks
+
+For every converted DAG that becomes a Python module, `convert_ir.py` writes `tests/test_<dag>.py` (in the Dagster project root; `generated_tests` in the report) and may add asset checks to the module (`asset_checks`; totals in `report.json` under `generated`).
+
+| Test | What it asserts |
+|---|---|
+| load | the module imports and its definitions load (`Definitions.validate_loadable`) |
+| shape | every asset key, its dependencies, pool and retry policy equal what the IR said (the expectations are written into the test, so a hand edit that drifts from the Airflow DAG fails) |
+| job and schedule | the job name; the schedule's cron and timezone |
+| checks | the module has exactly the generated structural checks |
+| materialize | for a DAG with no external system: the whole DAG runs (`execute_in_process` on the generated assets), every asset materializes and every structural check passes. A DAG with an external system (cloud storage, a warehouse, HTTP, SQL, a sensor, a container, a triggered DAG, dbt), a loud stub, partitions or assets read from outside is a **visible skip with the reason**, never a fake pass. A DAG with shell tasks runs them only with `CONVERTED_TESTS_RUN_SHELL=1` |
+
+Returned values are compared with Airflow's by the parity harness (it needs Airflow); the generated tests check outcomes and the structural checks.
+
+Asset checks come only from what the source shows, are `blocking=False`, and say in their description and metadata (`kind: structural`) that they are **structural, not business, checks** (API: `@dg.asset_check(asset=..., blocking=False)` returning `dg.AssetCheckResult`; the checked asset's value is loaded through the IO manager by a parameter):
+
+| Check | Generated for | Severity |
+|---|---|---|
+| `returned_value_present` | a task whose return value is consumed by a downstream task | ERROR if the value is `None`; WARN if it is an empty list, dict, string or DataFrame |
+| `s3_object_exists` | `S3CreateObjectOperator`, `LocalFilesystemToS3Operator`, `S3CopyObjectOperator` with a literal (untemplated) destination bucket and key | ERROR if `head_object` fails |
+
+Not generated, on purpose: a check that a SQL asset "ran without error" (a failure already fails the step, so the check would be vacuous), and any business check. dbt tests already become asset checks of the dbt models (see "Astronomer Cosmos").
+
 ## Settings that map or degrade
 
 - `retry_exponential_backoff` becomes `Backoff.EXPONENTIAL`; a named XCom of a `multiple_outputs` task reads that key of the returned dict.

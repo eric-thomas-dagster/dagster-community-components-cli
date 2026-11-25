@@ -46,6 +46,7 @@ from typing import Any
 from urllib.parse import urlparse
 
 import cosmos_ops as K
+import gen_tests as G
 import provider_ops as P
 
 CONTEXT_PARAMS = {"ds", "ds_nodash", "ts", "ti", "task_instance", "dag_run", "logical_date", "data_interval_start",
@@ -1328,6 +1329,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     """(module source, summary). Raises Defer if any part of the DAG cannot be converted."""
     dag = normalise_provider_tasks(dag)
     dag, cosmos_clusters, cosmos_stubs = K.plan(dag, produced, DBT_DIR)        # Cosmos groups become dbt components, per-task operators become steps, the rest stub
+    task_info: dict[str, dict[str, Any]] = {}            # per asset-form task: key, dependencies, pool, retries (written into the generated test)
+    check_blocks: list[str] = []                         # generated structural asset checks
+    check_list: list[dict[str, str]] = []
     cosmos_steps: list[dict[str, Any]] = []
     cosmos_files: dict[str, str] = {}
     cosmos_reqs: set[str] = set()
@@ -2341,7 +2345,46 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             inner_ = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
             body = f"    def _run():\n{inner_}\n    _result = _run()\n    af_runtime_partition_tag(context, {rt_outlets[tid]!r})\n    return _result"
         blocks.append(pre + "@dg.asset(\n    " + ",\n    ".join(deco) + ",\n)\n" + hook_deco + "def " + fname + sig + ":\n" + body + "\n")
+        pool_name = t["pool"] or (f"{safe(dag_id)}__{safe(tid)}" if t.get("max_active_tis_per_dag") and f"{safe(dag_id)}__{safe(tid)}" in pool_limits else None)
+        task_info[tid] = {"deps": sorted({"/".join(d) for d in deps} | {"/".join(keyparts[u]) for u in ordered if u in data}), "pool": pool_name, "retries": int(t["retries"] or 0)}
+        if tid in consumed and not ret_none and not (pplan or ppart) and not t.get("_caveat"):
+            nm = f"chk_{safe(tid)}_value"
+            check_blocks.append(
+                f"@dg.asset_check(asset=dg.AssetKey({keyparts[tid]!r}), name='returned_value_present', blocking=False,\n"
+                f"                description=\"Structural check generated from the Airflow DAG (not a business check): the task's return value is consumed downstream, so it must not be None; an empty list, dict, string or DataFrame is a warning.\")\n"
+                f"def {nm}(value) -> dg.AssetCheckResult:\n"
+                "    if value is None:\n"
+                "        return dg.AssetCheckResult(passed=False, severity=dg.AssetCheckSeverity.ERROR, metadata={'kind': 'structural', 'why': 'the value is None but a downstream task consumes it'})\n"
+                "    size = structural_size(value)\n"
+                "    if size == 0:\n"
+                "        return dg.AssetCheckResult(passed=False, severity=dg.AssetCheckSeverity.WARN, metadata={'kind': 'structural', 'size': 0, 'why': 'the value is empty'})\n"
+                "    return dg.AssetCheckResult(passed=True, metadata={'kind': 'structural', 'type': type(value).__name__, **({'size': size} if size is not None else {})})\n")
+            check_list.append({"name": "returned_value_present", "asset": "/".join(keyparts[tid]), "kind": "returned_value"})
+        if ty in S3_OPS and not t.get("is_mapped") and not (pplan or ppart):
+            dest = {"S3CopyObjectOperator": ("dest_bucket_name", "dest_bucket_key"), "LocalFilesystemToS3Operator": ("dest_bucket", "dest_key"),
+                    "S3CreateObjectOperator": ("s3_bucket", "s3_key")}.get(ty)
+            if dest:
+                tf_ = t["template_fields"]
+                b_, k_ = tf_.get(dest[0]), tf_.get(dest[1])
+                plain = lambda x: isinstance(x, str) and x and "{{" not in x and "{%" not in x          # noqa: E731
+                if plain(k_) and (plain(b_) or k_.startswith("s3://")):
+                    if k_.startswith("s3://"):
+                        b_, k_ = k_[5:].split("/", 1) if "/" in k_[5:] else (k_[5:], "")
+                    conn_ = tf_.get("aws_conn_id") or "aws_default"
+                    if k_:
+                        check_blocks.append(
+                            f"@dg.asset_check(asset=dg.AssetKey({keyparts[tid]!r}), name='s3_object_exists', blocking=False, required_resource_keys={{{conn_!r}}},\n"
+                            f"                description='Structural check generated from the Airflow DAG (not a business check): the object the task writes exists.')\n"
+                            f"def chk_{safe(tid)}_s3(context) -> dg.AssetCheckResult:\n"
+                            f"    client = getattr(context.resources, {conn_!r})\n"
+                            "    try:\n"
+                            f"        client.head_object(Bucket={b_!r}, Key={k_!r})\n"
+                            "    except Exception as e:  # noqa: BLE001\n"
+                            f"        return dg.AssetCheckResult(passed=False, severity=dg.AssetCheckSeverity.ERROR, metadata={{'kind': 'structural', 'bucket': {b_!r}, 'key': {k_!r}, 'error': type(e).__name__}})\n"
+                            f"    return dg.AssetCheckResult(passed=True, metadata={{'kind': 'structural', 'bucket': {b_!r}, 'key': {k_!r}}})\n")
+                        check_list.append({"name": "s3_object_exists", "asset": "/".join(keyparts[tid]), "kind": "s3_object_exists"})
 
+    blocks.extend(check_blocks)
     keys = [keyparts[t["task_id"]] for t in real] + ([[safe(dag_id), "run_check"]] if graph_outs else []) + cosmos_keys
     imports = (["import itertools"] if gplan else []) + ["import dagster as dg"] + (["from dagster_community_components import on_hooks"] if cb_code else []) \
         + (["from dagster_community_components import PartitionWindowSensorComponent"] if ppart and ppart.get("via") else []) + ["", "from ..runtime import *  # noqa: F401,F403"]
@@ -2429,6 +2472,27 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 f"cron_schedule={tt['cron']!r}, execution_timezone={tz_name(tt['timezone'])!r})\n")
     for k in own_keys | {"/".join(x) for x in cosmos_keys}:
         produced[k] = dag_id
+    ext_ops = SENSORS | TRIGGER | ISOLATED | ISOLATED_BRANCH | PROV | S3_OPS | SNOWFLAKE_OPS | COSMOS_STEP
+    mat_skip: str | None = None
+    if cosmos_clusters or cosmos_steps:
+        mat_skip = "the DAG runs dbt (Cosmos) against a warehouse"
+    elif resources or sf_resources or prov_conns or any(t["type"] in ext_ops for t in real):
+        mat_skip = "the DAG calls external systems (cloud storage, a warehouse, an HTTP or SQL service, a sensor, a container or a triggered DAG): only the load and shape tests apply; run it side by side with Airflow instead"
+    elif any(c.get("kind") == "stub" for c in caveats):
+        mat_skip = "the DAG contains a loud stub (AIRFLOW-CAVEAT), which fails when it runs by design"
+    elif ppart or pplan:
+        mat_skip = "the assets are partitioned: a run needs a partition key chosen by a person"
+    elif external:
+        mat_skip = "the DAG reads assets that no converted DAG produces (sources.py)"
+    elif any(is_custom(t) for t in real):
+        mat_skip = "the DAG runs a user-defined operator class, which may reach external systems"
+    sched_info: Any = {"cron": tt.get("cron"), "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None} if tt["kind"] in ("cron_trigger", "cron_data_interval") and not (ppart or pplan) else None
+    if ppart or pplan:
+        sched_info = "unchecked"
+    test_info = {"dag_id": dag_id, "job": safe(dag_id), "schedule": sched_info, "materialize_skip": mat_skip,
+                 "needs_shell": any(t["type"] in BASH | BASH_DEC for t in real),
+                 "assets": {"/".join(keyparts[t["task_id"]]): task_info.get(t["task_id"], {}) for t in real},
+                 "checks": check_list, "loadable_alone": not cosmos_keys}
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "provider_connections": dict(sorted(prov_conns.items())), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "catalog_keys": [list(v) for v in rt_outlets.values()], "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
@@ -2438,7 +2502,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                  "cosmos_sinks": {m: ["/".join(k) for k in c["sink_keys"]] for c in cosmos_clusters for m in c["members"]},
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
-                 "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}}
+                 "task_keys": {t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}, "test_info": test_info, "asset_checks": check_list}
 
 
 RUNTIME = '''"""Helpers used by the converted DAGs. Each mirrors what the Airflow operator or hook does."""
@@ -3234,6 +3298,16 @@ def af_map_items(fns, items):
     return out
 
 
+def structural_size(value):
+    """The number of items of a sized result (list, dict, string, DataFrame), or None when it has no size: used by the generated structural asset checks."""
+    try:
+        if hasattr(value, "shape") and hasattr(value, "columns"):
+            return len(value)
+        return len(value)
+    except TypeError:
+        return None
+
+
 def af_caveat(reason, skip=False):
     """A task the converter could not translate. It fails with the reason, or (skip mode) returns nothing so the rest of the DAG runs."""
     if skip:
@@ -3665,6 +3739,16 @@ def main(argv: list[str] | None = None) -> int:
             else:
                 (a.out_dir / f"{name}.py").write_text(code)
                 summary = {**summary, "output": "python"}
+                ti = summary.pop("test_info", None)
+                if ti:                                           # a pytest file per converted DAG (see gen_tests.py)
+                    pkg_dir = a.out_dir.resolve().parent
+                    tests_root = root_ if root_ != pkg_dir else pkg_dir.parent
+                    (tests_root / "tests").mkdir(exist_ok=True)
+                    tfile = tests_root / "tests" / f"test_{name}.py"
+                    tfile.write_text(G.render({**ti, "module": f"{pkg_dir.name}.{a.out_dir.name}.{name}"}))
+                    summary = {**summary, "generated_tests": {"file": f"tests/{tfile.name}", "functions": 5 if ti["materialize_skip"] is None else 5, "materializes": ti["materialize_skip"] is None,
+                                                             "materialize_skip_reason": ti["materialize_skip"], "needs_shell": ti["needs_shell"]}}
+            summary.pop("test_info", None)
             report["dags"][dag["dag_id"]] = {"status": "converted", **summary}
             resources |= set(summary["resources"])
             sf_resources |= set(summary["snowflake_resources"])
@@ -3701,6 +3785,10 @@ def main(argv: list[str] | None = None) -> int:
             "import dagster as dg\n\n\n@dg.definitions\ndef sources() -> dg.Definitions:\n    return dg.Definitions(assets=[\n" +
             "".join(f"        dg.AssetSpec(key={e.split('/')!r}),\n" for e in ext) + "    ])\n")
     conv = {k: v for k, v in report["dags"].items() if v["status"] == "converted"}
+    report["generated"] = {"test_files": sum(1 for v in conv.values() if v.get("generated_tests")), "test_functions": sum(v["generated_tests"]["functions"] for v in conv.values() if v.get("generated_tests")),
+                           "materialize_tests": sum(1 for v in conv.values() if (v.get("generated_tests") or {}).get("materializes")),
+                           "materialize_skipped": sum(1 for v in conv.values() if v.get("generated_tests") and not v["generated_tests"]["materializes"]),
+                           "asset_checks": sum(len(v.get("asset_checks") or []) for v in conv.values())}
     dbt_projects: dict[str, dict[str, Any]] = {}
     for dag_id_, v in conv.items():
         for cl in [*(v.get("cosmos") or []), *(v.get("cosmos_steps") or [])]:

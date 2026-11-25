@@ -322,3 +322,10 @@ def test_converted_cosmos_dags_run_dbt_against_duckdb(project, tmp_path):
     assert "shop_dbt_dag_dbt" in ran
     checks = [e for e in r.all_events if e.event_type_value == "ASSET_CHECK_EVALUATION"]
     assert len(checks) == 3 and all(e.event_specific_data.passed for e in checks)             # dbt tests ran as asset checks and passed
+
+
+def test_generated_tests_for_cosmos_dags_pass_and_skip_the_dbt_run_visibly(project, tmp_path):
+    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-W", "ignore", "-rs", str(tmp_path / "tests")], cwd=tmp_path, capture_output=True, text=True,
+                       env={**os.environ, "PYTHONPATH": str(tmp_path)})
+    assert r.returncode == 0 and "12 passed, 3 skipped" in r.stdout, r.stdout[-1500:]
+    assert "runs dbt (Cosmos) against a warehouse" in r.stdout or "calls external systems" in r.stdout
