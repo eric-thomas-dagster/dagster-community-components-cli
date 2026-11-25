@@ -1,21 +1,25 @@
 # Bank file batch-ingestion — file-level visibility without a partition blowup
 
-**Validated end-to-end.** Scaffolded via `setup_bank_file_batch_ingestion_demo.sh`,
-run against a real `dg dev` daemon and `dg launch`, $0 cost — 100% local,
-no cloud credentials.
+**Validated end-to-end**, twice: once hand-rolling the sensor, and again
+after replacing it with a real registry component. Scaffolded via
+`setup_bank_file_batch_ingestion_demo.sh`, run against a real `dg dev`
+daemon, $0 cost — 100% local (moto's standalone S3 server, no Docker, no
+real AWS credentials).
 
 ```
-incoming/<bank>/*.enc  (simulated SFTP/S3 drop, Fernet-"encrypted")
+s3://bank-files/incoming/<bank>/*.enc  (moto-backed S3 -- Fernet-"encrypted")
        │
        ▼
-bank_file_sensor            every 20s: scan for files not yet seen,
-                             group by bank, one RunRequest PER BANK
-       │                    (not per file) targeting (bank, today)
+bank_file_sensor             S3MonitorSensorComponent (REGISTRY component,
+  partition_mode:             not hand-rolled), partition_mode:
+  business_key_batch           business_key_batch -- every 20s: scan for
+       │                      new objects, group by bank, one RunRequest
+       │                      PER BANK (not per file) targeting (bank, today)
        ▼
-bank_batch_staged            ONE callable: decrypt → transform →
-  partitioned on              re-encrypt → append rows to DuckDB,
-  (bank, batch_day)            stamped with source_file + dagster_run_id
-       │
+bank_batch_staged            ONE callable (hand-rolled -- business logic,
+  partitioned on              not a generic pattern): decrypt → transform →
+  (bank, batch_day)            re-encrypt → append rows to DuckDB, stamped
+       │                      with source_file + dagster_run_id
        ▼
 bank_staging.duckdb::bank_transactions_staging
   (stand-in for a real Snowflake staging table)
@@ -44,6 +48,15 @@ doesn't help same-day accumulation at this rate, and production-grade
 re-runnability usually means keeping more than a few days of history anyway.
 
 ## The fix: partition on (bank, batch_day), not on the file
+
+[`src/<pkg>/defs/bank_file_sensor/defs.yaml`](#) configures
+[`S3MonitorSensorComponent`](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/sensors/s3_monitor/README.md)
+in its `business_key_batch` partition mode — built into the registry
+specifically so this pattern doesn't have to stay hand-rolled (see
+"What's hand-rolled vs. a registry component" below). It groups each
+tick's new objects by a business key (`business_key_template`, default
+`{key_parts[0]}` — the path segment right after `prefix`) and emits one
+`RunRequest` per key-with-new-objects-this-tick.
 
 [`src/<pkg>/defs/bank_file_ingestion/__init__.py`](#) defines ONE shared
 asset, `bank_batch_staged`, on a `MultiPartitionsDefinition` combining:
@@ -85,16 +98,32 @@ tomorrow. This demo (like the real use case) needs to re-materialize
 Without it, the sensor's very first same-day `RunRequest` raises — this was
 caught by actually running the demo, not just reasoning about the shape.
 
+### The DuckDB single-writer gotcha (another real bug this demo caught)
+
+The whole point of this pattern is that **multiple banks' runs legitimately
+land in the same tick and get scheduled concurrently** by Dagster's
+executor — and DuckDB allows exactly one writer on a file at a time, unlike
+a real warehouse. Running this for real surfaced it directly: with 6 banks'
+runs launched together, one would intermittently fail with
+`IOException: Could not set lock on file "...bank_staging.duckdb"`.
+`bank_batch_staged` retries the `duckdb.connect()` call with jittered
+backoff (up to 10 attempts) rather than letting the run fail — purely a
+demo-local-DuckDB concern; a real Snowflake/warehouse destination (see
+"Swap in production destinations" below) doesn't have this limitation at
+all, so the retry loop is not part of the pattern itself.
+
 ## File-level visibility: metadata + row lineage, not a bespoke audit table
 
 Every tick's `RunRequest.run_config` lists **exactly the files that tick
-found** — not the whole day's accumulated list:
+found** — not the whole day's accumulated list. This is `S3MonitorSensorComponent`'s
+own `business_key_batch` logic now (not hand-written here), but the shape
+is worth seeing explicitly:
 
 ```python
 run_requests.append(
     dg.RunRequest(
-        run_key=f"{bank}-{today}-{tick_id}",
-        partition_key=dg.MultiPartitionKey({"bank": bank, "batch_day": today}),
+        run_key=f"{bucket_name}/{business_key}/{batch_value}-{tick_id}",
+        partition_key=dg.MultiPartitionKey({"bank": business_key, "batch_day": batch_value}),
         run_config={"ops": {"bank_batch_staged": {"config": {"files": files}}}},
     )
 )
@@ -132,6 +161,13 @@ curl -sL https://raw.githubusercontent.com/eric-thomas-dagster/dagster-community
 cd my-bank-demo && uv run dg dev
 ```
 
+The setup script starts moto's standalone S3 server (`uvx --from
+'moto[server]' moto_server`, no Docker, no real AWS) in the background —
+deliberately left running after the script exits (same as this repo's
+Minio-based `s3_pipeline` demo leaves its Docker container running), since
+`dg dev`/`dg launch` need it available afterward. `AWS_ENDPOINT_URL` is
+written to `.env` in the project root, which `dg dev` loads automatically.
+
 Open `http://localhost:3000` — the sensor is `RUNNING` by default and picks
 up the seeded files within ~20 seconds (one run per bank with new files, six
 total on first tick). Seed more while it's running to see a **second**
@@ -142,22 +178,38 @@ one:
 uv run python seed_bank_files.py 2 5
 ```
 
-Confirmed live during validation: a follow-up seed of 2 files for
-`bank_alpha` alone produced exactly one new `RunRequest` (`bank_alpha=2`),
-and the staging table showed the same partition going from 1 run_id / 3
-files / 24 rows to 2 run_ids / 5 files / 26 rows — the partition count
-stayed at 6 the entire time.
+Confirmed live during validation: the first tick produced exactly 6 runs
+(one per bank, all `tick=1`), and the staging table showed `3 files / 24
+rows / 1 run_id` per bank. A follow-up seed of 2 files × 5 rows for **every**
+bank produced exactly 6 *more* runs — still only 6 distinct partition keys,
+each now materialized twice — and the staging table went to `5 files / 34
+rows / 2 run_ids` per bank. The partition count stayed at 6 throughout both
+ticks.
+
+Cleanup when you're done (stops the background moto server):
+
+```bash
+lsof -ti:5111 | xargs kill
+```
 
 ### Headless / re-run recipe
 
+Point `dg launch` at a prior run's exact file list to reprocess only those
+files — this is the re-run recipe, not just a smoke test. File entries
+match `S3MonitorSensorComponent`'s per-object config shape exactly
+(`bucket`/`key`/`size`/`etag`/`last_modified`/`prefix`/`region`):
+
 ```bash
 cd my-bank-demo
-TODAY="$(date +%Y-%m-%d)"
-FILE="$(ls incoming/bank_alpha/*.enc | head -1)"
+TODAY="$(date -u +%Y-%m-%d)"
 uv run dg launch --assets bank_batch_staged \
     --partition "bank_alpha|$TODAY" \
-    --config-json "{\"ops\": {\"bank_batch_staged\": {\"config\": {\"files\": [\"$FILE\"]}}}}"
+    --config-json '{"ops": {"bank_batch_staged": {"config": {"files": [{"bucket": "bank-files", "key": "incoming/bank_alpha/<a-real-key-from-the-Runs-tab>.enc", "size": 0, "etag": "", "last_modified": "", "prefix": "incoming/", "region": ""}]}}}}'
 ```
+
+(Only `bucket` and `key` actually matter for the re-run — the asset fetches
+the file from S3 live; the other fields are carried through for parity with
+the sensor's normal run_config shape but aren't read by the asset body.)
 
 Note the `MultiPartitionKey` string format: dimensions are joined with `|`
 in **alphabetical order by dimension name** (`bank` before `batch_day`), so
@@ -175,29 +227,76 @@ Inspect what landed:
 uv run python -c "import duckdb; print(duckdb.connect('data/bank_staging.duckdb').execute('select bank, batch_day, count(*) rows, count(distinct source_file) files, count(distinct dagster_run_id) runs from bank_transactions_staging group by 1,2 order by 1').fetchall())"
 ```
 
+## Credit cost implications
+
+Dagster+'s published pricing defines a credit as "the sum of asset
+materializations and ops executed" — each materialized asset is 1 credit
+and each executed op is 1 credit, **including** the op underlying a plain
+`@asset`, so one single-op asset materialization costs 2 credits. This is
+billed per materialization/op, not per run. Current published rates: Solo
+$0.040/credit, Starter $0.035/credit, Pro custom; serverless compute is
+billed separately at $0.010/min (Solo/Starter), no compute charge on
+Hybrid. (Source: [dagster.io/pricing](https://dagster.io/pricing), checked
+2026-11-25 — rates are subject to change.)
+
+Using this README's own real-scale numbers (100 banks, ~100 files/bank
+every 5 minutes, 288 ticks/day):
+
+- **The rejected naive approach** — one dynamic partition per file, with
+  decrypt/transform/re-encrypt as 3 separate ops (the "natural first
+  instinct" this README opens by rejecting on partition-count grounds) —
+  costs `num_files × (1 materialization + 3 ops)` = `num_files × 4` credits.
+  At 100 banks × 100 files × 288 ticks/day = 2,880,000 files/day, that's
+  **11,520,000 credits/day** — roughly $403,200/day at Starter rates.
+  Untenable on cost grounds alone, well before the partition-count ceiling
+  this README covers even becomes the binding constraint.
+- **This demo's design** — one run per bank per tick with new files, a
+  single op doing all three steps — costs `num_runs × (1 materialization +
+  1 op)` = `num_runs × 2` credits. Worst case (every bank has new files on
+  every tick, which real traffic patterns won't sustain continuously): 100
+  banks × 288 ticks/day × 2 = **57,600 credits/day** (~$2,016/day at
+  Starter rates). Real-world cost is typically lower, since not every bank
+  necessarily has new files on every single 5-minute tick.
+- **Net effect: roughly 200× fewer credits** (11,520,000 → 57,600 in the
+  worst case), from two design choices compounding — batching N files into
+  one run (fewer materializations) *and* collapsing 3 ops into 1 (fewer
+  op-credits per run) — on top of, not instead of, the partition-count fix
+  this README already covers.
+
 ## What's hand-rolled vs. a registry component
 
-Nothing in the registry today does "group new files by a business-key
-dimension, batch under a time window, one run per `(key, window)` with that
-tick's exact file list" — `s3_monitor` only supports plain `run_config`
-(one `RunRequest` per file, no partitioning) or `dynamic_partition` mode
-(one dynamic partition **per file**, exactly the pattern this demo avoids).
-So `bank_file_sensor` and `bank_batch_staged` are hand-rolled with raw
-`@dg.sensor` / `@dg.asset` / `MultiPartitionsDefinition` — not a wrapped
-registry component. If this shape proves broadly useful, it's a reasonable
-candidate for a future `s3_monitor` partition mode (e.g.
-`partition_mode: business_key_batch`) rather than staying one-off — out of
-scope for this demo, noted here honestly rather than implied otherwise.
+**Updated.** This demo originally hand-rolled the sensor with raw
+`@dg.sensor` + `MultiPartitionKey`, because nothing in the registry
+generalized "group new files by a business-key dimension, batch under a
+time window, one run per `(key, window)` with that tick's exact file list"
+— `s3_monitor` only supported plain `run_config` (one `RunRequest` per
+file, no partitioning) or `dynamic_partition` mode (one dynamic partition
+**per file**, exactly the anti-pattern this demo avoids). Rather than ship
+an example that hand-rolls something a registry component should own,
+`s3_monitor` gained a real `business_key_batch` partition mode (see its
+[README](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/sensors/s3_monitor/README.md))
+that does exactly this, and `bank_file_sensor` now configures it via plain
+YAML — zero custom sensor code.
+
+**What still stays hand-rolled, and why**: `bank_batch_staged` — the
+decrypt → transform → re-encrypt → stage asset body. That's inherently
+business-specific logic (your encryption scheme, your transform rules,
+your destination schema), not a generic pattern a registry component
+should own. The sensor (a generic "batch by business key" shape) and the
+business asset (inherently custom) are different things, and only the
+former makes sense as a reusable component.
 
 ## Swap in production destinations
 
 The pattern (sensor shape, partition shape, lineage columns) doesn't change
-going from local files + DuckDB to real S3 + Snowflake — only the I/O does:
+going from moto + DuckDB to real S3 + Snowflake — only the endpoint and the
+destination do:
 
-- **Source**: swap the `incoming/<bank>/*.enc` directory scan for the same
-  registry's `s3_monitor` in plain `run_config` mode (no partitioning on
-  the sensor side — this demo's own sensor already does the per-bank
-  grouping and partition targeting that `s3_monitor` doesn't).
+- **Source**: this demo already uses the production component
+  (`S3MonitorSensorComponent`, `partition_mode: business_key_batch`) — the
+  swap to real AWS is just dropping `AWS_ENDPOINT_URL`/the fake
+  credentials and pointing `bucket_name` at a real bucket. No component or
+  YAML shape change.
 - **Destination**: have `bank_batch_staged` return a DataFrame instead of
   writing DuckDB directly, then chain the registry's
   [`DataFrame to Snowflake`](https://github.com/eric-thomas-dagster/dagster-component-templates/blob/main/assets/sinks/dataframe_to_snowflake/README.md)
@@ -228,7 +327,6 @@ going from local files + DuckDB to real S3 + Snowflake — only the I/O does:
 
 | Component | Source | Role |
 |---|---|---|
-| `bank_file_sensor` | hand-rolled in this demo (not a registry component — see above) | Groups new files by bank, emits one `RunRequest` per bank targeting `(bank, today)` |
-| `bank_batch_staged` | hand-rolled in this demo | Decrypt → transform → re-encrypt → stage, one callable, partitioned on `(bank, batch_day)` |
+| `bank_file_sensor` | registry (`S3MonitorSensorComponent`, `partition_mode: business_key_batch`) | Groups new objects by bank, emits one `RunRequest` per bank targeting `(bank, today)` — configured via plain YAML, zero custom sensor code |
+| `bank_batch_staged` | hand-rolled in this demo | Decrypt → transform → re-encrypt → stage, one callable, partitioned on `(bank, batch_day)` — inherently business-specific, not a candidate for a generic component |
 | `dataframe_to_snowflake` | registry | Production swap-in for the local DuckDB staging step — see above |
-| `s3_monitor` | registry | Production swap-in for the local directory scan (plain `run_config` mode) |
