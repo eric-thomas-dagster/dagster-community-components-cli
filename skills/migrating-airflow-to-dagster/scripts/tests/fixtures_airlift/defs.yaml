@@ -1,0 +1,22 @@
+type: dagster_airlift.core.components.AirflowInstanceComponent
+
+attributes:
+  name: prod_airflow
+  auth:
+    type: basic_auth
+    webserver_url: '{{ env("AIRFLOW_WEBSERVER_URL") }}'
+    username: '{{ env("AIRFLOW_USERNAME") }}'
+    password: '{{ env("AIRFLOW_PASSWORD") }}'
+  source_code_retrieval_enabled: false
+  mappings:
+    - dag_id: orders
+      task_mappings:
+        - task_id: extract
+          assets:
+            - spec:
+                key: raw/orders
+        - task_id: load
+          assets:
+            - spec:
+                key: warehouse/orders
+                description: orders loaded into the warehouse
