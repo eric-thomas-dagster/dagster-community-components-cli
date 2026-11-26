@@ -46,6 +46,18 @@
     {
      "claim": "plain Python in one asset runs only the chosen branch",
      "status": "VERIFIED"
+    },
+    {
+     "claim": "a separate top-level asset below a top-level optional output, a multi_asset optional output (input or deps) or a skipped graph_asset is skipped when ANY upstream is skipped",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "a join graph_asset taking the branch assets as inputs with pass-through ops and a fan-in list runs with the branches that yielded (also when the skipped upstream is a top-level asset); skipped if none",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "an always-yielded marker output lets a join run whatever was skipped; Nothing-typed inputs / deps do not",
+     "status": "VERIFIED"
     }
    ],
    "dagster_cannot_express": [
@@ -148,6 +160,10 @@
     },
     {
      "claim": "the run_failure_sensor function, evaluated against a failed run record in an ephemeral instance (build_run_status_sensor_context), returns the RunRequest; not equal to a real firing",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "an asset or step below a failed one (and a fan-in join below a failed op) is not executed in the same run; there is no all_done step with its own state after a failure",
      "status": "VERIFIED"
     }
    ],

@@ -11,7 +11,7 @@
   {
    "gate": "generated_tests",
    "passed": true,
-   "detail": "test_simple_sequential_pipeline_rewrite.py: ============================== 3 passed in 0.58s ==============================="
+   "detail": "test_simple_sequential_pipeline_rewrite.py: ========================= 3 passed, 1 skipped in 0.44s ========================="
   },
   {
    "gate": "asset_checks_present",

@@ -12,3 +12,10 @@ Between separate assets Dagster applies `all_success` only. Between tasks folded
 
 Header: the task is `folded into `<asset>`` with the rule named, e.g. `<task>: folded into `<asset>`: trigger_rule all_done becomes try/finally`. Decision record (trigger rules): `preserved`
 (in-run code) or `not preserved: <why>` for the failure-sensor form.
+
+## all_done after an UPSTREAM FAILURE: what can and cannot be expressed in the same run (verified)
+
+- **A separate asset or step below a failed one never runs in the same run**: its step is not executed ("Dependencies ... failed") and the run fails. A fan-in join below a failed op in the same graph_asset is not executed either. There is no input form that runs a step after a failed upstream.
+- **Can be expressed:** `@dg.success_hook` + `@dg.failure_hook` on the asset or graph_asset (the cleanup runs after the step whatever happened, the asset keeps its true state); `try/finally` (or `except`) around the upstream work inside ONE asset (the cleanup runs, then the step fails if the work did).
+- **Cannot be expressed:** an all_done task that is its own step with its own `success` state after the failure, in the same run. The closest approximation is a run-failure sensor launching a handler job after the run (a later run, sensor must be running).
+- **Skipped upstream, not failed:** see `branching.md` (join below a skipped upstream): the graph_asset fan-in, the marker output and the sentinel forms all run the join.

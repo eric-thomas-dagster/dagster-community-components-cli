@@ -95,7 +95,7 @@ Your rewrite is accepted only when `python3 scripts/accept_rewrite.py --spec rew
 passes every gate (nine):
 
 1. `dg check defs` passes (or, where `dg` is not installed, the definitions load; the gate says which);
-2. the generated pytest passes: the module loads, a job named `{d}` exists, the schedule's cron and timezone equal Airflow's, and for a DAG without external systems the DAG materializes and every asset check passes;
+2. the generated pytest passes: the module loads, a job named `{d}` exists, the schedule's cron and timezone equal Airflow's, and for a DAG without external systems the DAG materializes and every asset check passes; when the Airflow baseline shows the DAG's own run failing (by design, or on a virtualenv / external-interpreter task that cannot build), the test asserts that the rewrite fails too, in a step, instead of succeeding;
 3. asset checks are present where the source supports them (at least {len((cv.get('asset_checks') or []))} here);
 4. parity: where an Airflow baseline exists, the same overall outcome and the same value as Airflow for every task the header says is `replaced by` an asset (a task `folded into` another has no value of its own to compare);
 5. no secret values;

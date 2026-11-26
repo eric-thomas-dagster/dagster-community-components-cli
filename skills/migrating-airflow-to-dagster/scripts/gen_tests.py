@@ -134,6 +134,7 @@ SCHEDULE = {info.get("schedule")!r}
 JOB = {info["dag_id"]!r}
 MATERIALIZE_SKIP = {info.get("materialize_skip")!r}
 NEEDS_SHELL = {bool(info.get("needs_shell"))!r}
+EXPECT_FAILURE = {info.get("expect_failure")!r}
 '''
     return head + '''
 
@@ -166,6 +167,7 @@ def test_job_and_schedule_match_the_airflow_dag():
 
 
 @pytest.mark.skipif(MATERIALIZE_SKIP is not None, reason=MATERIALIZE_SKIP or "")
+@pytest.mark.skipif(EXPECT_FAILURE is not None, reason="Airflow's own run of this DAG fails (see test_dag_fails_loudly_as_airflow_does)")
 @pytest.mark.skipif(NEEDS_SHELL and os.environ.get("CONVERTED_TESTS_RUN_SHELL") != "1", reason="the DAG runs shell commands; set CONVERTED_TESTS_RUN_SHELL=1 to run them here")
 def test_dag_materializes_and_every_check_passes():
     mod = _mod()
@@ -174,4 +176,15 @@ def test_dag_materializes_and_every_check_passes():
     assert result.success, [str(e.event_specific_data.error)[:300] for e in result.get_step_failure_events()]
     evals = [e.event_specific_data for e in result.all_events if e.event_type_value == "ASSET_CHECK_EVALUATION"]
     assert all(ev.passed for ev in evals), [(ev.check_name, ev.metadata) for ev in evals if not ev.passed]
+
+
+@pytest.mark.skipif(MATERIALIZE_SKIP is not None, reason=MATERIALIZE_SKIP or "")
+@pytest.mark.skipif(EXPECT_FAILURE is None, reason="Airflow's own run of this DAG succeeds")
+def test_dag_fails_loudly_as_airflow_does():
+    """The Airflow baseline shows this DAG failing (by design, or loudly for a virtualenv / external interpreter that is not configured): the rewrite must fail too, in a step (not at load time)."""
+    mod = _mod()
+    defs = dg.Definitions(assets=_assets(mod), asset_checks=_checks(mod))
+    result = defs.resolve_implicit_global_asset_job_def().execute_in_process(raise_on_error=False)
+    assert not result.success, f"Airflow's run failed ({EXPECT_FAILURE['why']}) but the rewrite succeeded"
+    assert result.get_step_failure_events(), "the run failed without a failing step (a load error, not the DAG's own failure)"
 '''

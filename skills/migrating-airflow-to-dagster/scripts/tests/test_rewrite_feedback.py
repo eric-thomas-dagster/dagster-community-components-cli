@@ -316,3 +316,99 @@ def test_baseline_that_failed_on_a_virtualenv_task_is_baseline_failed_not_by_des
     rt = {"state": "success", "assets": {}, "structure": {"jobs": ["v"], "schedules": [], "sensors": [], "assets": {}}, "observed": {}}
     res = B.compare(spec, a1, a1, rt, {}, "rewrite")
     assert res["rollup"]["verdict"] == "baseline-failed"
+
+
+# ---- generated_tests gate: a DAG that fails in Airflow must fail in the rewrite ------------------------------------------------------------------
+FAILING = '''"""decide: replaced by asset `x`
+a: folded into `x`
+b: folded into `x`
+"""
+import dagster as dg
+
+
+@dg.asset
+def x() -> None:
+    raise dg.Failure("fails loudly, as the DAG does")
+
+
+br = dg.define_asset_job("br", selection=[x])
+defs = dg.Definitions(assets=[x], jobs=[br])
+'''
+SUCCEEDING = FAILING.replace('    raise dg.Failure("fails loudly, as the DAG does")', "    pass")
+
+
+def baseline_dir(tmp, a1):
+    bd = tmp / "bl_fail"
+    bd.mkdir()
+    for f in ("airflow1.json", "airflow2.json"):
+        (bd / f).write_text(json.dumps(a1))
+    return bd
+
+
+def test_generated_test_asserts_failure_when_airflow_fails_by_design(tmp_path):
+    a1 = {"dag_id": "br", "state": "failed", "tasks": {"decide": {"state": "success"}, "a": {"state": "failed"}, "b": {"state": "upstream_failed"}}, "observed": {}, "errors": [], "error": None}
+    bd = baseline_dir(tmp_path, a1)
+    p = project(tmp_path, FAILING)
+    g = A.g_tests(BRANCH_SPEC, "rw_br.defs.br", p, bd)
+    assert g["passed"] and "EXPECTED FAILURE asserted instead of success" in g["detail"] and "failed task(s) ['a']" in g["detail"], g["detail"]
+    ok_project = project(tmp_path / "ok" if (tmp_path / "ok").mkdir() is None else tmp_path, SUCCEEDING)
+    g = A.g_tests(BRANCH_SPEC, "rw_br.defs.br", ok_project, bd)
+    assert not g["passed"]                                                                    # Airflow failed, the rewrite succeeded: the generated test now fails the gate
+
+
+def test_generated_test_asserts_failure_for_a_virtualenv_task_that_cannot_build(tmp_path):
+    spec = {**BRANCH_SPEC, "tasks": [BRANCH_SPEC["tasks"][0], {**BRANCH_SPEC["tasks"][1], "operator": "_PythonVirtualenvDecoratedOperator"}, BRANCH_SPEC["tasks"][2]]}
+    a1 = {"dag_id": "br", "state": "failed", "tasks": {"decide": {"state": "success"}, "a": {"state": "failed"}, "b": {"state": "upstream_failed"}}, "observed": {}, "errors": [], "error": None}
+    assert A.expected_failure(spec, baseline_dir(tmp_path, a1))["why"].startswith("a virtualenv")
+    g = A.g_tests(spec, "rw_br.defs.br", project(tmp_path, FAILING), tmp_path / "bl_fail")
+    assert g["passed"] and "virtualenv" in g["detail"] and "EXPECTED FAILURE" in g["detail"]
+
+
+def test_generated_test_keeps_expecting_success_without_a_baseline_or_when_airflow_failed_for_another_environmental_reason(tmp_path):
+    p = project(tmp_path, FAILING)
+    g = A.g_tests(BRANCH_SPEC, "rw_br.defs.br", p, None)
+    assert not g["passed"] and "EXPECTED FAILURE" not in g["detail"]                            # today's behaviour: the generated materialize test expects success
+    a1 = {"dag_id": "br", "state": "failed", "tasks": {"decide": {"state": "failed"}}, "observed": {}, "errors": ["ModuleNotFoundError: No module named 'pandas'"], "error": None}
+    assert A.expected_failure(BRANCH_SPEC, baseline_dir(tmp_path, a1)) is None                 # an environmental failure says nothing about what the rewrite should do
+
+
+# ---- nondeterministic decisions ---------------------------------------------------------------------------------------------------------------------
+def test_nondeterministic_decisions_only_for_a_decision_that_reads_time_or_random():
+    rnd = {**BRANCH_SPEC, "tasks": [{**BRANCH_SPEC["tasks"][0], "callable": {"source": "def f():\n    return random.choice(['a', 'b'])"}}, *BRANCH_SPEC["tasks"][1:]]}
+    assert list(B.nondeterministic_decisions(rnd)) == ["decide"]
+    minute = {**BRANCH_SPEC, "tasks": [{**BRANCH_SPEC["tasks"][0], "callable": {"source": "def f(ctx):\n    return 'a' if ctx['logical_date'].minute % 2 == 0 else 'b'"}}, *BRANCH_SPEC["tasks"][1:]]}
+    assert list(B.nondeterministic_decisions(minute)) == ["decide"]
+    det = {**BRANCH_SPEC, "tasks": [{**BRANCH_SPEC["tasks"][0], "callable": {"source": "def f(ctx):\n    return 'a' if ctx['params']['x'] else 'b'"}}, *BRANCH_SPEC["tasks"][1:]]}
+    assert B.nondeterministic_decisions(det) == {}
+    not_a_decision = {**BRANCH_SPEC, "tasks": [{**BRANCH_SPEC["tasks"][0], "operator": "PythonOperator", "callable": {"source": "def f():\n    return datetime.now()"}}, *BRANCH_SPEC["tasks"][1:]]}
+    assert B.nondeterministic_decisions(not_a_decision) == {}                                  # the clock elsewhere does not trigger it
+
+
+def test_task_states_below_a_nondeterministic_decision_are_not_compared_but_outcome_and_failure_still_are():
+    spec = {**BRANCH_SPEC, "tasks": [{**BRANCH_SPEC["tasks"][0], "callable": {"source": "def f():\n    return random.choice(['a', 'b'])"}}, *BRANCH_SPEC["tasks"][1:]]}
+    a1 = {"state": "success", "tasks": {"decide": {"state": "success"}, "a": {"state": "success"}, "b": {"state": "skipped"}}, "observed": {}}
+    structure = {"jobs": ["br"], "schedules": [], "sensors": [], "assets": {"d": {"deps": []}, "a": {"deps": []}, "b": {"deps": []}}}
+    # the route took the other branch: a skipped, b success
+    rt = {"state": "success", "assets": {"d": {"state": "success"}, "a": {"state": "not_run"}, "b": {"state": "success"}}, "structure": structure, "observed": {}}
+    tm = {"decide": {"mode": "replaced", "asset": "d"}, "a": {"mode": "replaced", "asset": "a"}, "b": {"mode": "replaced", "asset": "b"}}
+    res = B.compare(spec, a1, a1, rt, tm, "rewrite")
+    tasks = res["dimensions"]["tasks"]
+    assert tasks["verdict"] == "match" and tasks["compared"] == 1 and tasks["nondeterministic"]["not_compared_tasks"] == ["a", "b"]    # only the decision task itself is compared
+    assert res["rollup"]["verdict"] != "different"
+    # the same states with a DETERMINISTIC decision: different
+    spec2 = {**BRANCH_SPEC}
+    assert B.compare(spec2, a1, a1, rt, tm, "rewrite")["dimensions"]["tasks"]["verdict"] == "differ"
+    # outcome is still compared: the route fails where Airflow succeeded
+    bad = {**rt, "state": "failed"}
+    assert B.compare(spec, a1, a1, bad, tm, "rewrite")["dimensions"]["outcome"]["verdict"] == "differ"
+    # when nothing but the nondeterministic part could be compared the dimension says so, as `not compared`, never `different`
+    tm2 = {**tm, "decide": {"mode": "dropped", "asset": None}}
+    r2 = B.compare(spec, a1, a1, rt, tm2, "rewrite")
+    assert r2["dimensions"]["tasks"]["verdict"] == "not-compared" and r2["dimensions"]["tasks"]["reason"].startswith("nondeterministic: not compared")
+
+
+def test_report_lists_the_dags_whose_task_states_were_not_compared_for_a_nondeterministic_decision():
+    import eval_report as R
+    recs = [{"dag_id": "a", "behavior": {"routes": {"rewrite": {"dimensions": {"tasks": {"verdict": "match", "nondeterministic": {"nondeterministic_decisions": {"branching": "the decision reads `random.choice` (time or random)"}, "not_compared_tasks": ["x"]}}}}}}},
+            {"dag_id": "b", "behavior": {"routes": {"rewrite": {"dimensions": {"tasks": {"verdict": "match"}}}}}}, {"dag_id": "c", "behavior": None}]
+    assert R.nondeterministic_rows(recs) == [("a", "the decision reads `random.choice` (time or random)")]

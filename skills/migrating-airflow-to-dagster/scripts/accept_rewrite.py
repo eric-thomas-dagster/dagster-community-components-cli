@@ -81,14 +81,29 @@ def g_load(module: str, project: Path) -> dict[str, Any]:
     return gate("definitions_load", r.returncode == 0, "`dg` is not installed: the module's definitions were loaded with dagster instead (Definitions.validate_loadable)" + ("" if r.returncode == 0 else ": " + r.stderr[-600:]))
 
 
-def g_tests(spec: dict[str, Any], module: str, project: Path) -> dict[str, Any]:
+def expected_failure(spec: dict[str, Any], baseline: Path | None) -> dict[str, Any] | None:
+    """When the Airflow baseline shows the DAG's own run FAILING (by design, or on a virtualenv / external-interpreter task that cannot build in the sandbox), what the rewrite must do too: fail. None without a
+    baseline (today's behaviour: the generated test expects success), and None for a baseline that failed for any other environmental reason (the rewrite may legitimately succeed)."""
+    if baseline is None or not (Path(baseline) / "airflow1.json").exists():
+        return None
+    import behavior_compare as BC
+    a1 = json.loads((Path(baseline) / "airflow1.json").read_text())
+    a2 = json.loads((Path(baseline) / "airflow2.json").read_text()) if (Path(baseline) / "airflow2.json").exists() else None
+    cls, why = BC.baseline_class(a1, a2, spec)
+    if cls == "by-design-failure" or (cls == "baseline-failed" and "virtualenv" in why):
+        failed = sorted(t for t, v in (a1.get("tasks") or {}).items() if BC.norm_state(v.get("state")) == "failed")
+        return {"why": ("the DAG's own code fails" if cls == "by-design-failure" else "a virtualenv / external-interpreter task cannot build in the sandbox") + (f"; failed task(s) {failed}" if failed else ""), "failed_tasks": failed}
+    return None
+
+
+def g_tests(spec: dict[str, Any], module: str, project: Path, baseline: Path | None = None) -> dict[str, Any]:
     ops = [t["operator"] for t in spec["tasks"]]
     skip = None
     if spec.get("cosmos_groups") or any(any(w in o for w in EXTERNAL_OPS) for o in ops) or spec["schedule"]["assets"]:
         skip = "the DAG has an external system, a sensor, dbt or an asset trigger: only the load and shape tests apply"
     sched = spec["schedule"]
     info = {"dag_id": spec["dag_id"], "module": module, "schedule": ({"cron": sched["cron"], "timezone": sched["timezone"]} if sched["kind"] in ("cron_trigger", "cron_data_interval") and sched["cron"] else None),
-            "materialize_skip": skip, "needs_shell": any(o in ("BashOperator", "_BashDecoratedOperator") for o in ops)}
+            "materialize_skip": skip, "expect_failure": expected_failure(spec, baseline), "needs_shell": any(o in ("BashOperator", "_BashDecoratedOperator") for o in ops)}
     tdir = project / "tests"
     tdir.mkdir(exist_ok=True)
     f = tdir / f"test_{spec['dag_id']}_rewrite.py"
@@ -96,7 +111,8 @@ def g_tests(spec: dict[str, Any], module: str, project: Path) -> dict[str, Any]:
     r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-W", "ignore", "-rs", str(f)], cwd=project, capture_output=True, text=True,
                        env={**__import__("os").environ, "PYTHONPATH": f"{project / 'src'}:{project}"})
     tail = [ln for ln in r.stdout.strip().splitlines() if ln.strip()][-1:] or [r.stderr[-200:]]
-    return gate("generated_tests", r.returncode == 0, f"{f.name}: {tail[0]}" + ("; materialize skipped: " + skip if skip else ""))
+    ef = info["expect_failure"]
+    return gate("generated_tests", r.returncode == 0, f"{f.name}: {tail[0]}" + ("; materialize skipped: " + skip if skip else "") + (f"; EXPECTED FAILURE asserted instead of success: Airflow's own run fails ({ef['why']})" if ef else ""))
 
 
 def count_checks(src: str) -> int:
@@ -245,7 +261,7 @@ def run_gates(spec: dict[str, Any], module: str, project: Path, defs_dir: Path |
     src, path = source_of(module, project)
     if not path:
         return [gate("definitions_load", False, f"module {module} not found under {project}")]
-    return [g_load(module, project), g_tests(spec, module, project), g_checks(spec, src, defs_dir), g_parity(spec, module, project, parity), g_secrets(src, defs_dir), g_apis(src, defs_dir, project), g_tasks(spec, src), g_states(spec, module, project, baseline, source, src), g_decision(spec, src)]
+    return [g_load(module, project), g_tests(spec, module, project, baseline), g_checks(spec, src, defs_dir), g_parity(spec, module, project, parity), g_secrets(src, defs_dir), g_apis(src, defs_dir, project), g_tasks(spec, src), g_states(spec, module, project, baseline, source, src), g_decision(spec, src)]
 
 
 def record(manifest: dict[str, Any], dag_id: str, results: list[dict[str, Any]]) -> dict[str, int]:

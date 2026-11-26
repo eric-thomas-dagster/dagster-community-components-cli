@@ -68,6 +68,17 @@ def gather(work: Path, run: str) -> dict[str, dict[str, Any]]:
     return out
 
 
+def nondeterministic_rows(recs: list[dict[str, Any]], route: str = "rewrite") -> list[tuple[str, str]]:
+    """(dag id, reason) for each DAG whose task-state comparison was `nondeterministic: not compared` (a branch that reads the clock or a random number): outcome and failure behaviour were still compared."""
+    out = []
+    for r in recs:
+        x = ((r.get("behavior") or {}).get("routes", {}).get(route) or {}).get("dimensions", {}).get("tasks") or {}
+        nd = x.get("nondeterministic")
+        if nd:
+            out.append((r["dag_id"], "; ".join(sorted(set(nd["nondeterministic_decisions"].values())))))
+    return out
+
+
 def counts(recs: list[dict[str, Any]], route: str) -> collections.Counter:
     c: collections.Counter = collections.Counter()
     for r in recs:
@@ -211,6 +222,15 @@ def render(a: argparse.Namespace) -> str:
         A(f"| {both} | {rw} | {cv} | {neither} |")
         A("")
         A(f"Discordant pairs: {rw + cv}; exact two-sided sign test p = {sign_test(rw, cv):.3f}" + (" (too few discordant pairs to conclude either way)" if rw + cv < 10 else "") + ".")
+        A("")
+    nd = nondeterministic_rows(list(recs))
+    if nd:
+        A("## Task states not compared: nondeterministic decisions")
+        A("")
+        A(f"{len(nd)} DAG(s) have a branch or short-circuit decision that reads the clock or a random number, so the baseline's run and a later run can take different branches through no fault of the route. For these the per-task state comparison below the decision is reported as `nondeterministic: not compared`, not as a difference; the overall outcome and the failure behaviour are still compared.")
+        A("")
+        for dag_id, why in sorted(nd):
+            A(f"- `{dag_id}`: {why}")
         A("")
     # gates vs behaviour
     A("## Gates against behaviour (rewrite)")

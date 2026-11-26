@@ -235,21 +235,23 @@ Do not add `can_subset=True`: launch-time selection, verified unnecessary and ha
 | join after branches, `all_success` | a regular downstream asset with inputs from several optional outputs | exact: skipped if ANY input is skipped |
 | join after branches, `none_failed_min_one_success` / `one_success`, same run | `graph_asset` with a fan-in `list` input over the branch ops (`rejoined`) | **same run, runs with whichever branch ran** (verified); with none taken it is skipped, as in Airflow |
 | same join as separate top-level assets | `AutomationCondition.any_deps_updated()` on the join | approximation: requested in a LATER run after any one branch ran, not the same run (verified with `evaluate_automation_conditions`) |
-| join as a regular asset with two inputs when you wanted min_one_success | not reproducible: it is skipped when either branch is | mismatch with Airflow (verified); use the fan-in form |
+| join as a SEPARATE top-level asset (input or `deps`) below a top-level optional output, a multi_asset output or a skipped graph_asset | skipped when ANY upstream is skipped (verified for every one of these shapes; `Nothing`-typed inputs and `deps` do not help) | mismatch with none_failed / all_done: use a join `graph_asset` that takes the branches as inputs with pass-through ops and a fan-in `list` (`join_graph`, verified to run with the branches that yielded), or the marker output, or the sentinel form |
+| join in the same `graph_asset` as the branch | runs with the branches that yielded (verified) | same run |
+| all_done step after an upstream FAILURE, its own step | never runs in the same run (verified: dependents of a failed step, a fan-in join included, are not executed) | not expressible; hooks / try-finally / run-failure sensor approximate it |
 | ShortCircuit task itself | success: the condition part runs | exact |
 | ShortCircuit downstream skipped (plain Python), the FALLBACK | early `return`; guarded tasks folded | effects exact, state not expressed |
 | ShortCircuit downstream skipped (optional output), NATIVE | generator that returns before yielding: not materialized, everything below skipped | **same run, skipped expressed** (verified). A bare `return` with no `yield` does NOT skip (the None counts as the output): claim checked and refuted |
 | a task that skips itself and is its own asset, no optional output wanted | metadata `airflow/state: skipped` and the SKIPPED sentinel (`skip.py`) | closest: shows as materialized, the metadata carries the state |
-| mapped task with 0 instances (Airflow: skipped, downstream skipped) | `DynamicOut` yielding nothing: `.collect()` gets `[]` and the step below RUNS with `[]` (verified); a plain loop does the same. To reproduce the skip, give the collecting step an optional output and return before yielding when the list is empty | closest by default |
+| mapped task with 0 instances (Airflow: skipped, downstream skipped) | `DynamicOut(is_required=False)`: zero items = output not yielded, steps below `.map()`/`.collect()` skipped, run succeeds, asset not materialized (verified). The default `DynamicOut()` collects `[]` and the step below runs; a plain loop also returns `[]` | **same run, skipped reproduced** with the optional form |
 | `all_done` after a failure | `try/finally` in one asset | closest: cleanup runs, then the step is failed (Airflow: all_done task succeeds) |
 | `one_failed` / `all_failed` | run-failure sensor launching a handler job | approximation: after the run |
 | `deferred`, `queued`, `scheduled`, `running`, `removed` | none | not expressible |
 | sensor `reschedule` | a Dagster sensor that requests the run | closest |
-| `depends_on_past` waiting | the asset fails when its previous step failed | closest (waits vs fails) |
+| `depends_on_past` waiting | the asset fails when its previous step failed, or (partitioned) when the previous partition is not in `instance.get_materialized_partitions` (`depends_on_past.py`, both verified). A self-dependency with a -1 mapping does NOT block a run, and `eager()` / `on_missing()` on it requested nothing in evaluation (no daemon run) | closest (waits vs fails) |
 | `all_done` cleanup, native | `@dg.success_hook` + `@dg.failure_hook` on the asset or graph_asset (verified to fire on both): the asset keeps its true state, the cleanup runs after it either way | closest: the cleanup is not a task with its own `success` state |
 | mapped task, one failed instance | `DynamicOut` + `.map()`: that step fails, the run fails, the other items ran, the step after `.collect()` is not run (verified) | same as Airflow (instance failed, others success, downstream upstream_failed) |
 | mapped items as tracked units | `DynamicPartitionsDefinition` (keys added by a sensor or code), one partitioned asset | closest: a partition status per item, not a task instance |
-| pool `pool="x"` | first-class `pool="x"` on asset/op (not graph_asset); limit via `dagster instance concurrency set x <n>` (instance config) | slot count is not in the spec; per-run limits and `pool_slots` > 1 not expressible |
+| pool `pool="x"` | first-class `pool="x"` on asset/op (not graph_asset): an op attribute, step level; limit via `dagster instance concurrency set x <n>` (instance config). `dagster/concurrency_key` is a different, older op tag; run-level limits are the QueuedRunCoordinator's `tag_concurrency_limits` on run tags (docs only) | slot count is not in the spec; per-run limits and `pool_slots` > 1 not expressible |
 | long wait / sensor `reschedule` / async job | a `@sensor` emitting `RunRequest` (`condition_sensor`, `job_done_sensor`), or Pipes | closest: the wait is outside every run, no timeout state |
 | short wait, same run needed | `poll_until` in the asset (fallback) | holds the worker like `mode='poke'` |
 | TriggerDagRun / ExternalTaskSensor / asset trigger | asset dependency + `AutomationCondition.eager()` / `on_cron`; with conf: `run_status_sensor` yielding `RunRequest(run_config=...)` (verified eager requests the downstream) | separate run: `wait_for_completion` not reproduced |
@@ -315,7 +317,7 @@ Your rewrite is accepted only when `python3 scripts/accept_rewrite.py --spec rew
 passes every gate (nine):
 
 1. `dg check defs` passes (or, where `dg` is not installed, the definitions load; the gate says which);
-2. the generated pytest passes: the module loads, a job named `simple_sequential_pipeline` exists, the schedule's cron and timezone equal Airflow's, and for a DAG without external systems the DAG materializes and every asset check passes;
+2. the generated pytest passes: the module loads, a job named `simple_sequential_pipeline` exists, the schedule's cron and timezone equal Airflow's, and for a DAG without external systems the DAG materializes and every asset check passes; when the Airflow baseline shows the DAG's own run failing (by design, or on a virtualenv / external-interpreter task that cannot build), the test asserts that the rewrite fails too, in a step, instead of succeeding;
 3. asset checks are present where the source supports them (at least 2 here);
 4. parity: where an Airflow baseline exists, the same overall outcome and the same value as Airflow for every task the header says is `replaced by` an asset (a task `folded into` another has no value of its own to compare);
 5. no secret values;

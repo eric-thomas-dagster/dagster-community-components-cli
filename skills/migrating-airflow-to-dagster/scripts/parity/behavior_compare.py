@@ -36,6 +36,38 @@ ENV_ERRORS = re.compile(
     r"Cannot connect to host|nodename nor servname|unable to open database file|extension.*threw an exception|returned non-zero exit status 2|FileNotFoundError|Failed to download|Network is unreachable|Temporary failure|pip.*(?:returned non-zero|failed)|uv.*error:|Failed to fetch|Could not resolve", re.I)
 
 
+NONDET_SRC = re.compile(r"\brandom\.\w+|\bchoice\(|\brandint\(|\.minute\b|\.second\b|\.microsecond\b|datetime\.now\(|datetime\.utcnow\(|\bpendulum\.now\(|\btime\.time\(|\buuid\d?\(|\bnow\(\)")
+DECISION_OPS = re.compile(r"Branch|ShortCircuit")
+
+
+def nondeterministic_decisions(spec: dict[str, Any]) -> dict[str, str]:
+    """task id -> why, for each DECISION task (a branch or short circuit) whose callable's source reads the clock (a minute, `now()`), a random number or a uuid: the baseline and a later run of the route can then take
+    different branches through no fault of the route. Only the decision callable's own source counts (and the source of a function given as an argument); a DAG that merely uses the clock elsewhere does not trigger it."""
+    out: dict[str, str] = {}
+    for t in spec.get("tasks", []):
+        if not DECISION_OPS.search(t.get("operator") or ""):
+            continue
+        srcs = [(t.get("callable") or {}).get("source") or ""] + [(v or {}).get("source") or "" for v in (t.get("callable_arg_sources") or {}).values()]
+        for s in srcs:
+            m = NONDET_SRC.search(s)
+            if m:
+                out[t["task_id"]] = f"the decision reads `{m.group(0)}` (time or random)"
+                break
+    return out
+
+
+def descendants(spec: dict[str, Any], roots: set[str]) -> set[str]:
+    down = {t["task_id"]: t.get("downstream") or [] for t in spec.get("tasks", [])}
+    seen: set[str] = set()
+    todo = list(roots)
+    while todo:
+        for d in down.get(todo.pop(), []):
+            if d not in seen:
+                seen.add(d)
+                todo.append(d)
+    return seen
+
+
 def dim(verdict: str, reason: str | None = None, evidence: Any = None, **extra: Any) -> dict[str, Any]:
     d = {"verdict": verdict}
     if reason:
@@ -263,7 +295,12 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
     a2_tasks = (a2 or {}).get("tasks", {})
     nd_tasks = {t for t in a_tasks if a2 and norm_state(a_tasks[t].get("state")) != norm_state(a2_tasks.get(t, {}).get("state"))}
     cmp_rows, bad, skipped, accepted = [], [], [], []
+    nd_dec = nondeterministic_decisions(spec)
+    nd_skip = descendants(spec, set(nd_dec)) if nd_dec else set()
     for tid in sorted(tasks_spec):
+        if tid in nd_skip:
+            skipped.append(f"{tid}: nondeterministic: not compared ({'; '.join(sorted(set(nd_dec.values())))[:140]})")
+            continue
         tm = taskmap.get(tid, {"mode": None, "asset": None})
         at = norm_state(a_tasks.get(tid, {}).get("state"))
         if tid in nd_tasks:
@@ -286,13 +323,16 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         cmp_rows.append({"task": tid, "asset": asset, "mode": tm.get("mode") or "mapped", "airflow": at, "route": rs})
         if at != rs and not (at in ("skipped", "upstream_failed") and rs in ("skipped", "upstream_failed")):
             bad.append({"task": tid, "asset": asset, "airflow": at, "route": rs})
+    nd_note = {"nondeterministic_decisions": nd_dec, "not_compared_tasks": sorted(nd_skip)} if nd_dec else None
     if bad:
         dims["tasks"] = dim(DIFFER, evidence={"differences": bad[:20], "not_compared": skipped[:10], **({"accepted_representation": accepted[:20]} if accepted else {})}, compared=len(cmp_rows))
     elif cmp_rows:
         ev = {**({"not_compared": skipped[:10]} if skipped else {}), **({"accepted_representation": accepted[:20]} if accepted else {})}
         dims["tasks"] = dim(MATCH, evidence=ev or None, compared=len(cmp_rows))
     else:
-        dims["tasks"] = dim(NOT, "no task could be compared: " + "; ".join(skipped[:3]))
+        dims["tasks"] = dim(NOT, ("nondeterministic: not compared: " + "; ".join(sorted(set(nd_dec.values())))[:200]) if nd_dec and skipped else "no task could be compared: " + "; ".join(skipped[:3]))
+    if nd_note:
+        dims["tasks"]["nondeterministic"] = nd_note
 
     # --- values (XCom vs asset value)
     consumed = {u for t in tasks_spec.values() for u in t.get("reads_value_from", [])}

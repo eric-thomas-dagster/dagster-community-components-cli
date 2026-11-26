@@ -545,3 +545,118 @@ def test_single_run_backfill_range_reads_the_window_not_the_partition_key():
         def uses_key(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
             return dg.MaterializeResult(metadata={"k": context.partition_key})
         assert not dg.materialize([uses_key], instance=inst, tags=tags, raise_on_error=False).success       # partition_key raises for a range
+
+
+def test_join_below_a_skipped_upstream_by_shape():
+    m = load("branching")
+    m.CHOSEN["v"] = "a"
+    try:
+        # separate top-level join, inputs or deps, below a multi_asset optional output: skipped if ANY upstream is skipped
+        @dg.asset(deps=["asset_a", "asset_b"])
+        def join_deps() -> str:
+            return "j"
+        r, mat, skipped = run([m.branch_assets, join_deps])
+        assert r.success and "join_deps" in skipped and "join_deps" not in mat
+        r, mat, skipped = run([m.branch_assets, m.needs_both])
+        assert r.success and "needs_both" in skipped
+        # a skipped top-level optional-output asset + a sibling: a top-level join (input) is skipped too
+        @dg.asset(output_required=False)
+        def top_skipped():
+            return
+            yield
+
+        @dg.asset
+        def sibling() -> int:
+            return 1
+
+        @dg.asset
+        def top_join(top_skipped, sibling) -> str:
+            return "j"
+        r, mat, skipped = run([top_skipped, sibling, top_join])
+        assert r.success and "top_join" in skipped and set(mat) == {"sibling"}
+        # Nothing-typed op inputs do not help
+        @dg.op(out=dg.Out(is_required=False))
+        def s_op():
+            return
+            yield
+
+        @dg.op
+        def other() -> int:
+            return 1
+
+        @dg.op(ins={"a": dg.In(dg.Nothing), "b": dg.In(dg.Nothing)})
+        def join_n():
+            return "j"
+
+        @dg.job
+        def nothing_job():
+            join_n(a=s_op(), b=other())
+        assert steps(nothing_job.execute_in_process(raise_on_error=False))["join_n"] == "STEP_SKIPPED"
+        # the join as a graph_asset over the branch assets with pass-through ops and a fan-in list: runs with those that yielded
+        for chosen, want in (("a", ["value-a"]), ("b", ["value-b"]), ("both", ["value-a", "value-b"])):
+            m.CHOSEN["v"] = chosen
+            r, mat, _ = run([m.branch_assets, m.join_graph])
+            assert r.success and r.asset_value(dg.AssetKey("join_graph")) == want, chosen
+        m.CHOSEN["v"] = "a"
+        r, mat, _ = run([m.branch_assets, m.join_graph])
+        assert steps(r)["join_graph.passthru_2"] == "STEP_SKIPPED" and steps(r)["join_graph.join_results"] == "STEP_SUCCESS"
+        m.CHOSEN["v"] = "none"
+        r, mat, _ = run([m.branch_assets, m.join_graph])
+        assert r.success and "join_graph" not in mat and steps(r)["join_graph.join_results"] == "STEP_SKIPPED"
+        # the marker form: the join runs whatever was skipped, what is below the skipped output is skipped
+        for chosen in ("a", "none"):
+            m.CHOSEN["v"] = chosen
+            r, mat, skipped = run([m.marker_branches, m.join_on_marker, m.below_marker_b])
+            assert r.success and "join_on_marker" in mat and "below_marker_b" in skipped, chosen
+        # a skipped graph_asset: a top-level asset below it is skipped
+        @dg.op(out=dg.Out(is_required=False))
+        def maybe():
+            return
+            yield
+
+        @dg.op
+        def passthru2(x):
+            return x
+
+        @dg.graph_asset
+        def skipped_graph():
+            return passthru2(maybe())
+
+        @dg.asset
+        def below_skipped_graph(skipped_graph) -> str:
+            return "j"
+        r, mat, skipped = run([skipped_graph, below_skipped_graph])
+        assert r.success and "below_skipped_graph" in skipped
+    finally:
+        m.CHOSEN["v"] = "a"
+
+
+def test_nothing_below_a_failed_step_runs_in_the_same_run_a_fan_in_join_included():
+    @dg.op
+    def fails() -> int:
+        raise RuntimeError("x")
+
+    @dg.op
+    def ok() -> int:
+        return 1
+
+    @dg.op
+    def join_list(results: list) -> list:
+        return results
+
+    @dg.graph_asset
+    def g_fail():
+        return join_list([fails(), ok()])
+    r, mat, _ = run([g_fail])
+    st = steps(r)
+    assert not r.success and "g_fail" not in mat and st["g_fail.fails"] == "STEP_FAILURE" and "g_fail.join_list" not in st
+
+    @dg.asset
+    def failing_top():
+        raise RuntimeError("x")
+
+    @dg.asset(deps=["failing_top"])
+    def below() -> str:
+        return "j"
+    r, mat, _ = run([failing_top, below])
+    assert not r.success and "below" not in mat and "below" not in {e.step_key for e in r.all_events if e.event_type_value == "STEP_SUCCESS"}

@@ -72,6 +72,49 @@ def rejoined() -> list:
     return join([do_a(d.a), do_b(d.b)])                                 # the list form is the fan-in; `join(do_a(d.a), do_b(d.b))` would be all_success
 
 
+# --- (b2) JOIN BELOW A SKIPPED UPSTREAM, by shape (each run and asserted in tests/test_rewrite_patterns.py) ------------------------------------------------------
+# The branch outputs above (`asset_a`, `asset_b`) are TOP-LEVEL assets (outputs of a multi_asset). A separate top-level asset below them, whether it takes them as inputs (`needs_both`) or as deps, is SKIPPED
+# when ANY of them is skipped (Dagster's all_success): that cannot be turned into all_done / none_failed_min_one_success. What works instead:
+#   1. make the JOIN itself a graph_asset that takes the branch assets as graph inputs and wraps each in a pass-through op; the fan-in `list` then holds only the branches that yielded (`join_graph`).
+#      Verified with a top-level skipped input: the pass-through op of the skipped input is skipped, the fan-in join still runs. The branch and the join stay separate assets.
+#   2. branch and join in the SAME graph_asset (`rejoined`, above).
+#   3. an always-yielded MARKER output next to the optional ones, and the join depends on the marker (`join_on_marker`): the join runs whatever was skipped (all_done-like: it also runs when NO branch yielded).
+#   4. a sentinel + metadata `airflow/state: skipped` on a materialized asset (skip.py): the join takes it as an ordinary input and runs; the skipped state is only metadata.
+#   5. `Nothing`-typed op inputs or `deps` do NOT help: the join is skipped just the same (verified).
+@dg.op
+def passthru(x):
+    return x
+
+
+@dg.op
+def join_results(results: list) -> list:
+    return sorted(results)
+
+
+@dg.graph_asset
+def join_graph(asset_a: str, asset_b: str) -> list:
+    return join_results([passthru(asset_a), passthru(asset_b)])           # runs with whichever branch asset was materialized; skipped when none was
+
+
+@dg.multi_asset(specs=[dg.AssetSpec("marker_a", skippable=True), dg.AssetSpec("marker_b", skippable=True), dg.AssetSpec("branches_done")], name="marker_branches")
+def marker_branches():
+    if picks("a"):
+        yield dg.MaterializeResult(asset_key="marker_a")
+    if picks("b"):
+        yield dg.MaterializeResult(asset_key="marker_b")
+    yield dg.MaterializeResult(asset_key="branches_done")                  # always yielded
+
+
+@dg.asset(deps=["branches_done"])
+def join_on_marker() -> str:
+    return "ran whichever branch was skipped"
+
+
+@dg.asset(deps=["marker_b"])
+def below_marker_b() -> str:
+    return "skipped when marker_b was not yielded"
+
+
 # --- (c) rejoin across runs: separate assets + an automation condition ------------------------------------------------------------------------------
 @dg.asset
 def top_a() -> int:
@@ -88,4 +131,4 @@ def join_after_any() -> int:
     return 3
 
 
-defs = dg.Definitions(assets=[branch_assets, under_a, under_b, needs_both, rejoined, top_a, top_b, join_after_any])
+defs = dg.Definitions(assets=[branch_assets, under_a, under_b, needs_both, rejoined, join_graph, marker_branches, join_on_marker, below_marker_b, top_a, top_b, join_after_any])
