@@ -1,8 +1,7 @@
 # Mapped tasks (`.expand`, `.expand_kwargs`, `.partial().expand`)
 
 **Native (preferred): `DynamicOut` + `.map()` + `.collect()` in a graph asset** (`mapped_tasks.py: mapped_in_graph`): one step per item decided at run time, a `RetryPolicy` per item, per-item visibility. Header:
-`<mapped_task>: replaced by op `<name>` in asset `<key>`` (mapped instances are steps). An empty expansion (Airflow: the mapped task is skipped and its all_success downstream too): verified here that
-`.collect()` receives `[]` and the step below RUNS with it; to reproduce the skip, give the collecting step an optional output and return before yielding when the list is empty.
+`<mapped_task>: replaced by op `<name>` in asset `<key>`` (mapped instances are steps). `fan_out` is declared `DynamicOut(is_required=False)` (`mapped_tasks.py`): verified that with ZERO items the steps below `.map()` / `.collect()` are skipped, the run succeeds, and the asset is not materialized, which is Airflow's behaviour for an empty `expand` (the mapped task and its all_success downstream are skipped). With the default `DynamicOut()` the collecting step instead runs with `[]` (`fan_out_required`): use that only when the downstream should run on an empty list.
 
 **Fallback, a `for` loop or comprehension inside the asset** (`mapped_in_python`): when the native form is not verified for the case, failed a gate, or the items are trivial and share one failure boundary.
 Header: `<mapped_task>: folded into `<asset>`: mapped instances become loop iterations`; record: `- mapped tasks: fallback to plain Python: <reason>`; lost: per-item retries, per-item visibility, partial restart.

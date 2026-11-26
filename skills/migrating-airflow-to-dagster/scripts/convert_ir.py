@@ -48,6 +48,7 @@ from urllib.parse import urlparse
 import connections as CN
 import cosmos_ops as K
 import gen_tests as G
+import pattern_emit as PE
 import provider_ops as P
 import provider_ops_more
 
@@ -1387,6 +1388,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     catchup_note = ""
     ext_trigs: list[str] = []
 
+    dop_tasks: set[str] = set()                               # tasks whose asset step starts with the depends_on_past guard (the library's verified check)
+
     def soften(msg: str, tid: str = "") -> None:
         """A setting that cannot be mapped: a degraded caveat (the DAG converts without it) unless --caveats off, which defers the DAG."""
         if CAVEATS != "off":
@@ -1588,7 +1591,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         for flag, why in (("depends_on_past", "depends_on_past (a run waiting for the previous run's task) is not enforced"),
                           ("wait_for_downstream", "wait_for_downstream is not enforced")):
             if t.get(flag):
-                soften(f"{tid}: {why}", tid)
+                if flag == "depends_on_past" and DOP_GUARD and not mplan and not ppart and ty in PY_TASKS | BASH | BASH_DEC | PROV_STEPS | S3_OPS | SNOWFLAKE_OPS:
+                    dop_tasks.add(tid)            # asset form: the library's step-event guard runs first in the step
+                    soften(f"{tid}: depends_on_past is checked by failing the step when the previous run of the task failed (Airflow waits instead); a first run, or a run after a success, goes ahead", tid)
+                else:
+                    soften(f"{tid}: {why}", tid)
         if t.get("max_active_tis_per_dagrun"):
             soften(f"{tid}: max_active_tis_per_dagrun is not enforced", tid)
         mtis = t.get("max_active_tis_per_dag")
@@ -2482,6 +2489,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     call_ = f"{fpy}(" + ", ".join(fpos + [f"{k}={v_}" for k, v_ in fkws.items()]) + ")"
                 prelude += f"    {params[f_]} = {call_}      # folded from Airflow task {f_!r}\n"
             body = prelude + body
+        if tid in dop_tasks:
+            body = "    af_depends_on_past(context)\n" + body
         body = sla_wrap(body, t, "/".join(keyparts[tid]))
         if tid in rt_outlets:
             inner_ = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
@@ -2761,8 +2770,22 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
     run = getattr(context, "run", None)
     tags = dict(getattr(run, "tags", None) or {})
     utc = _dt.timezone.utc
-    ld = _dt.datetime.fromisoformat(tags["airflow/logical_date"]) if tags.get("airflow/logical_date") else _dt.datetime.now(utc)
-    de = _dt.datetime.fromisoformat(tags["airflow/data_interval_end"]) if tags.get("airflow/data_interval_end") else ld
+    window = None                                        # a time-partitioned run: the verified templating pattern takes ds and the interval from the partition's window
+    try:
+        if context.has_partition_key:
+            window = context.partition_time_window
+    except Exception:                                    # noqa: BLE001  not a time partition (static or dynamic keys), or an op context without one
+        window = None
+    if tags.get("airflow/logical_date"):                 # a scheduled run carries Airflow's own logical date
+        ld = _dt.datetime.fromisoformat(tags["airflow/logical_date"])
+    elif window is not None:
+        ld = window.start
+    else:
+        ld = _dt.datetime.now(utc)
+    if tags.get("airflow/data_interval_end"):
+        de = _dt.datetime.fromisoformat(tags["airflow/data_interval_end"])
+    else:
+        de = window.end if window is not None else ld
     ld, de = ld.astimezone(utc), de.astimezone(utc)
     ds = ld.strftime("%Y-%m-%d")
     nxt = _dt.datetime.fromisoformat(tags["airflow/next_logical_date"]).astimezone(utc) if tags.get("airflow/next_logical_date") else (de if de != ld else ld)
@@ -3284,7 +3307,9 @@ def af_isolated(fn, requirements=None, python=None, python_version=None, system_
     name = fn.__name__
 
     def interpreter():
-        if python:
+        if python:                                                  # the verified venv pattern: a missing interpreter fails loudly, never the current one
+            if not (os.path.exists(python) or shutil.which(python)):
+                raise dg.Failure(description=f"the interpreter for this task's virtualenv ({python!r}) is missing; build it and point `python` at it: not falling back to the current interpreter")
             return python
         reqs = [requirements] if isinstance(requirements, str) else list(requirements or [])
         key = hashlib.sha256(repr((reqs, python_version, system_site_packages, pip_options, index_urls)).encode()).hexdigest()[:16]
@@ -3797,6 +3822,16 @@ RUNTIME += ITEM_SRC + GATE_SRC
 
 RUNTIME += P.PROVIDER_RUNTIME
 RUNTIME += K.RUNTIME
+# depends_on_past: the library's VERIFIED step-event check, embedded from reference/rewrite-patterns/depends_on_past.py (index.json is read now, so a refined library is picked up);
+# `previous_run_failed` is the library's own function, the wrapper only turns it into Airflow's wording.
+DOP_GUARD = PE.status("depends_on_past", "STEP_FAILURE") == "VERIFIED"      # emitted only while the library still says VERIFIED; otherwise the old degraded caveat
+RUNTIME += ("\n\n" + PE.pull("depends_on_past", ["_latest_id", "previous_run_failed"]) if DOP_GUARD else "\n\nprevious_run_failed = None") + '''
+
+def af_depends_on_past(context):
+    """depends_on_past=True: Airflow waits for the previous run's instance of this task; here the step fails when its previous run failed (waits become fails)."""
+    if previous_run_failed(context):
+        raise dg.Failure(description="depends_on_past: the previous run of this task did not succeed")
+'''
 
 
 def main(argv: list[str] | None = None) -> int:

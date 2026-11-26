@@ -5,7 +5,7 @@
 1. **Branches with different downstream assets, ops, retries, resources or checks**: `@multi_asset(outs={...: AssetOut(is_required=False)})` yielding only the chosen `Output(..., output_name=...)`, or an op
    with `Out(is_required=False)` per branch. The branches not taken are not materialized and every step below them is skipped; the run succeeds, so Airflow's `skipped` state IS expressed. `can_subset` is not needed.
 2. **Branch then rejoin into one product**: a `@graph_asset` whose branch op has `Out(is_required=False)` per branch and whose join op takes the results as a fan-in `list` (`join([do_a(d.a), do_b(d.b)])`): it
-   runs with whichever branch ran (Airflow's none_failed_min_one_success), and is skipped if none did. A join written as `join(do_a(d.a), do_b(d.b))`, or a regular asset with two upstream arguments, is
+   runs when AT LEAST ONE branch yielded: its list input holds only the outputs of the branches that yielded (verified: `['x-A']`, `['y-B']`, or both), and it is SKIPPED (not failed, the run still succeeds) when no branch yielded, as Airflow skips a none_failed_min_one_success join with no success upstream. A join written as `join(do_a(d.a), do_b(d.b))`, or a regular asset with two upstream arguments, is
    all_success: skipped when either branch is skipped, NOT none_failed_min_one_success. Separate top-level assets joined by `AutomationCondition.any_deps_updated()` run the join in a later run, not the same run:
    an approximation, say so.
 3. **A list known only at run time**: `DynamicOut` + `.map()` (`mapped_tasks.py`).

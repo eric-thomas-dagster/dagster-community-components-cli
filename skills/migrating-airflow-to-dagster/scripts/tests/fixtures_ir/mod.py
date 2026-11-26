@@ -235,3 +235,21 @@ GOT = []
 def capture(x):
     GOT.append(x)
     return x
+
+
+def flaky_step():
+    if os.environ.get("DOP_FAIL"):
+        raise RuntimeError("this run fails")
+    return "ran"
+
+
+def empty_list():
+    return []
+
+
+def to_str(x):
+    return str(x)
+
+
+def falsy():
+    return False

@@ -37,7 +37,7 @@ Connections become resources under the same key (`resources.py`); third-party im
 
 ## Translated, not stubbed
 
-- **`PythonVirtualenvOperator`, `ExternalPythonOperator`, their decorators and the branch variants:** the callable (and the support code it needs) runs in its own interpreter through `af_isolated`: the given `python`, or a virtualenv built once from `requirements` (`uv` when present, else `venv` + `pip`) and cached; arguments and the result are pickled, as Airflow does. An external `python` path from the Airflow DAG is carried over and noted in the report.
+- **`PythonVirtualenvOperator`, `ExternalPythonOperator`, their decorators and the branch variants:** the callable (and the support code it needs) runs in its own interpreter through `af_isolated`: the given `python`, or a virtualenv built once from `requirements` (`uv` when present, else `venv` + `pip`) and cached; arguments and the result are pickled, as Airflow does. An external `python` path from the Airflow DAG is carried over and noted in the report. A `python` that does not exist fails the step loudly (`dg.Failure`, "not falling back to the current interpreter"), as the library's `venv_pipes` pattern does; Pipes itself is not used because the callable's return value must come back (the library's Pipes form reports metadata only).
 - **`TriggerDagRunOperator` without `wait_for_completion`:** the run is created and executed in the background without waiting (the same split the registry's `trigger_job_asset` `wait: false` uses).
 - **Task `sla`:** the step records an `sla_breach` observation on its asset when it finishes later than the SLA after the scheduled tick (`dagster/scheduled_execution_time`; the run start for a manual run). The task is not stopped, as in Airflow.
 - **`.map(f)` that raises `AirflowSkipException`:** that item is left out, as Airflow skips that mapped instance.
@@ -307,7 +307,8 @@ Loading a converted project proves nothing about behavior. Running both sides (b
 | `execution_timeout` on a Python task | degraded (a callable cannot be interrupted safely) |
 | `trigger_rule` other than `all_success` | translated in the graph form (Airflow's own rule table); a rule the table does not have defers the DAG |
 | `sla` on a task | translated (an `sla_breach` observation; the task is not stopped, as in Airflow) |
-| `depends_on_past`, `wait_for_downstream` | degraded (not enforced) |
+| `depends_on_past` | asset form: degraded, the step starts with the pattern library's verified guard (`af_depends_on_past`, source embedded from `reference/rewrite-patterns/depends_on_past.py`) and fails when the task's previous run failed (Airflow waits); graph and partitioned forms: degraded, not enforced |
+| `wait_for_downstream` | degraded (not enforced) |
 | `max_active_tis_per_dagrun`, `pool_slots != 1` | degraded (not enforced; one slot is used) |
 | `max_active_tis_per_dag` | translated to a Dagster pool of that size (the limit goes in `concurrency_limits.yaml`); defers with a named pool or a value that is not a positive number |
 | task callbacks (`on_failure_callback`, `on_success_callback`, `on_retry_callback`) | translated with `@on_hooks` in the asset form; degraded in the graph form |

@@ -291,19 +291,21 @@ def test_depends_on_past_blocks_after_a_failed_previous_run_and_allows_first_and
         assert not r.success and "after_previous" not in mat
 
 
-def test_dynamic_out_empty_expansion_collects_an_empty_list_and_the_step_below_runs():
+def test_dynamic_out_optional_zero_items_skips_everything_below_and_the_run_succeeds():
     m = load("mapped_tasks")
-
-    @dg.op(out=dg.DynamicOut())
-    def fan():
-        return
-        yield
-
-    @dg.graph_asset
-    def g() -> list:
-        return m.collect_items(fan().map(m.process_item).collect())
-    r, mat, _ = run([g])
-    assert r.success and "g" in mat and r.asset_value(dg.AssetKey("g")) == []
+    m.ITEMS["v"] = []
+    try:
+        r, mat, _ = run([m.mapped_in_graph])
+        st = steps(r)
+        assert r.success and "mapped_in_graph" not in mat                                         # run status SUCCESS, asset not materialized
+        assert st["mapped_in_graph.collect_items"] == "STEP_SKIPPED" and st["mapped_in_graph.fan_out"] == "STEP_SUCCESS"
+        r, mat, _ = run([m.mapped_in_graph_runs_on_empty])                                         # the default DynamicOut(): the collecting step runs with []
+        assert r.success and r.asset_value(dg.AssetKey("mapped_in_graph_runs_on_empty")) == []
+        m.ITEMS["v"] = [1, 2, 3]
+        r, mat, _ = run([m.mapped_in_graph])
+        assert r.success and r.asset_value(dg.AssetKey("mapped_in_graph")) == [2, 4, 6]
+    finally:
+        m.ITEMS["v"] = [1, 2, 3]
 
 
 def test_pool_is_first_class_on_assets_and_ops_and_the_project_runs():
@@ -431,28 +433,115 @@ def test_latest_only_closest_form_loads_and_the_downstream_is_unpartitioned():
     assert m.latest_only_downstream.partitions_def is None and m.partitioned_load.partitions_def is not None
 
 
-def test_depends_on_past_partitioned_self_dependency_is_declared_but_not_enforced_for_a_manual_run():
+def test_depends_on_past_partition_guard_uses_the_real_instance_api():
+    m = load("depends_on_past")
+    assert not hasattr(dg.DagsterInstance.ephemeral(), "get_materialization_count_for_partition")      # the API an unverified source named does not exist
+    with dg.DagsterInstance.ephemeral() as inst:
+        r = dg.materialize([m.guarded_partition], partition_key="2024-01-03", instance=inst, raise_on_error=False)
+        assert not r.success                                                                      # previous partition missing: blocked
+        for pk in ("2024-01-01", "2024-01-02", "2024-01-03"):                                      # the first has no predecessor; then in order
+            assert dg.materialize([m.guarded_partition], partition_key=pk, instance=inst, raise_on_error=False).success
+
+
+def test_depends_on_past_self_dependency_neither_blocks_a_run_nor_drives_automation():
     m = load("depends_on_past")
     assert dg.AssetKey("chain_after_previous") in m.chain_after_previous.asset_deps[dg.AssetKey("chain_after_previous")]
-    r = dg.materialize([m.chain_after_previous], partition_key="2024-01-02", raise_on_error=False)
-    assert r.success                                                                        # the previous partition (01-01) was never materialized: not blocked
+    assert dg.materialize([m.chain_after_previous], partition_key="2024-01-02", raise_on_error=False).success      # previous partition missing: not blocked
+    daily = dg.DailyPartitionsDefinition(start_date="2024-01-01", end_date="2024-01-05")
+    for label, cond in (("eager", dg.AutomationCondition.eager()), ("on_missing", dg.AutomationCondition.on_missing())):
+        @dg.asset(name=f"chain_{label}", partitions_def=daily, automation_condition=cond,
+                  deps=[dg.AssetDep(f"chain_{label}", partition_mapping=dg.TimeWindowPartitionMapping(start_offset=-1, end_offset=-1))])
+        def a(context: dg.AssetExecutionContext):
+            return context.partition_key
+        defs, key = dg.Definitions(assets=[a]), dg.AssetKey(f"chain_{label}")
+        with dg.DagsterInstance.ephemeral() as inst:
+            res = dg.evaluate_automation_conditions(defs=defs, instance=inst)
+            assert res.get_num_requested(key) == 0
+            dg.materialize([a], partition_key="2024-01-01", instance=inst)
+            res = dg.evaluate_automation_conditions(defs=defs, instance=inst, cursor=res.cursor)
+            assert res.get_num_requested(key) == 0                                                # as evaluated here (no daemon), nothing is requested
 
 
-def test_index_lists_every_pattern_with_files_statuses_and_a_test():
-    import json as _j
-    sys.path.insert(0, str(PAT.parents[1] / "scripts"))
-    import rewrite_patterns as RP
-    idx = RP.index()
-    ids = [p["id"] for p in idx["patterns"]]
-    assert ids == RP.ORDER                                                                    # the detection order and the index agree
-    tests = Path(__file__).read_text()
-    for p in idx["patterns"]:
-        assert (PAT / p["doc"]).exists()
-        for c in p["code"]:
-            assert (PAT / c).exists()
-        assert any(f'load("{Path(c).stem}")' in tests for c in p["code"] if not c.startswith("_")), p["id"]       # an executing test loads each pattern
-        assert p["claims"] and all(c["status"] in idx["statuses"] for c in p["claims"])
-        assert p["dagster_cannot_express"] is not None and p["native_form"]
-    on_disk = {f.stem for f in PAT.glob("*.py") if not f.name.startswith("_")}
-    assert on_disk == {Path(c).stem for p in idx["patterns"] for c in p["code"] if not c.startswith("_")}
-    assert _j.loads((PAT / "index.json").read_text())["dagster_version_verified"]
+def test_short_circuit_generator_form_skips_and_both_non_generator_returns_emit_none():
+    @dg.asset(output_required=False)
+    def gen_sc():
+        if True:
+            return
+        yield dg.Output(1)
+
+    @dg.asset
+    def below_gen(gen_sc) -> str:
+        return "ran"
+    r, mat, skipped = run([gen_sc, below_gen])
+    assert r.success and mat == {} and skipped == {"below_gen"}
+
+    @dg.asset(output_required=False)
+    def bare_return():
+        return
+
+    @dg.asset(output_required=False)
+    def return_none():
+        return None
+
+    @dg.asset
+    def below_bare(bare_return) -> str:
+        return "ran"
+
+    @dg.asset
+    def below_none(return_none) -> str:
+        return "ran"
+    r, mat, skipped = run([bare_return, return_none, below_bare, below_none])
+    assert set(mat) == {"bare_return", "return_none", "below_bare", "below_none"} and not skipped      # both emit None; nothing is skipped
+
+
+def test_run_failure_sensor_evaluated_against_a_failed_run_record():
+    m = load("trigger_rules")
+    with dg.DagsterInstance.ephemeral() as inst:
+        r = dg.materialize([m.risky], instance=inst, raise_on_error=False)
+        run_rec = inst.get_run_by_id(r.run_id)
+        assert run_rec.status == dg.DagsterRunStatus.FAILURE
+        ctx = dg.build_run_status_sensor_context(sensor_name="on_failure", dagster_event=r.get_run_failure_event(), dagster_instance=inst, dagster_run=run_rec)
+        out = m.on_failure(ctx)
+        assert isinstance(out, dg.RunRequest) and out.run_key == r.run_id        # the function returns the request; a daemon firing it was not run
+
+
+def test_max_runtime_job_tag_lands_on_the_run_and_an_op_tag_does_not():
+    import dagster as d
+    m = load("timeouts_sla")
+
+    @d.asset(op_tags={"dagster/max_runtime": "30"})
+    def at():
+        return 1
+    job = d.define_asset_job("aj", selection=[at], tags={"dagster/max_runtime": "90"})
+    with d.DagsterInstance.ephemeral() as inst:
+        r = d.Definitions(assets=[at], jobs=[job]).get_job_def("aj").execute_in_process(instance=inst)
+        assert inst.get_run_by_id(r.run_id).tags["dagster/max_runtime"] == "90"                     # the run tag run monitoring reads
+    assert at.op.tags["dagster/max_runtime"] == "30"                                                # an op tag stays an op tag
+    assert m.timeboxed_job.tags["dagster/max_runtime"] == "3600"
+
+
+def test_pool_is_an_op_attribute_and_the_concurrency_key_is_a_different_op_tag():
+    @dg.asset(pool="p1")
+    def ap():
+        return 1
+
+    @dg.asset(op_tags={"dagster/concurrency_key": "k1"})
+    def ak():
+        return 1
+    assert ap.op.pool == "p1" and "dagster/concurrency_key" not in ap.op.tags
+    assert ak.op.pool is None and ak.op.tags["dagster/concurrency_key"] == "k1"
+
+
+def test_single_run_backfill_range_reads_the_window_not_the_partition_key():
+    m = load("latest_only")
+    daily = m.daily
+    tags = {"dagster/asset_partition_range_start": "2024-01-01", "dagster/asset_partition_range_end": "2024-01-03"}
+    with dg.DagsterInstance.ephemeral() as inst:
+        r = dg.materialize([m.windowed_load], instance=inst, tags=tags)
+        md = {k: v.value for k, v in next(iter(r.get_asset_materialization_events())).materialization.metadata.items()}
+        assert md == {"window": "2024-01-01..2024-01-04", "n_keys": 3} and len(inst.get_runs()) == 1       # ONE run covers the range
+
+        @dg.asset(partitions_def=daily, backfill_policy=dg.BackfillPolicy.single_run())
+        def uses_key(context: dg.AssetExecutionContext) -> dg.MaterializeResult:
+            return dg.MaterializeResult(metadata={"k": context.partition_key})
+        assert not dg.materialize([uses_key], instance=inst, tags=tags, raise_on_error=False).success       # partition_key raises for a range

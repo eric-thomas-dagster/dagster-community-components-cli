@@ -109,3 +109,25 @@ The scan also lists DAGs Airflow did not produce, all from files Airflow failed 
 What the static scan models: DAGs by `with DAG`, `DAG(...)`, `@dag` and `@asset`; tasks at their call sites with group prefixes and Airflow's duplicate-call suffixes; `.override`, `.partial`, `.expand`, `.loop`; `>>`, `<<`, `chain`, `set_downstream`, TaskFlow argument passing; dag-factory YAML.
 
 What it does not: DAGs or tasks produced by factories in other files, loops with unknowable counts, constructs added after it was written (it flags `.loop` groups but cannot name synthetic tasks such as `__loop_gate`), or code behind conditional imports. It reports unparsable files as `unparsed`, keeps computed task ids as `dynamic_id` and loop-created tasks as `in_loop` (one source task may be many), and `reconcile.py` closes the remaining gap against a real Airflow parse. When the manifest's DAG count disagrees with the instance's, trust the instance.
+
+## Alignment with the verified pattern library
+
+The converter and the rewrite route share one set of verified Dagster patterns (`reference/rewrite-patterns/`, statuses in `index.json`, tested on the installed Dagster). `scripts/pattern_emit.py` reads that index at conversion time and embeds the library's own code in the generated runtime (today: `previous_run_failed` for `depends_on_past`); `scripts/tests/test_converter_patterns.py` fails when the converter's form or tables diverge from the library's and executes converter output for each pattern. Per pattern:
+
+| Pattern | Converter | Why |
+|---|---|---|
+| depends_on_past | **adopted** (asset form): the library's step-event guard, embedded from the library source; degraded caveat states fail-instead-of-wait | VERIFIED; before, nothing was enforced. Graph and partitioned forms keep the old caveat (step keys differ; the partitioned guard is a different, newer form) |
+| venv operators | **adopted in part**: a missing interpreter fails loudly, never the current one | Pipes not used: the converter returns the callable's value (pickled), Pipes reports metadata |
+| templating | **fixed**: a time-partitioned run with no schedule tags takes `ds` and the interval from the partition window (the library's `partition_key`/`partition_time_window`), not from the clock | disagreement found, see below |
+| branch / short circuit | left as is: one graph asset with a gate per op | the library's optional-output form is verified for a single `graph_asset`/`multi_asset`, not for this converter's `graph_multi_asset` with one output per task; it expresses only all_success joins (the converter also runs `none_failed*`, `one_success`, `all_done`, setup/teardown), and an unyielded output leaves no materialization where the converter records `airflow/state: skipped` (the evaluation harness reads that; a missing materialization reads as `not_run`) |
+| mapped tasks, empty expansion | left as is: DynamicOut + `.map` + `.collect` already; an empty expansion skips the mapped step and what is below, with the state recorded (Airflow's behaviour). `DynamicOut(is_required=False)` gives the same skip in a single `graph_asset`; here it would drop the materialization and the trigger-rule gates downstream | executed test |
+| trigger rules | left as is: the converter's table covers every rule in the run; the library's hooks/sensor forms cover `all_done` and a post-run handler only | PARTIAL claims in the library |
+| sensors | left as is: poll in the step (the library's fallback form, same-run), `poke` semantics with one more poke at the timeout than `poll_until` | same outcomes asserted; a Dagster sensor changes the pipeline shape |
+| TriggerDagRun / ExternalTaskSensor | TriggerDagRun is a real in-run launch with `wait_for_completion` (not a stub); ExternalTaskSensor and asset schedules use `AutomationCondition.eager()` as the library | the library's `run_status_sensor` form is PARTIAL and loses the wait |
+| pools, `max_active_tis_per_dag` | already first-class `pool=` on assets and ops (never on the graph asset); limits in the generated deployment notes | matches the library; tested |
+| SLA, timeouts | `af_sla_check` records a breach observation measured from the scheduled time; `dagster/max_runtime` tag for `dagrun_timeout` | the library's `FreshnessPolicy` measures from the last update, not the scheduled start; not added |
+| LatestOnly | dropped with a note | the library's closest form is not equivalent (backfills still run) |
+| TaskGroup | `group_name` only; asset keys are not prefixed | adding `key_prefix` would change every asset key of converted DAGs |
+| XCom | agrees: return value is the asset value; keyed push is metadata, JSON-serializable only | executed test |
+| connections | agrees: `EnvVar` names only, official resources or step-local env reads | |
+| Variables | disagreement kept: the converter reads `AIRFLOW_VAR_<KEY>` (Airflow's own environment backend), the library says an env var read by name | existing Airflow deployments already set the prefixed names |

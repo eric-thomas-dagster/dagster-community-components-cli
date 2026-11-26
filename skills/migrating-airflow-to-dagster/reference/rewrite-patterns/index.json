@@ -78,6 +78,10 @@
     {
      "claim": "optional-output op in a graph_asset skips the guarded step",
      "status": "VERIFIED"
+    },
+    {
+     "claim": "in a non-generator asset both a bare `return` and `return None` emit None (downstream runs); only a generator with output_required=False that returns before yielding skips",
+     "status": "VERIFIED"
     }
    ],
    "dagster_cannot_express": [
@@ -139,8 +143,12 @@
      "status": "PARTIAL"
     },
     {
-     "claim": "run_failure_sensor fires on a real failed run",
+     "claim": "run_failure_sensor fires from a daemon on a real failed run (sensor RUNNING / default_status=RUNNING)",
      "status": "PARTIAL"
+    },
+    {
+     "claim": "the run_failure_sensor function, evaluated against a failed run record in an ephemeral instance (build_run_status_sensor_context), returns the RunRequest; not equal to a real firing",
+     "status": "VERIFIED"
     }
    ],
    "dagster_cannot_express": [
@@ -172,11 +180,15 @@
      "status": "VERIFIED"
     },
     {
-     "claim": "empty expansion: collect gets [] and the step below runs (Airflow skips)",
+     "claim": "with the default DynamicOut() an empty expansion collects [] and the step below runs (Airflow skips)",
      "status": "VERIFIED"
     },
     {
      "claim": "DynamicPartitionsDefinition partition materializes",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "DynamicOut(is_required=False): zero items = output not yielded, steps below .map()/.collect() skipped, run status SUCCESS, asset not materialized (Airflow's skip on empty expand)",
      "status": "VERIFIED"
     }
    ],
@@ -244,8 +256,16 @@
      "status": "FAILED"
     },
     {
-     "claim": "an automation condition respects the self-dependency",
-     "status": "PARTIAL"
+     "claim": "AutomationCondition.eager() / on_missing() on the previous-partition self-dependency drive the chain (evaluated against an ephemeral instance: 0 partitions requested before and after the first partition materialized; a daemon was not run)",
+     "status": "FAILED"
+    },
+    {
+     "claim": "in-asset guard using instance.get_materialized_partitions(asset_key) blocks a partition whose predecessor is missing and allows the first and in-order partitions",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "instance.get_materialization_count_for_partition exists (named by an unverified source)",
+     "status": "FAILED"
     }
    ],
    "dagster_cannot_express": [
@@ -314,6 +334,14 @@
     },
     {
      "claim": "max_active_runs via run tag + deployment concurrency limit (as the converter does)",
+     "status": "PARTIAL"
+    },
+    {
+     "claim": "pool= is an op attribute; op_tags dagster/concurrency_key is a different, older tag and does not set pool",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "QueuedRunCoordinator tag_concurrency_limits works at run level on run tags (docs only, not run)",
      "status": "PARTIAL"
     }
    ],
@@ -466,6 +494,10 @@
     {
      "claim": "the tag terminates a run (needs run monitoring in dagster.yaml)",
      "status": "PARTIAL"
+    },
+    {
+     "claim": "dagster/max_runtime in job/define_asset_job tags= lands on the run record; the same key in op_tags stays an op tag",
+     "status": "VERIFIED"
     }
    ],
    "dagster_cannot_express": [
@@ -491,6 +523,14 @@
     },
     {
      "claim": "what a multi-partition backfill does end to end",
+     "status": "PARTIAL"
+    },
+    {
+     "claim": "BackfillPolicy.single_run: one run covers the range; partition_time_window/partition_keys readable, partition_key raises, the default fs IO manager cannot persist a multi-partition value (MaterializeResult works); in-process range run, not a daemon-launched backfill",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "a daemon-launched multi-partition backfill producing one run per partition without single_run",
      "status": "PARTIAL"
     }
    ],
