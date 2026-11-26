@@ -11,7 +11,7 @@
   {
    "gate": "generated_tests",
    "passed": true,
-   "detail": "test_partner_ingest_rewrite.py: ========================= 2 passed, 1 skipped in 0.24s =========================; materialize skipped: the DAG has an external system, a sensor, dbt or an asset trigger: only the load and shape tests apply"
+   "detail": "test_partner_ingest_rewrite.py: ========================= 2 passed, 1 skipped in 0.26s =========================; materialize skipped: the DAG has an external system, a sensor, dbt or an asset trigger: only the load and shape tests apply"
   },
   {
    "gate": "asset_checks_present",
@@ -37,6 +37,35 @@
    "gate": "tasks_accounted_for",
    "passed": true,
    "detail": "every Airflow task is named in the header with what happened to it"
+  },
+  {
+   "gate": "task_states",
+   "passed": true,
+   "detail": "not run (no Airflow baseline for this DAG was given)"
+  },
+  {
+   "gate": "decision_record",
+   "passed": true,
+   "detail": "decision record covers ['retries', 'sensor modes', 'xcom', 'templating / connections', 'failure semantics']; 1 behaviour(s) declared not preserved (sensor modes); 0 fallback(s) to plain Python",
+   "declared": {
+    "flagged": [
+     "retries",
+     "sensor modes",
+     "xcom",
+     "templating / connections",
+     "failure semantics"
+    ],
+    "preserved": [
+     "failure semantics",
+     "retries",
+     "templating / connections",
+     "xcom"
+    ],
+    "not_preserved": {
+     "sensor modes": "the Airflow sensor ran in reschedule-free poke style inside a task; here the wait is a poll loop at the start of `partner_export_rows` holding the worker for up to 6 h. A Dagster sensor that requests the run when the export is ready would free the worker but moves the wait outside every run (see the sensors pattern)."
+    },
+    "fallback": {}
+   }
   }
  ]
 }

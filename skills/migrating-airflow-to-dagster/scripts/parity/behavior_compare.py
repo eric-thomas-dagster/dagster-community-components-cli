@@ -11,7 +11,7 @@ A dimension where nothing was observed on either side is `not-compared`, never `
 nondeterministic and are excluded (listed as such), not counted as a difference.
 
 Roll-up (`rollup`):
-    baseline-failed             the baseline failed for an environmental reason (missing package, unreachable service, undefined connection or variable): excluded from rates
+    baseline-failed             the baseline failed for an environmental reason (missing package, unreachable service, undefined connection or variable, or a virtualenv / external-interpreter task that cannot build in the sandbox): excluded from rates
     not-comparable              the baseline is unstable (outcome differs between its two runs) or the harness itself failed
     matches-baseline-failure    the baseline fails by design (the DAG's own code fails) and the route fails the same way, with nothing else different
     different                   a behavioural dimension differs (outcome, a task's outcome, consumed values, files, SQLite rows, HTTP requests, mail, S3 objects, failure behaviour)
@@ -57,6 +57,9 @@ def baseline_class(a1: dict[str, Any], a2: dict[str, Any] | None, spec: dict[str
         if a2 and "success" not in (airflow_overall(a2, spec)[0] if spec else str(a2.get("state", ""))).lower():
             return "unstable", "the baseline succeeded once and failed on its repeat"
         return "ok", "baseline succeeded"
+    venv = [t["task_id"] for t in (spec or {}).get("tasks", []) if re.search(r"Virtualenv|ExternalPython", t.get("operator") or "") and norm_state((a1.get("tasks") or {}).get(t["task_id"], {}).get("state")) == "failed"]
+    if venv and not ENV_ERRORS.search(text):
+        return "baseline-failed", f"the baseline failed on a virtualenv / external-interpreter task ({', '.join(venv[:3])}): building the environment needs pip and a network, or an interpreter path, that the sandbox does not have (the Airflow run recorded no error text)"
     m = ENV_ERRORS.search(text)
     if m:
         return "baseline-failed", f"the baseline failed for an environmental reason ({m.group(0)[:60]}): {text.strip().splitlines()[-1][:200] if text.strip() else ''}"
@@ -83,7 +86,9 @@ def parse_header(doc: str, task_ids: list[str], asset_keys: list[str], node_name
         return None
     for tid in task_ids:
         mode, asset = None, None
-        for ln in doc.splitlines():
+        lines = doc.splitlines()
+        own = [ln for ln in lines if re.match(rf"\s*[-*]?\s*`?{re.escape(tid)}`?\s*[:(]", ln)]      # the task's own accounting line first: another task's line may mention this id in passing
+        for ln in own + [x for x in lines if x not in own]:
             if not re.search(rf"(?<![\w]){re.escape(tid)}(?![\w])", ln):
                 continue
             m = re.search(r"\b(replaced|folded|merged|dropped)\b", ln)
@@ -103,6 +108,14 @@ def parse_header(doc: str, task_ids: list[str], asset_keys: list[str], node_name
             break
         out[tid] = {"mode": mode, "asset": asset}
     return out
+
+
+def rewrite_taskmap(sources: dict[str, str], spec: dict[str, Any], route: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], str | None]:
+    """task id -> {mode, asset} from the rewrite's header, over {path: source} of its defs modules and the route's run result (its assets)."""
+    ids = [t["task_id"] for t in spec["tasks"]]
+    doc, path = module_doc_with_accounting(sources, ids)
+    assets = (route.get("structure") or {}).get("assets") or {}
+    return parse_header(doc, ids, sorted(assets), {k: v.get("node") for k, v in assets.items()}), path
 
 
 def module_doc_with_accounting(sources: dict[str, str], task_ids: list[str]) -> tuple[str, str | None]:
@@ -227,7 +240,7 @@ def observed_maps(obs: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
 
 
 # ---- the comparison ---------------------------------------------------------------------------------------------------------------------------------------
-def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[str, Any], taskmap: dict[str, dict[str, Any]], route_kind: str) -> dict[str, Any]:
+def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[str, Any], taskmap: dict[str, dict[str, Any]], route_kind: str, accept_folded_skips: bool = True) -> dict[str, Any]:
     """-> {dimensions: {name: {...}}, baseline: {...}, rollup: {...}}"""
     dims: dict[str, dict[str, Any]] = {}
     bclass, breason = baseline_class(a1, a2, spec)
@@ -249,7 +262,7 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
     a_tasks = a1.get("tasks", {})
     a2_tasks = (a2 or {}).get("tasks", {})
     nd_tasks = {t for t in a_tasks if a2 and norm_state(a_tasks[t].get("state")) != norm_state(a2_tasks.get(t, {}).get("state"))}
-    cmp_rows, bad, skipped = [], [], []
+    cmp_rows, bad, skipped, accepted = [], [], [], []
     for tid in sorted(tasks_spec):
         tm = taskmap.get(tid, {"mode": None, "asset": None})
         at = norm_state(a_tasks.get(tid, {}).get("state"))
@@ -267,13 +280,17 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
             bad.append({"task": tid, "airflow": at, "route": "no asset accounts for this task" + (f" (header says {tm.get('mode')} but names no loadable asset)" if tm.get("mode") else "")})
             continue
         rs = ds[asset]
+        if at == "skipped" and rs == "success" and tm.get("mode") in ("folded", "merged") and accept_folded_skips and route_kind == "rewrite":
+            accepted.append({"task": tid, "asset": asset, "airflow": at, "route": rs, "why": f"folded into `{asset}` (branch not taken or skipped by a short circuit): Dagster has no state for code that is not run; accepted when the decision record declares it"})
+            continue
         cmp_rows.append({"task": tid, "asset": asset, "mode": tm.get("mode") or "mapped", "airflow": at, "route": rs})
         if at != rs and not (at in ("skipped", "upstream_failed") and rs in ("skipped", "upstream_failed")):
             bad.append({"task": tid, "asset": asset, "airflow": at, "route": rs})
     if bad:
-        dims["tasks"] = dim(DIFFER, evidence={"differences": bad[:20], "not_compared": skipped[:10]}, compared=len(cmp_rows))
+        dims["tasks"] = dim(DIFFER, evidence={"differences": bad[:20], "not_compared": skipped[:10], **({"accepted_representation": accepted[:20]} if accepted else {})}, compared=len(cmp_rows))
     elif cmp_rows:
-        dims["tasks"] = dim(MATCH, evidence={"not_compared": skipped[:10]} if skipped else None, compared=len(cmp_rows))
+        ev = {**({"not_compared": skipped[:10]} if skipped else {}), **({"accepted_representation": accepted[:20]} if accepted else {})}
+        dims["tasks"] = dim(MATCH, evidence=ev or None, compared=len(cmp_rows))
     else:
         dims["tasks"] = dim(NOT, "no task could be compared: " + "; ".join(skipped[:3]))
 

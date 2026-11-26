@@ -59,12 +59,23 @@ Each worker gets `$WORK/stage1/<dag>/` (see `eval_kit.py --help` for the layout)
 ## 5. After the workers finish
 
 ```bash
-python3 eval_gates.py    --work $WORK --run stage1 --jobs 3                                  # the seven gates in each worker's project; reads WORKER_REPORT.md
+python3 eval_gates.py    --work $WORK --run stage1 --jobs 3                                  # the nine gates in each worker's project (task_states uses the kit's tools/baseline); reads WORKER_REPORT.md
 python3 eval_behavior.py batch --work $WORK --run stage1 --manifest $WORK/corpus/manifest.json --venv-2 $AF2 --venv-3 $AF3 --jobs 3
 python3 eval_report.py   --work $WORK --runs stage1 --writers cold --costs $WORK/costs.json --manifest $WORK/corpus/manifest.json
 ```
 
 `eval_behavior.py` runs, for each DAG, the original in real Airflow twice, the converter's output and the rewrite, each in its own sandbox, and writes `$WORK/stage1-private/behavior/<dag>/behavior.json` with a verdict per dimension and the evidence. `eval_report.py` writes `reference/rewrite-route-evaluation.md` (use `--writers designer` only when the agent that designed the prompts wrote the rewrites: the report then says its numbers are not cold). `--sleep-cap 0.05` makes slow DAGs fast on every route at the price of execution timeouts no longer firing: leave it off for a measurement.
+
+## 5b. A second measurement of the same DAGs after the prompt changed (`stage1b`)
+
+Same manifest, sample and seed; the new prompts (pattern library, decision record, native-first wording) and kits that carry `tools/compare_behavior.py` and a baked baseline. The Airflow baseline of each DAG is copied from `stage1` (same DAG, same Airflow; nothing is re-run) and `stage1` is not touched:
+
+```bash
+python3 eval_kit.py make  --work $WORK --manifest $WORK/corpus/manifest.json --sample $WORK/samples/stage1.json --run stage1b --baseline-from stage1
+python3 eval_kit.py check --work $WORK --run stage1b     # also verifies each kit is self-contained (tools import only from tools/, baseline is this DAG's only)
+```
+
+Launch workers on `$WORK/stage1b/<dag>/` as in section 4, then run section 5 with `--run stage1b`. `eval_report.py` then also counts the decision records: how many behaviours were declared `not preserved`, and how many rewrites used a fallback to plain Python and why.
 
 ## 6. Stage 2 (the whole usable corpus)
 

@@ -13,6 +13,10 @@ dataframes or warehouse tables; the steps here are list arithmetic on a dict, so
 
 Schedule: `0 9 * * *` in UTC, no catchup (Airflow's `catchup=False`; a Dagster schedule does not replay missed ticks).
 Dropped: nothing. Not preserved: the per-task run record and log (there is one run and one asset materialization), XCom (plain function calls instead).
+
+Decision record:
+- retries: not preserved: Airflow retried one task; here the whole asset retries (one RetryPolicy of 3 retries, 300 s). Alternative if per-step restart mattered: a graph asset with an op per step and a RetryPolicy on each.
+- xcom: preserved: the dict between steps is a local variable inside the one asset; the final line is the asset's value.
 """
 import dagster as dg
 

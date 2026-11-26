@@ -127,7 +127,8 @@ def save_results(processed: dict) -> str:
 
 ## Behaviours that must be preserved
 
-- the dependencies between tasks (what must finish before what), including trigger rules and which branch or skip decisions are taken
+- the dependencies between tasks (what must finish before what), including trigger rules, which branch or skip decisions are taken, and the effects of the branch taken and none of the branch not taken
+- each task's end state in Airflow (success, failed, skipped, upstream_failed): `skipped` is kept, or its loss is declared in the rewrite's decision record
 - the schedule (cron or interval) and its timezone, and what `catchup` and `start_date` meant for missed intervals
 - retries, retry delay and backoff, pools and concurrency limits, execution timeouts
 - every value that one task passes to another, and every output a task persists (outlets / assets, files, tables, keys)
@@ -138,7 +139,7 @@ def save_results(processed: dict) -> str:
 ## Differences that are acceptable
 
 - asset keys and the grouping of tasks into data products (one asset per data product is the target; several tasks may become one asset)
-- per-task run records, durations and logs are replaced by per-asset runs and materializations
+- per-task run records, durations and logs are replaced by per-asset runs and materializations (a task's `skipped` state is NOT in this list: it is kept, or its loss is declared in the decision record)
 - XCom is replaced by asset values (IO manager) or by plain function calls inside an asset
 - the Airflow UI, task instances and `dag_run` objects have no counterpart
 - notification, wait and glue tasks may become sensors, hooks, run-status sensors or be folded into the producing asset

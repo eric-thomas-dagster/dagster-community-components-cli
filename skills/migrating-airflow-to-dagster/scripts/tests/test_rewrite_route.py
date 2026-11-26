@@ -92,7 +92,7 @@ def test_both_committed_rewrites_pass_every_gate_and_the_manifest_records_the_ro
         r = accept(tmp_path, dag_id, proj, "--manifest", str(tmp_path / "m.json"), *extra)
         assert r.returncode == 0, r.stdout + r.stderr
         gates = json.loads((tmp_path / f"{dag_id}.gates.json").read_text())
-        assert gates["passed"] and [g["gate"] for g in gates["gates"]] == ["definitions_load", "generated_tests", "asset_checks_present", "parity", "no_secret_values", "no_invented_apis", "tasks_accounted_for"]
+        assert gates["passed"] and [g["gate"] for g in gates["gates"]] == ["definitions_load", "generated_tests", "asset_checks_present", "parity", "no_secret_values", "no_invented_apis", "tasks_accounted_for", "task_states", "decision_record"]
     assert "outcome and 1 value(s) match Airflow" in (tmp_path / "simple_sequential_pipeline.gates.json").read_text()
     after = json.loads((tmp_path / "m.json").read_text())
     assert {(u["dag_id"], u.get("route"), u["status"]) for u in after["units"]} == {("simple_sequential_pipeline", "rewrite", "complete"), ("partner_ingest", "rewrite", "complete")}

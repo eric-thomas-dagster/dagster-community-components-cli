@@ -11,7 +11,7 @@
   {
    "gate": "generated_tests",
    "passed": true,
-   "detail": "test_simple_sequential_pipeline_rewrite.py: ============================== 3 passed in 0.43s ==============================="
+   "detail": "test_simple_sequential_pipeline_rewrite.py: ============================== 3 passed in 0.58s ==============================="
   },
   {
    "gate": "asset_checks_present",
@@ -37,6 +37,29 @@
    "gate": "tasks_accounted_for",
    "passed": true,
    "detail": "every Airflow task is named in the header with what happened to it"
+  },
+  {
+   "gate": "task_states",
+   "passed": true,
+   "detail": "not run (no Airflow baseline for this DAG was given)"
+  },
+  {
+   "gate": "decision_record",
+   "passed": true,
+   "detail": "decision record covers ['retries', 'xcom']; 1 behaviour(s) declared not preserved (retries); 0 fallback(s) to plain Python",
+   "declared": {
+    "flagged": [
+     "retries",
+     "xcom"
+    ],
+    "preserved": [
+     "xcom"
+    ],
+    "not_preserved": {
+     "retries": "Airflow retried one task; here the whole asset retries (one RetryPolicy of 3 retries, 300 s). Alternative if per-step restart mattered: a graph asset with an op per step and a RetryPolicy on each."
+    },
+    "fallback": {}
+   }
   }
  ]
 }

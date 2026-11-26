@@ -200,7 +200,7 @@ try:
                     res["assets"][k] = {"state": "not_run", "errors": []}
                 try:
                     v = r.asset_value(dg.AssetKey.from_user_string(k))
-                    res["assets"][k]["value"] = json.dumps(v, sort_keys=True, default=repr)
+                    res["assets"][k]["value"] = None if (isinstance(v, type) and v.__name__ == "NoValueSentinel") else json.dumps(v, sort_keys=True, default=repr)   # a MaterializeResult without a value is no value
                 except Exception:
                     res["assets"][k]["value"] = None
             for e in ev:

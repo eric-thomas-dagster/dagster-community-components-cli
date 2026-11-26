@@ -16,6 +16,13 @@ fields, but the host here comes from the Airflow connection `partner_api`, so it
 
 Connection `partner_api` (names only): `PARTNER_API_BASE_URL` (the connection's host) and `PARTNER_API_PASSWORD` (sent as a bearer token), read from the environment when the asset runs.
 Schedule: `0 */6 * * *` UTC, no catchup. Not preserved: per-task run records and XCom; the sensor's `timeout` of 6 h now counts inside the asset's run.
+
+Decision record:
+- retries: preserved: the DAG's default_args retries (2, 10 minutes apart) are a RetryPolicy on both assets; the fetch keeps its own asset so a failed fetch restarts alone, the reshape and publish restart together.
+- sensor modes: not preserved: the Airflow sensor ran in reschedule-free poke style inside a task; here the wait is a poll loop at the start of `partner_export_rows` holding the worker for up to 6 h. A Dagster sensor that requests the run when the export is ready would free the worker but moves the wait outside every run (see the sensors pattern).
+- xcom: preserved: the rows pass from `partner_export_rows` to `customer_summary` as an ordinary asset argument; the published line is kept as output metadata.
+- templating / connections: preserved: the Airflow connection `partner_api` is read from the environment by name (`PARTNER_API_BASE_URL`, `PARTNER_API_PASSWORD`) when the asset runs; a `ConfigurableResource` with `EnvVar` fields would make it injectable and mockable (see the templating pattern); no value is in the code.
+- failure semantics: preserved: a wait that times out raises (Airflow: the sensor fails and the downstream tasks do not run); a failed fetch fails the run and `customer_summary` does not run.
 """
 import os
 import shutil

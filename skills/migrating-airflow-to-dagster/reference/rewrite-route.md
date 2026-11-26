@@ -69,3 +69,8 @@ Remaining pattern, not fixed: the parity gate cannot distinguish a baseline that
 ## When to use it
 
 For a DAG the converter deferred or stubbed, a redesign-heavy DAG, the plan's last wave, and the pilot DAGs where idiomatic output matters while the mapping is being learned. Keep the converter for the mechanical bulk. **Cost:** the rewrite spends model effort on every DAG (the prompt is 14 to 16 KB for these two, the model reads it, searches the registry and writes the file, and a failed gate means another pass); the converter takes under a second. The plan's effort figures do not include it.
+
+
+## Changes after the cold-writer measurement
+
+The measurement (`reference/rewrite-route-evaluation.md`, 40 DAGs) found the route 70% equivalent in either form and 12 DAGs `different`, mostly branching. The triage of those 12 is `reference/rewrite-route-triage.md`. In response: the prompt injects a pattern library (`reference/rewrite-patterns/`, native Dagster forms first, plain Python as the declared fallback, every code file executed by a test, `index.json` with VERIFIED / PARTIAL / FAILED claims); the "acceptable differences" text no longer lets a task's `skipped` state be dropped silently; two gates were added (`task_states`, `decision_record`); a worker can run `tools/compare_behavior.py` in its kit and iterate on behaviour differences against a baked Airflow baseline; `eval_report.py` counts `not preserved` declarations and fallbacks. What these changes do to the pass rate is NOT measured yet: `stage1b` (same DAGs, new kit) is the run that measures it.

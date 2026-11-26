@@ -218,7 +218,8 @@ def render(a: argparse.Namespace) -> str:
     g = [r for r in recs if r["gates"] is not None]
     if g:
         gp = [r for r in g if r["gates"].get("passed")]
-        A(f"All seven gates pass for {pct(len(gp), len(g))} of the rewrites that were gated. The gates check that the code loads, accounts for its tasks and has no secrets or invented APIs, not that it behaves like the original. Gate pass against behaviour verdict:")
+        ng = max((len(r["gates"].get("gates", [])) for r in g), default=0)
+        A(f"All {ng} gates pass for {pct(len(gp), len(g))} of the rewrites that were gated. The gates check that the code loads, accounts for its tasks, has no secrets or invented APIs, and (in the later gate sets) that task states and effects match a baseline and a decision record exists; they are not the behaviour comparison. Gate pass against behaviour verdict:")
         A("")
         A("| | " + " | ".join(VERDICTS[:-1]) + " |")
         A("|---|" + "---|" * (len(VERDICTS) - 1))
@@ -234,6 +235,30 @@ def render(a: argparse.Namespace) -> str:
         A("|---|---|---|")
         for name in sorted({k[0] for k in gc}):
             A(f"| {name} | {gc[(name, True)]} | {gc[(name, False)]} |")
+        dec = [(r, x) for r in g for x in r["gates"].get("gates", []) if x["gate"] == "decision_record" and x.get("declared") is not None]
+        if dec:
+            A("")
+            A("### Decision records: what workers declared not preserved")
+            A("")
+            nd = [(r, x["declared"]["not_preserved"]) for r, x in dec]
+            A(f"{len(dec)} rewrite(s) had a decision record checked; {sum(1 for _, n in nd if n)} declared at least one behaviour not preserved ({sum(len(n) for _, n in nd)} declarations in all). A declaration is honest accounting, not a pass: the behaviour comparison still judges the result.")
+            A("")
+            fb = [(r, x["declared"].get("fallback") or {}) for r, x in dec]
+            A(f"{sum(1 for _, f in fb if f)} rewrite(s) used a **fallback to plain Python** ({sum(len(f) for _, f in fb)} declarations) instead of a native Dagster form; the native form is the expected path and its skipped states are compared directly, the fallback is accepted but counted here with its reason.")
+            A("")
+            if any(f for _, f in fb):
+                A("| behaviour | fallbacks | reasons |")
+                A("|---|---|---|")
+                fc: collections.Counter = collections.Counter(b for _, f in fb for b in f)
+                for b in sorted(fc):
+                    A(f"| {b} | {fc[b]} | " + "; ".join(sorted({str(f[b])[:90] for _, f in fb if b in f})[:4]).replace("|", "/") + " |")
+                A("")
+            bc: collections.Counter = collections.Counter(b for _, n in nd for b in n)
+            if bc:
+                A("| behaviour | declared not preserved | rewrites that declared it preserved |")
+                A("|---|---|---|")
+                for b in sorted(bc):
+                    A(f"| {b} | {bc[b]} | {sum(1 for _, x in dec if b in x['declared']['preserved'])} |")
     else:
         A("Gate results: not run (no `eval_gates.py` output).")
     A("")

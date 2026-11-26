@@ -28,21 +28,9 @@ import eval_common as C
 
 sys.path.insert(0, str(C.HERE / "parity"))
 import behavior_compare as B  # noqa: E402
+from harness_cfg import conn_uri, sandbox_cfg  # noqa: E402,F401
 
 PARITY = C.HERE / "parity"
-
-
-def conn_uri(cid: str, root: Path) -> str:
-    c = cid.lower()
-    if "sqlite" in c:
-        return f"sqlite:///{root / 'data' / 'app.db'}"
-    if "http" in c:
-        return "http://eval-http.test"
-    if "smtp" in c or "email" in c:
-        return "smtp://eval-smtp.test:25"
-    if c.startswith("aws") or "s3" in c:
-        return "aws://"
-    return f"generic://eval-host.test/{cid}"
 
 
 def fresh(path: Path) -> Path:
@@ -52,10 +40,6 @@ def fresh(path: Path) -> Path:
         shutil.rmtree(path)
     path.mkdir(parents=True)
     return path
-
-
-def sandbox_cfg(root: Path, spec: dict[str, Any], cap: float | None = None, seed: dict[str, str] | None = None) -> dict[str, Any]:
-    return {"root": str(root), "connections": {c: conn_uri(c, root) for c in spec.get("connections", [])}, "variables": {v: "eval-variable" for v in spec.get("variables", [])}, "sleep_cap": cap, "seed": seed or {}}
 
 
 def converter_src(work: Path, row: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
@@ -88,10 +72,7 @@ def wait(p: subprocess.Popen, timeout: int) -> str | None:
 
 def rewrite_taskmap(project: Path, spec: dict[str, Any], route: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], str | None]:
     sources = {str(p): p.read_text() for p in sorted((project / "src").glob("*/defs/**/*.py")) if p.name != "__init__.py"}
-    ids = [t["task_id"] for t in spec["tasks"]]
-    doc, path = B.module_doc_with_accounting(sources, ids)
-    assets = (route.get("structure") or {}).get("assets") or {}
-    return B.parse_header(doc, ids, sorted(assets), {k: v.get("node") for k, v in assets.items()}), path
+    return B.rewrite_taskmap(sources, spec, route)
 
 
 def converter_taskmap(rep: dict[str, Any]) -> dict[str, dict[str, Any]]:

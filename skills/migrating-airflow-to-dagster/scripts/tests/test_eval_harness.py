@@ -149,7 +149,7 @@ def test_kit_has_what_a_worker_needs_and_nothing_else(work):
     task = (d / "TASK.md").read_text()
     for must in ("dagster-expert", "dagster-community-components", "Do NOT read", "Count your attempts", "AIRFLOW_CONN_", "out/rw_fixture_pipeline"):
         assert must in task
-    assert "not run here: no Airflow baseline is given to you" in task                          # the baseline is not given to workers
+    assert "compare_behavior.py" in task and "Iterate until every DIFFERENT dimension is fixed or explicitly justified" in task and "Decision record:" in task
     assert (d / "source" / "dags" / "fixture_pipeline.py").exists()
     assert not (d / "source" / "dags" / "fixture_fails.py").exists()                           # no other DAG's source
     spec = json.loads((d / "spec.json").read_text())

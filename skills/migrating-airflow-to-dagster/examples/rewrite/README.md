@@ -19,7 +19,7 @@ Files: `ir.json`, `report.json`, `manifest.json` (the converter's run); `specs/<
 | size | 100 lines, importing a shared 1,561-line `runtime.py` | 52 lines, imports only `dagster` |
 | retries | `RetryPolicy(3, 300)` on each asset | the same policy once, on the asset; a failed step restarts from the start of the asset (stated in the header) |
 | registry | none used | searched (`multi-step transform pipeline`): the `*_pipeline` components take dataframes or warehouse tables, these steps are list arithmetic, so none fits (stated in the header) |
-| gates | converter's generated tests: pass | **all 7 pass**: `dg check defs`, generated pytest (3), asset check present, parity with Airflow (overall outcome and the value of `save_results`, `'Saved 5 items from api'`), no secrets, no invented APIs, every task accounted for |
+| gates | converter's generated tests: pass | **all 9 pass** (the table below lists the first seven; `task_states` is `not run` without a baseline and `decision_record` covers retries and xcom): `dg check defs`, generated pytest (3), asset check present, parity with Airflow (overall outcome and the value of `save_results`, `'Saved 5 items from api'`), no secrets, no invented APIs, every task accounted for |
 
 Idioms: the rewrite is what the converter's `--granularity product` would aim at but cannot reach here (its steps have retries, so the converter keeps them separate); it is smaller and has no runtime dependency. It lost nothing the spec lists as must-be-preserved; it lost per-task run records, which the spec lists as acceptable.
 

@@ -3,8 +3,7 @@
 
     python3 eval_gates.py --work DIR --run stage1 [--only dag_id ...] [--jobs 4] [--dagster-python PY]
 
-For each DAG folder `<work>/<run>/<dag>/` that has `out/<project>/`: runs the gates with the project's own virtualenv (falling back to --dagster-python), WITHOUT an Airflow baseline (the gate
-reports `parity: not run (no baseline)`: the behaviour comparison is `eval_behavior.py`, a stronger test), and writes `<work>/<run>-private/gates/<dag>.gates.json` plus
+For each DAG folder `<work>/<run>/<dag>/` that has `out/<project>/`: runs the gates with the project's own virtualenv (falling back to --dagster-python), WITHOUT the `parity` baseline (the gate reports `parity: not run (no baseline)`); the `task_states` gate uses the kit's own `tools/baseline/` when there is one, and writes `<work>/<run>-private/gates/<dag>.gates.json` plus
 `<dag>.report.json` (what the worker reported: attempts, registry components, assumptions section present). A folder with no project is recorded as `no project`.
 """
 from __future__ import annotations
@@ -27,7 +26,7 @@ def parse_report(text: str) -> dict[str, Any]:
     rows = [ln for ln in text.splitlines() if ln.startswith("|") and not re.match(r"^\|[\s\-|:]+\|$", ln) and "schema fields set" not in ln]
     comps = [r.split("|")[1].strip() for r in rows if len(r.split("|")) > 2 and r.split("|")[1].strip() and r.split("|")[1].strip().lower() not in ("none", "id")]
     filled = {}
-    for sec in ("Files written", "Registry components used", "What you searched", "Assumptions", "Behaviour you could not preserve or could not verify"):
+    for sec in ("Files written", "Registry components used", "What you searched", "Assumptions", "Behaviour comparison", "Behaviour you could not preserve or could not verify"):
         mm = re.search(rf"## {re.escape(sec)}[^\n]*\n(.*?)(?=\n## |\Z)", text, re.S)
         body = re.sub(r"\|[\s\-|:]*\|\n?|\|.*?\|\n?", "", mm.group(1)).strip() if mm else ""
         filled[sec] = bool(body) and not body.lower().startswith(("for each:", "every place", "registry searches"))
@@ -52,6 +51,8 @@ def one(a: argparse.Namespace, key: str, v: dict[str, Any]) -> dict[str, Any]:
     cmd = [str(py) if py.exists() else a.dagster_python, str(C.HERE / "accept_rewrite.py"), "--spec", str(spec), "--module", f"{v['project']}.defs.{v['module']}", "--project", str(project), "--out", str(out)]
     if defs_dirs:
         cmd += ["--defs-dir", str(defs_dirs[0])]
+    if (d / "tools" / "baseline" / "airflow1.json").exists():              # the kit's own baked baseline: the task_states gate runs with it
+        cmd += ["--baseline", str(d / "tools" / "baseline"), "--source", str(d / "source")]
     try:
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=a.timeout, env={**os.environ, "PYTHONPATH": str(C.HERE)}, cwd=str(project))
     except subprocess.TimeoutExpired:
@@ -75,7 +76,7 @@ def main(argv: list[str] | None = None) -> int:
     todo = [(k, v) for k, v in sorted(index.items()) if not a.only or v["dag_id"] in a.only]
     with ThreadPoolExecutor(a.jobs) as ex:
         res = list(ex.map(lambda kv: one(a, *kv), todo))
-    print(f"gates: {sum(r['passed'] for r in res)} of {len(res)} DAGs pass all seven; {sum(1 for r in res if r.get('no_project'))} have no project")
+    print(f"gates: {sum(r['passed'] for r in res)} of {len(res)} DAGs pass every gate; {sum(1 for r in res if r.get('no_project'))} have no project")
     return 0
 
 

@@ -1,0 +1,502 @@
+{
+ "dagster_version_verified": "1.13.31",
+ "statuses": {
+  "VERIFIED": "executed on the installed Dagster and asserted by a test",
+  "PARTIAL": "loaded or wired, or checked against docs/converter, but not exercised end to end",
+  "FAILED": "a claim from an unverified source that was run and refuted"
+ },
+ "note": "Consumed by rewrite_patterns.py (prompt injection) and meant for the converter's emitters: the .py files are importable, tested templates; reuse them rather than writing a second form.",
+ "patterns": [
+  {
+   "id": "branching",
+   "airflow_features": [
+    "BranchPythonOperator",
+    "@task.branch",
+    "BranchDateTimeOperator"
+   ],
+   "detected_by": "operator name contains Branch",
+   "doc": "branching.md",
+   "code": [
+    "branching.py",
+    "branching_plain_fallback.py"
+   ],
+   "native_form": "multi_asset AssetOut(is_required=False) / op Out(is_required=False); graph_asset with fan-in list for the rejoin",
+   "fallback_form": "plain Python in one asset (branching_plain_fallback.py)",
+   "claims": [
+    {
+     "claim": "unyielded optional output skips every step below it; run succeeds",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "can_subset is unnecessary and harmless in a job selecting every asset",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "a regular downstream asset with inputs from two optional branches is skipped if either is skipped (not none_failed_min_one_success)",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "graph_asset op with a fan-in list input runs with whichever branch ran; skipped if none",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "separate assets + AutomationCondition.any_deps_updated() request the join in a later run",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "plain Python in one asset runs only the chosen branch",
+     "status": "VERIFIED"
+    }
+   ],
+   "dagster_cannot_express": [
+    "a distinct skipped state for code folded into plain Python",
+    "same-run rejoin across top-level assets"
+   ]
+  },
+  {
+   "id": "short_circuit",
+   "airflow_features": [
+    "ShortCircuitOperator",
+    "@task.short_circuit"
+   ],
+   "detected_by": "operator name contains ShortCircuit",
+   "doc": "short_circuit.md",
+   "code": [
+    "short_circuit.py"
+   ],
+   "native_form": "optional-output asset or op (generator that returns before yielding)",
+   "fallback_form": "early return in plain Python",
+   "claims": [
+    {
+     "claim": "output_required=False asset that returns before yielding is not materialized; everything below is skipped; run succeeds",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "bare return (no yield) in a non-generator asset skips",
+     "status": "FAILED"
+    },
+    {
+     "claim": "optional-output op in a graph_asset skips the guarded step",
+     "status": "VERIFIED"
+    }
+   ],
+   "dagster_cannot_express": [
+    "Airflow ignore_downstream_trigger_rules=False tail without a plain-Python or deps workaround"
+   ]
+  },
+  {
+   "id": "skip",
+   "airflow_features": [
+    "AirflowSkipException",
+    "exit code 99 / skip_on_exit_code",
+    "skip_if / run_if"
+   ],
+   "detected_by": "AirflowSkipException|skip_on_exit_code|exit 99|.skip_if(|.run_if( in a callable or argument",
+   "doc": "skip.md",
+   "code": [
+    "skip.py"
+   ],
+   "native_form": "optional-output asset; or metadata airflow/state=skipped + SKIPPED sentinel",
+   "fallback_form": "early return in the asset",
+   "claims": [
+    {
+     "claim": "metadata form records airflow/state=skipped; all_success consumer propagates, all_done consumer runs",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "exit code 99 skips, other non-zero fails",
+     "status": "VERIFIED"
+    }
+   ],
+   "dagster_cannot_express": [
+    "a skipped asset state (only metadata) when the asset is materialized"
+   ]
+  },
+  {
+   "id": "trigger_rules",
+   "airflow_features": [
+    "trigger_rule != all_success",
+    "setup/teardown"
+   ],
+   "detected_by": "task trigger_rule not all_success, or is_setup/is_teardown",
+   "doc": "trigger_rules.md",
+   "code": [
+    "trigger_rules.py"
+   ],
+   "native_form": "success_hook + failure_hook on the asset or graph_asset (all_done); graph_asset fan-in (min_one_success)",
+   "fallback_form": "try/finally in one asset",
+   "claims": [
+    {
+     "claim": "hooks fire on @asset(hooks=...) and @graph_asset(hooks=...) for success and failure",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "try/finally runs cleanup, step then fails",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "run_failure_sensor + handler job wiring loads and the handler job runs",
+     "status": "PARTIAL"
+    },
+    {
+     "claim": "run_failure_sensor fires on a real failed run",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "one_failed/all_failed inside the run",
+    "an all_done task with its own success state after a failure"
+   ]
+  },
+  {
+   "id": "mapped_tasks",
+   "airflow_features": [
+    "expand",
+    "expand_kwargs",
+    "partial().expand"
+   ],
+   "detected_by": "task is_mapped or expand",
+   "doc": "mapped_tasks.md",
+   "code": [
+    "mapped_tasks.py"
+   ],
+   "native_form": "DynamicOut + .map() + .collect() in a graph_asset",
+   "fallback_form": "for loop in the asset; DynamicPartitionsDefinition when items are tracked units",
+   "claims": [
+    {
+     "claim": "collect gathers the mapped results into one downstream step",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "one failed item fails the run, the others ran, the step after collect did not (as Airflow)",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "empty expansion: collect gets [] and the step below runs (Airflow skips)",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "DynamicPartitionsDefinition partition materializes",
+     "status": "VERIFIED"
+    }
+   ],
+   "dagster_cannot_express": [
+    "Airflow's skipped mapped task with 0 instances unless the collecting step has an optional output"
+   ]
+  },
+  {
+   "id": "sensors",
+   "airflow_features": [
+    "sensors with timeout/soft_fail/mode",
+    "deferrable sensors",
+    "async external jobs"
+   ],
+   "detected_by": "task has sensor facts, an operator named *Sensor, or deferrable=True",
+   "doc": "sensors.md",
+   "code": [
+    "sensors.py"
+   ],
+   "native_form": "@sensor emitting RunRequest; asset A submits + sensor polls + asset B in its own run; Pipes",
+   "fallback_form": "poll_until inside the asset",
+   "claims": [
+    {
+     "claim": "poll_until: true, timeout, soft_fail skipped metadata (fake clock)",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "condition_sensor / job_done_sensor return SkipReason / RunRequest as expected when called",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "sensors scheduled by a daemon and firing in a deployment",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "a timeout state for a sensor moved outside the run",
+    "reschedule mode exactly"
+   ]
+  },
+  {
+   "id": "depends_on_past",
+   "airflow_features": [
+    "depends_on_past",
+    "wait_for_downstream"
+   ],
+   "detected_by": "task depends_on_past or wait_for_downstream",
+   "doc": "depends_on_past.md",
+   "code": [
+    "depends_on_past.py"
+   ],
+   "native_form": "step-event check that fails when the previous run failed",
+   "fallback_form": "self-dependency on the previous partition (declared only)",
+   "claims": [
+    {
+     "claim": "latest STEP_FAILURE newer than latest materialization blocks the next run; first and recovered runs run",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "partitioned self-dependency with TimeWindowPartitionMapping(-1,-1) is accepted",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "that self-dependency blocks a manual partition run",
+     "status": "FAILED"
+    },
+    {
+     "claim": "an automation condition respects the self-dependency",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "Airflow's waiting (not failed) state"
+   ]
+  },
+  {
+   "id": "cross_dag",
+   "airflow_features": [
+    "TriggerDagRunOperator",
+    "ExternalTaskSensor",
+    "asset-triggered schedules"
+   ],
+   "detected_by": "operator TriggerDagRun/ExternalTask*, or schedule.assets",
+   "doc": "cross_dag.md",
+   "code": [
+    "cross_dag.py"
+   ],
+   "native_form": "asset dependency + AutomationCondition.eager()/on_cron; run_status_sensor yielding RunRequest(run_config=...)",
+   "fallback_form": "(none: no plain-Python equivalent)",
+   "claims": [
+    {
+     "claim": "eager() requests the downstream after the upstream updates",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "on_cron and run_status_sensor definitions load",
+     "status": "PARTIAL"
+    },
+    {
+     "claim": "run_status_sensor fires on a real run",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "wait_for_completion=True (a trigger that blocks)"
+   ]
+  },
+  {
+   "id": "pools",
+   "airflow_features": [
+    "pool",
+    "pool_slots",
+    "max_active_tis_per_dag",
+    "max_active_runs"
+   ],
+   "detected_by": "task pool not default_pool, or max_active_tis_per_dag",
+   "doc": "pools.md",
+   "code": [
+    "pools.py"
+   ],
+   "native_form": "first-class pool= on asset/op (not graph_asset); limit via dagster instance concurrency set",
+   "fallback_form": "(none)",
+   "claims": [
+    {
+     "claim": "pool= exists on asset, multi_asset and op, not on graph_asset",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "`dagster instance concurrency set|get` CLI exists",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "pool limit enforced under load",
+     "status": "PARTIAL"
+    },
+    {
+     "claim": "max_active_runs via run tag + deployment concurrency limit (as the converter does)",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "pool_slots > 1",
+    "per-run task limits"
+   ]
+  },
+  {
+   "id": "xcom",
+   "airflow_features": [
+    "xcom_push/pull",
+    "task return values",
+    "TaskFlow"
+   ],
+   "detected_by": "a task with reads_value_from",
+   "doc": "xcom.md",
+   "code": [
+    "xcom.py"
+   ],
+   "native_form": "return value as asset argument; add_output_metadata for observability",
+   "fallback_form": "local variables inside a folded asset",
+   "claims": [
+    {
+     "claim": "value flows as asset argument; metadata via add_output_metadata and Output(metadata=)",
+     "status": "VERIFIED"
+    }
+   ],
+   "dagster_cannot_express": [
+    "xcom with many tasks_ids pulled by key without restructuring"
+   ]
+  },
+  {
+   "id": "task_groups",
+   "airflow_features": [
+    "TaskGroup"
+   ],
+   "detected_by": "a task with a group",
+   "doc": "task_groups.md",
+   "code": [
+    "task_groups.py"
+   ],
+   "native_form": "group_name + key_prefix assets; factory for template groups",
+   "fallback_form": "fold into one asset",
+   "claims": [
+    {
+     "claim": "group_name/key_prefix produce group/task keys; factory builds template groups",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "consumers of a prefixed asset must name the key via AssetIn(key=...)",
+     "status": "VERIFIED"
+    }
+   ],
+   "dagster_cannot_express": [
+    "the Airflow UI's collapsed group"
+   ]
+  },
+  {
+   "id": "templating_config",
+   "airflow_features": [
+    "Jinja {{ ds }} / data_interval_*",
+    "params",
+    "Variables",
+    "connections"
+   ],
+   "detected_by": "{{ in arguments/templates, params./var., Variable.get, context['ds'], or any connection",
+   "doc": "templating_config.md",
+   "code": [
+    "templating_config.py"
+   ],
+   "native_form": "partition_key / partition_time_window; dg.Config; EnvVar; ConfigurableResource",
+   "fallback_form": "run time for unpartitioned assets (not the interval)",
+   "claims": [
+    {
+     "claim": "partition_key/partition_time_window give ds, ds_add and the interval",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "dg.Config field replaces params",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "ConfigurableResource with EnvVar fields, replaceable by a mock",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "the table agrees line by line with convert_ir.py's SUPPORTED_CTX/SUPPORTED_MACROS",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "the data interval without a partitions_def"
+   ]
+  },
+  {
+   "id": "venv_pipes",
+   "airflow_features": [
+    "PythonVirtualenvOperator",
+    "ExternalPythonOperator",
+    "@task.virtualenv",
+    "branch virtualenv variants"
+   ],
+   "detected_by": "operator name with Virtualenv/ExternalPython",
+   "doc": "venv_pipes.md",
+   "code": [
+    "venv_pipes.py",
+    "_venv_pipes_task.py"
+   ],
+   "native_form": "PipesSubprocessClient with the venv's interpreter, requirements declared, loud failure if missing",
+   "fallback_form": "plain Python only if the venv pins already-installed versions",
+   "claims": [
+    {
+     "claim": "a Pipes subprocess run materializes the asset with the reported metadata",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "a missing interpreter fails the run loudly",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "building a real venv",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "building the environment at run time without network"
+   ]
+  },
+  {
+   "id": "timeouts_sla",
+   "airflow_features": [
+    "execution_timeout",
+    "dagrun_timeout",
+    "sla",
+    "sla_miss_callback"
+   ],
+   "detected_by": "execution_timeout_s or sla_s or an sla callback",
+   "doc": "timeouts_sla.md",
+   "code": [
+    "timeouts_sla.py"
+   ],
+   "native_form": "job tag dagster/max_runtime (seconds); freshness_policy=FreshnessPolicy.time_window(fail_window=...)",
+   "fallback_form": "deadline in code",
+   "claims": [
+    {
+     "claim": "the tag and the freshness policy attach to the definitions",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "the tag terminates a run (needs run monitoring in dagster.yaml)",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "SLA measured from scheduled start"
+   ]
+  },
+  {
+   "id": "latest_only",
+   "airflow_features": [
+    "LatestOnlyOperator"
+   ],
+   "detected_by": "operator name contains LatestOnly",
+   "doc": "latest_only.md",
+   "code": [
+    "latest_only.py"
+   ],
+   "native_form": "unpartitioned downstream + AutomationCondition.eager() + BackfillPolicy.single_run()",
+   "fallback_form": "(none)",
+   "claims": [
+    {
+     "claim": "the closest form loads",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "what a multi-partition backfill does end to end",
+     "status": "PARTIAL"
+    }
+   ],
+   "dagster_cannot_express": [
+    "skipping downstream for non-latest intervals"
+   ]
+  }
+ ]
+}

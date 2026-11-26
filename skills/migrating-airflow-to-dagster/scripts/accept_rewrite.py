@@ -14,6 +14,12 @@ Gates (all must pass; a gate that cannot run FAILS, it is never skipped silently
   5. no secret values      no credential-looking literal in the module or the component YAML.
   6. no invented APIs      every import resolves to a real module and name, and every `type:` in the component YAML is an importable class.
   7. tasks accounted for   the module docstring names every Airflow task and says what happened to it (replaced, folded, dropped).
+  8. task states           where an Airflow baseline exists (`--baseline DIR` with airflow1.json/airflow2.json): the project is run in the measurement's sandbox and each task's final state (success, failed,
+                           skipped, upstream_failed), the outcome, the failure behaviour and the observable effects (files, SQLite rows, HTTP requests, mails, S3 objects) are compared with Airflow's; the gate
+                           names every task that differs. A task folded into another asset whose Airflow state is `skipped` (a branch not taken) is an accepted representation difference only when the
+                           decision record declares `fallback to plain Python: <reason>` (or `not preserved`); the native optional-output form is the expected path, where the skipped state itself is compared. Without a baseline: `not run`, which does not fail the gate.
+  9. decision record       the header has a `Decision record:` section with `- <behaviour>: preserved | not preserved: <why>` for every behaviour the spec flags (skip/branch, trigger rules, retries, pools,
+                           sensor modes, depends_on_past, failure semantics, mapped tasks); `not preserved` needs a reason. The declared losses are recorded in the gate result.
 
 With `--manifest`, every unit of the DAG gets `route: rewrite` and the gate results. All gates passed: pending or deferred units are advanced with the evidence. Any gate failed: the units that are not
 already complete stay or become `deferred` with the failure, and the converter's output (if any) remains the fallback. A unit the converter already completed keeps `route: converter` and gets a
@@ -32,8 +38,13 @@ import sys
 from pathlib import Path
 from typing import Any
 
-import gen_tests as G
-import status as S
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+if (Path(__file__).resolve().parent / "parity").exists():                  # the repository layout; in a worker kit everything is flat in tools/
+    sys.path.insert(0, str(Path(__file__).resolve().parent / "parity"))
+
+import gen_tests as G  # noqa: E402
+import rewrite_patterns as RP  # noqa: E402
+import status as S  # noqa: E402
 
 SECRET_LITERAL = re.compile(r"""(?i)\b(\w*(?:password|passwd|secret|token|api_?key|private_?key|credential)\w*)\s*[:=]\s*(['"])(?!<)([^'"\n]{6,})\2""")
 ENV_OK = re.compile(r"(?i)env_var|EnvVar|environ|getenv|os\.environ|\{\{\s*env")
@@ -188,11 +199,53 @@ def g_tasks(spec: dict[str, Any], src: str) -> dict[str, Any]:
                 else f"missing from the header docstring: {missing}; named without replaced/folded/dropped/merged: {nostatus}")
 
 
-def run_gates(spec: dict[str, Any], module: str, project: Path, defs_dir: Path | None, parity: dict[str, Any] | None) -> list[dict[str, Any]]:
+def header_doc(src: str) -> str:
+    try:
+        return ast.get_docstring(ast.parse(src)) or ""
+    except SyntaxError:
+        return ""
+
+
+def g_states(spec: dict[str, Any], module: str, project: Path, baseline: Path | None, source: Path | None, src: str) -> dict[str, Any]:
+    if baseline is None or not (Path(baseline) / "airflow1.json").exists():
+        return gate("task_states", True, "not run (no Airflow baseline for this DAG was given)")
+    import compare_behavior as CB
+    res = CB.compare_project(project, spec, baseline, source, python=sys.executable)
+    if res is None:
+        return gate("task_states", True, "not run (no Airflow baseline for this DAG was given)")
+    bclass = res["baseline"]["class"]
+    if bclass in ("baseline-failed", "unstable"):
+        return gate("task_states", True, f"not compared: the Airflow baseline is {bclass} ({res['baseline']['reason'][:160]})")
+    if res.get("route_error") and not (res["dimensions"].get("tasks", {}).get("verdict") in ("match", "differ")):
+        return gate("task_states", False, f"the project could not be run in the sandbox: {str(res['route_error'])[:200]}")
+    dims = res["dimensions"]
+    problems = []
+    for x in (dims.get("tasks", {}).get("evidence") or {}).get("differences", []) if dims.get("tasks", {}).get("verdict") == "differ" else []:
+        problems.append(f"task `{x['task']}`: Airflow {x['airflow']}, rewrite {x['route']}" + (f" (asset `{x['asset']}`)" if x.get("asset") else ""))
+    for n in ("outcome", "failure", "files", "sqlite", "http", "smtp", "s3"):
+        if dims.get(n, {}).get("verdict") == "differ":
+            problems.append(f"{n}: {json.dumps(dims[n].get('evidence'), default=str)[:240]}")
+    accepted = (dims.get("tasks", {}).get("evidence") or {}).get("accepted_representation", [])
+    if accepted and RP.parse_record(header_doc(src)).get("skip/branch", {}).get("verdict") not in ("fallback", "not preserved"):
+        problems.append("tasks " + ", ".join(f"`{a['task']}`" for a in accepted) + " were skipped in Airflow (not taken) and are folded into another asset, so Dagster shows no skipped state for them: either use the native optional-output form "
+                        "(the expected path for branches) or declare `- skip/branch: fallback to plain Python: <reason>` in the decision record")
+    n = dims.get("tasks", {}).get("compared", 0)
+    note = f"; {len(accepted)} folded not-taken task(s) accepted as a representation difference (declared)" if accepted and not problems else ""
+    return gate("task_states", not problems, (f"{n} task(s) compared; outcome, failure behaviour and effects match Airflow" + note) if not problems else "; ".join(problems)[:900])
+
+
+def g_decision(spec: dict[str, Any], src: str) -> dict[str, Any]:
+    ok, detail, declared = RP.check_record(spec, header_doc(src))
+    g = gate("decision_record", ok, detail)
+    g["declared"] = declared
+    return g
+
+
+def run_gates(spec: dict[str, Any], module: str, project: Path, defs_dir: Path | None, parity: dict[str, Any] | None, baseline: Path | None = None, source: Path | None = None) -> list[dict[str, Any]]:
     src, path = source_of(module, project)
     if not path:
         return [gate("definitions_load", False, f"module {module} not found under {project}")]
-    return [g_load(module, project), g_tests(spec, module, project), g_checks(spec, src, defs_dir), g_parity(spec, module, project, parity), g_secrets(src, defs_dir), g_apis(src, defs_dir, project), g_tasks(spec, src)]
+    return [g_load(module, project), g_tests(spec, module, project), g_checks(spec, src, defs_dir), g_parity(spec, module, project, parity), g_secrets(src, defs_dir), g_apis(src, defs_dir, project), g_tasks(spec, src), g_states(spec, module, project, baseline, source, src), g_decision(spec, src)]
 
 
 def record(manifest: dict[str, Any], dag_id: str, results: list[dict[str, Any]]) -> dict[str, int]:
@@ -226,10 +279,12 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--manifest", type=Path)
     ap.add_argument("--parity", type=Path)
     ap.add_argument("--out", type=Path)
+    ap.add_argument("--baseline", type=Path, help="a folder with the original DAG's airflow1.json (and airflow2.json): enables the task_states gate")
+    ap.add_argument("--source", type=Path, help="the folder whose files are seeded into the sandbox's working directory (a worker kit's source/)")
     a = ap.parse_args(argv)
     spec = json.loads(a.spec.read_text())
     parity = json.loads(a.parity.read_text()) if a.parity else None
-    results = run_gates(spec, a.module, a.project.resolve(), a.defs_dir.resolve() if a.defs_dir else None, parity)
+    results = run_gates(spec, a.module, a.project.resolve(), a.defs_dir.resolve() if a.defs_dir else None, parity, a.baseline.resolve() if a.baseline else None, a.source.resolve() if a.source else None)
     out = a.out or a.spec.with_name(f"{spec['dag_id']}.gates.json")
     out.write_text(json.dumps({"dag_id": spec["dag_id"], "module": a.module, "passed": all(r["passed"] for r in results), "gates": results}, indent=1) + "\n")
     for r in results:

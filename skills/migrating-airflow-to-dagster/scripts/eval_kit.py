@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Generate the cold-worker kit: for each sampled DAG, a folder with exactly what a fresh agent needs to write the rewrite, and nothing else.
 
-    python3 eval_kit.py make  --work DIR --manifest corpus/manifest.json --sample sample.json --run stage1 [--dcc-skill PATH]
+    python3 eval_kit.py make  --work DIR --manifest corpus/manifest.json --sample sample.json --run stage1 [--dcc-skill PATH] [--baseline-from RUN | --venv-2 PY --venv-3 PY]
     python3 eval_kit.py check --work DIR --run stage1 [--manifest corpus/manifest.json --sample sample.json]
 
 `make` writes, per DAG, DIR/<run>/<dag>/ :
@@ -10,12 +10,16 @@
     spec.md, spec.json  the facts-only spec (`dag_spec.py`), generated WITHOUT any converter data and WITHOUT an Airflow baseline
     prompt.md           the generated rewrite prompt (`rewrite_prompt.py`), unchanged except the module name when the DAG id is not a Python identifier
     source/             the original DAG file and its local dependencies (modules it imports, data files it names), at their repository paths
-    tools/              the acceptance gates (accept_rewrite.py and the two modules it imports) and a sandbox runner, so the worker can check its own work
+    tools/              the acceptance gates (accept_rewrite.py and the modules it imports), a sandbox runner, and `compare_behavior.py` with `tools/baseline/` (the ORIGINAL DAG's results from real Airflow,
+                        run twice when the kit is built, this DAG only), so the worker can check its own work and see where its behaviour differs from Airflow's without Airflow installed
     out/                empty: the worker creates its Dagster project here
 and DIR/<run>-private/ (kit index, private specs): never given to workers.
 
+Baselines: `--baseline-from RUN` copies the raw Airflow results (`airflow1.json`, `airflow2.json`) that an earlier run of the same DAGs already produced (`<work>/<RUN>-private/behavior/<dag>/`; same DAG, same
+Airflow, nothing re-run); `--venv-2/--venv-3` run the original DAG twice now. With neither, the kit has no baseline and `tools/compare_behavior.py` says so. Paths are scrubbed.
+
 `check` fails when a worker folder holds converter output (a converted module, the shared runtime, a conversion report, a caveat marker) or any other sampled DAG's data (its id, its source file,
-its spec), or a path of this machine's user. It is the guard that the rewrites are cold.
+its spec), or a path of this machine's user. It also verifies the kit is self-contained: every module a tool imports is in `tools/`, the baseline is present and holds nothing but this DAG's Airflow run. It is the guard that the rewrites are cold.
 """
 from __future__ import annotations
 
@@ -46,7 +50,7 @@ DAG in real Airflow, so what it DOES matters more than how it looks.
 | `spec.md` / `spec.json` | the facts about the DAG: tasks, operator arguments, callables' source, dependencies, value flow, schedule, retries, pools, connection and Variable names |
 | `prompt.md` | the full instructions for the rewrite (skills to load, target idioms, header accounting, gates). Follow it; where it conflicts with this file, this file wins |
 | `source/` | the original DAG file and the local files it imports or reads, at their repository paths. Read the source: the spec is a summary of it |
-| `tools/` | `accept_rewrite.py` (the acceptance gates) and `run_in_sandbox.py` (runs your DAG in the same sandbox the measurement uses) |
+| `tools/` | `accept_rewrite.py` (the acceptance gates), `run_in_sandbox.py` (runs your DAG in the sandbox the measurement uses) and `compare_behavior.py` (runs your project there and shows where it behaves differently from the original DAG in real Airflow; the original's results are in `tools/baseline/`) |
 | `out/` | where your Dagster project goes |
 | `WORKER_REPORT.md` | fill it in when you finish |
 
@@ -63,12 +67,24 @@ DAG in real Airflow, so what it DOES matters more than how it looks.
 ## The acceptance gates (you run them; they are necessary, not sufficient)
 
 ```
-cd out/{project} && .venv/bin/python ../../tools/accept_rewrite.py --spec ../../spec.json --module {project}.defs.{module} --project . [--defs-dir src/{project}/defs/<component folder>]
+cd out/{project} && .venv/bin/python ../../tools/accept_rewrite.py --spec ../../spec.json --module {project}.defs.{module} --project . --baseline ../../tools/baseline --source ../../source [--defs-dir src/{project}/defs/<component folder>]
 ```
 
-Seven gates: `dg check defs`, a generated behavioural test, asset checks, parity (not run here: no Airflow baseline is given to you), no secret values, no invented APIs, every task accounted for.
-Passing them does not mean the behaviour is right. After the gates, the harness runs the original DAG in Airflow and your project side by side and compares outcomes, values, files, rows, requests, mails,
-schedule, retries, pools and dependencies. You will not see those results.
+Nine gates: `dg check defs`, a generated behavioural test, asset checks, parity (not run here), no secret values, no invented APIs, every task accounted for, **task states** (your project's task outcomes
+and effects against Airflow's; it names the task that differs) and **decision record** (see rule 8).
+Passing the gates does not mean the behaviour is right.
+
+## Behaviour feedback: run it, read it, iterate
+
+```
+cd out/{project} && .venv/bin/python ../../tools/compare_behavior.py --project . --spec ../../spec.json --source ../../source
+```
+
+Airflow is not needed: the original DAG was run in real Airflow when this kit was built; its results are in `tools/baseline/`. The tool runs your project in the sandbox, then prints each dimension (outcome, each
+task's state, values, files, SQLite rows, HTTP requests, mails, S3 objects, failure behaviour, schedule, retries, pools, dependencies, job) as `match`, `DIFFERENT` or `not compared`, and for DIFFERENT
+exactly what differs. **Iterate until every DIFFERENT dimension is fixed or explicitly justified** (a `not preserved: <why>` line in the decision record and a sentence in `WORKER_REPORT.md`). If the
+tool says Airflow itself failed in the sandbox (a missing package, no network), that is not yours to fix: a rewrite that fails the same way is correct. Each run of the tool after a change is an attempt.
+After you finish, the harness measures the same thing and the result is what counts.
 
 ## The sandbox your code runs in (the same for the original DAG)
 
@@ -90,7 +106,10 @@ schedule, retries, pools and dependencies. You will not see those results.
 4. No secrets, no customer names, nothing outside this folder (except `uv` and registry downloads).
 5. When something in the spec is ambiguous, pick the reading the source supports, and write the assumption in `WORKER_REPORT.md`.
 6. `prompt.md` was generated for a wider workflow: it mentions a converter, a `manifest.json` and `python3 scripts/accept_rewrite.py`. None of those exist for you. There is no converter output to read, and the gate command is the one above.
-7. Count your attempts: every time you run the gates or the sandbox after changing code is one attempt. Report the number honestly.
+7. Count your attempts: every time you run the gates, the sandbox or `compare_behavior.py` after changing code is one attempt. Report the number honestly.
+8. The header docstring ends with a **decision record**: a paragraph that starts with the line `Decision record:` and one line per non-obvious behaviour, `- <behaviour>: preserved` or
+   `- <behaviour>: not preserved: <why>`, for `skip/branch`, `trigger rules`, `retries`, `pools`, `sensor modes`, `depends_on_past`, `failure semantics`, `mapped tasks` (every one the spec shows). The
+   `decision_record` gate checks it exists and covers them; a declared loss is accepted, a hidden one is not.
 """
 
 REPORT_MD = """# Worker report: `{dag_id}`
@@ -115,10 +134,45 @@ Registry searches (the exact terms), skill references read.
 ## Assumptions
 Every place the spec or source was ambiguous and which reading you took.
 
+## Behaviour comparison (`tools/compare_behavior.py`)
+Last verdict, how many times you ran it, and for every dimension still DIFFERENT: fixed, or justified (and where in the decision record).
+
 ## Behaviour you could not preserve or could not verify
 
 ## Anything else the reviewer should know
 """
+
+
+TOOLS_TOP = ("accept_rewrite.py", "gen_tests.py", "status.py", "rewrite_patterns.py")
+TOOLS_PARITY = ("sandbox.py", "run_dagster.py", "run_in_sandbox.py", "behavior_compare.py", "harness_cfg.py", "compare_behavior.py")
+
+
+def bake_baseline(a: argparse.Namespace, work: Path, manifest: dict[str, Any], row: dict[str, Any], name: str, spec: dict[str, Any], dest: Path) -> str:
+    """Put the ORIGINAL DAG's Airflow results (airflow1.json, airflow2.json: this DAG only) into tools/baseline/, scrubbed of this machine's paths. Returns how it was obtained."""
+    src_dir = None
+    if getattr(a, "baseline_from", None):
+        src_dir = private_dir(work, a.baseline_from) / "behavior" / name
+        if not (src_dir / "airflow1.json").exists():
+            return f"none: {a.baseline_from} has no airflow results for this DAG"
+        how = f"copied from run {a.baseline_from} (the same DAG in the same Airflow; not re-run)"
+    elif getattr(a, "venv_2", None) and getattr(a, "venv_3", None):
+        import eval_behavior as E
+        base = work / "baselines_kit" / C.safe(row["key"])
+        E.execute(base / "out", base / "sandboxes", spec, row["dag_id"], C.dag_file(work, manifest, row), work / "repos" / row["repo"], a.venv_2 if row["airflow"] == "2" else a.venv_3, sys.executable, None, base / "none", [], 300,
+                  seed=E.seed_for(C.dag_file(work, manifest, row), work / "repos" / row["repo"]))
+        src_dir, how = base / "out", "run now in real Airflow (twice)"
+    else:
+        return "none: no --baseline-from and no Airflow interpreters were given"
+    dest.mkdir(parents=True, exist_ok=True)
+    for f in ("airflow1.json", "airflow2.json"):
+        if (src_dir / f).exists():
+            (dest / f).write_text(clean_baseline(C.scrub((src_dir / f).read_text(), work)))
+    return how
+
+
+def clean_baseline(text: str) -> str:
+    """A raw Airflow result as a worker may see it: nothing is added or removed except that any user home path (also a truncated one in a log tail) is replaced, after `C.scrub` replaced the work directory."""
+    return re.sub(r"/Users/[^/\s\"']*", "<home>", text)
 
 
 def worker_dir(work: Path, run: str, name: str) -> Path:
@@ -166,16 +220,16 @@ def make(a: argparse.Namespace) -> int:
         deps = C.local_deps(root, src)
         for f in deps:
             C.copy_tree_file(root, f, d / "source")
-        for f in ("accept_rewrite.py", "gen_tests.py", "status.py"):
+        for f in TOOLS_TOP:
             shutil.copy2(HERE / f, d / "tools" / f)
-        shutil.copy2(HERE / "parity" / "sandbox.py", d / "tools" / "sandbox.py")
-        shutil.copy2(HERE / "parity" / "run_dagster.py", d / "tools" / "run_dagster.py")
-        shutil.copy2(HERE / "parity" / "run_in_sandbox.py", d / "tools" / "run_in_sandbox.py")
+        for f in TOOLS_PARITY:
+            shutil.copy2(HERE / "parity" / f, d / "tools" / f)
+        base_note = bake_baseline(a, work, manifest, row, name, spec, d / "tools" / "baseline")
         (d / "TASK.md").write_text(TASK_MD.format(dag_id=row["dag_id"], project=project, module=module, dcc_skill=dcc))
         (d / "WORKER_REPORT.md").write_text(REPORT_MD.format(dag_id=row["dag_id"], project=project))
         (priv / "specs").mkdir(exist_ok=True)
         (priv / "specs" / f"{name}.spec.json").write_text(json.dumps(spec, indent=1, sort_keys=True) + "\n")
-        index[e["key"]] = {"dir": name, "dag_id": row["dag_id"], "project": project, "module": module, "stratum": e["stratum"], "pattern": e["pattern"], "repo": row["repo"],
+        index[e["key"]] = {"baseline": base_note, "dir": name, "dag_id": row["dag_id"], "project": project, "module": module, "stratum": e["stratum"], "pattern": e["pattern"], "repo": row["repo"],
                            "source_file": str(src.relative_to(root)), "local_deps": [str(f.relative_to(root)) for f in deps]}
     (priv / "kit_index.json").write_text(json.dumps(index, indent=1, sort_keys=True) + "\n")
     (priv / "kit_meta.json").write_text(json.dumps({"dcc_skill": dcc, "sample_seed": sample.get("seed"), "sample_label": sample.get("label")}, indent=1) + "\n")
@@ -226,11 +280,47 @@ def check_all(work: Path, run: str, index: dict[str, Any], dcc: str = "") -> lis
             out.append(f"{v['dir']}: folder missing")
             continue
         out += check_dir(d, v["dag_id"], ids, banned, dcc)
+        out += tools_problems(d, v["dag_id"])
         # the source folder must hold no other sampled DAG's file
         src_files = [str(p.relative_to(d / "source")) for p in (d / "source").rglob("*.py")]
         for k, o in index.items():
             if o["dag_id"] != v["dag_id"] and o["source_file"] in src_files and o["source_file"] not in [v["source_file"], *v["local_deps"]]:
                 out.append(f"{v['dir']}: source/ holds the file of another sampled DAG ({o['dag_id']})")
+    return out
+
+
+def tools_problems(d: Path, own_id: str) -> list[str]:
+    """The kit is self-contained: every module a tool imports from this skill is in tools/, and tools/baseline holds this DAG's Airflow run and nothing else."""
+    import ast
+    out: list[str] = []
+    tools = d / "tools"
+    local = {p.stem for p in list(HERE.glob("*.py")) + list((HERE / "parity").glob("*.py"))}
+    have = {p.stem for p in tools.glob("*.py")}
+    for need in [Path(f).stem for f in TOOLS_TOP + TOOLS_PARITY]:
+        if need not in have:
+            out.append(f"{d.name}: tools/{need}.py is missing")
+    for p in sorted(tools.glob("*.py")):
+        try:
+            tree = ast.parse(p.read_text())
+        except SyntaxError:
+            out.append(f"{d.name}: tools/{p.name} does not parse")
+            continue
+        for node in ast.walk(tree):
+            mods = [a.name for a in node.names] if isinstance(node, ast.Import) else ([node.module] if isinstance(node, ast.ImportFrom) and node.module and not node.level else [])
+            for m in mods:
+                top = m.split(".")[0]
+                if top in local and top not in have and top != p.stem:
+                    out.append(f"{d.name}: tools/{p.name} imports `{top}`, which is not in tools/")
+    base = tools / "baseline"
+    if base.exists():
+        for f in base.glob("*.json"):
+            try:
+                j = json.loads(f.read_text())
+            except ValueError:
+                out.append(f"{d.name}: tools/baseline/{f.name} is not JSON")
+                continue
+            if j.get("dag_id") not in (None, own_id):
+                out.append(f"{d.name}: tools/baseline/{f.name} is another DAG's result ({j.get('dag_id')})")
     return out
 
 
@@ -254,6 +344,9 @@ def main(argv: list[str] | None = None) -> int:
     m.add_argument("--sample", type=Path, required=True)
     m.add_argument("--run", required=True)
     m.add_argument("--dcc-skill")
+    m.add_argument("--baseline-from", help="an earlier run of the same DAGs whose raw Airflow results to bake into each kit (its <work>/<RUN>-private/behavior/<dag>/airflow{1,2}.json)")
+    m.add_argument("--venv-2")
+    m.add_argument("--venv-3")
     c = sub.add_parser("check")
     c.add_argument("--work", type=Path, required=True)
     c.add_argument("--run", required=True)
