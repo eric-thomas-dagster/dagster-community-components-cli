@@ -4,6 +4,7 @@
     python3 eval_sample.py --manifest corpus/manifest.json --stage 1 --seed 20260101 --out sample.json
     python3 eval_sample.py --manifest corpus/manifest.json --stage 2 --out sample.json            (every eligible DAG; stage 1's DAGs come first)
     python3 eval_sample.py --manifest corpus/manifest.json --n 120 --out sample.json              (a stratified sample of exactly 120)
+    python3 eval_sample.py --subset-of sample.json --n 12 --out sample_b.json                     (a stratified subset, for the second independent pass)
 
 Strata are the converter's result: clean, degraded, stubbed, deferred ("hard" = stubbed or deferred). Inside a stratum DAGs are drawn round-robin over (pattern, repository) buckets in a seeded
 order, so no single pattern and no single repository dominates, and a repository holds at most `--max-repo-share` of the sample (relaxed only when nothing else is left to draw).
@@ -12,7 +13,7 @@ order, so no single pattern and no single repository dominates, and a repository
   stage 2   as many as possible: the whole eligible corpus. There is no cap: 100 or 280 DAGs work the same. The stage 1 sample is its prefix, so stage 2 continues stage 1 rather than redoing it
   --n       a stratified sample of that size, proportional to the strata (hard DAGs first when n is small)
 
-Same manifest and same seed give the same file. Writes sample.json and a readable sample.md.
+With --baselines (from eval_baseline.py) only DAGs whose Airflow baseline ran are sampled. Same manifest, baselines and seed give the same file. Writes sample.json and a readable sample.md.
 """
 from __future__ import annotations
 
@@ -26,8 +27,15 @@ from typing import Any
 STRATA = ["clean", "degraded", "stubbed", "deferred"]
 
 
-def eligible(manifest: dict[str, Any]) -> list[dict[str, Any]]:
-    return sorted((r for r in manifest["dags"] if r.get("eligible") and r["converter"] in STRATA), key=lambda r: r["key"])
+USABLE_BASELINES = {"ok", "by-design-failure"}
+
+
+def eligible(manifest: dict[str, Any], baselines: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    """Eligible DAGs; with `baselines` (from eval_baseline.py) only those whose Airflow baseline ran: ok, or failing by design (reproducibly)."""
+    rows = [r for r in manifest["dags"] if r.get("eligible") and r["converter"] in STRATA]
+    if baselines is not None:
+        rows = [r for r in rows if baselines.get(r["key"], {}).get("class") in USABLE_BASELINES]
+    return sorted(rows, key=lambda r: r["key"])
 
 
 def draw(rows: list[dict[str, Any]], k: int, rng: random.Random, taken_by_repo: collections.Counter, repo_cap: int) -> list[dict[str, Any]]:
@@ -100,8 +108,8 @@ def stratified(rows: list[dict[str, Any]], seed: int, n: int, max_share: float) 
     return sel
 
 
-def build_sample(manifest: dict[str, Any], stage: int | None, n: int | None, seed: int, max_share: float = 0.25, n1: int = 40) -> dict[str, Any]:
-    rows = eligible(manifest)
+def build_sample(manifest: dict[str, Any], stage: int | None, n: int | None, seed: int, max_share: float = 0.25, n1: int = 40, baselines: dict[str, Any] | None = None) -> dict[str, Any]:
+    rows = eligible(manifest, baselines)
     first = stage1(rows, seed, min(n1, len(rows)), max_share)
     if stage == 1:
         chosen, label = first, "stage 1"
@@ -118,12 +126,23 @@ def build_sample(manifest: dict[str, Any], stage: int | None, n: int | None, see
     entries = [{"key": r["key"], "dag_id": r["dag_id"], "repo": r["repo"], "stratum": r["converter"], "hard": r["converter"] in ("stubbed", "deferred"), "pattern": r["pattern"], "patterns": r["patterns"],
                 "airflow": r["airflow"], "stage1": r["key"] in s1} for r in chosen]
     cnt = lambda f: dict(sorted(collections.Counter(f(e) for e in entries).items()))      # noqa: E731
-    return {"seed": seed, "label": label, "n": len(entries), "eligible_corpus": len(rows), "max_repo_share": max_share, "dags": entries,
+    return {"seed": seed, "label": label, "n": len(entries), "eligible_corpus": len(rows), "baseline_filter": baselines is not None,
+            "dropped_for_baseline": (len(eligible(manifest)) - len(rows)) if baselines is not None else None, "max_repo_share": max_share, "dags": entries,
             "counts": {"stratum": cnt(lambda e: e["stratum"]), "pattern": cnt(lambda e: e["pattern"]), "repo": cnt(lambda e: e["repo"])}}
 
 
+def subset(sample: dict[str, Any], n: int, seed: int) -> dict[str, Any]:
+    """A stratified subset of an existing sample (for the second, independent pass that measures variance): same strata proportions, hard DAGs first."""
+    rows = [{**e, "converter": e["stratum"]} for e in sample["dags"]]
+    chosen = stratified(rows, seed, min(n, len(rows)), 1.0)
+    entries = [{k: v for k, v in r.items() if k != "converter"} for r in chosen]
+    cnt = lambda f: dict(sorted(collections.Counter(f(e) for e in entries).items()))      # noqa: E731
+    return {**{k: sample[k] for k in ("eligible_corpus", "max_repo_share", "baseline_filter", "dropped_for_baseline") if k in sample}, "seed": seed, "label": f"subset of {sample['label']} for variance (n={len(entries)})",
+            "n": len(entries), "dags": entries, "counts": {"stratum": cnt(lambda e: e["stratum"]), "pattern": cnt(lambda e: e["pattern"]), "repo": cnt(lambda e: e["repo"])}}
+
+
 def render_md(s: dict[str, Any]) -> str:
-    out = [f"# Evaluation sample ({s['label']}, seed {s['seed']}): {s['n']} DAGs of {s['eligible_corpus']} eligible", "",
+    out = [f"# Evaluation sample ({s['label']}, seed {s['seed']}): {s['n']} DAGs of {s['eligible_corpus']} eligible" + (f" with a usable Airflow baseline ({s['dropped_for_baseline']} eligible DAGs dropped because their baseline failed or was unstable)" if s.get("baseline_filter") else ""), "",
            f"By stratum: {s['counts']['stratum']}", f"By pattern: {s['counts']['pattern']}", f"By repository: {s['counts']['repo']}", ""]
     for st in STRATA:
         es = [e for e in s["dags"] if e["stratum"] == st]
@@ -134,16 +153,24 @@ def render_md(s: dict[str, Any]) -> str:
 
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    ap.add_argument("--manifest", type=Path, required=True)
+    ap.add_argument("--manifest", type=Path)
+    ap.add_argument("--subset-of", type=Path, help="an existing sample.json: write a stratified subset of --n of its DAGs (the variance pass)")
     ap.add_argument("--stage", type=int, choices=[1, 2])
     ap.add_argument("--n", type=int)
     ap.add_argument("--seed", type=int, default=20260101)
     ap.add_argument("--max-repo-share", type=float, default=0.25)
+    ap.add_argument("--baselines", type=Path, help="baselines.json from eval_baseline.py: sample only DAGs whose Airflow baseline ran (ok, or failing by design)")
     ap.add_argument("--out", type=Path, default=Path("sample.json"))
     a = ap.parse_args(argv)
-    if not a.stage and not a.n:
-        ap.error("give --stage 1, --stage 2 or --n")
-    s = build_sample(json.loads(a.manifest.read_text()), a.stage, a.n, a.seed, a.max_repo_share)
+    if a.subset_of:
+        s = subset(json.loads(a.subset_of.read_text()), a.n or 12, a.seed)
+        a.out.write_text(json.dumps(s, indent=1, sort_keys=True) + "\n")
+        a.out.with_suffix(".md").write_text(render_md({**s, "eligible_corpus": s.get("eligible_corpus", "?")}))
+        print(f"wrote {a.out}: {s['n']} DAGs; by stratum {s['counts']['stratum']}")
+        return 0
+    if not a.manifest or (not a.stage and not a.n):
+        ap.error("give --manifest and --stage 1, --stage 2 or --n")
+    s = build_sample(json.loads(a.manifest.read_text()), a.stage, a.n, a.seed, a.max_repo_share, baselines=json.loads(a.baselines.read_text()) if a.baselines else None)
     a.out.write_text(json.dumps(s, indent=1, sort_keys=True) + "\n")
     a.out.with_suffix(".md").write_text(render_md(s))
     print(f"wrote {a.out} and {a.out.with_suffix('.md')}: {s['n']} DAGs; by stratum {s['counts']['stratum']}; by pattern {s['counts']['pattern']}")

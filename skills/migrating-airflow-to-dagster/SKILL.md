@@ -26,7 +26,7 @@ The tiers are **where the work runs**: 1 observe, 2 bridge (Airlift keeps Airflo
 | **convert** | the deterministic converter (`convert_ir.py`): a near like-for-like conversion of what Airflow built, task by task (or `--granularity product`) | the mechanical bulk; it is the default |
 | **rewrite** | a generated spec (`dag_spec.py`) and prompt (`rewrite_prompt.py`): Claude writes the Dagster code from scratch with `dagster-expert` and `dagster-community-components`, accepted by `accept_rewrite.py` through the same kind of gates | DAGs the converter deferred or stubbed, redesign-heavy DAGs, pilot DAGs where idiomatic output matters, anything `plan.py` puts in the last wave |
 
-The rewrite is expected to be more idiomatic (one asset per data product, glue folded, registry components) and to cover operators the converter stubs; the evidence so far is `examples/rewrite/` (two worked DAGs and a sample of eight) and `reference/rewrite-route.md`, not a claim that it is better. The converter's output is the reference draft and the fallback for every rewrite. The rewrite route spends model effort on every DAG.
+The rewrite is expected to be more idiomatic (one asset per data product, glue folded, registry components) and to cover operators the converter stubs; the evidence so far is `examples/rewrite/` (two worked DAGs and a sample of eight, written by the agent that designed the prompts, so not a cold measurement) and `reference/rewrite-route.md`, not a claim that it is better. A behaviour measurement against real Airflow, on a large sample, by cold workers, has a harness (`scripts/eval_*.py`, run book `reference/rewrite-route-evaluation-runbook.md`) and a generated report (`reference/rewrite-route-evaluation.md`: the numbers appear there only once it has been run). The converter's output is the reference draft and the fallback for every rewrite. The rewrite route spends model effort on every DAG.
 
 The scanner, manifest and gates below are for tier 3 and for deciding what stays in tiers 1-2. **Airflow 3 source:** `dagster-airlift` 0.29.31 cannot read an Airflow 3 REST API (`/api/v2`), so tier 3 with the converter is the route; the extractor runs the DAG files and does not use the REST API (`reference/airlift.md`).
 
@@ -180,6 +180,7 @@ Writes `cutover-<dag_id>.md` for each converted DAG (pause plan, catchup and bac
 | The cutover checklist and what each section is for | `reference/cutover-checklist.md` |
 | A worked wave plan and cutover checklists | `examples/migration_plan/` |
 | The rewrite route on two DAGs (one the converter handles, one it stubs), with the spec, prompt and gates | `examples/rewrite/`, `reference/rewrite-route.md` |
+| How to measure both routes against real Airflow (corpus, sample, cold-worker kit, behaviour comparison, report) | `reference/rewrite-route-evaluation-runbook.md`, `reference/rewrite-route-evaluation.md` |
 
 ## Scripts
 
@@ -193,6 +194,7 @@ Writes `cutover-<dag_id>.md` for each converted DAG (pause plan, catchup and bac
 | `scripts/rewrite_prompt.py` | The self-contained prompt that has Claude write one DAG from its spec (rewrite route) |
 | `scripts/run_evals.py` | Skill-level evals (`evals/`): fixtures converted, then `dg check defs`, the generated tests, no invented component types and no secret values checked |
 | `scripts/accept_rewrite.py` | The gates for a rewrite, and the manifest record of which route produced each unit |
+| `scripts/eval_corpus.py`, `eval_baseline.py`, `eval_sample.py`, `eval_kit.py`, `eval_gates.py`, `eval_behavior.py`, `eval_report.py` | The evaluation harness: corpus of public DAGs, baseline pre-flight, seeded stratified sample, cold-worker kit, gates, behaviour comparison against real Airflow (`parity/`), generated report |
 | `scripts/plan.py` | Wave plan from the manifest (and IR and report): pattern, complexity, path, wave, coarse effort, pilot; heuristic and deterministic |
 | `scripts/cosmos_ops.py` | The Cosmos mapping `convert_ir.py` uses (dbt component, dbt steps, profiles) |
 | `scripts/cutover.py` | One cutover checklist per converted DAG; writes markdown and prints commands, acts on nothing |

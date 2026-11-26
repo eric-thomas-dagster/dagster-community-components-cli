@@ -32,7 +32,8 @@ ENV_ERRORS = re.compile(
     r"ModuleNotFoundError|No module named|ImportError|cannot import name|Name or service not known|NameResolutionError|Temporary failure in name resolution|Connection refused|Failed to establish a new connection|"
     r"Max retries exceeded|gaierror|NoCredentialsError|EndpointConnectionError|isn't defined|conn_id .* (?:not found|is not defined)|AirflowNotFoundException|Variable \S+ does not exist|"
     r"KeyError: 'AIRFLOW_VAR|command not found|No such file or directory: '(?:docker|ssh|spark|kubectl|dbt|java|node|aws|gcloud)|Cannot connect to the Docker|ConfigException|could not translate host|"
-    r"UnknownHostException|TimeoutExpired|ReadTimeout|ConnectTimeout|ProxyError|SSLError|Errno 111|Errno 61", re.I)
+    r"UnknownHostException|TimeoutExpired|ReadTimeout|ConnectTimeout|ProxyError|SSLError|Errno 111|Errno 61|No interpreter found|No matching distribution|Could not find a version that satisfies|"
+    r"Failed to download|Network is unreachable|Temporary failure|pip.*(?:returned non-zero|failed)|uv.*error:|Failed to fetch|Could not resolve", re.I)
 
 
 def dim(verdict: str, reason: str | None = None, evidence: Any = None, **extra: Any) -> dict[str, Any]:

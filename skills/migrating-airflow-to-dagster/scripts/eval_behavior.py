@@ -123,18 +123,20 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
             routes: list[str], timeout: int = 300, cap: float | None = None, deferred: bool = False) -> dict[str, Any]:
     """The four executions and the comparison for one DAG. `conv` is {"src": converted source dir, "report": the converter's report entry} or None; `project` is the rewrite's project root."""
     out_dir, sb, dag_path, root, project = (Path(p).resolve() for p in (out_dir, sb, dag_path, root, project))
+    af_py, dagster_python = str(Path(af_py).absolute()), str(Path(dagster_python).absolute())          # absolute, but not resolved: a virtualenv's python is a symlink and its bin directory must stay on the PATH
     if conv:
         conv = {**conv, "src": Path(conv["src"]).resolve()}
     out_dir.mkdir(parents=True, exist_ok=True)
     t0 = time.time()
     procs: dict[str, tuple[subprocess.Popen, Path]] = {}
     base_env = {"PYTHONWARNINGS": "ignore"}
+    path_with = lambda py: {"PATH": str(Path(py).parent) + os.pathsep + os.environ.get("PATH", "")}      # noqa: E731  # `python`, `uv`, `dbt` of the route's own environment are on the PATH
     for label in ("airflow1", "airflow2"):
         r = fresh(sb / label)
         cfg = {"dag_file": str(dag_path), "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap), "out": str(out_dir / f"{label}.json"), "timeout_s": timeout}
         (r / "config.json").write_text(json.dumps(cfg))
         (out_dir / f"{label}.json").unlink(missing_ok=True)
-        procs[label] = (launch([af_py, "-W", "ignore", str(PARITY / "run_airflow.py"), str(r / "config.json")], base_env, timeout, out_dir / f"{label}.log"), r)
+        procs[label] = (launch([af_py, "-W", "ignore", str(PARITY / "run_airflow.py"), str(r / "config.json")], {**base_env, **path_with(af_py)}, timeout, out_dir / f"{label}.log"), r)
     rep = (conv or {}).get("report")
     notes: dict[str, str] = {}
     if "converter" in routes:
@@ -147,7 +149,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
             cfg = {"kind": "converter", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap), "out": str(out_dir / "converter.json"), "timeout_s": timeout, "converter": {"src": str(conv["src"]), "pkg": "pkg"}}
             (r / "config.json").write_text(json.dumps(cfg))
             (out_dir / "converter.json").unlink(missing_ok=True)
-            procs["converter"] = (launch([dagster_python, str(PARITY / "run_dagster.py"), str(r / "config.json")], {**base_env, "PYTHONPATH": os.pathsep.join([str(conv["src"]), str(root)])}, timeout, out_dir / "converter.log"), r)
+            procs["converter"] = (launch([dagster_python, str(PARITY / "run_dagster.py"), str(r / "config.json")], {**base_env, **path_with(dagster_python), "PYTHONPATH": os.pathsep.join([str(conv["src"]), str(root)])}, timeout, out_dir / "converter.log"), r)
     if "rewrite" in routes:
         if not (project / "src").exists():
             notes["rewrite"] = "no-output: the worker produced no project"
@@ -157,9 +159,13 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
             cfg = {"kind": "rewrite", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap), "out": str(out_dir / "rewrite.json"), "timeout_s": timeout, "rewrite": {"project": str(project), "module": None}}
             (r / "config.json").write_text(json.dumps(cfg))
             (out_dir / "rewrite.json").unlink(missing_ok=True)
-            procs["rewrite"] = (launch([str(py) if py.exists() else dagster_python, str(PARITY / "run_dagster.py"), str(r / "config.json")], base_env, timeout, out_dir / "rewrite.log"), r)
+            procs["rewrite"] = (launch([str(py) if py.exists() else dagster_python, str(PARITY / "run_dagster.py"), str(r / "config.json")], {**base_env, **path_with(str(py) if py.exists() else dagster_python)}, timeout, out_dir / "rewrite.log"), r)
     killed = {k: wait(p, timeout + 120) for k, (p, _) in procs.items()}
     elapsed = round(time.time() - t0, 1)
+    for _, r in procs.values():                                               # the metadata databases are the bulk of the disk and are not evidence; the cwd, data and results stay
+        for sub in ("airflow_home", "dagster_home"):
+            if "sandboxes" in r.parts and (r / sub).exists():
+                shutil.rmtree(r / sub, ignore_errors=True)
 
     def load(label: str) -> dict[str, Any]:
         f = out_dir / f"{label}.json"

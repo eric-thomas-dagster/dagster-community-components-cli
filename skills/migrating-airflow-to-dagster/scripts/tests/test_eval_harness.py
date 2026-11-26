@@ -95,6 +95,26 @@ def test_sampler_never_picks_an_ineligible_dag():
         assert {e["key"] for e in S.build_sample(m, stage, None, 1)["dags"]} <= ok
 
 
+def test_sampler_drops_dags_whose_airflow_baseline_failed():
+    m = synthetic_manifest()
+    keys = [r["key"] for r in m["dags"] if r["eligible"]]
+    base = {k: {"class": "baseline-failed" if i % 3 == 0 else ("unstable" if i % 7 == 0 else "ok")} for i, k in enumerate(keys)}
+    base[keys[1]] = {"class": "by-design-failure"}
+    s = S.build_sample(m, 2, None, 5, baselines=base)
+    usable = {k for k, v in base.items() if v["class"] in ("ok", "by-design-failure")}
+    assert {e["key"] for e in s["dags"]} == usable
+    assert s["baseline_filter"] is True and s["dropped_for_baseline"] == len(keys) - len(usable)
+    assert S.build_sample(m, 2, None, 5)["baseline_filter"] is False
+
+
+def test_subset_for_the_variance_pass_keeps_strata_and_is_a_subset():
+    m = synthetic_manifest()
+    s = S.build_sample(m, 1, None, 3)
+    b = S.subset(s, 12, 4)
+    assert b["n"] == 12 and {e["key"] for e in b["dags"]} <= {e["key"] for e in s["dags"]}
+    assert set(b["counts"]["stratum"]) >= {"stubbed", "clean"} and b == S.subset(s, 12, 4)
+
+
 # ---- cold-worker kit ----------------------------------------------------------------------------------------------------------------------------------
 @pytest.fixture()
 def work(tmp_path):
@@ -401,7 +421,7 @@ def test_report_counts_intervals_pairs_and_provenance(tmp_path):
     (tmp_path / "costs.json").write_text(json.dumps({"d0": {"tokens": 1000, "tool_uses": 10}, "d1": {"tokens": 3000, "tool_uses": 30}}))
     out = {}
     for writers in ("cold", "designer"):
-        a = argparse.Namespace(work=tmp_path, runs=["r1"], writers=writers, costs=tmp_path / "costs.json", variance_run=None, manifest=None, out=None)
+        a = argparse.Namespace(work=tmp_path, runs=["r1"], writers=writers, costs=tmp_path / "costs.json", variance_run=None, manifest=None, baselines=None, out=None)
         out[writers] = R.render(a)
     t = out["cold"]
     assert "written by fresh agents that did not design the prompts" in t and "NOT cold-worker numbers" in out["designer"]
@@ -420,14 +440,15 @@ def test_report_counts_intervals_pairs_and_provenance(tmp_path):
 def test_report_with_no_behaviour_results_says_nothing_was_measured(tmp_path):
     import argparse
     fake_run(tmp_path, "r1", [])
-    a = argparse.Namespace(work=tmp_path, runs=["r1"], writers="cold", costs=None, variance_run=None, manifest=None, out=None)
-    assert "nothing below has been measured (not run)" in R.render(a)
+    a = argparse.Namespace(work=tmp_path, runs=["r1"], writers="cold", costs=None, variance_run=None, manifest=None, baselines=None, out=None)
+    txt = R.render(a)
+    assert "**Not run.**" in txt and "nothing below has been measured" in txt and "fresh agents" not in txt
 
 
 def test_report_variance_section_pairs_two_independent_rewrites(tmp_path):
     import argparse
     fake_run(tmp_path, "r1", [("equivalent", "equivalent", "clean"), ("equivalent", "different", "clean")])
     fake_run(tmp_path, "r1b", [("equivalent", "equivalent", "clean"), ("equivalent", "equivalent", "clean")])
-    a = argparse.Namespace(work=tmp_path, runs=["r1"], writers="cold", costs=None, variance_run="r1b", manifest=None, out=None)
+    a = argparse.Namespace(work=tmp_path, runs=["r1"], writers="cold", costs=None, variance_run="r1b", manifest=None, baselines=None, out=None)
     t = R.render(a)
     assert "2 DAGs have a second independent rewrite" in t and "Same behaviour verdict in both passes: 1/2 = 50%" in t

@@ -96,6 +96,8 @@ try:
                 try:
                     m = importlib.import_module(f"{d.parent.name}.definitions")
                     defs = getattr(m, "defs", None) or next((v for v in vars(m).values() if isinstance(v, dg.Definitions)), None)
+                    if defs is not None and not isinstance(defs, dg.Definitions) and callable(defs):          # `@definitions def defs()` is a LazyDefinitions: call it, as `dg` does
+                        defs = defs()
                     if defs is None and hasattr(m, "definitions"):
                         defs = m.definitions()
                     if defs is not None:
@@ -149,7 +151,7 @@ try:
         try:
             job = None
             if cfg["kind"] == "rewrite" and cfg["dag_id"] in [j.name for j in jobs]:
-                d2 = dg.Definitions(assets=assets, asset_checks=checks, jobs=jobs, schedules=schedules, sensors=sensors, resources=resources or None)
+                d2 = defs if defs is not None else dg.Definitions(assets=assets, asset_checks=checks, jobs=jobs, schedules=schedules, sensors=sensors, resources=resources or None)
                 job = d2.get_job_def(cfg["dag_id"]) if hasattr(d2, "get_job_def") else d2.resolve_job_def(cfg["dag_id"])
                 res["notes"].append(f"executed the job `{cfg['dag_id']}`")
                 pk = {}
