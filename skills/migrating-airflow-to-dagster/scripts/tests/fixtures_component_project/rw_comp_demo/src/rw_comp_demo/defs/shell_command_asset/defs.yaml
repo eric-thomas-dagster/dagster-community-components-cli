@@ -1,0 +1,11 @@
+# comp_demo: export_raw: replaced by asset `raw_data_export` (registry component `shell_command_asset`,
+#   fields set: asset_name, command, group_name, skip_on_exit_code; validation tier: live)
+# notify: dropped: an EmptyOperator has no behaviour
+#
+# Decision record:
+# - retries: preserved
+type: rw_comp_demo.components.shell_command_asset.component.ShellCommandAssetComponent
+attributes:
+  asset_name: raw_data_export
+  command: "echo exported"
+  group_name: comp_demo

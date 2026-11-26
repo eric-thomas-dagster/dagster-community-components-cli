@@ -19,6 +19,7 @@ from pathlib import Path
 from typing import Any
 
 import eval_common as C
+import rewrite_project as RPJ
 
 
 def parse_report(text: str) -> dict[str, Any]:
@@ -30,7 +31,21 @@ def parse_report(text: str) -> dict[str, Any]:
         mm = re.search(rf"## {re.escape(sec)}[^\n]*\n(.*?)(?=\n## |\Z)", text, re.S)
         body = re.sub(r"\|[\s\-|:]*\|\n?|\|.*?\|\n?", "", mm.group(1)).strip() if mm else ""
         filled[sec] = bool(body) and not body.lower().startswith(("for each:", "every place", "registry searches"))
-    return {"attempts": int(m.group(1)) if m else None, "registry_components": comps, "sections_filled": filled, "words": len(text.split())}
+    return {"attempts": int(m.group(1)) if m else None, "registry_components": comps, "sections_filled": filled, "words": len(text.split()), **searches_reported(text)}
+
+
+def searches_reported(text: str) -> dict[str, Any]:
+    """Does the worker report say registry searches were run? Read from the `What you searched` section: it names `dagster-component search` or a quoted search term, and does not say none / not run. `search_terms` counts the quoted terms."""
+    mm = re.search(r"## What you searched[^\n]*\n(.*?)(?=\n## |\Z)", text, re.S)
+    body = mm.group(1).strip() if mm else ""
+    if not body or body.lower().startswith(("registry searches", "for each:")):
+        return {"searches_reported": False, "search_terms": 0}
+    terms = re.findall(r"[\"“`]([^\"”`\n]{3,80})[\"”`]", body)
+    terms = [t for t in terms if not t.startswith(("dagster-component", "dagster-", "dg "))]
+    low = body.lower()
+    said_none = bool(re.match(r"(none|no searches?|not run|did not search)\b", low))
+    ran = ("search" in low) and not said_none
+    return {"searches_reported": ran, "search_terms": len(terms) if ran else 0}
 
 
 def one(a: argparse.Namespace, key: str, v: dict[str, Any]) -> dict[str, Any]:
@@ -40,21 +55,27 @@ def one(a: argparse.Namespace, key: str, v: dict[str, Any]) -> dict[str, Any]:
     (priv / "gates").mkdir(parents=True, exist_ok=True)
     rep = d / "WORKER_REPORT.md"
     (priv / "gates" / f"{v['dir']}.report.json").write_text(json.dumps(parse_report(rep.read_text()) if rep.exists() else {"missing": True}, indent=1) + "\n")
-    project = d / "out" / v["project"]
+    roots = [p for p in sorted((d / "out").iterdir()) if (p / "src").is_dir()] if (d / "out").exists() else []
+    project = roots[0] if roots else d / "out" / v["project"]            # the folder on disk: `uv` may have normalised the name the index computed (`rw_x_S3` -> `rw_x_s3`)
     out = priv / "gates" / f"{v['dir']}.gates.json"
     if not (project / "src").exists():
         out.write_text(json.dumps({"dag_id": v["dag_id"], "passed": False, "no_project": True, "gates": []}, indent=1) + "\n")
         return {"key": key, "passed": False, "no_project": True}
+    pkg = RPJ.package_of(project, v["project"])
+    rep_json = json.loads((priv / "gates" / f"{v['dir']}.report.json").read_text())
+    rep_json["components"] = RPJ.component_usage(project, pkg)           # what the project USES (read from its defs.yaml files), whatever the worker reported
+    rep_json["style"] = "component" if RPJ.component_dirs(project, pkg) else "module"
+    (priv / "gates" / f"{v['dir']}.report.json").write_text(json.dumps(rep_json, indent=1) + "\n")
     py = project / ".venv" / "bin" / "python"
     spec = d / "spec.json"
-    defs_dirs = [p for p in (project / "src" / v["project"] / "defs").iterdir() if p.is_dir() and p.name != "__pycache__"] if (project / "src" / v["project"] / "defs").exists() else []
-    cmd = [str(py) if py.exists() else a.dagster_python, str(C.HERE / "accept_rewrite.py"), "--spec", str(spec), "--module", f"{v['project']}.defs.{v['module']}", "--project", str(project), "--out", str(out)]
-    if defs_dirs:
-        cmd += ["--defs-dir", str(defs_dirs[0])]
-    if (d / "tools" / "baseline" / "airflow1.json").exists():              # the kit's own baked baseline: the task_states gate runs with it
-        cmd += ["--baseline", str(d / "tools" / "baseline"), "--source", str(d / "source")]
+    cmd = [str(py) if py.exists() else a.dagster_python, str(C.HERE / "accept_rewrite.py"), "--spec", str(spec), "--project", str(project), "--out", str(out)]
+    # the Airflow baseline for the task_states gate: the kit's own (arm A) or the harness's private copy (arm B kits hold none: the worker never sees it)
+    for bdir in (d / "tools" / "baseline", priv / "baseline" / v["dir"]):
+        if (bdir / "airflow1.json").exists():
+            cmd += ["--baseline", str(bdir), "--source", str(d / "source")]
+            break
     try:
-        r = subprocess.run(cmd, capture_output=True, text=True, timeout=a.timeout, env={**os.environ, "PYTHONPATH": str(C.HERE)}, cwd=str(project))
+        r = subprocess.run(cmd, capture_output=True, text=True, timeout=a.timeout, env={**{k: x for k, x in os.environ.items() if k != "VIRTUAL_ENV"}, "PYTHONPATH": str(C.HERE)}, cwd=str(project))
     except subprocess.TimeoutExpired:
         out.write_text(json.dumps({"dag_id": v["dag_id"], "passed": False, "gates": [{"gate": "harness", "passed": False, "detail": f"timeout after {a.timeout}s"}]}, indent=1) + "\n")
         return {"key": key, "passed": False}

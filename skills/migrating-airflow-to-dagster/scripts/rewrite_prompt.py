@@ -80,9 +80,16 @@ do not add it; verified unnecessary). Folding into plain Python loses the skippe
 
 {patterns}## 4. Where to write it
 
-- The module `{package}.defs.{d}` (`src/{package}/defs/{d}.py`), plus any component folders under `src/{package}/defs/`. Define a job named `{d}` over the DAG's assets and the schedule from the spec.
-- The first lines of the module are a docstring that **accounts for every Airflow task**: one line per task id in the form `<task_id>: replaced by asset `<asset key>`` / `folded into `<asset key>`` /
-  `dropped: <reason>` / `merged into ...`, followed by the registry components and tiers you used and any behaviour you could not preserve (stated, not hidden).
+- Under `src/{package}/defs/`, in either shape (the gates accept both on equal terms: they load the project through its own definitions loader, `dg check defs` and the `Definitions` object, and find assets, the job and the
+  schedule by KEY and NAME, never by a module-level variable):
+  - **module style**: `{package}.defs.{d}` (`src/{package}/defs/{d}.py`) with `@dg.asset` functions; or
+  - **component style**: one folder per registry component under `src/{package}/defs/<id>/` with a `defs.yaml` (created by `dagster-component add <id>`, filled from the real `schema.json`), plus a small `.py` file next to it
+    for the job and the schedule (a module-level `dg.define_asset_job("{d}", selection=dg.AssetSelection.assets("<key>"))` and `dg.ScheduleDefinition(...)`).
+  **Component projects are fine, and preferred whenever a registry component fits a stage** (`dagster-community-components` rule: registry first, official integration second, hand-written code last); a project may mix
+  both shapes (components for the stages they fit, a module for the rest). A component project is not a lesser answer and does not need a module-level asset. Define a job named `{d}` over the DAG's assets and the schedule from the spec.
+- The header **accounts for every Airflow task**: one line per task id in the form `<task_id>: replaced by asset `<asset key>`` / `folded into `<asset key>`` / `dropped: <reason>` / `merged into ...` (the asset key must exist
+  in the loaded definitions), followed by the registry components and tiers you used and any behaviour you could not preserve (stated, not hidden). The header is the docstring at the top of a module under `defs/` OR the `#`
+  comment block at the top of a component's `defs.yaml` (the decision record may be in the same place); it may be split across files.
 - Under the accounting, a **decision record**: a paragraph that starts with the line `Decision record:` and then one line per non-obvious behaviour in the form `- <behaviour>: preserved` or
   `- <behaviour>: not preserved: <why>`. Behaviours: `skip/branch`, `trigger rules`, `retries`, `pools`, `sensor modes`, `depends_on_past`, `failure semantics`, `mapped tasks`. Write a line for every behaviour the spec
   shows (the gate lists which it expects); `not preserved` needs a reason, and where folding loses per-step retries or partial restart, name the alternative (`RetryPolicy`, a graph asset). Declaring a loss is accepted;
@@ -91,18 +98,18 @@ do not add it; verified unnecessary). Folding into plain Python loses the skippe
 
 ## 5. The acceptance gates
 
-Your rewrite is accepted only when `python3 scripts/accept_rewrite.py --spec rewrite/{d}.spec.json --module {package}.defs.{d} --project <project root> [--defs-dir <component folder>] [--parity <Airflow results>] --manifest manifest.json`
-passes every gate (nine):
+Your rewrite is accepted only when `python3 scripts/accept_rewrite.py --spec rewrite/{d}.spec.json --project <project root> [--parity <Airflow results>] --manifest manifest.json`
+passes every gate (nine; the package, modules and component folders are discovered under `src/{package}/defs/`, `--module` and `--defs-dir` are optional hints):
 
 1. `dg check defs` passes (or, where `dg` is not installed, the definitions load; the gate says which);
-2. the generated pytest passes: the module loads, a job named `{d}` exists, the schedule's cron and timezone equal Airflow's, and for a DAG without external systems the DAG materializes and every asset check passes; when the Airflow baseline shows the DAG's own run failing (by design, or on a virtualenv / external-interpreter task that cannot build), the test asserts that the rewrite fails too, in a step, instead of succeeding;
+2. the generated pytest passes: the project's definitions load through its own loader, a job named `{d}` exists, the schedule's cron and timezone equal Airflow's, and for a DAG without external systems the DAG materializes and every asset check passes; when the Airflow baseline shows the DAG's own run failing (by design, or on a virtualenv / external-interpreter task that cannot build), the test asserts that the rewrite fails too, in a step, instead of succeeding;
 3. asset checks are present where the source supports them (at least {len((cv.get('asset_checks') or []))} here);
 4. parity: where an Airflow baseline exists, the same overall outcome and the same value as Airflow for every task the header says is `replaced by` an asset (a task `folded into` another has no value of its own to compare);
 5. no secret values;
 6. no invented APIs: every import and every component `type:` resolves;
-7. every Airflow task is accounted for in the header docstring;
+7. every Airflow task is accounted for in the header (module docstring or `defs.yaml` comment block) and the asset it names exists in the loaded definitions;
 
-8. **task states**: where an Airflow baseline is available (`tools/baseline/`, see `TASK.md`), run the project and compare each task's final state (success, failed, skipped, upstream_failed) and the observable effects
+8. **task states**: where an Airflow baseline is available to the gate (see `TASK.md`; otherwise the gate reports `not run`), run the project and compare each task's final state (success, failed, skipped, upstream_failed) and the observable effects
    with Airflow's; the gate names the task that differs. A task folded into another asset with Airflow state `skipped` (a branch not taken) is an accepted representation difference ONLY when the decision record declares it;
 9. **decision record**: the header has the `Decision record:` section and it covers every behaviour the spec flags.
 

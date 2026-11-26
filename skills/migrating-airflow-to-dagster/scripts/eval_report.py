@@ -23,7 +23,7 @@ import eval_common as C
 VERDICTS = ["equivalent", "equivalent-with-differences", "matches-baseline-failure", "different", "not-comparable", "no-output", "baseline-failed"]
 GOOD_STRICT = {"equivalent"}
 GOOD_LENIENT = {"equivalent", "equivalent-with-differences", "matches-baseline-failure"}
-DIMS = ["outcome", "tasks", "values", "files", "sqlite", "http", "smtp", "s3", "failure", "schedule", "retries", "pools", "dependencies", "job"]
+DIMS = ["outcome", "tasks", "values", "files", "sqlite", "http", "smtp", "s3", "stdout", "failure", "schedule", "retries", "pools", "dependencies", "job"]
 
 
 def wilson(k: int, n: int, z: float = 1.96) -> tuple[float, float]:
@@ -58,7 +58,7 @@ def gather(work: Path, run: str) -> dict[str, dict[str, Any]]:
     out: dict[str, dict[str, Any]] = {}
     for key, v in index.items():
         d = v["dir"]
-        rec: dict[str, Any] = {"key": key, "dir": d, "run": run, **{k: v[k] for k in ("dag_id", "stratum", "pattern", "repo", "project")}, "behavior": None, "gates": None, "report": None}
+        rec: dict[str, Any] = {"key": key, "dir": d, "run": run, **{k: v[k] for k in ("dag_id", "stratum", "pattern", "repo", "project")}, "arm": v.get("arm"), "group": v.get("group"), "behavior": None, "gates": None, "report": None}
         for name, path in (("behavior", priv / "behavior" / d / "behavior.json"), ("gates", priv / "gates" / f"{d}.gates.json"), ("report", priv / "gates" / f"{d}.report.json")):
             if path.exists():
                 rec[name] = json.loads(path.read_text())
@@ -87,8 +87,15 @@ def counts(recs: list[dict[str, Any]], route: str) -> collections.Counter:
         elif r["baseline_failed"]:
             c["baseline-failed"] += 1
         else:
-            c[r["verdicts"].get(route, "not run")] += 1
+            v = r["verdicts"].get(route, "not run")
+            c[v] += 1
+            if v == "equivalent":                                              # strict `equivalent` split: a value, file, row, request, mail, object or printed line was compared, or only outcome and structure were
+                c["equivalent:thin" if thin(r, route) else "equivalent:substantive"] += 1
     return c
+
+
+def thin(r: dict[str, Any], route: str) -> bool:
+    return bool((((r.get("behavior") or {}).get("routes") or {}).get(route) or {}).get("rollup", {}).get("thin"))
 
 
 def route_table(recs: list[dict[str, Any]], route: str) -> list[str]:
@@ -97,6 +104,9 @@ def route_table(recs: list[dict[str, Any]], route: str) -> list[str]:
     rows = ["| verdict | DAGs | share of evaluated DAGs |", "|---|---|---|"]
     for v in VERDICTS[:-1]:
         rows.append(f"| {v} | {c[v]} | {pct(c[v], n_eval)} |")
+        if v == "equivalent":
+            rows.append(f"| &nbsp;&nbsp;of which **with a substantive comparison** (a value, file, row, request, mail, object or printed line was compared) | {c['equivalent:substantive']} | {pct(c['equivalent:substantive'], n_eval)} |")
+            rows.append(f"| &nbsp;&nbsp;of which **thin** (only outcome, task states and structure were observable) | {c['equivalent:thin']} | {pct(c['equivalent:thin'], n_eval)} |")
     rows.append(f"| equivalent or equivalent-with-differences (or matches a by-design baseline failure) | {sum(c[v] for v in GOOD_LENIENT)} | {pct(sum(c[v] for v in GOOD_LENIENT), n_eval)} |")
     rows.append(f"| baseline-failed (excluded from the shares) | {c['baseline-failed']} | |")
     if c["not run"]:
@@ -106,12 +116,12 @@ def route_table(recs: list[dict[str, Any]], route: str) -> list[str]:
 
 def split_table(recs: list[dict[str, Any]], route: str, field: str) -> list[str]:
     vals = sorted({r[field] for r in recs})
-    rows = [f"| {field} | evaluated | equivalent | equivalent-with-differences | different | no-output | not-comparable / matches-baseline-failure |", "|---|---|---|---|---|---|---|"]
+    rows = [f"| {field} | evaluated | equivalent | of which substantive | of which thin | equivalent-with-differences | different | no-output | not-comparable / matches-baseline-failure |", "|---|---|---|---|---|---|---|---|---|"]
     for val in vals:
         sub = [r for r in recs if r[field] == val]
         c = counts(sub, route)
         n = len(sub) - c["baseline-failed"] - c["not run"]
-        rows.append(f"| {val} | {n} | {pct(c['equivalent'], n)} | {c['equivalent-with-differences']} | {c['different']} | {c['no-output']} | {c['not-comparable'] + c['matches-baseline-failure']} |")
+        rows.append(f"| {val} | {n} | {pct(c['equivalent'], n)} | {c['equivalent:substantive']} | {c['equivalent:thin']} | {c['equivalent-with-differences']} | {c['different']} | {c['no-output']} | {c['not-comparable'] + c['matches-baseline-failure']} |")
     return rows
 
 
@@ -125,6 +135,104 @@ def evidence_text(x: dict[str, Any], limit: int = 420) -> str:
 
 def med(xs: list[float]) -> str:
     return f"{statistics.mean(xs):.1f} / {statistics.median(xs):.1f}" if xs else "n/a"
+
+
+def fisher_exact(a: int, b: int, c: int, d: int) -> float:
+    """two-sided Fisher exact test on the 2x2 table [[a, b], [c, d]] (sum of the probabilities of every table as or less likely than the observed one)."""
+    n1, n2, k = a + b, c + d, a + c
+    n = n1 + n2
+
+    def p(x: int) -> float:
+        return math.comb(n1, x) * math.comb(n2, k - x) / math.comb(n, k)
+    lo, hi = max(0, k - n2), min(k, n1)
+    obs = p(a)
+    return min(1.0, sum(p(x) for x in range(lo, hi + 1) if p(x) <= obs * (1 + 1e-9)))
+
+
+def diff_ci(k1: int, n1: int, k2: int, n2: int, z: float = 1.96) -> tuple[float, float, float]:
+    """difference of two proportions (arm A minus arm B) with Newcombe's hybrid-score 95% interval (built from the two Wilson intervals)."""
+    p1, p2 = k1 / n1, k2 / n2
+    l1, u1 = wilson(k1, n1, z)
+    l2, u2 = wilson(k2, n2, z)
+    d = p1 - p2
+    return d, d - math.sqrt((p1 - l1) ** 2 + (u2 - p2) ** 2), d + math.sqrt((u1 - p1) ** 2 + (p2 - l2) ** 2)
+
+
+def evaluated(recs: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    return [r for r in recs if r["behavior"] and not r["baseline_failed"]]
+
+
+def arm_comparison(recs: list[dict[str, Any]]) -> list[str]:
+    """ARM A (behaviour-feedback tool) against ARM B (none): the strata balance, then the difference in the share of strictly equivalent rewrites with its interval and Fisher's exact test. The arms are DIFFERENT DAGs."""
+    L: list[str] = []
+    arms = ["A", "B"]
+    L += ["## Arm A against arm B: does the feedback tool change the result?", "",
+          "**This is a between-DAG comparison.** Each DAG was given to ONE arm (assigned at random, stratified by the converter's stratum and by pattern), so the two arms are different DAGs, not the same DAG written twice: a "
+          "difference can come from the tool, from which DAGs fell into which arm, or from noise between workers. The balance of the arms over the strata is shown first; the interval is Newcombe's 95% interval for the "
+          "difference of two proportions and the test is Fisher's exact test (two-sided).", "",
+          "| | " + " | ".join(f"arm {x}" for x in arms) + " |", "|---|---|---|"]
+    for title, field in (("stratum", "stratum"), ("pattern", "pattern")):
+        for v in sorted({r[field] for r in recs}):
+            L.append(f"| {title} `{v}` | " + " | ".join(str(sum(1 for r in recs if r.get("arm") == x and r[field] == v)) for x in arms) + " |")
+    L.append("| **sampled DAGs** | " + " | ".join(str(sum(1 for r in recs if r.get("arm") == x)) for x in arms) + " |")
+    L.append("| evaluated (baseline ran, behaviour compared) | " + " | ".join(str(len([r for r in evaluated(recs) if r.get("arm") == x])) for x in arms) + " |")
+    L.append("")
+    L += ["| measure | arm A | arm B | A minus B (95% CI) | Fisher exact p |", "|---|---|---|---|---|"]
+    for name, good, subst in (("strictly equivalent", GOOD_STRICT, False), ("strictly equivalent with a substantive comparison", GOOD_STRICT, True), ("equivalent, lenient (with differences or matching a by-design failure)", GOOD_LENIENT, False)):
+        k, n = {}, {}
+        for x in arms:
+            sub = [r for r in evaluated(recs) if r.get("arm") == x]
+            n[x] = len(sub)
+            k[x] = sum(1 for r in sub if r["verdicts"].get("rewrite") in good and not (subst and thin(r, "rewrite")))
+        if min(n.values()) == 0:
+            L.append(f"| {name} | {k['A']}/{n['A']} | {k['B']}/{n['B']} | n/a | n/a |")
+            continue
+        d, lo, hi = diff_ci(k["A"], n["A"], k["B"], n["B"])
+        L.append(f"| {name} | {pct(k['A'], n['A'])} | {pct(k['B'], n['B'])} | {100 * d:+.0f} points ({100 * lo:+.0f} to {100 * hi:+.0f}) | {fisher_exact(k['A'], n['A'] - k['A'], k['B'], n['B'] - k['B']):.3f} |")
+    L += ["", "With groups of about 30 DAGs per arm the interval is wide: a difference smaller than about 25 points cannot be told apart from noise here. Read an interval that contains 0 as `not shown`, not as `no effect`.", ""]
+    return L
+
+
+def components_used(r: dict[str, Any]) -> list[str]:
+    return list(((r.get("report") or {}).get("components") or {}).get("registry") or [])
+
+
+def registry_first(recs: list[dict[str, Any]]) -> list[str]:
+    """Is `registry first` measurable? Per rewrite: did the project USE a registry component (read from its defs.yaml `type:` entries and the `.dg-community.json` marker `dagster-component add` writes), and did the worker's
+    report say registry searches were run (parsed from WORKER_REPORT.md)."""
+    rows = [r for r in recs if r.get("report") and "components" in (r["report"] or {})]
+    L = ["## Registry first: component use and searches", ""]
+    if not rows:
+        return L + ["No gate run recorded which components the rewrites use (`eval_gates.py` writes it), so this is **not measured** for this run.", ""]
+    arms = sorted({r["arm"] for r in rows if r.get("arm")}) or [None]
+    L += ["Per rewrite: **uses a registry component** = a `defs.yaml` under `defs/` names a component installed from the community registry (read from the project by the harness, whatever the worker reported); "
+          "**searches reported** = the report's `What you searched` section says registry searches were run (the worker's own statement, parsed, not verified); **component style** = at least one component folder.", "",
+          "| " + ("arm | " if arms != [None] else "") + "rewrites | use a registry component | component-style projects | report says searches were run | searched but used no component | no search reported and no component |", "|" + ("---|" if arms != [None] else "") + "---|---|---|---|---|---|"]
+    for arm in arms:
+        sub = [r for r in rows if arm is None or r.get("arm") == arm]
+        use = [r for r in sub if components_used(r)]
+        srch = [r for r in sub if r["report"].get("searches_reported")]
+        L.append(f"| " + (f"{arm} | " if arm else "") + f"{len(sub)} | {pct(len(use), len(sub))} | {sum(1 for r in sub if r['report'].get('style') == 'component')} | {pct(len(srch), len(sub))} | "
+                 f"{sum(1 for r in srch if not components_used(r))} | {sum(1 for r in sub if not r['report'].get('searches_reported') and not components_used(r))} |")
+    cc: collections.Counter = collections.Counter(c for r in rows for c in components_used(r))
+    if cc:
+        L += ["", "Registry components used (DAGs using each): " + ", ".join(f"`{c}` {n}" for c, n in cc.most_common()) + "."]
+    other = collections.Counter(c for r in rows for c in ((r["report"].get("components") or {}).get("other") or []))
+    if other:
+        L += ["", "Other component types used (official integrations and anything else): " + ", ".join(f"`{c}` {n}" for c, n in other.most_common()) + "."]
+    claimed = sum(1 for r in rows if r["report"].get("registry_components") and not components_used(r))
+    L += ["", f"{claimed} report(s) list a registry component in the `Registry components used` table although the project's `defs.yaml` files use none (a hand-written asset that follows a component's idea, or a component only read): the harness counts what the project uses, not what the report claims.", ""]
+    return L
+
+
+def baseline_nondeterministic(recs: list[dict[str, Any]], route: str = "rewrite") -> list[tuple[str, list[str]]]:
+    """(dag id, tasks) for each DAG with a task whose Airflow state differed between the recorded baseline runs: `nondeterministic: not compared`, the rest of the DAG still compared."""
+    out = []
+    for r in recs:
+        ev = ((((r.get("behavior") or {}).get("routes") or {}).get(route) or {}).get("dimensions") or {}).get("tasks", {}).get("evidence") or {}
+        if ev.get("nondeterministic_baseline"):
+            out.append((r["dag_id"], sorted(ev["nondeterministic_baseline"])))
+    return out
 
 
 def render(a: argparse.Namespace) -> str:
@@ -187,42 +295,60 @@ def render(a: argparse.Namespace) -> str:
         A("")
         A("Sample: " + "; ".join(f"{r}: {len([x for x in recs if x['run'] == r])} DAGs" for r in a.runs) + f". By stratum: {dict(sorted(collections.Counter(x['stratum'] for x in recs).items()))}.")
         A("")
-    A("## Results by route")
-    A("")
-    for route, label in (("converter", "Deterministic converter"), ("rewrite", "Rewrite (spec and prompt, written by a worker)")):
-        A(f"### {label}")
+    def block(sub: list[dict[str, Any]], H: str) -> None:
+        A(f"{H} Results by route")
         A("")
-        A(who if route == "rewrite" else "The converter is deterministic; no model wrote it. Its output here is `convert_ir.py --return-all` (every Python task returns its value, which the value comparison needs).")
-        A("")
-        L += route_table(recs, route)
-        A("")
-    A("## Split by stratum (the converter's own result) and by pattern")
-    A("")
-    for route in ("converter", "rewrite"):
-        for field in ("stratum", "pattern", "repo"):
-            A(f"**{route}, by {field}**")
+        for route, label in (("converter", "Deterministic converter"), ("rewrite", "Rewrite (spec and prompt, written by a worker)")):
+            A(f"{H}# {label}")
             A("")
-            L += split_table(recs, route, field)
+            A(who if route == "rewrite" else "The converter is deterministic; no model wrote it. Its output here is `convert_ir.py --return-all` (every Python task returns its value, which the value comparison needs).")
             A("")
-    # paired
-    A("## Paired comparison: the same DAG through both routes")
-    A("")
-    pool = [r for r in recs if r["behavior"] and not r["baseline_failed"] and r["verdicts"].get("rewrite") not in (None, "no-output")]
-    A(f"Population: the {len(pool)} DAGs where Airflow's baseline ran and the worker produced a rewrite. A converter `no-output` (deferred) counts as the converter not being equivalent.")
-    A("")
-    for name, good in (("strictly equivalent", GOOD_STRICT), ("equivalent, with or without metadata differences (or matching a by-design failure)", GOOD_LENIENT)):
-        both = sum(1 for r in pool if r["verdicts"].get("rewrite") in good and r["verdicts"].get("converter") in good)
-        rw = sum(1 for r in pool if r["verdicts"].get("rewrite") in good and r["verdicts"].get("converter") not in good)
-        cv = sum(1 for r in pool if r["verdicts"].get("rewrite") not in good and r["verdicts"].get("converter") in good)
-        neither = len(pool) - both - rw - cv
-        A(f"**{name}**")
+            L.extend(route_table(sub, route))
+            A("")
+        A(f"{H} Split by stratum (the converter's own result) and by pattern")
         A("")
-        A("| both routes | rewrite only | converter only | neither |")
-        A("|---|---|---|---|")
-        A(f"| {both} | {rw} | {cv} | {neither} |")
+        for route in ("converter", "rewrite"):
+            for field in ("stratum", "pattern", "repo"):
+                A(f"**{route}, by {field}**")
+                A("")
+                L.extend(split_table(sub, route, field))
+                A("")
+        # paired
+        A(f"{H} Paired comparison: the same DAG through both routes")
         A("")
-        A(f"Discordant pairs: {rw + cv}; exact two-sided sign test p = {sign_test(rw, cv):.3f}" + (" (too few discordant pairs to conclude either way)" if rw + cv < 10 else "") + ".")
+        pool = [r for r in sub if r["behavior"] and not r["baseline_failed"] and r["verdicts"].get("rewrite") not in (None, "no-output")]
+        A(f"Population: the {len(pool)} DAGs where Airflow's baseline ran and the worker produced a rewrite. A converter `no-output` (deferred) counts as the converter not being equivalent.")
         A("")
+        def ok_in(r: dict[str, Any], route: str, good: set[str], substantive: bool) -> bool:
+            return r["verdicts"].get(route) in good and not (substantive and thin(r, route))
+        for name, good, subst in (("strictly equivalent (thin ones included)", GOOD_STRICT, False), ("strictly equivalent **with a substantive comparison** (a thin `equivalent`, where only outcome and structure were observable, does not count as shown equivalent)", GOOD_STRICT, True),
+                                  ("equivalent, with or without metadata differences (or matching a by-design failure)", GOOD_LENIENT, False)):
+            both = sum(1 for r in pool if ok_in(r, "rewrite", good, subst) and ok_in(r, "converter", good, subst))
+            rw = sum(1 for r in pool if ok_in(r, "rewrite", good, subst) and not ok_in(r, "converter", good, subst))
+            cv = sum(1 for r in pool if not ok_in(r, "rewrite", good, subst) and ok_in(r, "converter", good, subst))
+            neither = len(pool) - both - rw - cv
+            A(f"**{name}**")
+            A("")
+            A("| both routes | rewrite only | converter only | neither |")
+            A("|---|---|---|---|")
+            A(f"| {both} | {rw} | {cv} | {neither} |")
+            A("")
+            A(f"Discordant pairs: {rw + cv}; exact two-sided sign test p = {sign_test(rw, cv):.3f}" + (" (too few discordant pairs to conclude either way)" if rw + cv < 10 else "") + ".")
+            A("")
+
+    arms = sorted({r["arm"] for r in recs if r.get("arm")})
+    block(recs, "##")
+    if len(arms) > 1:
+        A("## The same tables split by arm")
+        A("")
+        A("ARM A: the worker's kit had the behaviour-feedback tool (`tools/compare_behavior.py` and the baseline). ARM B: no feedback tool and no baseline; every other instruction, the gates and the pattern library were identical. "
+          "**The two arms are different DAGs** (each DAG was given to one arm), so everything below is a between-DAG comparison.")
+        A("")
+        for arm in arms:
+            A(f"## Arm {arm} ({len([r for r in recs if r.get('arm') == arm])} DAGs)")
+            A("")
+            block([r for r in recs if r.get("arm") == arm], "###")
+        L += arm_comparison(recs)
     nd = nondeterministic_rows(list(recs))
     if nd:
         A("## Task states not compared: nondeterministic decisions")
@@ -232,6 +358,16 @@ def render(a: argparse.Namespace) -> str:
         for dag_id, why in sorted(nd):
             A(f"- `{dag_id}`: {why}")
         A("")
+    nb = baseline_nondeterministic(list(recs))
+    if nb:
+        A("## Task states not compared: tasks that are nondeterministic in Airflow itself")
+        A("")
+        A(f"{len(nb)} DAG(s) have a task whose final state in Airflow differed between the recorded baseline runs (the measurement's two runs and any earlier run of the same DAG the kit baked in). Such a task is classified `nondeterministic: not compared`: the baseline cannot say what the correct state is. The rest of the DAG is compared as usual.")
+        A("")
+        for dag_id, tasks in sorted(nb):
+            A(f"- `{dag_id}`: {', '.join(f'`{t}`' for t in tasks)}")
+        A("")
+    L += registry_first(recs)
     # gates vs behaviour
     A("## Gates against behaviour (rewrite)")
     A("")
@@ -299,6 +435,11 @@ def render(a: argparse.Namespace) -> str:
         att = [float(r["report"]["attempts"]) for r in sub if r["report"] and r["report"].get("attempts") is not None]
         vals = {f: [x for x in (cost_of(r, f) for r in sub) if x is not None] for f in ("tokens", "tool_uses", "duration_s")}
         A(f"| {st} | {len(sub)} | {med(att)} ({len(att)} reported) | {med(vals['tokens'])} ({len(vals['tokens'])}) | {med(vals['tool_uses'])} ({len(vals['tool_uses'])}) | {med(vals['duration_s'])} ({len(vals['duration_s'])}) |")
+    for arm in sorted({r["arm"] for r in recs if r.get("arm")}) if len({r.get("arm") for r in recs if r.get("arm")}) > 1 else []:
+        sub = [r for r in recs if r.get("arm") == arm]
+        att = [float(r["report"]["attempts"]) for r in sub if r["report"] and r["report"].get("attempts") is not None]
+        vals = {f: [x for x in (cost_of(r, f) for r in sub) if x is not None] for f in ("tokens", "tool_uses", "duration_s")}
+        A(f"| **arm {arm}** | {len(sub)} | {med(att)} ({len(att)} reported) | {med(vals['tokens'])} ({len(vals['tokens'])}) | {med(vals['tool_uses'])} ({len(vals['tool_uses'])}) | {med(vals['duration_s'])} ({len(vals['duration_s'])}) |")
     if not costs:
         A("")
         A("`costs.json` was not supplied: token, tool-use and duration columns are **not available**.")
@@ -360,9 +501,16 @@ def render(a: argparse.Namespace) -> str:
             c = collections.Counter(((r["behavior"]["routes"].get(route) or {}).get("dimensions") or {}).get(dname, {}).get("verdict") for r in recs if r["behavior"] and not r["baseline_failed"] and route in r["behavior"]["routes"] and (r["behavior"]["routes"][route].get("dimensions")))
             A(f"| {dname} | {c['match']} | {c['differ']} | {c['not-compared']} |")
         A("")
-    thin = [r for r in recs if r["behavior"] and not r["baseline_failed"] and (r["behavior"]["routes"].get("rewrite") or {}).get("rollup", {}).get("thin")]
-    A(f"Rewrites judged `equivalent` where only the outcome and structure were observable (no value, file, row, request, mail or object to compare; flagged `thin`): "
-      f"{sum(1 for r in thin if r['verdicts'].get('rewrite') == 'equivalent')} of {sum(1 for r in recs if r['verdicts'].get('rewrite') == 'equivalent')}. An `equivalent` on a thin DAG means: it ran, the tasks ended in the same states, the structure matches.")
+    thin_rows = [r for r in recs if r["behavior"] and not r["baseline_failed"] and thin(r, "rewrite")]
+    A(f"Rewrites judged `equivalent` where only the outcome and structure were observable (no value, file, row, request, mail, object or printed line to compare; flagged `thin`): "
+      f"{sum(1 for r in thin_rows if r['verdicts'].get('rewrite') == 'equivalent')} of {sum(1 for r in recs if r['verdicts'].get('rewrite') == 'equivalent')}. An `equivalent` on a thin DAG means: it ran, the tasks ended in the same states, the structure matches. "
+      "The headline table, the split tables and the paired test all show the `equivalent` count with and without a substantive comparison.")
+    A("")
+    A("**The printed-output dimension (`stdout`).** The plain lines a run printed (not log records: no timestamp or level prefix; no warnings or tracebacks) are compared as multisets, after masking the tokens that differ between two runs of the same code "
+      "(timestamps and dates, run ids, uuids, memory addresses, temporary and sandbox paths, process ids, durations). Controls against false positives: only lines BOTH of the original's runs printed are required; the route may print MORE than "
+      "the original (its own `$ command` echo, progress lines), and extra lines are listed, never a difference; the order and the task a line belongs to are not compared (the Dagster side has no reliable per-task attribution of process output); "
+      "it is not one of the behaviour dimensions, so a printed-line difference makes a rewrite `equivalent-with-differences`, never `different`; when the original printed no stable line (or no record exists) it is `not compared`. "
+      "It does NOT see output a task writes through a logger (Airflow's BashOperator output is a log record), so a bash-only DAG stays `thin`.")
     A("")
     A("**The harness cannot compare:** durations and data volume; anything that needs a real external system (the sample excludes such DAGs; the stand-ins are SQLite, HTTP and SMTP recorders and S3 through moto, and a DAG using any other database, warehouse, queue or API is out of scope); "
       "HTTP responses other than a canned 200 `{\"ok\": true}` (a DAG whose logic depends on the response body is compared only for that response); Airflow scheduling (ticks, catchup, backfill, data intervals: a cron string and timezone are compared, "

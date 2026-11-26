@@ -25,6 +25,8 @@ from typing import Any
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
+if (HERE.parent / "rewrite_project.py").exists():                       # the repository layout; in a worker kit everything is flat in tools/
+    sys.path.insert(0, str(HERE.parent))
 import behavior_compare as B  # noqa: E402
 from harness_cfg import sandbox_cfg  # noqa: E402
 
@@ -44,13 +46,14 @@ def run_rewrite(project: Path, spec: dict[str, Any], dag_id: str, source: Path |
     venv_py = project / ".venv" / "bin" / "python"
     py = python or (str(venv_py) if venv_py.exists() else sys.executable)
     env = {**os.environ, "PYTHONWARNINGS": "ignore", "PATH": str(Path(py).parent) + os.pathsep + os.environ.get("PATH", "")}
+    proc_out = ""
     try:
-        subprocess.run([py, "-W", "ignore", str(HERE / "run_dagster.py"), str(root / "config.json")], capture_output=True, text=True, timeout=timeout + 60, env=env)
+        proc_out = subprocess.run([py, "-W", "ignore", str(HERE / "run_dagster.py"), str(root / "config.json")], capture_output=True, text=True, timeout=timeout + 60, env=env).stdout
     except subprocess.TimeoutExpired:
         pass
     try:
         if (root / "result.json").exists():
-            return json.loads((root / "result.json").read_text())
+            return {**json.loads((root / "result.json").read_text()), "stdout_lines": B.printed_lines(proc_out)}
         return {"error": "the run left no result", "state": None}
     finally:
         shutil.rmtree(root, ignore_errors=True)
@@ -61,8 +64,8 @@ def compare_project(project: Path, spec: dict[str, Any], baseline_dir: Path, sou
     if a1 is None:
         return None
     route = run_rewrite(project, spec, spec["dag_id"], source, python, timeout)
-    sources = {str(p): p.read_text() for p in sorted((Path(project) / "src").glob("*/defs/**/*.py")) if p.name != "__init__.py"}
-    tm, _ = B.rewrite_taskmap(sources, spec, route)
+    import rewrite_project as RPJ
+    tm, _ = B.rewrite_taskmap(RPJ.sources(Path(project)), spec, route)
     res = B.compare(spec, a1, a2 if a2 and (a2.get("state") is not None or a2.get("error") is None) else None, route, tm, "rewrite")
     res["taskmap"], res["route_error"], res["route_notes"] = tm, route.get("error"), route.get("notes", [])
     return res
@@ -74,6 +77,7 @@ HINTS = {
     "values": "a value Airflow returned (XCom) differs from the asset's value",
     "files": "files created or changed differ (name or content hash)",
     "sqlite": "SQLite rows differ", "http": "HTTP requests sent differ (method, URL, body)", "smtp": "mails sent differ", "s3": "S3 objects differ",
+    "stdout": "a line Airflow printed (masked of times, ids, paths) is not printed by your run; extra lines are fine",
     "failure": "which tasks failed or were upstream_failed differs", "schedule": "schedule differs", "retries": "retry count or delay differs", "pools": "pool differs",
     "dependencies": "ordering between tasks differs", "job": "no job named after the DAG",
 }

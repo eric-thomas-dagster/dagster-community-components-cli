@@ -44,6 +44,7 @@ if (Path(__file__).resolve().parent / "parity").exists():                  # the
 
 import gen_tests as G  # noqa: E402
 import rewrite_patterns as RP  # noqa: E402
+import rewrite_project as RPJ  # noqa: E402
 import status as S  # noqa: E402
 
 SECRET_LITERAL = re.compile(r"""(?i)\b(\w*(?:password|passwd|secret|token|api_?key|private_?key|credential)\w*)\s*[:=]\s*(['"])(?!<)([^'"\n]{6,})\2""")
@@ -56,6 +57,7 @@ def gate(name: str, ok: bool, detail: str) -> dict[str, Any]:
 
 
 def source_of(module: str, project: Path) -> tuple[str, Path | None]:
+    """the source of one module (kept for callers that name a module); the gates themselves read every file under defs/ (`rewrite_project.sources`)."""
     for root in (project / "src", project):
         p = root.joinpath(*module.split(".")).with_suffix(".py")
         if p.exists():
@@ -63,22 +65,18 @@ def source_of(module: str, project: Path) -> tuple[str, Path | None]:
     return "", None
 
 
-def g_load(module: str, project: Path) -> dict[str, Any]:
-    dg_bin = shutil.which("dg")
+def g_load(project: Path, pkg: str, module: str | None = None) -> dict[str, Any]:
+    """`dg check defs` in the project (its own `dg` first; VIRTUAL_ENV is unset for the run, so an outer virtualenv does not make `dg` warn about a mismatch). Without `dg` the project's own loader is run instead."""
+    dg_bin = RPJ.dg_binary(project)
     if dg_bin:
-        r = subprocess.run([dg_bin, "check", "defs"], cwd=project, capture_output=True, text=True, env={**__import__("os").environ, "PYTHONPATH": f"{project / 'src'}:{project}"})
-        noise = ("Warning", "class ", "return meta", "real = ")
-        tail = "\n".join(ln for ln in (r.stdout + r.stderr).splitlines() if not any(w in ln for w in noise))[-600:]
+        r = subprocess.run([dg_bin, "check", "defs"], cwd=project, capture_output=True, text=True, env=RPJ.clean_env(project))
+        noise = ("Warning", "class ", "return meta", "real = ", "active virtual environment", "project virtual environment", "To suppress this warning", "root directory. This may lead")
+        tail = "\n".join(ln for ln in (r.stdout + r.stderr).splitlines() if ln.strip() and not any(w in ln for w in noise))[-600:]
         return gate("definitions_load", r.returncode == 0, "dg check defs" + ("" if r.returncode == 0 else ": " + tail))
-    code = ("import importlib, sys, dagster as dg\n" f"sys.path[:0] = [{str(project / 'src')!r}, {str(project)!r}]\n" f"m = importlib.import_module({module!r})\n"
-            "a = [v for v in vars(m).values() if isinstance(v, dg.AssetsDefinition) and not isinstance(v, dg.AssetChecksDefinition)]\n"
-            "c = [v for v in vars(m).values() if isinstance(v, dg.AssetChecksDefinition)]\n"
-            "j = [v for v in vars(m).values() if type(v).__name__ in ('UnresolvedAssetJobDefinition', 'JobDefinition')]\n"
-            "s = [v for v in vars(m).values() if isinstance(v, dg.ScheduleDefinition)]\n"
-            "need = set().union(set(), *(set(d.required_resource_keys) for d in a + c)) - {'io_manager'}\n"
-            "dg.Definitions.validate_loadable(dg.Definitions(resources={k: dg.ResourceDefinition.mock_resource() for k in need}, assets=a, asset_checks=c, jobs=j, schedules=s))\n")
-    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
-    return gate("definitions_load", r.returncode == 0, "`dg` is not installed: the module's definitions were loaded with dagster instead (Definitions.validate_loadable)" + ("" if r.returncode == 0 else ": " + r.stderr[-600:]))
+    code = ("import sys, dagster as dg\n" f"sys.path[:0] = [{str(project / 'src')!r}, {str(project)!r}]\n" + RPJ.LOAD_DEFS_SOURCE +
+            f"dg.Definitions.validate_loadable(load_defs({RPJ.definitions_module(project, pkg)!r}, {module!r}))\n")
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=project, env=RPJ.clean_env(project))
+    return gate("definitions_load", r.returncode == 0, "`dg` is not installed: the project's definitions were loaded with its own loader instead (Definitions.validate_loadable)" + ("" if r.returncode == 0 else ": " + r.stderr[-600:]))
 
 
 def expected_failure(spec: dict[str, Any], baseline: Path | None) -> dict[str, Any] | None:
@@ -96,20 +94,30 @@ def expected_failure(spec: dict[str, Any], baseline: Path | None) -> dict[str, A
     return None
 
 
-def g_tests(spec: dict[str, Any], module: str, project: Path, baseline: Path | None = None) -> dict[str, Any]:
+def sandbox_env(spec: dict[str, Any]) -> dict[str, str]:
+    """the Airflow connections and Variables the behaviour sandbox exports (`AIRFLOW_CONN_<ID>`, `AIRFLOW_VAR_<NAME>`), as the generated test sets them: `{TMP}` stands for the test's temporary directory."""
+    import harness_cfg as HC
+    conns = {"sqlite_default", "http_default", "smtp_default", "aws_default", *(spec.get("connections") or [])}
+    env = {"AIRFLOW_CONN_" + c.upper(): HC.conn_uri(c, Path("{TMP}")) for c in sorted(conns)}
+    env.update({"AIRFLOW_VAR_" + v.upper(): "eval-variable" for v in (spec.get("variables") or [])})
+    return env
+
+
+def g_tests(spec: dict[str, Any], module: str | None, project: Path, baseline: Path | None = None) -> dict[str, Any]:
     ops = [t["operator"] for t in spec["tasks"]]
     skip = None
     if spec.get("cosmos_groups") or any(any(w in o for w in EXTERNAL_OPS) for o in ops) or spec["schedule"]["assets"]:
         skip = "the DAG has an external system, a sensor, dbt or an asset trigger: only the load and shape tests apply"
     sched = spec["schedule"]
-    info = {"dag_id": spec["dag_id"], "module": module, "schedule": ({"cron": sched["cron"], "timezone": sched["timezone"]} if sched["kind"] in ("cron_trigger", "cron_data_interval") and sched["cron"] else None),
-            "materialize_skip": skip, "expect_failure": expected_failure(spec, baseline), "needs_shell": any(o in ("BashOperator", "_BashDecoratedOperator") for o in ops)}
+    pkg = RPJ.package_of(project, module.split(".")[0] if module else None) or (module or "pkg").split(".")[0]
+    info = {"dag_id": spec["dag_id"], "module": module or f"{pkg}.defs.{spec['dag_id']}", "definitions_module": RPJ.definitions_module(project, pkg),
+            "schedule": ({"cron": sched["cron"], "timezone": sched["timezone"]} if sched["kind"] in ("cron_trigger", "cron_data_interval") and sched["cron"] else (None if sched["kind"] in ("manual", None) else "unchecked")),
+            "materialize_skip": skip, "expect_failure": expected_failure(spec, baseline), "needs_shell": any(o in ("BashOperator", "_BashDecoratedOperator") for o in ops), "env": sandbox_env(spec)}
     tdir = project / "tests"
     tdir.mkdir(exist_ok=True)
     f = tdir / f"test_{spec['dag_id']}_rewrite.py"
     f.write_text(G.render_rewrite(info))
-    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-W", "ignore", "-rs", str(f)], cwd=project, capture_output=True, text=True,
-                       env={**__import__("os").environ, "PYTHONPATH": f"{project / 'src'}:{project}"})
+    r = subprocess.run([sys.executable, "-m", "pytest", "-q", "-p", "no:cacheprovider", "-W", "ignore", "-rs", str(f)], cwd=project, capture_output=True, text=True, env=RPJ.clean_env(project))
     tail = [ln for ln in r.stdout.strip().splitlines() if ln.strip()][-1:] or [r.stderr[-200:]]
     ef = info["expect_failure"]
     return gate("generated_tests", r.returncode == 0, f"{f.name}: {tail[0]}" + ("; materialize skipped: " + skip if skip else "") + (f"; EXPECTED FAILURE asserted instead of success: Airflow's own run fails ({ef['why']})" if ef else ""))
@@ -119,36 +127,35 @@ def count_checks(src: str) -> int:
     return len(re.findall(r"@(?:dg|dagster)\.asset_check\(|@asset_check\(|check_specs\s*=|AssetCheckSpec\(|@dg\.multi_asset_check", src)) + src.count("asset_checks=") * 0
 
 
-def g_checks(spec: dict[str, Any], src: str, defs_dir: Path | None) -> dict[str, Any]:
-    n = count_checks(src) + (sum(count_checks(p.read_text()) for p in defs_dir.rglob("*.py")) if defs_dir and defs_dir.exists() else 0)
+def g_checks(spec: dict[str, Any], texts: dict[str, str], summary: dict[str, Any]) -> dict[str, Any]:
+    """Asset checks present: counted in the LOADED definitions (a component's checks included), and, when the definitions could not be summarised, by reading the files under defs/."""
+    n = len(summary.get("checks") or []) if "error" not in summary else sum(count_checks(t) for p, t in texts.items() if p.endswith(".py")) + sum(1 for p, t in texts.items() if p.endswith((".yaml", ".yml")) and ("asset_checks" in t or "AssetCheck" in t))
     need = len((spec.get("converter") or {}).get("asset_checks") or [])
-    if defs_dir and defs_dir.exists() and any("asset_checks" in p.read_text() or "AssetCheck" in p.read_text() for p in defs_dir.rglob("*.yaml")):
-        n += 1
     # a rewrite folds steps, so it has fewer places to check than the task-per-asset converter: what is required is a structural check wherever the source supports one at all
     return gate("asset_checks_present", n >= min(need, 1), f"{n} asset check(s) in the rewrite; the converter derived {need} from the source (at least 1 is required when it derived any)")
 
 
-def g_parity(spec: dict[str, Any], module: str, project: Path, parity: dict[str, Any] | None) -> dict[str, Any]:
+def g_parity(spec: dict[str, Any], project: Path, pkg: str, parity: dict[str, Any] | None, header: str) -> dict[str, Any]:
     base = (parity or {}).get(spec["dag_id"])
     if not base or "error" in base:
         return gate("parity", True, "not run (no Airflow baseline for this DAG: it may be ineligible, or none was given)")
-    code = ("import importlib, json, sys, dagster as dg\n" f"sys.path[:0] = [{str(project / 'src')!r}, {str(project)!r}]\n" f"m = importlib.import_module({module!r})\n"
-            "a = [v for v in vars(m).values() if isinstance(v, dg.AssetsDefinition) and not isinstance(v, dg.AssetChecksDefinition)]\n"
-            "r = dg.materialize(a, raise_on_error=False)\nvals = {}\n"
+    code = ("import json, sys, dagster as dg\n" f"sys.path[:0] = [{str(project / 'src')!r}, {str(project)!r}]\n" + RPJ.LOAD_DEFS_SOURCE +
+            f"defs = load_defs({RPJ.definitions_module(project, pkg)!r}, None)\n"
+            "a = [v for v in defs.assets if isinstance(v, dg.AssetsDefinition) and not isinstance(v, dg.AssetChecksDefinition)]\n"
+            "job = defs.resolve_job_def(" + repr(spec['dag_id']) + ") if " + repr(spec['dag_id']) + " in [j.name for j in (defs.jobs or [])] else defs.resolve_implicit_global_asset_job_def()\n"
+            "r = job.execute_in_process(raise_on_error=False)\nvals = {}\n"
             "for d in a:\n    for k in d.keys:\n        try:\n            vals[k.to_user_string()] = repr(r.asset_value(k))[:300]\n        except Exception:\n            pass\n"
             "print(json.dumps({'ok': r.success, 'values': vals}))\n")
-    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True)
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, cwd=project, env=RPJ.clean_env(project))
     try:
         out = json.loads(r.stdout.strip().splitlines()[-1])
     except (ValueError, IndexError):
         return gate("parity", False, "the rewrite could not be run: " + r.stderr[-300:])
     want_ok = "success" in str(base.get("state", "")).lower()
     problems = [] if out["ok"] == want_ok else [f"overall: Airflow {base.get('state')}, rewrite {'success' if out['ok'] else 'failed'}"]
-    src, _ = source_of(module, project)
-    doc = ast.get_docstring(ast.parse(src)) or ""
     compared = 0
     for tid, tb in (base.get("tasks") or {}).items():
-        m = re.search(rf"{re.escape(tid)}\s*:\s*replaced by[^`\n]*`([^`]+)`", doc)
+        m = re.search(rf"{re.escape(tid)}\s*:\s*replaced by[^`\n]*`([^`]+)`", header)
         if m and m.group(1) in out["values"] and tb.get("value") not in (None, "None"):
             compared += 1
             if out["values"][m.group(1)] != tb["value"]:
@@ -156,73 +163,79 @@ def g_parity(spec: dict[str, Any], module: str, project: Path, parity: dict[str,
     return gate("parity", not problems, ("outcome and " + str(compared) + " value(s) match Airflow" if not problems else "; ".join(problems)))
 
 
-def g_secrets(src: str, defs_dir: Path | None) -> dict[str, Any]:
-    texts = [("module", src)] + ([(str(p.name), p.read_text()) for p in defs_dir.rglob("*") if p.is_file() and p.suffix in (".py", ".yaml", ".yml")] if defs_dir and defs_dir.exists() else [])
+def g_secrets(texts: dict[str, str]) -> dict[str, Any]:
     hits = []
-    for name, t in texts:
+    for name, t in texts.items():
         for i, ln in enumerate(t.splitlines(), 1):
             m = SECRET_LITERAL.search(ln)
             if m and not ENV_OK.search(ln):
-                hits.append(f"{name} line {i}: a string literal is assigned to `{m.group(1)}` (the value is not echoed)")
+                hits.append(f"{Path(name).name} line {i}: a string literal is assigned to `{m.group(1)}` (the value is not echoed)")
     return gate("no_secret_values", not hits, "none found" if not hits else "; ".join(hits[:5]))
 
 
-def g_apis(src: str, defs_dir: Path | None, project: Path) -> dict[str, Any]:
+def g_apis(texts: dict[str, str], project: Path, pkg: str) -> dict[str, Any]:
     bad = []
     sys.path[:0] = [str(project / "src"), str(project)]
     try:
-        for node in ast.walk(ast.parse(src)):
-            if isinstance(node, ast.ImportFrom) and node.module and not node.level:
+        for name, text in texts.items():
+            if name.endswith(".py"):
                 try:
-                    mod = importlib.import_module(node.module)
-                except Exception as e:  # noqa: BLE001
-                    bad.append(f"import {node.module} ({type(e).__name__})")
+                    tree = ast.parse(text)
+                except SyntaxError as e:
+                    bad.append(f"{Path(name).name} does not parse: {e.msg}")
                     continue
-                for a in node.names:
-                    if a.name != "*" and not hasattr(mod, a.name):
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom) and node.module and not node.level:
                         try:
-                            importlib.import_module(f"{node.module}.{a.name}")
-                        except Exception:  # noqa: BLE001
-                            bad.append(f"{node.module}.{a.name} does not exist")
-            elif isinstance(node, ast.Import):
-                for a in node.names:
-                    try:
-                        importlib.import_module(a.name)
-                    except Exception as e:  # noqa: BLE001
-                        bad.append(f"import {a.name} ({type(e).__name__})")
-        if defs_dir and defs_dir.exists():
-            for y in defs_dir.rglob("defs.yaml"):
-                for m in re.finditer(r"^type:\s*([\w.]+)\s*$", y.read_text(), re.M):
-                    mod_name, _, cls = m.group(1).rpartition(".")
+                            mod = importlib.import_module(node.module)
+                        except Exception as e:  # noqa: BLE001
+                            bad.append(f"import {node.module} ({type(e).__name__})")
+                            continue
+                        for a in node.names:
+                            if a.name != "*" and not hasattr(mod, a.name):
+                                try:
+                                    importlib.import_module(f"{node.module}.{a.name}")
+                                except Exception:  # noqa: BLE001
+                                    bad.append(f"{node.module}.{a.name} does not exist")
+                    elif isinstance(node, ast.Import):
+                        for a in node.names:
+                            try:
+                                importlib.import_module(a.name)
+                            except Exception as e:  # noqa: BLE001
+                                bad.append(f"import {a.name} ({type(e).__name__})")
+            else:
+                for m in re.finditer(r"^type:\s*([\w.]+)\s*$", text, re.M):
+                    t = m.group(1)
+                    if t.startswith("."):                                            # relative to the folder of the defs.yaml, as dg resolves it
+                        rel = Path(name).parent.relative_to(project / "src")
+                        t = ".".join(rel.parts) + t
+                    mod_name, _, cls = t.rpartition(".")
                     try:
                         if not hasattr(importlib.import_module(mod_name), cls):
-                            bad.append(f"component type {m.group(1)} does not exist")
+                            bad.append(f"component type {t} does not exist")
                     except Exception as e:  # noqa: BLE001
-                        bad.append(f"component type {m.group(1)} ({type(e).__name__})")
+                        bad.append(f"component type {t} ({type(e).__name__})")
     finally:
         del sys.path[:2]
     return gate("no_invented_apis", not bad, "every import and component type resolves" if not bad else "; ".join(bad[:6]))
 
 
-def g_tasks(spec: dict[str, Any], src: str) -> dict[str, Any]:
-    try:
-        doc = ast.get_docstring(ast.parse(src)) or ""
-    except SyntaxError as e:
-        return gate("tasks_accounted_for", False, f"the module does not parse: {e.msg}")
-    missing = [t["task_id"] for t in spec["tasks"] if t["task_id"] not in doc]
-    nostatus = [t["task_id"] for t in spec["tasks"] if t["task_id"] in doc and not re.search(rf"{re.escape(t['task_id'])}[^\n]*(replaced|folded|dropped|merged)", doc)]
-    return gate("tasks_accounted_for", not missing and not nostatus, "every Airflow task is named in the header with what happened to it" if not missing and not nostatus
-                else f"missing from the header docstring: {missing}; named without replaced/folded/dropped/merged: {nostatus}")
+def g_tasks(spec: dict[str, Any], header: str, summary: dict[str, Any]) -> dict[str, Any]:
+    """Every Airflow task is named in the header (module docstring or defs.yaml comment block) with what happened to it, and a task `replaced by`, `folded into` or `merged into` an asset names an asset KEY that exists in the
+    loaded definitions (resolved as the behaviour comparison resolves it: full key, last segment or function name)."""
+    missing = [t["task_id"] for t in spec["tasks"] if t["task_id"] not in header]
+    nostatus = [t["task_id"] for t in spec["tasks"] if t["task_id"] in header and not re.search(rf"{re.escape(t['task_id'])}[^\n]*(replaced|folded|dropped|merged)", header)]
+    unresolved: list[str] = []
+    if "error" not in summary and not missing and not nostatus:
+        import behavior_compare as BC
+        tm = BC.parse_header(header, [t["task_id"] for t in spec["tasks"]], sorted(summary["assets"]), {k: v for k, v in summary["assets"].items() if v})
+        unresolved = [f"{t} ({v['mode']} but no loaded asset key matches)" for t, v in tm.items() if v["mode"] in ("replaced", "folded", "merged") and not v["asset"]]
+    ok = not missing and not nostatus and not unresolved
+    return gate("tasks_accounted_for", ok, "every Airflow task is named in the header with what happened to it, and each asset it names exists in the loaded definitions" if ok
+                else f"missing from the header: {missing}; named without replaced/folded/dropped/merged: {nostatus}; asset not found among the loaded asset keys: {unresolved}")
 
 
-def header_doc(src: str) -> str:
-    try:
-        return ast.get_docstring(ast.parse(src)) or ""
-    except SyntaxError:
-        return ""
-
-
-def g_states(spec: dict[str, Any], module: str, project: Path, baseline: Path | None, source: Path | None, src: str) -> dict[str, Any]:
+def g_states(spec: dict[str, Any], project: Path, baseline: Path | None, source: Path | None, header: str) -> dict[str, Any]:
     if baseline is None or not (Path(baseline) / "airflow1.json").exists():
         return gate("task_states", True, "not run (no Airflow baseline for this DAG was given)")
     import compare_behavior as CB
@@ -242,26 +255,33 @@ def g_states(spec: dict[str, Any], module: str, project: Path, baseline: Path | 
         if dims.get(n, {}).get("verdict") == "differ":
             problems.append(f"{n}: {json.dumps(dims[n].get('evidence'), default=str)[:240]}")
     accepted = (dims.get("tasks", {}).get("evidence") or {}).get("accepted_representation", [])
-    if accepted and RP.parse_record(header_doc(src)).get("skip/branch", {}).get("verdict") not in ("fallback", "not preserved"):
+    if accepted and RP.parse_record(header).get("skip/branch", {}).get("verdict") not in ("fallback", "not preserved"):
         problems.append("tasks " + ", ".join(f"`{a['task']}`" for a in accepted) + " were skipped in Airflow (not taken) and are folded into another asset, so Dagster shows no skipped state for them: either use the native optional-output form "
                         "(the expected path for branches) or declare `- skip/branch: fallback to plain Python: <reason>` in the decision record")
     n = dims.get("tasks", {}).get("compared", 0)
-    note = f"; {len(accepted)} folded not-taken task(s) accepted as a representation difference (declared)" if accepted and not problems else ""
+    nd = (dims.get("tasks", {}).get("evidence") or {}).get("nondeterministic_baseline") or {}
+    note = (f"; {len(accepted)} folded not-taken task(s) accepted as a representation difference (declared)" if accepted and not problems else "") + (f"; {len(nd)} task(s) `nondeterministic: not compared` (the Airflow baseline's runs disagree on them)" if nd else "")
     return gate("task_states", not problems, (f"{n} task(s) compared; outcome, failure behaviour and effects match Airflow" + note) if not problems else "; ".join(problems)[:900])
 
 
-def g_decision(spec: dict[str, Any], src: str) -> dict[str, Any]:
-    ok, detail, declared = RP.check_record(spec, header_doc(src))
+def g_decision(spec: dict[str, Any], header: str) -> dict[str, Any]:
+    ok, detail, declared = RP.check_record(spec, header)
     g = gate("decision_record", ok, detail)
     g["declared"] = declared
     return g
 
 
-def run_gates(spec: dict[str, Any], module: str, project: Path, defs_dir: Path | None, parity: dict[str, Any] | None, baseline: Path | None = None, source: Path | None = None) -> list[dict[str, Any]]:
-    src, path = source_of(module, project)
-    if not path:
-        return [gate("definitions_load", False, f"module {module} not found under {project}")]
-    return [g_load(module, project), g_tests(spec, module, project, baseline), g_checks(spec, src, defs_dir), g_parity(spec, module, project, parity), g_secrets(src, defs_dir), g_apis(src, defs_dir, project), g_tasks(spec, src), g_states(spec, module, project, baseline, source, src), g_decision(spec, src)]
+def run_gates(spec: dict[str, Any], module: str | None, project: Path, defs_dir: Path | None, parity: dict[str, Any] | None, baseline: Path | None = None, source: Path | None = None) -> list[dict[str, Any]]:
+    """`module` and `defs_dir` are hints only: the package, the modules and the component folders are discovered under src/<pkg>/defs/ (`rewrite_project`), so the file name a worker chose (`_name.py`, a lower-cased package,
+    a component folder instead of a module) does not matter."""
+    pkg = RPJ.package_of(project, module.split(".")[0] if module else None)
+    texts = RPJ.sources(project, pkg) if pkg else {}
+    if not pkg or not texts:
+        return [gate("definitions_load", False, f"no rewrite found under {project}: expected src/<package>/defs/ with a Python module or a component folder holding a defs.yaml")]
+    header = RPJ.header_text(project, pkg)
+    summary = RPJ.defs_summary(project, pkg, python=sys.executable)
+    return [g_load(project, pkg, module), g_tests(spec, module, project, baseline), g_checks(spec, texts, summary), g_parity(spec, project, pkg, parity, header), g_secrets(texts), g_apis(texts, project, pkg),
+            g_tasks(spec, header, summary), g_states(spec, project, baseline, source, header), g_decision(spec, header)]
 
 
 def record(manifest: dict[str, Any], dag_id: str, results: list[dict[str, Any]]) -> dict[str, int]:
@@ -289,9 +309,9 @@ def record(manifest: dict[str, Any], dag_id: str, results: list[dict[str, Any]])
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--spec", type=Path, required=True)
-    ap.add_argument("--module", required=True)
+    ap.add_argument("--module", help="optional hint (the dotted module of a module-style rewrite); the project is discovered under src/<pkg>/defs/ either way")
     ap.add_argument("--project", type=Path, required=True)
-    ap.add_argument("--defs-dir", type=Path)
+    ap.add_argument("--defs-dir", type=Path, help="optional and ignored: every component folder under defs/ is found automatically")
     ap.add_argument("--manifest", type=Path)
     ap.add_argument("--parity", type=Path)
     ap.add_argument("--out", type=Path)

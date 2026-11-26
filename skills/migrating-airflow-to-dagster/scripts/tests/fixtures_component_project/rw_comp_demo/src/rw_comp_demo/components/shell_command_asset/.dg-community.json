@@ -1,0 +1,9 @@
+{
+  "id": "shell_command_asset",
+  "name": "ShellCommandAsset",
+  "category": "infrastructure",
+  "ref": "main",
+  "version": "1.0.0",
+  "registry_url": "https://raw.githubusercontent.com/eric-thomas-dagster/dagster-component-templates/main/assets/infrastructure/shell_command_asset/component.py",
+  "installed_at": "fixture"
+}

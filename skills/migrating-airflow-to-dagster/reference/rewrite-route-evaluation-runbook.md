@@ -77,6 +77,31 @@ python3 eval_kit.py check --work $WORK --run stage1b     # also verifies each ki
 
 Launch workers on `$WORK/stage1b/<dag>/` as in section 4, then run section 5 with `--run stage1b`. `eval_report.py` then also counts the decision records: how many behaviours were declared `not preserved`, and how many rewrites used a fallback to plain Python and why.
 
+## 5c. A fresh sample with two arms (`stage2a`)
+
+A new measurement on DAGs the prompts were not tuned on. The harness features that change what a worker or the report sees: the gates find a rewrite through the project's own loader (module style and `defs.yaml` component style alike); `eval_gates.py` uses the kit's baseline for arm A and the harness's private copy (`<run>-private/baseline/<dag>/`) for arm B; the report separates a strict `equivalent` with a substantive comparison from a thin one, adds a printed-output (`stdout`) dimension, counts registry components used and searches reported, and splits every table, the paired converter test and the cost table by arm.
+
+```bash
+# the sample: the usable-baseline corpus MINUS every stage 1 DAG, 60 drawn by the same stratified sampler (new seed 20260202); arms assigned by --arms-seed (stratified by stratum and pattern), groups of 4 that never mix arms
+python3 eval_sample.py --manifest $WORK/corpus/manifest.json --baselines $WORK/corpus/baselines.json --n 60 --seed 20260202 --exclude $WORK/samples/stage1.json --arms-seed 20260203 --group-size 4 --out $WORK/samples/stage2a.json
+# the kits: arm A holds tools/compare_behavior.py and tools/baseline/, arm B holds neither; the baselines are copied from the corpus baselines, not re-run; GROUPS.md is written
+python3 eval_kit.py make  --work $WORK --manifest $WORK/corpus/manifest.json --sample $WORK/samples/stage2a.json --run stage2a --baseline-dir $WORK/baselines
+python3 eval_kit.py check --work $WORK --run stage2a     # also: no arm B kit holds a feedback tool, a baseline or an Airflow result file
+```
+
+After the workers finish (each worker takes one group of `$WORK/stage2a/GROUPS.md` and sees one arm only):
+
+```bash
+unset VIRTUAL_ENV
+python3 eval_gates.py    --work $WORK --run stage2a --jobs 4
+python3 eval_behavior.py batch --work $WORK --run stage2a --manifest $WORK/corpus/manifest.json --venv-2 $WORK/venvs/af210/bin/python --venv-3 $WORK/venvs/af340/bin/python --conv-dir $WORK/conv_stage2a --jobs 3
+python3 eval_report.py   --work $WORK --runs stage2a --writers cold --manifest $WORK/corpus/manifest.json --baselines $WORK/corpus/baselines.json --costs $WORK/costs_stage2a.json --out $WORK/stage2a-report.md
+```
+
+`--conv-dir` points the converter's `--return-all` output at a folder converted with the current converter (`convert_ir.py <ir> --out-dir <dir>/<repo>.<airflow>.ra/src/pkg/defs --report <dir>/<repo>.<airflow>.ra/report.json --return-all`; `eval_behavior.py` does this itself when the folder is empty), so the paired converter comparison is available for the same DAGs. The arms are DIFFERENT DAGs: the A-against-B table is a between-DAG comparison (Newcombe interval, Fisher exact), with the strata balance next to it.
+
+Tasks whose Airflow state differs between the recorded baseline runs (this measurement's two runs and the two the kit baked in) are classified `nondeterministic: not compared` and listed in the report; the rest of the DAG is still compared.
+
 ## 6. Stage 2 (the whole usable corpus)
 
 Repeat 4 and 5 with `--sample $WORK/samples/stage2.json --run stage2`; the stage 1 DAGs are its first 40 entries, so make a kit only for the rest if you prefer (`--sample` accepts any sample file). Report both runs together with `--runs stage1 stage2`. There is no cap in the sampler: 100 or 280 DAGs work the same; the cost is the workers (a rewrite per DAG) and about 10 to 60 seconds of harness time per DAG.

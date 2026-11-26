@@ -28,6 +28,7 @@ from typing import Any
 MATCH, DIFFER, NOT = "match", "differ", "not-compared"
 BEHAVIOUR = ("outcome", "tasks", "values", "files", "sqlite", "http", "smtp", "s3", "failure")
 METADATA = ("schedule", "retries", "pools", "dependencies", "job")
+SUBSTANTIVE = ("values", "files", "sqlite", "http", "smtp", "s3", "stdout")           # a dimension that compared a value, file, row, request, mail, object or printed line: an `equivalent` without one is `thin`
 ENV_ERRORS = re.compile(
     r"ModuleNotFoundError|No module named|ImportError|cannot import name|Name or service not known|NameResolutionError|Temporary failure in name resolution|Connection refused|Failed to establish a new connection|"
     r"Max retries exceeded|gaierror|NoCredentialsError|EndpointConnectionError|isn't defined|conn_id .* (?:not found|is not defined)|AirflowNotFoundException|Variable \S+ does not exist|"
@@ -76,6 +77,77 @@ def dim(verdict: str, reason: str | None = None, evidence: Any = None, **extra: 
         d["evidence"] = evidence
     d.update(extra)
     return d
+
+
+# ---- printed output (stdout) -----------------------------------------------------------------------------------------------------------------------------
+LOGGER_LINE = re.compile(r"^(\[\d{4}-\d\d-\d\d|\d{4}-\d\d-\d\d|(INFO|WARNI|WARNING|DEBUG|ERROR|CRITICAL|TRACE)\b|\s*$)")
+NOISE_LINE = re.compile(r"Warning\b|warnings\.warn|^\s+warn\(|RemovedInAirflow|DeprecationWarning|^Traceback|^\s+File \"|^\w*(Error|Exception)\b|^\$ |^Running command|^Output:|^Command exited")
+ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
+MASKS = [
+    (re.compile(r"\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:[.,]\d+)?(?:\s?(?:Z|[+-]\d\d:?\d\d|UTC))?"), "<time>"),
+    (re.compile(r"\d{4}-\d\d-\d\d"), "<date>"),
+    (re.compile(r"\b(?:manual|scheduled|backfill|asset_triggered|dataset_triggered)__\S+"), "<run-id>"),
+    (re.compile(r"\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b", re.I), "<uuid>"),
+    (re.compile(r"0x[0-9a-fA-F]{6,}"), "<addr>"),
+    (re.compile(r"(?:/[\w.@+-]+)*/(?:sandboxes|airflowtmp\w*|compare_sandbox_\w*|tmp\w*|T|private|var/folders)(?:/[\w.@+-]+)*"), "<path>"),
+    (re.compile(r"\b(?:pid|PID)[: =]+\d+"), "pid <n>"),
+    (re.compile(r"\b\d+(?:\.\d+)?\s?(?:ms|s|seconds)\b"), "<duration>"),
+]
+
+
+def mask_volatile(line: str) -> str:
+    """a printed line with the tokens that differ between two runs of the same code replaced: timestamps and dates, run ids, uuids, memory addresses, temporary and sandbox paths, process ids, durations."""
+    for rx, rep in MASKS:
+        line = rx.sub(rep, line)
+    return line.strip()
+
+
+def printed_lines(text: str) -> list[str]:
+    """What a process printed: the lines that are not log records (no timestamp or level prefix), not warnings or tracebacks, with volatile tokens masked. Both Airflow's `dag.test()` and Dagster's `execute_in_process`
+    leave a task's `print()` on the process's standard output as plain lines; framework logging has a timestamp or level prefix and is dropped."""
+    out = []
+    in_tb = False
+    for raw in ANSI.sub("", text or "").splitlines():
+        if raw.startswith("Traceback"):
+            in_tb = True
+            continue
+        if in_tb:
+            if raw.startswith((" ", "\t")) or not raw.strip():
+                continue
+            in_tb = False
+            continue
+        if LOGGER_LINE.match(raw) or NOISE_LINE.search(raw):
+            continue
+        m = mask_volatile(raw)
+        if m:
+            out.append(m)
+    return out
+
+
+def compare_stdout(a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[str, Any]) -> dict[str, Any]:
+    """The printed lines of the whole run, as multisets (the order and the task a line belongs to are not compared: Airflow's lines carry no reliable task attribution on the Dagster side). Controls against false positives:
+    only plain printed lines count, volatile tokens are masked, only lines BOTH of the baseline's runs printed are required, and the route may print MORE than Airflow (its own `$ command` echo, progress lines): extra lines are
+    listed, never a difference. A line Airflow printed that the route does not print is the difference. Without a printed-lines record on either side the dimension is not compared."""
+    base, rt = a1.get("stdout_lines"), route.get("stdout_lines")
+    if base is None or rt is None:
+        return dim(NOT, "no printed-output record for " + ("the baseline" if base is None else "the route") + " (it was recorded from the process output of runs made by this harness version)")
+    from collections import Counter
+    need = Counter(base)
+    if a2 and a2.get("stdout_lines") is not None:
+        need = need & Counter(a2["stdout_lines"])
+        unstable = sorted(set(base) - set(need.elements()))
+    else:
+        unstable = []
+    if not need:
+        return dim(NOT, "the original printed no stable line to compare" + (f" ({len(unstable)} line(s) differ between its two runs)" if unstable else ""))
+    have = Counter(rt)
+    missing = [ln for ln, n in need.items() if have[ln] < n]
+    extra = sorted(set(have) - set(Counter(base)))
+    ev = {**({"missing_in_route": [ln[:160] for ln in missing[:8]]} if missing else {}), **({"extra_in_route": [ln[:120] for ln in extra[:5]]} if extra else {}), **({"unstable_in_baseline": [ln[:80] for ln in unstable[:5]]} if unstable else {})}
+    n = sum(need.values())
+    if missing:
+        return dim(DIFFER, evidence=ev, compared=n)
+    return dim(MATCH, evidence=ev or None, compared=n)
 
 
 # ---- baseline classification -----------------------------------------------------------------------------------------------------------------------------
@@ -154,10 +226,13 @@ def module_doc_with_accounting(sources: dict[str, str], task_ids: list[str]) -> 
     """the module docstring that names the most Airflow tasks (the header accounting), over {path: source}."""
     best, best_n, best_path = "", -1, None
     for path, src in sorted(sources.items()):
-        try:
-            doc = ast.get_docstring(ast.parse(src)) or ""
-        except SyntaxError:
-            continue
+        if str(path).endswith((".yaml", ".yml")):                       # a component folder's header: the `#` comment block of its defs.yaml
+            doc = "\n".join((ln.strip()[1:][1:] if ln.strip()[1:2] == " " else ln.strip()[1:]) for ln in src.splitlines() if ln.strip().startswith("#") and not ln.strip().startswith("# yaml-language-server"))
+        else:
+            try:
+                doc = ast.get_docstring(ast.parse(src)) or ""
+            except SyntaxError:
+                continue
         n = sum(1 for t in task_ids if t in doc)
         if n > best_n:
             best, best_n, best_path = doc, n, path
@@ -272,7 +347,7 @@ def observed_maps(obs: dict[str, Any] | None) -> dict[str, dict[str, Any]]:
 
 
 # ---- the comparison ---------------------------------------------------------------------------------------------------------------------------------------
-def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[str, Any], taskmap: dict[str, dict[str, Any]], route_kind: str, accept_folded_skips: bool = True) -> dict[str, Any]:
+def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[str, Any], taskmap: dict[str, dict[str, Any]], route_kind: str, accept_folded_skips: bool = True, extra_runs: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """-> {dimensions: {name: {...}}, baseline: {...}, rollup: {...}}"""
     dims: dict[str, dict[str, Any]] = {}
     bclass, breason = baseline_class(a1, a2, spec)
@@ -293,7 +368,11 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
     ds = dagster_states(route)
     a_tasks = a1.get("tasks", {})
     a2_tasks = (a2 or {}).get("tasks", {})
-    nd_tasks = {t for t in a_tasks if a2 and norm_state(a_tasks[t].get("state")) != norm_state(a2_tasks.get(t, {}).get("state"))}
+    # a task whose final state is not the same in EVERY recorded Airflow run (the two this measurement ran, plus any earlier run of the same DAG the kit baked in: `extra_runs`) is nondeterministic in the baseline:
+    # it is classified `nondeterministic: not compared` and the rest of the DAG is still compared
+    runs = [r for r in [a2, *(extra_runs or [])] if r and r.get("tasks")]
+    nd_states = {t: sorted({norm_state(a_tasks[t].get("state"))} | {norm_state((r.get("tasks") or {}).get(t, {}).get("state")) for r in runs if t in (r.get("tasks") or {})}) for t in a_tasks}
+    nd_tasks = {t for t, v in nd_states.items() if len(v) > 1}
     cmp_rows, bad, skipped, accepted = [], [], [], []
     nd_dec = nondeterministic_decisions(spec)
     nd_skip = descendants(spec, set(nd_dec)) if nd_dec else set()
@@ -304,7 +383,7 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         tm = taskmap.get(tid, {"mode": None, "asset": None})
         at = norm_state(a_tasks.get(tid, {}).get("state"))
         if tid in nd_tasks:
-            skipped.append(f"{tid}: nondeterministic outcome in the baseline")
+            skipped.append(f"{tid}: nondeterministic: not compared (the Airflow baseline's runs disagree: {', '.join(nd_states[tid])})")
             continue
         if tid not in a_tasks:
             skipped.append(f"{tid}: not run by Airflow")
@@ -324,10 +403,12 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         if at != rs and not (at in ("skipped", "upstream_failed") and rs in ("skipped", "upstream_failed")):
             bad.append({"task": tid, "asset": asset, "airflow": at, "route": rs})
     nd_note = {"nondeterministic_decisions": nd_dec, "not_compared_tasks": sorted(nd_skip)} if nd_dec else None
+    nd_base = {t: nd_states[t] for t in sorted(nd_tasks) if t not in nd_skip}
+    base_ev = {"nondeterministic_baseline": nd_base} if nd_base else {}
     if bad:
-        dims["tasks"] = dim(DIFFER, evidence={"differences": bad[:20], "not_compared": skipped[:10], **({"accepted_representation": accepted[:20]} if accepted else {})}, compared=len(cmp_rows))
+        dims["tasks"] = dim(DIFFER, evidence={"differences": bad[:20], "not_compared": skipped[:10], **base_ev, **({"accepted_representation": accepted[:20]} if accepted else {})}, compared=len(cmp_rows))
     elif cmp_rows:
-        ev = {**({"not_compared": skipped[:10]} if skipped else {}), **({"accepted_representation": accepted[:20]} if accepted else {})}
+        ev = {**({"not_compared": skipped[:10]} if skipped else {}), **base_ev, **({"accepted_representation": accepted[:20]} if accepted else {})}
         dims["tasks"] = dim(MATCH, evidence=ev or None, compared=len(cmp_rows))
     else:
         dims["tasks"] = dim(NOT, ("nondeterministic: not compared: " + "; ".join(sorted(set(nd_dec.values())))[:200]) if nd_dec and skipped else "no task could be compared: " + "; ".join(skipped[:3]))
@@ -380,6 +461,8 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
     base_o, rep_o, rt_o = observed_maps(a1.get("observed")), observed_maps((a2 or {}).get("observed")) if a2 else None, observed_maps(route.get("observed"))
     for name in ("files", "sqlite", "http", "smtp", "s3"):
         dims[name] = compare_maps(name, base_o[name], rep_o[name] if rep_o else None, rt_o[name])
+
+    dims["stdout"] = compare_stdout(a1, a2, route)
 
     # --- failure behaviour
     af = {t for t, v in a_tasks.items() if norm_state(v.get("state")) == "failed" and t not in nd_tasks}
@@ -476,7 +559,7 @@ def rollup(dims: dict[str, dict[str, Any]], bclass: str, breason: str, ran: bool
     notc = {n: d.get("reason") for n, d in dims.items() if d["verdict"] == NOT}
     beh = [n for n in differ if n in BEHAVIOUR and not (n == "values" and not dims[n].get("any_consumed"))]
     meta = [n for n in differ if n not in beh]
-    info = [n for n in compared if n in ("values", "files", "sqlite", "http", "smtp", "s3")]
+    info = [n for n in compared if n in SUBSTANTIVE]
     base = {"differing": differ, "matching": compared, "not_compared": notc, "thin": not info}
     if bclass == "baseline-failed":
         return {"verdict": "baseline-failed", "why": breason, **base}

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import eval_common as C
+import rewrite_project as RPJ
 
 sys.path.insert(0, str(C.HERE / "parity"))
 import behavior_compare as B  # noqa: E402
@@ -42,9 +43,12 @@ def fresh(path: Path) -> Path:
     return path
 
 
-def converter_src(work: Path, row: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
+CONV_DIR: Path | None = None                                                  # set by --conv-dir: where the converter output is cached (default <work>/conv)
+
+
+def converter_src(work: Path, row: dict[str, Any], conv_dir: Path | None = None) -> tuple[Path, dict[str, Any] | None]:
     """The converter's output with --return-all (every Python task's value is returned, as the parity runs need), converted once per (repository, Airflow) and cached."""
-    out = work / "conv" / f"{row['repo']}.{row['airflow']}.ra"
+    out = (Path(conv_dir) if conv_dir else work / "conv") / f"{row['repo']}.{row['airflow']}.ra"
     rep = out / "report.json"
     if not rep.exists():
         (out / "src" / "pkg" / "defs").mkdir(parents=True, exist_ok=True)
@@ -71,8 +75,7 @@ def wait(p: subprocess.Popen, timeout: int) -> str | None:
 
 
 def rewrite_taskmap(project: Path, spec: dict[str, Any], route: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], str | None]:
-    sources = {str(p): p.read_text() for p in sorted((project / "src").glob("*/defs/**/*.py")) if p.name != "__init__.py"}
-    return B.rewrite_taskmap(sources, spec, route)
+    return B.rewrite_taskmap(RPJ.sources(project), spec, route)
 
 
 def converter_taskmap(rep: dict[str, Any]) -> dict[str, dict[str, Any]]:
@@ -95,18 +98,31 @@ def run_one(a: argparse.Namespace, entry: dict[str, Any], key: str) -> dict[str,
     routes = [x for x in a.routes.split(",") if x]
     conv = None
     if "converter" in routes and row["converter"] != "deferred":
-        src, rep = converter_src(work, row)
+        src, rep = converter_src(work, row, CONV_DIR)
         conv = {"src": src, "report": rep}
     res = execute(priv / "behavior" / name, priv / "sandboxes" / name, spec, row["dag_id"], C.dag_file(work, manifest, row), work / "repos" / row["repo"],
                   a.venv_2 if row["airflow"] == "2" else a.venv_3, a.dagster_python, conv, work / a.run / name / "out" / entry["project"], routes, a.timeout, a.sleep_cap,
-                  deferred=row["converter"] == "deferred", seed=seed_for(C.dag_file(work, manifest, row), work / "repos" / row["repo"]))
+                  deferred=row["converter"] == "deferred", seed=seed_for(C.dag_file(work, manifest, row), work / "repos" / row["repo"]), extra_runs=earlier_baseline_runs(work, a.run, name))
     res.update({"key": key, "stratum": row["converter"], "pattern": row["pattern"], "repo": row["repo"]})
     (priv / "behavior" / name / "behavior.json").write_text(json.dumps(res, indent=1, sort_keys=True, default=str) + "\n")
     return res
 
 
+def earlier_baseline_runs(work: Path, run: str, name: str) -> list[dict[str, Any]]:
+    """Airflow runs of this DAG recorded BEFORE the measurement (the two a kit baked into `tools/baseline/`, or the harness's private copy `<run>-private/baseline/<dag>/`). They are extra evidence on whether a task is
+    deterministic: a task whose state differs across any of them is `nondeterministic: not compared`."""
+    out = []
+    for d in (work / run / name / "tools" / "baseline", work / f"{run}-private" / "baseline" / name):
+        for f in ("airflow1.json", "airflow2.json"):
+            if (d / f).exists():
+                out.append(json.loads((d / f).read_text()))
+        if out:
+            break
+    return out
+
+
 def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path: Path, root: Path, af_py: str, dagster_python: str, conv: dict[str, Any] | None, project: Path,
-            routes: list[str], timeout: int = 300, cap: float | None = None, deferred: bool = False, seed: dict[str, str] | None = None) -> dict[str, Any]:
+            routes: list[str], timeout: int = 300, cap: float | None = None, deferred: bool = False, seed: dict[str, str] | None = None, extra_runs: list[dict[str, Any]] | None = None) -> dict[str, Any]:
     """The four executions and the comparison for one DAG. `conv` is {"src": converted source dir, "report": the converter's report entry} or None; `project` is the rewrite's project root."""
     out_dir, sb, dag_path, root, project = (Path(p).resolve() for p in (out_dir, sb, dag_path, root, project))
     af_py, dagster_python = str(Path(af_py).absolute()), str(Path(dagster_python).absolute())          # absolute, but not resolved: a virtualenv's python is a symlink and its bin directory must stay on the PATH
@@ -165,12 +181,22 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
         lg = out_dir / f"{label}.log"
         if lg.exists() and "success" not in str(a_.get("state", "")).lower():
             a_.setdefault("errors", []).append("[process output] " + lg.read_text(errors="replace")[-2500:])
+    for a_, label in ((a1, "airflow1"), (a2, "airflow2")):                    # what the original printed, from the process output (the printed-output comparison; also baked into kits made from this run)
+        lg = out_dir / f"{label}.log"
+        if lg.exists() and a_.get("state") is not None:
+            a_["stdout_lines"] = B.printed_lines(lg.read_text(errors="replace"))
+            raw = json.loads((out_dir / f"{label}.json").read_text()) if (out_dir / f"{label}.json").exists() else {}
+            if raw:
+                (out_dir / f"{label}.json").write_text(json.dumps({**raw, "stdout_lines": a_["stdout_lines"]}, indent=1, default=str))
     result: dict[str, Any] = {"dag_id": dag_id, "airflow": a1.get("airflow_version"), "seconds": elapsed, "routes": {}}
     for route in routes:
         if route in notes:
             result["routes"][route] = {"rollup": {"verdict": "no-output", "why": notes[route]}, "dimensions": {}}
             continue
         r = load(route)
+        rl = out_dir / f"{route}.log"
+        if rl.exists() and r.get("state") is not None:
+            r["stdout_lines"] = B.printed_lines(rl.read_text(errors="replace"))
         if route == "converter":
             tm = converter_taskmap(rep or {})
         else:
@@ -179,7 +205,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
         if "left no result" in str(r.get("error")) and not r.get("assets"):
             result["routes"][route] = {"rollup": {"verdict": "not-comparable", "why": "harness: " + r["error"]}, "dimensions": {}}
             continue
-        cmp_ = B.compare(spec, a1, a2 if a2.get("state") is not None or a2.get("error") is None else None, r, tm, route)
+        cmp_ = B.compare(spec, a1, a2 if a2.get("state") is not None or a2.get("error") is None else None, r, tm, route, extra_runs=extra_runs)
         cmp_["taskmap"] = tm
         cmp_["route_notes"] = r.get("notes", [])
         cmp_["route_error"] = r.get("error")
@@ -197,7 +223,7 @@ def batch(a: argparse.Namespace) -> int:
     todo = [(k, v) for k, v in sorted(index.items()) if not a.only or v["dag_id"] in a.only]
     if "converter" in a.routes:                                               # convert once per repository, before the parallel runs
         for k, v in todo:
-            converter_src(work, C.row_for(manifest, k))
+            converter_src(work, C.row_for(manifest, k), CONV_DIR)
     print(f"comparing {len(todo)} DAG(s) with {a.jobs} at a time ...", flush=True)
 
     def go(item: tuple[str, dict[str, Any]]) -> dict[str, Any]:
@@ -227,6 +253,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--dagster-python", default=str(Path(os.environ.get("EVAL_DAGSTER_PYTHON", sys.executable))))
         p.add_argument("--sleep-cap", type=float, default=None, help="cap time.sleep at this many seconds on every route (off by default: it stops timeouts from firing)")
         p.add_argument("--routes", default="converter,rewrite")
+        p.add_argument("--conv-dir", type=Path, help="where to cache the converter's --return-all output (default <work>/conv); point it at a fresh folder to convert with the CURRENT converter")
         p.add_argument("--timeout", type=int, default=300)
         if n == "one":
             p.add_argument("--key", required=True)
@@ -234,6 +261,8 @@ def main(argv: list[str] | None = None) -> int:
             p.add_argument("--jobs", type=int, default=3)
             p.add_argument("--only", nargs="*")
     a = ap.parse_args(argv)
+    global CONV_DIR
+    CONV_DIR = getattr(a, "conv_dir", None)
     if a.cmd == "batch":
         return batch(a)
     index = json.loads((a.work.resolve() / f"{a.run}-private" / "kit_index.json").read_text())

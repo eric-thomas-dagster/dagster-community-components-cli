@@ -16,6 +16,12 @@ SCRIPTS = HERE.parent
 sys.path.insert(0, str(SCRIPTS))
 sys.path.insert(0, str(SCRIPTS / "parity"))
 import accept_rewrite as A  # noqa: E402
+import rewrite_project as RPJ  # noqa: E402
+
+
+def DOC(src):
+    return RPJ.doc_of_source('x.py', src)
+
 import behavior_compare as B  # noqa: E402
 import compare_behavior as CB  # noqa: E402
 import eval_kit as K  # noqa: E402
@@ -74,11 +80,11 @@ def test_state_gate_accepts_a_declared_folded_not_taken_branch_and_names_the_tas
     p = project(tmp_path, GOOD.format(record=RECORD, extra="pass"))
     bd = baseline(tmp_path, p)
     src = (p / "src/rw_br/defs/br.py").read_text()
-    g = A.g_states(BRANCH_SPEC, "rw_br.defs.br", p, bd, None, src)
+    g = A.g_states(BRANCH_SPEC, p, bd, None, DOC(src))
     assert g["passed"], g["detail"]
     assert "accepted" in g["detail"]
     undeclared = GOOD.format(record="", extra="pass")
-    g = A.g_states(BRANCH_SPEC, "rw_br.defs.br", p, bd, None, undeclared)
+    g = A.g_states(BRANCH_SPEC, p, bd, None, DOC(undeclared))
     assert not g["passed"] and "`b`" in g["detail"] and "decision record" in g["detail"]
 
 
@@ -88,7 +94,7 @@ def test_state_gate_flags_an_unchosen_branch_that_ran_and_a_wrong_state_names_th
     # the rewrite also does the branch that was not taken: its side effect (a file) appears
     bad = GOOD.format(record=RECORD, extra='Path("b.txt").write_text("b")')
     (p / "src/rw_br/defs/br.py").write_text(bad)
-    g = A.g_states(BRANCH_SPEC, "rw_br.defs.br", p, bd, None, bad)
+    g = A.g_states(BRANCH_SPEC, p, bd, None, DOC(bad))
     assert not g["passed"] and "files" in g["detail"] and "b.txt" in g["detail"]
     # Airflow says task a failed but the rewrite succeeds: the gate names `a`
     p2 = project(tmp_path / "x" if (tmp_path / "x").mkdir() is None else tmp_path, GOOD.format(record=RECORD, extra="pass"))
@@ -97,12 +103,12 @@ def test_state_gate_flags_an_unchosen_branch_that_ran_and_a_wrong_state_names_th
     a1["state"] = "failed"
     (bd / "airflow1.json").write_text(json.dumps(a1))
     (bd / "airflow2.json").write_text(json.dumps(a1))
-    g = A.g_states(BRANCH_SPEC, "rw_br.defs.br", p2, bd, None, GOOD.format(record=RECORD, extra="pass"))
+    g = A.g_states(BRANCH_SPEC, p2, bd, None, DOC(GOOD.format(record=RECORD, extra="pass")))
     assert not g["passed"] and "task `a`: Airflow failed, rewrite success" in g["detail"]
 
 
 def test_state_gate_without_a_baseline_is_not_run_and_does_not_fail(tmp_path):
-    g = A.g_states(BRANCH_SPEC, "m", tmp_path, None, None, "")
+    g = A.g_states(BRANCH_SPEC, tmp_path, None, None, DOC(""))
     assert g["passed"] and g["detail"].startswith("not run")
 
 
@@ -117,7 +123,7 @@ def test_decision_record_gate_requires_every_flagged_behaviour_with_a_reason():
     doc = "x\n\nDecision record:\n- Skip / branch decisions: preserved\n- retries: not preserved: one RetryPolicy for the whole asset\n"
     ok, detail, declared = RP.check_record(spec, doc)
     assert ok and declared["not_preserved"] == {"retries": "one RetryPolicy for the whole asset"} and declared["preserved"] == ["skip/branch"]
-    g = A.g_decision(spec, '"""' + doc + '"""\n')
+    g = A.g_decision(spec, doc)
     assert g["passed"] and g["declared"]["not_preserved"]
     assert RP.check_record({**BRANCH_SPEC, "tasks": [BRANCH_SPEC["tasks"][1]]}, "")[0]       # nothing flagged: no record needed
 
@@ -270,12 +276,12 @@ def test_state_gate_compares_skipped_states_when_the_rewrite_uses_optional_outpu
     bd.mkdir()
     for f in ("airflow1.json", "airflow2.json"):
         (bd / f).write_text(json.dumps(a))
-    g = A.g_states(BRANCH_SPEC, "rw_br.defs.br", p, bd, None, OPTIONAL)
+    g = A.g_states(BRANCH_SPEC, p, bd, None, DOC(OPTIONAL))
     assert g["passed"], g["detail"]                                            # b: Airflow skipped, asset_b not materialized -> skipped: a real state match, no declaration needed
     a["tasks"]["b"]["state"] = "success"                                       # Airflow says b succeeded: the rewrite skipped it
     for f in ("airflow1.json", "airflow2.json"):
         (bd / f).write_text(json.dumps(a))
-    g = A.g_states(BRANCH_SPEC, "rw_br.defs.br", p, bd, None, OPTIONAL)
+    g = A.g_states(BRANCH_SPEC, p, bd, None, DOC(OPTIONAL))
     assert not g["passed"] and "task `b`: Airflow success, rewrite skipped" in g["detail"]
 
 
@@ -291,9 +297,9 @@ def test_state_gate_accepts_folded_skips_only_as_a_declared_fallback(tmp_path):
     p = project(tmp_path, GOOD.format(record=RECORD, extra="pass"))
     bd = baseline(tmp_path, p)
     plain_ok = GOOD.format(record="Decision record:\n- skip/branch: fallback to plain Python: both branches yield the same output\n", extra="pass")
-    assert A.g_states(BRANCH_SPEC, "rw_br.defs.br", p, bd, None, plain_ok)["passed"]
+    assert A.g_states(BRANCH_SPEC, p, bd, None, DOC(plain_ok))["passed"]
     claims_preserved = GOOD.format(record="Decision record:\n- skip/branch: preserved\n", extra="pass")
-    g = A.g_states(BRANCH_SPEC, "rw_br.defs.br", p, bd, None, claims_preserved)
+    g = A.g_states(BRANCH_SPEC, p, bd, None, DOC(claims_preserved))
     assert not g["passed"] and "native optional-output form" in g["detail"] and "`b`" in g["detail"]
 
 

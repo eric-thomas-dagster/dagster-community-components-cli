@@ -97,3 +97,9 @@ Registry components that could replace code the converter now generates: `lambda
 ## How each component gets checked
 
 For each component, the harness runs the original operator with the external system mocked and recording, runs the Dagster component against an equivalent recording fake, and compares outcomes, calls and values. The scripts are in `examples/runtime_conversion/component_parity/`. Dagster resources attach derived objects (`S3Resource` attaches the boto client, `SnowflakeResource` a `SnowflakeConnection`), so fakes must attach the same.
+
+## Found while testing registry components through the rewrite gates
+
+- `dagster-component add <id>` asks `Continue? [Y/n]` before copying files and has no `--yes` flag (`--auto-install` only covers the pip requirements), so a non-interactive worker or script gets `Aborted!`. A `--yes` / `--no-input` flag would let agents and CI use it without `yes |`.
+- `shell_command_asset` prints `$ <command>` to standard output before running the command. That is fine, but it is an extra printed line next to the original's output: the harness's printed-output comparison tolerates extra lines, so it costs nothing here, and it is noted so nobody removes the output lines that matter.
+- `shell_command_asset` has no job or schedule of its own, so a component-style rewrite needs a small `.py` file next to the `defs.yaml` for `define_asset_job` and `ScheduleDefinition`. A `job_name` / `cron_schedule` attribute (as some other components have) would make a one-component DAG a one-file project.

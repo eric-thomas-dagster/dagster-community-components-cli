@@ -12,6 +12,8 @@ order, so no single pattern and no single repository dominates, and a repository
   stage 1   about 40 DAGs: every eligible hard DAG up to 20, the rest split between degraded and clean (about 40 / 60)
   stage 2   as many as possible: the whole eligible corpus. There is no cap: 100 or 280 DAGs work the same. The stage 1 sample is its prefix, so stage 2 continues stage 1 rather than redoing it
   --n       a stratified sample of that size, proportional to the strata (hard DAGs first when n is small)
+  --exclude earlier sample files whose DAGs are removed from the pool first (a fresh sample, for example stage 2a without stage 1's 40)
+  --arms-seed  then assign every DAG to ARM A or ARM B, stratified by stratum and pattern (seeded), and to a worker group of --group-size that never mixes arms
 
 With --baselines (from eval_baseline.py) only DAGs whose Airflow baseline ran are sampled. Same manifest, baselines and seed give the same file. Writes sample.json and a readable sample.md.
 """
@@ -108,8 +110,11 @@ def stratified(rows: list[dict[str, Any]], seed: int, n: int, max_share: float) 
     return sel
 
 
-def build_sample(manifest: dict[str, Any], stage: int | None, n: int | None, seed: int, max_share: float = 0.25, n1: int = 40, baselines: dict[str, Any] | None = None) -> dict[str, Any]:
+def build_sample(manifest: dict[str, Any], stage: int | None, n: int | None, seed: int, max_share: float = 0.25, n1: int = 40, baselines: dict[str, Any] | None = None, exclude: set[str] | None = None) -> dict[str, Any]:
     rows = eligible(manifest, baselines)
+    n_before = len(rows)
+    if exclude:                                                                # a fresh sample: nothing drawn earlier (for example stage 1) may be drawn again
+        rows = [r for r in rows if r["key"] not in exclude]
     first = stage1(rows, seed, min(n1, len(rows)), max_share)
     if stage == 1:
         chosen, label = first, "stage 1"
@@ -122,12 +127,12 @@ def build_sample(manifest: dict[str, Any], stage: int | None, n: int | None, see
         chosen, label = first + extra, "stage 2"
     else:
         chosen, label = stratified(rows, seed, n or 40, max_share), f"n={n}"
-    s1 = {r["key"] for r in first}
+    s1 = {r["key"] for r in first} if not exclude else set()                   # `stage1` marks the stage 1 prefix; a fresh sample has none
     entries = [{"key": r["key"], "dag_id": r["dag_id"], "repo": r["repo"], "stratum": r["converter"], "hard": r["converter"] in ("stubbed", "deferred"), "pattern": r["pattern"], "patterns": r["patterns"],
                 "airflow": r["airflow"], "stage1": r["key"] in s1} for r in chosen]
     cnt = lambda f: dict(sorted(collections.Counter(f(e) for e in entries).items()))      # noqa: E731
     return {"seed": seed, "label": label, "n": len(entries), "eligible_corpus": len(rows), "baseline_filter": baselines is not None,
-            "dropped_for_baseline": (len(eligible(manifest)) - len(rows)) if baselines is not None else None, "max_repo_share": max_share, "dags": entries,
+            "dropped_for_baseline": (len(eligible(manifest)) - n_before) if baselines is not None else None, "excluded_earlier_draws": (n_before - len(rows)) if exclude else 0, "max_repo_share": max_share, "dags": entries,
             "counts": {"stratum": cnt(lambda e: e["stratum"]), "pattern": cnt(lambda e: e["pattern"]), "repo": cnt(lambda e: e["repo"])}}
 
 
@@ -139,6 +144,56 @@ def subset(sample: dict[str, Any], n: int, seed: int) -> dict[str, Any]:
     cnt = lambda f: dict(sorted(collections.Counter(f(e) for e in entries).items()))      # noqa: E731
     return {**{k: sample[k] for k in ("eligible_corpus", "max_repo_share", "baseline_filter", "dropped_for_baseline") if k in sample}, "seed": seed, "label": f"subset of {sample['label']} for variance (n={len(entries)})",
             "n": len(entries), "dags": entries, "counts": {"stratum": cnt(lambda e: e["stratum"]), "pattern": cnt(lambda e: e["pattern"]), "repo": cnt(lambda e: e["repo"])}}
+
+
+def assign_arms(sample: dict[str, Any], seed: int, group_size: int = 4) -> dict[str, Any]:
+    """Randomly (seeded) assign each DAG to ARM A or ARM B, stratified by the converter's stratum and by pattern, and split each arm into worker groups. Inside every (stratum, pattern) cell the DAGs are shuffled and dealt
+    alternately to A and B, and the alternation CONTINUES across cells (a seeded random first arm), so each cell is balanced within one DAG and the arms differ in size by at most one overall. Groups: each arm's DAGs are
+    shuffled (seeded) and cut into consecutive groups of `group_size` (the last may be smaller); a group never mixes arms, because a worker sees one arm only. Adds `arm` and `group` to every entry, `arm_seed`,
+    `groups` and the balance tables to the sample."""
+    rng = random.Random(seed)
+    cells: dict[tuple[str, str], list[dict[str, Any]]] = collections.defaultdict(list)
+    for e in sample["dags"]:
+        cells[(e["stratum"], e["pattern"])].append(e)
+    nxt = rng.choice("AB")
+    for key in sorted(cells):
+        es = sorted(cells[key], key=lambda e: e["key"])
+        rng.shuffle(es)
+        for e in es:
+            e["arm"] = nxt
+            nxt = "B" if nxt == "A" else "A"
+    groups: dict[str, list[str]] = {}
+    for arm in "AB":
+        es = sorted((e for e in sample["dags"] if e["arm"] == arm), key=lambda e: e["key"])
+        rng.shuffle(es)
+        for i in range(0, len(es), group_size):
+            gid = f"{arm}{i // group_size + 1}"
+            for e in es[i:i + group_size]:
+                e["group"] = gid
+            groups[gid] = [e["dag_id"] for e in es[i:i + group_size]]
+    cnt = lambda f: dict(sorted(collections.Counter(f(e) for e in sample["dags"]).items()))      # noqa: E731
+    sample["arm_seed"] = seed
+    sample["groups"] = groups
+    sample["counts"]["arm"] = cnt(lambda e: e["arm"])
+    sample["counts"]["arm_by_stratum"] = cnt(lambda e: f"{e['arm']}/{e['stratum']}")
+    sample["counts"]["arm_by_pattern"] = cnt(lambda e: f"{e['arm']}/{e['pattern']}")
+    return sample
+
+
+def render_groups(sample: dict[str, Any], folder_names: dict[str, str]) -> str:
+    """GROUPS.md: group id, arm, DAG folder names, then the strata and pattern balance of the two arms."""
+    out = [f"# Worker groups ({sample['label']})", "",
+           "A worker takes ONE group and sees one arm only. **ARM A**: the kit has the behaviour-feedback tool (`tools/compare_behavior.py` and `tools/baseline/`). **ARM B**: no feedback tool and no baseline; everything else is identical (the pattern library, the gates, the sandbox runner).", "",
+           "| group | arm | DAGs | folders |", "|---|---|---|---|"]
+    for gid, ids in sample["groups"].items():
+        es = [e for e in sample["dags"] if e.get("group") == gid]
+        out.append(f"| {gid} | {es[0]['arm']} | {len(es)} | " + ", ".join(f"`{folder_names[e['key']]}`" for e in es) + " |")
+    out += ["", f"Arm assignment seed {sample['arm_seed']}; sample seed {sample['seed']}. Strata balance (DAGs per arm):", "", "| | A | B |", "|---|---|---|"]
+    for title, field in (("stratum", "stratum"), ("pattern", "pattern")):
+        for v in sorted({e[field] for e in sample["dags"]}):
+            out.append(f"| {title} `{v}` | {sum(1 for e in sample['dags'] if e['arm'] == 'A' and e[field] == v)} | {sum(1 for e in sample['dags'] if e['arm'] == 'B' and e[field] == v)} |")
+    out.append(f"| **all** | {sum(1 for e in sample['dags'] if e['arm'] == 'A')} | {sum(1 for e in sample['dags'] if e['arm'] == 'B')} |")
+    return "\n".join(out) + "\n"
 
 
 def render_md(s: dict[str, Any]) -> str:
@@ -160,6 +215,9 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--seed", type=int, default=20260101)
     ap.add_argument("--max-repo-share", type=float, default=0.25)
     ap.add_argument("--baselines", type=Path, help="baselines.json from eval_baseline.py: sample only DAGs whose Airflow baseline ran (ok, or failing by design)")
+    ap.add_argument("--exclude", type=Path, nargs="*", default=[], help="earlier sample.json files whose DAGs must not be drawn again (a fresh sample)")
+    ap.add_argument("--arms-seed", type=int, help="after drawing, assign the DAGs to ARM A / ARM B (stratified by stratum and pattern) with this seed and write `arm` and `group` into every entry")
+    ap.add_argument("--group-size", type=int, default=4)
     ap.add_argument("--out", type=Path, default=Path("sample.json"))
     a = ap.parse_args(argv)
     if a.subset_of:
@@ -170,7 +228,10 @@ def main(argv: list[str] | None = None) -> int:
         return 0
     if not a.manifest or (not a.stage and not a.n):
         ap.error("give --manifest and --stage 1, --stage 2 or --n")
-    s = build_sample(json.loads(a.manifest.read_text()), a.stage, a.n, a.seed, a.max_repo_share, baselines=json.loads(a.baselines.read_text()) if a.baselines else None)
+    excl = {e["key"] for f in a.exclude for e in json.loads(f.read_text())["dags"]}
+    s = build_sample(json.loads(a.manifest.read_text()), a.stage, a.n, a.seed, a.max_repo_share, baselines=json.loads(a.baselines.read_text()) if a.baselines else None, exclude=excl)
+    if a.arms_seed is not None:
+        assign_arms(s, a.arms_seed, a.group_size)
     a.out.write_text(json.dumps(s, indent=1, sort_keys=True) + "\n")
     a.out.with_suffix(".md").write_text(render_md(s))
     print(f"wrote {a.out} and {a.out.with_suffix('.md')}: {s['n']} DAGs; by stratum {s['counts']['stratum']}; by pattern {s['counts']['pattern']}")

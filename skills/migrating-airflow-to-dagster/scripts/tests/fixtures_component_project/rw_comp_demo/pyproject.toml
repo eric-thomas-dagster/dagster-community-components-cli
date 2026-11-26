@@ -1,0 +1,31 @@
+[project]
+name = "rw_comp_demo"
+requires-python = ">=3.11,<3.15"
+version = "0.1.0"
+dependencies = [
+    "dagster==1.13.31",
+]
+
+[dependency-groups]
+dev = [
+    "dagster-dg-cli",
+    "dagster-webserver",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+force-include = { "pyproject.toml" = "pyproject.toml" }
+
+[tool.dg]
+directory_type = "project"
+
+[tool.dg.project]
+root_module = "rw_comp_demo"
+registry_modules = [
+    "rw_comp_demo.components.*",
+]
+
+
