@@ -452,3 +452,24 @@ def test_report_variance_section_pairs_two_independent_rewrites(tmp_path):
     a = argparse.Namespace(work=tmp_path, runs=["r1"], writers="cold", costs=None, variance_run="r1b", manifest=None, baselines=None, out=None)
     t = R.render(a)
     assert "2 DAGs have a second independent rewrite" in t and "Same behaviour verdict in both passes: 1/2 = 50%" in t
+
+
+def test_converter_route_loads_the_projects_definitions_modules_for_resources(tmp_path):
+    """The converter emits defs/resources.py (a @dg.definitions module) for connection steps; the harness must load it, as `dg` does, so the op's resource key is provided."""
+    import subprocess
+    src = tmp_path / "src"
+    defs = src / "pkg" / "defs"
+    defs.mkdir(parents=True)
+    (src / "pkg" / "__init__.py").write_text("")
+    (defs / "__init__.py").write_text("")
+    (defs / "resources.py").write_text("import dagster as dg\n\n\nclass Conn(dg.ConfigurableResource):\n    tag: str = 'ok'\n\n\n@dg.definitions\ndef resources() -> dg.Definitions:\n    return dg.Definitions(resources={'my_conn': Conn()})\n")
+    (defs / "sibling.py").write_text("import dagster as dg\n\n\n@dg.asset\ndef sibling_asset():\n    raise RuntimeError('a sibling DAG module must not run')\n")
+    (defs / "needs_conn.py").write_text("import dagster as dg\n\n\n@dg.asset(required_resource_keys={'my_conn'})\ndef needs_conn(context):\n    return context.resources.my_conn.tag\n")
+    cfg = {"kind": "converter", "dag_id": "needs_conn", "repo_root": str(tmp_path), "out": str(tmp_path / "out.json"), "timeout_s": 60, "converter": {"src": str(src), "pkg": "pkg"},
+           "sandbox": {"root": str(tmp_path / "sb"), "connections": {}, "variables": {}, "sleep_cap": None, "seed": {}}}
+    (tmp_path / "cfg.json").write_text(json.dumps(cfg))
+    subprocess.run([sys.executable, str(SCRIPTS / "parity" / "run_dagster.py"), str(tmp_path / "cfg.json")], check=True, capture_output=True, cwd=tmp_path)
+    r = json.loads((tmp_path / "out.json").read_text())
+    assert r["error"] is None, r
+    assert r["state"] == "success" and r["assets"]["needs_conn"]["state"] == "success" and r["assets"]["needs_conn"]["value"] == '"ok"'
+    assert set(r["assets"]) == {"needs_conn"} and "resources" in r["load"] and "sibling" not in r["load"]

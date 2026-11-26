@@ -85,6 +85,28 @@ try:
         schedules = [v for v in vals if isinstance(v, dg.ScheduleDefinition)]
         sensors = [v for v in vals if isinstance(v, dg.SensorDefinition)]
         res["load"] = "module " + mod.__name__
+        # `dg` loads EVERY module under defs/: the converter emits `defs/resources.py` (the connections as resources) and `defs/sources.py` as `@dg.definitions` modules beside the DAG modules.
+        # The DAG's own module supplies the assets under test; the definitions modules supply the resources, exactly as the merged project would. A definitions module that fails to import
+        # fails the load, as it would for `dg`.
+        pkgname = cfg["converter"].get("pkg", "pkg")
+        own_stem = mod.__name__.rsplit(".", 1)[-1]
+        loaded_mods = []
+        for f in sorted(Path(mod.__file__).parent.glob("*.py")):
+            if f.stem == "__init__":
+                continue
+            if f.stem != own_stem and not re.search(r"^\s*@(?:dg\.|dagster\.)?definitions\b|=\s*(?:dg\.|dagster\.)?Definitions\(", f.read_text(errors="replace"), re.M):
+                continue                                                 # a sibling DAG module: not part of this DAG's run (its assets would collide and run)
+            try:
+                m = mod if f.stem == own_stem else importlib.import_module(f"{pkgname}.defs.{f.stem}")
+            except BaseException as e:  # noqa: BLE001
+                raise RuntimeError(f"the project's definitions module defs/{f.name} failed to load: {type(e).__name__}: {str(e)[:300]}") from e
+            loaded_mods.append(f.stem)
+            for v in list(vars(m).values()):
+                d = v if isinstance(v, dg.Definitions) else (v() if type(v).__name__ == "LazyDefinitions" else None)
+                if isinstance(d, dg.Definitions):
+                    resources.update(dict(d.resources or {}))
+        if len(loaded_mods) > 1:
+            res["load"] += " + definitions modules " + ", ".join(s for s in loaded_mods if s != own_stem)
     else:
         project = Path(cfg["rewrite"]["project"]).resolve()
         for p in (project / "src", project):
