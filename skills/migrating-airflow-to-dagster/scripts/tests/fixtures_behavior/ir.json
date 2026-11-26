@@ -1,0 +1,845 @@
+{
+ "airflow_version": "2.11.0",
+ "dags": [
+  {
+   "dag_id": "fixture_fails",
+   "file": "fixture_fails.py",
+   "description": null,
+   "tags": [],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-01-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10ac49940>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10ac49940>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "user_defined_macros": {},
+   "user_defined_macro_functions": [],
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "ok",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "boom"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails.ok"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "ok",
+       "module": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails",
+       "source": "def ok():\n    return \"fine\"\n",
+       "file": "dags/fixture_fails.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "ok",
+      "module": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails",
+      "source": "def ok():\n    return \"fine\"\n",
+      "file": "dags/fixture_fails.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "boom",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [
+      "ok"
+     ],
+     "downstream": [
+      "after"
+     ],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails.boom"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "boom",
+       "module": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails",
+       "source": "def boom():\n    raise ValueError(\"by design\")\n",
+       "file": "dags/fixture_fails.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "boom",
+      "module": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails",
+      "source": "def boom():\n    raise ValueError(\"by design\")\n",
+      "file": "dags/fixture_fails.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "after",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [
+      "boom"
+     ],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails.after"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "after",
+       "module": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails",
+       "source": "def after():\n    with open(\"after.txt\", \"w\") as f:\n        f.write(\"should not exist\")\n",
+       "file": "dags/fixture_fails.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "after",
+      "module": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails",
+      "source": "def after():\n    with open(\"after.txt\", \"w\") as f:\n        f.write(\"should not exist\")\n",
+      "file": "dags/fixture_fails.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "side",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails.side"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "side",
+       "module": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails",
+       "source": "def side():\n    with open(\"side.txt\", \"w\") as f:\n        f.write(\"independent\")\n",
+       "file": "dags/fixture_fails.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "side",
+      "module": "unusual_prefix_80b5540f9fd02bc306c3b4f01061bf5f2cdc1157_fixture_fails",
+      "source": "def side():\n    with open(\"side.txt\", \"w\") as f:\n        f.write(\"independent\")\n",
+      "file": "dags/fixture_fails.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    }
+   ]
+  },
+  {
+   "dag_id": "fixture_env",
+   "file": "fixture_env.py",
+   "description": null,
+   "tags": [],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-01-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "NullTimetable",
+    "timezone": "UTC",
+    "summary": "None",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10ac49940>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10ac49940>",
+    "kind": "manual"
+   },
+   "default_args": {},
+   "user_defined_macros": {},
+   "user_defined_macro_functions": [],
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "call",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [],
+     "retries": 0,
+     "retry_delay_s": 300.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_52489ef8b90087d7a0fe4b4beffbb98c6d80f51e_fixture_env.call"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "call",
+       "module": "unusual_prefix_52489ef8b90087d7a0fe4b4beffbb98c6d80f51e_fixture_env",
+       "source": "def call():\n    raise ConnectionRefusedError(\"[Errno 111] Connection refused\")\n",
+       "file": "dags/fixture_env.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "call",
+      "module": "unusual_prefix_52489ef8b90087d7a0fe4b4beffbb98c6d80f51e_fixture_env",
+      "source": "def call():\n    raise ConnectionRefusedError(\"[Errno 111] Connection refused\")\n",
+      "file": "dags/fixture_env.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    }
+   ]
+  },
+  {
+   "dag_id": "fixture_pipeline",
+   "file": "fixture_pipeline.py",
+   "description": null,
+   "tags": [],
+   "catchup": false,
+   "max_active_runs": 16,
+   "start_date": "2024-01-01 00:00:00+00:00",
+   "is_subdag": false,
+   "parent_dag_id": null,
+   "timetable": {
+    "class": "CronDataIntervalTimetable",
+    "cron": "0 6 * * *",
+    "timezone": "UTC",
+    "summary": "0 6 * * *",
+    "assets": [
+     "<airflow.timetables.base._NullDataset object at 0x10ac49940>"
+    ],
+    "asset_logic": "single",
+    "asset_tree": "<airflow.timetables.base._NullDataset object at 0x10ac49940>",
+    "kind": "cron_data_interval"
+   },
+   "default_args": {
+    "retries": 2,
+    "retry_delay": {
+     "seconds": 30.0
+    }
+   },
+   "user_defined_macros": {},
+   "user_defined_macro_functions": [],
+   "params": {},
+   "dag_settings": {
+    "fail_stop": false,
+    "max_active_tasks": 16,
+    "max_active_runs": 16,
+    "max_consecutive_failed_dag_runs": 0,
+    "render_template_as_native_obj": false,
+    "concurrency": 16
+   },
+   "has_callbacks": false,
+   "cosmos_groups": [],
+   "tasks": [
+    {
+     "task_id": "t_extract",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "t_load"
+     ],
+     "retries": 2,
+     "retry_delay_s": 30.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline.extract"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "extract",
+       "module": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline",
+       "source": "def extract():\n    return {\"rows\": [[1, \"a\"], [2, \"b\"]]}\n",
+       "file": "dags/fixture_pipeline.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "extract",
+      "module": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline",
+      "source": "def extract():\n    return {\"rows\": [[1, \"a\"], [2, \"b\"]]}\n",
+      "file": "dags/fixture_pipeline.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "t_write",
+     "type": "BashOperator",
+     "module": "airflow.operators.bash",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "t_notify"
+     ],
+     "retries": 2,
+     "retry_delay_s": 30.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "bash_command": "echo hello > report.txt",
+      "env": null,
+      "cwd": null
+     },
+     "args": {
+      "append_env": false,
+      "bash_command": "echo hello > report.txt",
+      "cwd": null,
+      "env": null,
+      "output_encoding": "utf-8",
+      "skip_on_exit_code": [
+       99
+      ]
+     },
+     "callable_args": {
+      "output_processor": "airflow.operators.bash.BashOperator.<lambda>"
+     },
+     "callable_arg_info": {}
+    },
+    {
+     "task_id": "t_load",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [
+      "t_extract"
+     ],
+     "downstream": [
+      "t_notify"
+     ],
+     "retries": 2,
+     "retry_delay_s": 30.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline.load"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "load",
+       "module": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline",
+       "source": "def load():\n    con = sqlite3.connect(_db())\n    con.execute(\"create table if not exists items (id integer, name text)\")\n    con.executemany(\"insert into items values (?, ?)\", [(1, \"a\"), (2, \"b\")])\n    con.commit()\n    con.close()\n",
+       "file": "dags/fixture_pipeline.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "load",
+      "module": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline",
+      "source": "def load():\n    con = sqlite3.connect(_db())\n    con.execute(\"create table if not exists items (id integer, name text)\")\n    con.executemany(\"insert into items values (?, ?)\", [(1, \"a\"), (2, \"b\")])\n    con.commit()\n    con.close()\n",
+      "file": "dags/fixture_pipeline.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "t_stamp",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [],
+     "downstream": [
+      "t_notify"
+     ],
+     "retries": 2,
+     "retry_delay_s": 30.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline.stamp"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "stamp",
+       "module": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline",
+       "source": "def stamp():\n    with open(\"stamp.txt\", \"w\") as f:\n        f.write(datetime.datetime.now().isoformat())\n",
+       "file": "dags/fixture_pipeline.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "stamp",
+      "module": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline",
+      "source": "def stamp():\n    with open(\"stamp.txt\", \"w\") as f:\n        f.write(datetime.datetime.now().isoformat())\n",
+      "file": "dags/fixture_pipeline.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    },
+    {
+     "task_id": "t_notify",
+     "type": "PythonOperator",
+     "module": "airflow.operators.python",
+     "group": null,
+     "upstream": [
+      "t_load",
+      "t_stamp",
+      "t_write"
+     ],
+     "downstream": [],
+     "retries": 2,
+     "retry_delay_s": 30.0,
+     "pool": null,
+     "do_xcom_push": true,
+     "sensor": null,
+     "operator_class": null,
+     "trigger_rule": "all_success",
+     "owner": "airflow",
+     "queue": null,
+     "execution_timeout_s": null,
+     "expand": null,
+     "is_mapped": false,
+     "loop": null,
+     "cosmos": null,
+     "is_setup": false,
+     "is_teardown": false,
+     "on_failure_fail_dagrun": false,
+     "short_circuit_hard": true,
+     "depends_on_past": false,
+     "wait_for_downstream": false,
+     "max_active_tis_per_dag": null,
+     "max_active_tis_per_dagrun": null,
+     "pool_slots": 1,
+     "retry_exponential_backoff": false,
+     "max_retry_delay_s": null,
+     "sla_s": null,
+     "callback_fns": {},
+     "callbacks": [],
+     "outlets": [],
+     "outlet_assets": [],
+     "inlets": [],
+     "template_fields": {
+      "templates_dict": null,
+      "op_args": [],
+      "op_kwargs": {}
+     },
+     "args": {
+      "op_args": [],
+      "op_kwargs": {},
+      "show_return_value_in_logs": true,
+      "templates_dict": null
+     },
+     "callable_args": {
+      "python_callable": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline.notify"
+     },
+     "callable_arg_info": {
+      "python_callable": {
+       "name": "notify",
+       "module": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline",
+       "source": "def notify():\n    requests.post(\"http://hooks.example/notify\", json={\"rows\": 2}, timeout=5)\n    m = EmailMessage()\n    m[\"Subject\"] = \"pipeline done\"\n    m[\"From\"] = \"etl@example.com\"\n    m[\"To\"] = \"ops@example.com\"\n    m.set_content(\"2 rows loaded\")\n    with smtplib.SMTP(\"localhost\") as s:\n        s.send_message(m)\n    import boto3\n    c = boto3.client(\"s3\", region_name=\"us-east-1\")\n    c.create_bucket(Bucket=\"fixture-bucket\")\n    c.put_object(Bucket=\"fixture-bucket\", Key=\"done.json\", Body=json.dumps({\"rows\": 2}).encode())\n",
+       "file": "dags/fixture_pipeline.py",
+       "params": []
+      }
+     },
+     "callable": {
+      "name": "notify",
+      "module": "unusual_prefix_73ece2c66541d28893e5c29e2b970125cd975342_fixture_pipeline",
+      "source": "def notify():\n    requests.post(\"http://hooks.example/notify\", json={\"rows\": 2}, timeout=5)\n    m = EmailMessage()\n    m[\"Subject\"] = \"pipeline done\"\n    m[\"From\"] = \"etl@example.com\"\n    m[\"To\"] = \"ops@example.com\"\n    m.set_content(\"2 rows loaded\")\n    with smtplib.SMTP(\"localhost\") as s:\n        s.send_message(m)\n    import boto3\n    c = boto3.client(\"s3\", region_name=\"us-east-1\")\n    c.create_bucket(Bucket=\"fixture-bucket\")\n    c.put_object(Bucket=\"fixture-bucket\", Key=\"done.json\", Body=json.dumps({\"rows\": 2}).encode())\n",
+      "file": "dags/fixture_pipeline.py",
+      "params": []
+     },
+     "op_args": [],
+     "op_kwargs": {}
+    }
+   ]
+  }
+ ],
+ "import_errors": {}
+}
