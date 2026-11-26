@@ -1,0 +1,598 @@
+{
+ "baseline_filter": true,
+ "counts": {
+  "pattern": {
+   "bash": 9,
+   "branching": 7,
+   "mapping": 9,
+   "python": 9,
+   "sensor": 3,
+   "transfer": 3
+  },
+  "repo": {
+   "apache_airflow": 7,
+   "astronomer_2-10-example-dags": 4,
+   "astronomer_2-4-example-dags": 2,
+   "astronomer_2-5-example-dags": 3,
+   "astronomer_2-6-example-dags": 4,
+   "astronomer_2-7-example-dags": 1,
+   "astronomer_2-8-example-dags": 2,
+   "astronomer_2-9-example-dags": 2,
+   "astronomer_airflow-data-quality-demo": 1,
+   "astronomer_airflow-testing-ebook-companion": 1,
+   "astronomer_astro-ide-example-dags-airflow3": 3,
+   "astronomer_backfill-dag-demo": 1,
+   "astronomer_ded-ultimate-guide-to-dags": 2,
+   "astronomer_dynamic-dags-tutorial": 1,
+   "astronomer_gsd-airflow-basics": 1,
+   "astronomer_practical-guide-to-apache-airflow-3": 1,
+   "astronomer_quickstart-etl-with-airflow-videos": 1,
+   "astronomer_reusable_dag_examples": 1,
+   "astronomer_sample_open_lineage_dags": 1,
+   "matsudan_airflow-dag-examples": 1
+  },
+  "stratum": {
+   "clean": 12,
+   "deferred": 1,
+   "degraded": 8,
+   "stubbed": 19
+  }
+ },
+ "dags": [
+  {
+   "airflow": "3",
+   "dag_id": "mapped_task_loop",
+   "hard": true,
+   "key": "apache_airflow::mapped_task_loop",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "python"
+   ],
+   "repo": "apache_airflow",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "complex_dag_structure_rainbow",
+   "hard": true,
+   "key": "astronomer_2-9-example-dags::complex_dag_structure_rainbow",
+   "pattern": "transfer",
+   "patterns": [
+    "transfer",
+    "branching",
+    "mapping",
+    "python"
+   ],
+   "repo": "astronomer_2-9-example-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_branch_operator",
+   "hard": true,
+   "key": "astronomer_astro-ide-example-dags-airflow3::example_branch_operator",
+   "pattern": "branching",
+   "patterns": [
+    "branching",
+    "python"
+   ],
+   "repo": "astronomer_astro-ide-example-dags-airflow3",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "fetch_extra_info",
+   "hard": true,
+   "key": "astronomer_2-10-example-dags::fetch_extra_info",
+   "pattern": "bash",
+   "patterns": [
+    "bash",
+    "python"
+   ],
+   "repo": "astronomer_2-10-example-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_complex",
+   "hard": true,
+   "key": "astronomer_gsd-airflow-basics::example_complex",
+   "pattern": "sensor",
+   "patterns": [
+    "sensor",
+    "branching",
+    "mapping",
+    "bash",
+    "python"
+   ],
+   "repo": "astronomer_gsd-airflow-basics",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "task_group_mapping_toy",
+   "hard": true,
+   "key": "astronomer_2-5-example-dags::task_group_mapping_toy",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_2-5-example-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "2_4_example_toy_dag_mapping_multiple_parameters",
+   "hard": true,
+   "key": "astronomer_2-4-example-dags::2_4_example_toy_dag_mapping_multiple_parameters",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "bash",
+    "python"
+   ],
+   "repo": "astronomer_2-4-example-dags",
+   "stage1": true,
+   "stratum": "deferred"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "simple_redshift_1",
+   "hard": true,
+   "key": "astronomer_airflow-data-quality-demo::simple_redshift_1",
+   "pattern": "transfer",
+   "patterns": [
+    "transfer",
+    "python"
+   ],
+   "repo": "astronomer_airflow-data-quality-demo",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "planet_conditions",
+   "hard": true,
+   "key": "astronomer_ded-ultimate-guide-to-dags::planet_conditions",
+   "pattern": "branching",
+   "patterns": [
+    "branching",
+    "python"
+   ],
+   "repo": "astronomer_ded-ultimate-guide-to-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_passing_params_via_test_command",
+   "hard": true,
+   "key": "apache_airflow::example_passing_params_via_test_command",
+   "pattern": "bash",
+   "patterns": [
+    "bash",
+    "python"
+   ],
+   "repo": "apache_airflow",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "json_yaml_macros_toy",
+   "hard": true,
+   "key": "astronomer_2-6-example-dags::json_yaml_macros_toy",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_2-6-example-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "openlineage_base_complex_dag",
+   "hard": true,
+   "key": "astronomer_sample_open_lineage_dags::openlineage_base_complex_dag",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "bash",
+    "python"
+   ],
+   "repo": "astronomer_sample_open_lineage_dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "launch_window_history",
+   "hard": true,
+   "key": "astronomer_ded-ultimate-guide-to-dags::launch_window_history",
+   "pattern": "branching",
+   "patterns": [
+    "branching",
+    "python"
+   ],
+   "repo": "astronomer_ded-ultimate-guide-to-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "babel_format",
+   "hard": true,
+   "key": "astronomer_2-10-example-dags::babel_format",
+   "pattern": "bash",
+   "patterns": [
+    "bash"
+   ],
+   "repo": "astronomer_2-10-example-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "producer_dag",
+   "hard": true,
+   "key": "astronomer_2-8-example-dags::producer_dag",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_2-8-example-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "2_3_example_toy_dag_mapping_xcoms",
+   "hard": true,
+   "key": "astronomer_2-4-example-dags::2_3_example_toy_dag_mapping_xcoms",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "python"
+   ],
+   "repo": "astronomer_2-4-example-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_branch_operator",
+   "hard": true,
+   "key": "apache_airflow::example_branch_operator",
+   "pattern": "branching",
+   "patterns": [
+    "branching",
+    "python"
+   ],
+   "repo": "apache_airflow",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_bash_decorator",
+   "hard": true,
+   "key": "astronomer_astro-ide-example-dags-airflow3::example_bash_decorator",
+   "pattern": "bash",
+   "patterns": [
+    "bash"
+   ],
+   "repo": "astronomer_astro-ide-example-dags-airflow3",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "my_dag_task_flow",
+   "hard": true,
+   "key": "astronomer_airflow-testing-ebook-companion::my_dag_task_flow",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_airflow-testing-ebook-companion",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "UI_features_toy",
+   "hard": true,
+   "key": "astronomer_2-6-example-dags::UI_features_toy",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "python"
+   ],
+   "repo": "astronomer_2-6-example-dags",
+   "stage1": true,
+   "stratum": "stubbed"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "toy_auto_pause",
+   "hard": false,
+   "key": "astronomer_2-9-example-dags::toy_auto_pause",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_2-9-example-dags",
+   "stage1": true,
+   "stratum": "degraded"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "consume_1_or_2_with_asset_expressions",
+   "hard": false,
+   "key": "apache_airflow::consume_1_or_2_with_asset_expressions",
+   "pattern": "bash",
+   "patterns": [
+    "bash"
+   ],
+   "repo": "apache_airflow",
+   "stage1": true,
+   "stratum": "degraded"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_branch_dop_operator_v3",
+   "hard": false,
+   "key": "apache_airflow::example_branch_dop_operator_v3",
+   "pattern": "branching",
+   "patterns": [
+    "branching",
+    "python"
+   ],
+   "repo": "apache_airflow",
+   "stage1": true,
+   "stratum": "degraded"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "max_active_tis_per_dagrun",
+   "hard": false,
+   "key": "astronomer_2-6-example-dags::max_active_tis_per_dagrun",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "python"
+   ],
+   "repo": "astronomer_2-6-example-dags",
+   "stage1": true,
+   "stratum": "degraded"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "downstream_on_alias",
+   "hard": false,
+   "key": "astronomer_2-10-example-dags::downstream_on_alias",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_2-10-example-dags",
+   "stage1": true,
+   "stratum": "degraded"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "consume_1_and_2_with_asset_expressions",
+   "hard": false,
+   "key": "apache_airflow::consume_1_and_2_with_asset_expressions",
+   "pattern": "bash",
+   "patterns": [
+    "bash"
+   ],
+   "repo": "apache_airflow",
+   "stage1": true,
+   "stratum": "degraded"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "run_if_skip_if_example",
+   "hard": false,
+   "key": "astronomer_2-10-example-dags::run_if_skip_if_example",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_2-10-example-dags",
+   "stage1": true,
+   "stratum": "degraded"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "asset_with_extra_from_classic_operator",
+   "hard": false,
+   "key": "apache_airflow::asset_with_extra_from_classic_operator",
+   "pattern": "bash",
+   "patterns": [
+    "bash"
+   ],
+   "repo": "apache_airflow",
+   "stage1": true,
+   "stratum": "degraded"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "example_astronauts",
+   "hard": false,
+   "key": "astronomer_quickstart-etl-with-airflow-videos::example_astronauts",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "python"
+   ],
+   "repo": "astronomer_quickstart-etl-with-airflow-videos",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "new_branching_decorators_example",
+   "hard": false,
+   "key": "astronomer_2-8-example-dags::new_branching_decorators_example",
+   "pattern": "branching",
+   "patterns": [
+    "branching",
+    "python"
+   ],
+   "repo": "astronomer_2-8-example-dags",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "load_file_to_S3",
+   "hard": false,
+   "key": "astronomer_2-6-example-dags::load_file_to_S3",
+   "pattern": "transfer",
+   "patterns": [
+    "transfer"
+   ],
+   "repo": "astronomer_2-6-example-dags",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "tutorial",
+   "hard": false,
+   "key": "astronomer_backfill-dag-demo::tutorial",
+   "pattern": "bash",
+   "patterns": [
+    "bash"
+   ],
+   "repo": "astronomer_backfill-dag-demo",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "toy_setup_teardown_task_group_and_failures",
+   "hard": false,
+   "key": "astronomer_2-7-example-dags::toy_setup_teardown_task_group_and_failures",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_2-7-example-dags",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "pythonsensor_example",
+   "hard": false,
+   "key": "astronomer_2-5-example-dags::pythonsensor_example",
+   "pattern": "sensor",
+   "patterns": [
+    "sensor",
+    "python"
+   ],
+   "repo": "astronomer_2-5-example-dags",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_astronauts",
+   "hard": false,
+   "key": "astronomer_reusable_dag_examples::example_astronauts",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "python"
+   ],
+   "repo": "astronomer_reusable_dag_examples",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_short_circuit_decorator",
+   "hard": false,
+   "key": "astronomer_astro-ide-example-dags-airflow3::example_short_circuit_decorator",
+   "pattern": "branching",
+   "patterns": [
+    "branching"
+   ],
+   "repo": "astronomer_astro-ide-example-dags-airflow3",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "dag_file_1",
+   "hard": false,
+   "key": "astronomer_dynamic-dags-tutorial::dag_file_1",
+   "pattern": "bash",
+   "patterns": [
+    "bash"
+   ],
+   "repo": "astronomer_dynamic-dags-tutorial",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "raw_zen_quotes",
+   "hard": false,
+   "key": "astronomer_practical-guide-to-apache-airflow-3::raw_zen_quotes",
+   "pattern": "python",
+   "patterns": [
+    "python"
+   ],
+   "repo": "astronomer_practical-guide-to-apache-airflow-3",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "2",
+   "dag_id": "sensor_decorator",
+   "hard": false,
+   "key": "astronomer_2-5-example-dags::sensor_decorator",
+   "pattern": "sensor",
+   "patterns": [
+    "sensor",
+    "python"
+   ],
+   "repo": "astronomer_2-5-example-dags",
+   "stage1": true,
+   "stratum": "clean"
+  },
+  {
+   "airflow": "3",
+   "dag_id": "example_dtm_non_taskflow_api",
+   "hard": false,
+   "key": "matsudan_airflow-dag-examples::example_dtm_non_taskflow_api",
+   "pattern": "mapping",
+   "patterns": [
+    "mapping",
+    "bash"
+   ],
+   "repo": "matsudan_airflow-dag-examples",
+   "stage1": true,
+   "stratum": "clean"
+  }
+ ],
+ "dropped_for_baseline": 39,
+ "eligible_corpus": 242,
+ "label": "stage 1",
+ "max_repo_share": 0.25,
+ "n": 40,
+ "seed": 20260101
+}

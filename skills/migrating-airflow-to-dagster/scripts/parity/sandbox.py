@@ -53,7 +53,7 @@ def _text(b: Any) -> str:
 
 
 class Sandbox:
-    def __init__(self, root: Path, connections: dict[str, str] | None = None, variables: dict[str, str] | None = None, sleep_cap: float | None = None, moto: bool = True) -> None:
+    def __init__(self, root: Path, connections: dict[str, str] | None = None, variables: dict[str, str] | None = None, sleep_cap: float | None = None, moto: bool = True, seed: dict[str, str] | None = None) -> None:
         self.root = Path(root).resolve()
         self.cwd = self.root / "cwd"
         self.home = self.root / "home"
@@ -63,6 +63,8 @@ class Sandbox:
         self.variables = variables or {}
         self.sleep_cap = sleep_cap
         self.moto_on = moto
+        self.seed = seed or {}                                                       # repo-relative path -> source file: copied into the cwd, as the DAG's project files are where an Airflow project runs
+        self.seed_hash: dict[str, str] = {}
         self.http: list[dict[str, Any]] = []
         self.smtp: list[dict[str, Any]] = []
         self._moto = None
@@ -83,6 +85,11 @@ class Sandbox:
             env["AIRFLOW_CONN_" + cid.upper()] = uri
         for name, v in self.variables.items():
             env["AIRFLOW_VAR_" + name.upper()] = v
+        for rel, src in self.seed.items():
+            dst = self.cwd / rel
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(src, dst)
+            self.seed_hash[f"cwd/{rel}"] = _sha(dst.read_bytes())
         tempfile.tempdir = str(self.tmp)
         os.chdir(self.cwd)
         self._patch_sleep()
@@ -216,6 +223,8 @@ class Sandbox:
                 except OSError:
                     continue
                 if label == "cwd" and base.name == "ephemeral" and f"cwd/{rel}" in out:
+                    continue
+                if self.seed_hash.get(f"{label}/{rel}") == _sha(b):                      # a project file the sandbox put there and nobody changed
                     continue
                 out[f"{label}/{rel}"] = {"via_task_tmpdir": base.name == "ephemeral", "sha": _sha(b), "size": len(b), "head": b[:200].decode("utf-8", "replace") if len(b) < 4096 and b.isascii() else None}
         return out

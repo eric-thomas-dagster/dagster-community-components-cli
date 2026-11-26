@@ -9,7 +9,7 @@ How to reproduce the measurement behind [rewrite-route-evaluation.md](rewrite-ro
 ```bash
 export WORK=$HOME/airflow-eval-scratch ; mkdir -p $WORK/venvs && cd $WORK/venvs
 # Airflow 2 and 3 (the extractor executes DAG files: scratch machine only), each with the providers the example DAGs import
-uv venv --python 3.12 af210 && uv pip install --python af210/bin/python "apache-airflow==2.10.5" --constraint https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.12.txt
+uv venv --python 3.12 af210 && uv pip install --python af210/bin/python "apache-airflow==2.10.5" --constraint https://raw.githubusercontent.com/apache/airflow/constraints-2.10.5/constraints-3.12.txt   # the providers below pulled it to 2.11.0 in the measured setup; the manifest records the version
 uv venv --python 3.12 af340 && uv pip install --python af340/bin/python "apache-airflow==3.4.0" --constraint https://raw.githubusercontent.com/apache/airflow/constraints-3.4.0/constraints-3.12.txt
 # per venv, best effort (a provider that does not install only costs the DAGs that import it): standard (3.x), http, sqlite, common-sql, smtp, postgres, amazon, slack, docker,
 # ssh, sftp, snowflake, cncf-kubernetes, mysql, astronomer-cosmos, dag-factory, airflow-blueprint, airflow-provider-duckdb, duckdb, deltalake, joblib, moto, flask, requests, pandas, numpy
@@ -28,7 +28,7 @@ python3 eval_corpus.py build --work $WORK --venv-2 $AF2 --venv-3 $AF3        # c
 python3 eval_corpus.py summary --manifest $WORK/corpus/manifest.json
 ```
 
-`$WORK/corpus/manifest.json` has one row per DAG (extracted or not and why, converter result, pattern, external systems, eligibility). A copy is committed as `evals/corpus/manifest.json`. The corpus is public example DAGs, not an estate.
+`$WORK/corpus/manifest.json` has one row per DAG (extracted or not and why, converter result, pattern, external systems, eligibility). A copy is committed as `evals/corpus/manifest.json` (with `baselines.json` and `sample_stage1`). The corpus is public example DAGs, not an estate.
 
 ## 2. Baselines: does the original even run? (about 10 to 25 minutes; resumable)
 

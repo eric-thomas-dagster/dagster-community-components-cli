@@ -23,6 +23,7 @@ def main() -> int:
     ap.add_argument("--dag-id", required=True)
     ap.add_argument("--module")
     ap.add_argument("--spec", type=Path, help="the spec.json in your folder: its connection names are exported")
+    ap.add_argument("--source", type=Path, help="your folder's source/ directory: its files are copied into the sandbox's working directory at the same paths, as the measurement does")
     ap.add_argument("--timeout", type=int, default=300)
     a = ap.parse_args()
     conns = {}
@@ -33,7 +34,7 @@ def main() -> int:
                 conns[cid] = "sqlite:///{root}/data/app.db" if "sqlite" in cid.lower() else f"generic://eval-host.test/{cid}"
     root = Path(tempfile.mkdtemp(prefix="sandbox_"))
     conns = {k: v.replace("{root}", str(root)) for k, v in conns.items()}
-    cfg = {"kind": "rewrite", "dag_id": a.dag_id, "out": str(root / "result.json"), "timeout_s": a.timeout, "sandbox": {"root": str(root), "connections": conns, "variables": {}},
+    cfg = {"kind": "rewrite", "dag_id": a.dag_id, "out": str(root / "result.json"), "timeout_s": a.timeout, "sandbox": {"root": str(root), "connections": conns, "variables": {}, "seed": {str(f.relative_to(a.source)): str(f) for f in sorted(a.source.rglob("*")) if f.is_file()} if a.source else {}},
            "rewrite": {"project": str(a.project.resolve()), "module": a.module}}
     (root / "config.json").write_text(json.dumps(cfg))
     r = subprocess.run([sys.executable, str(HERE / "run_dagster.py"), str(root / "config.json")], capture_output=True, text=True)

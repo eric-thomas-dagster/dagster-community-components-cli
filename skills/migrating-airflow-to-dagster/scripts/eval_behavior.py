@@ -54,8 +54,8 @@ def fresh(path: Path) -> Path:
     return path
 
 
-def sandbox_cfg(root: Path, spec: dict[str, Any], cap: float | None = None) -> dict[str, Any]:
-    return {"root": str(root), "connections": {c: conn_uri(c, root) for c in spec.get("connections", [])}, "variables": {v: "eval-variable" for v in spec.get("variables", [])}, "sleep_cap": cap}
+def sandbox_cfg(root: Path, spec: dict[str, Any], cap: float | None = None, seed: dict[str, str] | None = None) -> dict[str, Any]:
+    return {"root": str(root), "connections": {c: conn_uri(c, root) for c in spec.get("connections", [])}, "variables": {v: "eval-variable" for v in spec.get("variables", [])}, "sleep_cap": cap, "seed": seed or {}}
 
 
 def converter_src(work: Path, row: dict[str, Any]) -> tuple[Path, dict[str, Any] | None]:
@@ -99,6 +99,11 @@ def converter_taskmap(rep: dict[str, Any]) -> dict[str, dict[str, Any]]:
     return {tid: {"mode": "folded" if tid in folded else "replaced", "asset": key} for tid, key in (rep.get("task_keys") or {}).items()}
 
 
+def seed_for(dag_path: Path, root: Path) -> dict[str, str]:
+    """the project files the DAG needs (imports and named data files, as in the worker's source/ folder), by repo-relative path: the sandbox copies them into the cwd for every route."""
+    return {str(f.relative_to(root)): str(f) for f in C.local_deps(root, dag_path)}
+
+
 def run_one(a: argparse.Namespace, entry: dict[str, Any], key: str) -> dict[str, Any]:
     work = a.work.resolve()
     manifest = C.load_manifest(a.manifest)
@@ -113,14 +118,14 @@ def run_one(a: argparse.Namespace, entry: dict[str, Any], key: str) -> dict[str,
         conv = {"src": src, "report": rep}
     res = execute(priv / "behavior" / name, priv / "sandboxes" / name, spec, row["dag_id"], C.dag_file(work, manifest, row), work / "repos" / row["repo"],
                   a.venv_2 if row["airflow"] == "2" else a.venv_3, a.dagster_python, conv, work / a.run / name / "out" / entry["project"], routes, a.timeout, a.sleep_cap,
-                  deferred=row["converter"] == "deferred")
+                  deferred=row["converter"] == "deferred", seed=seed_for(C.dag_file(work, manifest, row), work / "repos" / row["repo"]))
     res.update({"key": key, "stratum": row["converter"], "pattern": row["pattern"], "repo": row["repo"]})
     (priv / "behavior" / name / "behavior.json").write_text(json.dumps(res, indent=1, sort_keys=True, default=str) + "\n")
     return res
 
 
 def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path: Path, root: Path, af_py: str, dagster_python: str, conv: dict[str, Any] | None, project: Path,
-            routes: list[str], timeout: int = 300, cap: float | None = None, deferred: bool = False) -> dict[str, Any]:
+            routes: list[str], timeout: int = 300, cap: float | None = None, deferred: bool = False, seed: dict[str, str] | None = None) -> dict[str, Any]:
     """The four executions and the comparison for one DAG. `conv` is {"src": converted source dir, "report": the converter's report entry} or None; `project` is the rewrite's project root."""
     out_dir, sb, dag_path, root, project = (Path(p).resolve() for p in (out_dir, sb, dag_path, root, project))
     af_py, dagster_python = str(Path(af_py).absolute()), str(Path(dagster_python).absolute())          # absolute, but not resolved: a virtualenv's python is a symlink and its bin directory must stay on the PATH
@@ -133,7 +138,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
     path_with = lambda py: {"PATH": str(Path(py).parent) + os.pathsep + os.environ.get("PATH", "")}      # noqa: E731  # `python`, `uv`, `dbt` of the route's own environment are on the PATH
     for label in ("airflow1", "airflow2"):
         r = fresh(sb / label)
-        cfg = {"dag_file": str(dag_path), "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap), "out": str(out_dir / f"{label}.json"), "timeout_s": timeout}
+        cfg = {"dag_file": str(dag_path), "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed), "out": str(out_dir / f"{label}.json"), "timeout_s": timeout}
         (r / "config.json").write_text(json.dumps(cfg))
         (out_dir / f"{label}.json").unlink(missing_ok=True)
         procs[label] = (launch([af_py, "-W", "ignore", str(PARITY / "run_airflow.py"), str(r / "config.json")], {**base_env, **path_with(af_py)}, timeout, out_dir / f"{label}.log"), r)
@@ -146,7 +151,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
             notes["converter"] = "no-output: the converter produced nothing for this DAG"
         else:
             r = fresh(sb / "converter")
-            cfg = {"kind": "converter", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap), "out": str(out_dir / "converter.json"), "timeout_s": timeout, "converter": {"src": str(conv["src"]), "pkg": "pkg"}}
+            cfg = {"kind": "converter", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed), "out": str(out_dir / "converter.json"), "timeout_s": timeout, "converter": {"src": str(conv["src"]), "pkg": "pkg"}}
             (r / "config.json").write_text(json.dumps(cfg))
             (out_dir / "converter.json").unlink(missing_ok=True)
             procs["converter"] = (launch([dagster_python, str(PARITY / "run_dagster.py"), str(r / "config.json")], {**base_env, **path_with(dagster_python), "PYTHONPATH": os.pathsep.join([str(conv["src"]), str(root)])}, timeout, out_dir / "converter.log"), r)
@@ -156,7 +161,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
         else:
             r = fresh(sb / "rewrite")
             py = project / ".venv" / "bin" / "python"
-            cfg = {"kind": "rewrite", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap), "out": str(out_dir / "rewrite.json"), "timeout_s": timeout, "rewrite": {"project": str(project), "module": None}}
+            cfg = {"kind": "rewrite", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed), "out": str(out_dir / "rewrite.json"), "timeout_s": timeout, "rewrite": {"project": str(project), "module": None}}
             (r / "config.json").write_text(json.dumps(cfg))
             (out_dir / "rewrite.json").unlink(missing_ok=True)
             procs["rewrite"] = (launch([str(py) if py.exists() else dagster_python, str(PARITY / "run_dagster.py"), str(r / "config.json")], {**base_env, **path_with(str(py) if py.exists() else dagster_python)}, timeout, out_dir / "rewrite.log"), r)

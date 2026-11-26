@@ -29,6 +29,8 @@ from pathlib import Path
 from typing import Any
 
 HERE = Path(__file__).resolve().parent
+sys.path.insert(0, str(HERE))
+import eval_common as C  # noqa: E402
 SKILL = HERE.parent
 PATTERN_ORDER = ["dbt", "containers", "transfer", "sql", "sensor", "branching", "mapping", "bash", "python"]
 STRATA = ["clean", "degraded", "stubbed", "deferred"]
@@ -325,7 +327,7 @@ def build(a: argparse.Namespace) -> int:
                 "repos": {s["name"]: {"github": s["github"], "commit": repo_commit(roots[s["name"]]), "dag_folders": [str(p.relative_to(roots[s["name"]])) for p in s.get("_folders", [])]} for s in specs if roots[s["name"]].exists()},
                 "dags": rows}
     out = work / "corpus" / "manifest.json"
-    out.write_text(json.dumps(manifest, indent=1, sort_keys=True) + "\n")
+    out.write_text(C.scrub(json.dumps(manifest, indent=1, sort_keys=True), work) + "\n")                      # error text names this machine's paths: not a fact about the corpus
     print(f"wrote {out}")
     return summary(out)
 

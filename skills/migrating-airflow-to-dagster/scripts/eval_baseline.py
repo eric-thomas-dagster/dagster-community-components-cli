@@ -29,7 +29,7 @@ def one(a: argparse.Namespace, row: dict[str, Any]) -> tuple[str, dict[str, Any]
     spec, _ = C.make_spec(work, row)
     base = work / "baselines" / C.safe(row["key"])
     res = E.execute(base / "out", base / "sandboxes", spec, row["dag_id"], C.dag_file(work, a.manifest_data, row), work / "repos" / row["repo"],
-                    a.venv_2 if row["airflow"] == "2" else a.venv_3, sys.executable, None, base / "none", [], a.timeout)
+                    a.venv_2 if row["airflow"] == "2" else a.venv_3, sys.executable, None, base / "none", [], a.timeout, seed=E.seed_for(C.dag_file(work, a.manifest_data, row), work / "repos" / row["repo"]))
     cls, why = res["baseline"]["class"]
     a1 = json.loads((base / "out" / "airflow1.json").read_text()) if (base / "out" / "airflow1.json").exists() else {}
     return row["key"], {"class": cls, "reason": why[:300], "seconds": res["seconds"], "state": a1.get("state"), "tasks": {t: v.get("state") for t, v in (a1.get("tasks") or {}).items()}}
@@ -66,9 +66,9 @@ def main(argv: list[str] | None = None) -> int:
             done[k] = v
             n += 1
             if n % 10 == 0 or n == len(todo):
-                out.write_text(json.dumps(done, indent=1, sort_keys=True) + "\n")
+                out.write_text(C.scrub(json.dumps(done, indent=1, sort_keys=True), a.work.resolve()) + "\n")
                 print(f"  [{n}/{len(todo)}] {dict(collections.Counter(x['class'] for x in done.values()))}", flush=True)
-    out.write_text(json.dumps(done, indent=1, sort_keys=True) + "\n")
+    out.write_text(C.scrub(json.dumps(done, indent=1, sort_keys=True), a.work.resolve()) + "\n")
     print("baseline classes:", dict(collections.Counter(x["class"] for x in done.values())), f"-> {out}")
     return 0
 

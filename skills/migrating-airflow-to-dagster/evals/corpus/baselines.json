@@ -1,0 +1,3296 @@
+{
+ "apache_airflow::aggregate_regional_sales": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.3,
+  "state": "success",
+  "tasks": {
+   "aggregate_sales": "success"
+  }
+ },
+ "apache_airflow::asset1_producer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.3,
+  "state": "success",
+  "tasks": {
+   "asset1_producer": "success"
+  }
+ },
+ "apache_airflow::asset2_producer": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 7.1,
+  "state": "failed",
+  "tasks": {
+   "asset2_producer": "failed"
+  }
+ },
+ "apache_airflow::asset_alias_example_alias_consumer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.3,
+  "state": "success",
+  "tasks": {
+   "consume_asset_event_from_asset_alias": "success"
+  }
+ },
+ "apache_airflow::asset_alias_example_alias_consumer_with_no_taskflow": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.3,
+  "state": "success",
+  "tasks": {
+   "consume_asset_event_from_asset_alias": "success"
+  }
+ },
+ "apache_airflow::asset_alias_example_alias_producer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.3,
+  "state": "success",
+  "tasks": {
+   "produce_asset_events_through_asset_alias": "success"
+  }
+ },
+ "apache_airflow::asset_alias_example_alias_producer_with_no_taskflow": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.3,
+  "state": "success",
+  "tasks": {
+   "produce_asset_events_through_asset_alias_with_no_taskflow": "success"
+  }
+ },
+ "apache_airflow::asset_consumes_1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 15.8,
+  "state": "success",
+  "tasks": {
+   "consuming_1": "success"
+  }
+ },
+ "apache_airflow::asset_consumes_1_and_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.9,
+  "state": "success",
+  "tasks": {
+   "consuming_2": "success"
+  }
+ },
+ "apache_airflow::asset_consumes_1_never_scheduled": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.9,
+  "state": "success",
+  "tasks": {
+   "consuming_3": "success"
+  }
+ },
+ "apache_airflow::asset_consumes_unknown_never_scheduled": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 12.0,
+  "state": "success",
+  "tasks": {
+   "unrelated_task": "success"
+  }
+ },
+ "apache_airflow::asset_produces_1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.9,
+  "state": "success",
+  "tasks": {
+   "producing_task_1": "success"
+  }
+ },
+ "apache_airflow::asset_produces_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.8,
+  "state": "success",
+  "tasks": {
+   "producing_task_2": "success"
+  }
+ },
+ "apache_airflow::asset_s3_bucket_consumer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.4,
+  "state": "success",
+  "tasks": {
+   "consume_asset_event": "success"
+  }
+ },
+ "apache_airflow::asset_s3_bucket_consumer_with_no_taskflow": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "consume_asset_event": "success"
+  }
+ },
+ "apache_airflow::asset_s3_bucket_producer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.9,
+  "state": "success",
+  "tasks": {
+   "produce_asset_events": "success"
+  }
+ },
+ "apache_airflow::asset_s3_bucket_producer_with_no_taskflow": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.1,
+  "state": "success",
+  "tasks": {
+   "produce_asset_events": "success"
+  }
+ },
+ "apache_airflow::asset_with_extra_by_context": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.1,
+  "state": "success",
+  "tasks": {
+   "asset_with_extra_by_context": "success"
+  }
+ },
+ "apache_airflow::asset_with_extra_by_yield": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.7,
+  "state": "success",
+  "tasks": {
+   "asset_with_extra_by_yield": "success"
+  }
+ },
+ "apache_airflow::asset_with_extra_from_classic_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.5,
+  "state": "success",
+  "tasks": {
+   "asset_with_extra_from_classic_operator": "success"
+  }
+ },
+ "apache_airflow::child_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 11.7,
+  "state": "success",
+  "tasks": {
+   "child_task": "success"
+  }
+ },
+ "apache_airflow::clean_and_combine_player_stats": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.5,
+  "state": "success",
+  "tasks": {
+   "combine_player_stats": "success"
+  }
+ },
+ "apache_airflow::compute_player_odds": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.5,
+  "state": "success",
+  "tasks": {
+   "compute_player_odds": "success"
+  }
+ },
+ "apache_airflow::conditional_asset_and_time_based_timetable": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 10.8,
+  "state": "success",
+  "tasks": {
+   "conditional_asset_and_time_based_timetable": "success"
+  }
+ },
+ "apache_airflow::consume_1_and_2_with_asset_expressions": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 10.8,
+  "state": "success",
+  "tasks": {
+   "consume_1_and_2_with_asset_expressions": "success"
+  }
+ },
+ "apache_airflow::consume_1_or_2_with_asset_expressions": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 10.8,
+  "state": "success",
+  "tasks": {
+   "consume_1_or_2_with_asset_expressions": "success"
+  }
+ },
+ "apache_airflow::consume_1_or_both_2_and_3_with_asset_expressions": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 10.6,
+  "state": "success",
+  "tasks": {
+   "consume_1_or_both_2_and_3_with_asset_expressions": "success"
+  }
+ },
+ "apache_airflow::consumes_asset_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.7,
+  "state": "success",
+  "tasks": {
+   "process_nothing": "success"
+  }
+ },
+ "apache_airflow::daily_inference": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.9,
+  "state": "success",
+  "tasks": {
+   "run_inference": "success"
+  }
+ },
+ "apache_airflow::daily_team_a_rollup": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.9,
+  "state": "success",
+  "tasks": {
+   "summarise_team_a_day": "success"
+  }
+ },
+ "apache_airflow::example_asset_state_store_consumer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.0,
+  "state": "success",
+  "tasks": {
+   "consume": "success"
+  }
+ },
+ "apache_airflow::example_asset_state_store_producer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "load": "success"
+  }
+ },
+ "apache_airflow::example_asset_with_watchers": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "test_task": "success"
+  }
+ },
+ "apache_airflow::example_bash_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 10.7,
+  "state": "success",
+  "tasks": {
+   "also_run_this": "success",
+   "also_run_this_again": "success",
+   "describe_dag_folder": "success",
+   "get_file_stats": "success",
+   "make_dynamic_dirs": "success",
+   "run_after_loop": "success",
+   "run_this_last": "success",
+   "runme_0": "success",
+   "runme_1": "success",
+   "runme_2": "success",
+   "show_dag_folder_stats": "success",
+   "sleep_in": "skipped",
+   "this_will_skip": "skipped"
+  }
+ },
+ "apache_airflow::example_bash_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 10.3,
+  "state": "success",
+  "tasks": {
+   "also_run_this": "success",
+   "describe_dag_folder": "success",
+   "run_after_loop": "success",
+   "run_this_last": "skipped",
+   "runme_0": "success",
+   "runme_1": "success",
+   "runme_2": "success",
+   "show_dag_folder_stats": "success",
+   "this_will_skip": "skipped"
+  }
+ },
+ "apache_airflow::example_branch_datetime_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.4,
+  "state": "success",
+  "tasks": {
+   "date_in_range": "skipped",
+   "date_outside_range": "success",
+   "datetime_branch": "success"
+  }
+ },
+ "apache_airflow::example_branch_datetime_operator_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "date_in_range": "skipped",
+   "date_outside_range": "success",
+   "datetime_branch": "success"
+  }
+ },
+ "apache_airflow::example_branch_datetime_operator_3": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.8,
+  "state": "success",
+  "tasks": {
+   "date_in_range": "skipped",
+   "date_outside_range": "success",
+   "datetime_branch": "success"
+  }
+ },
+ "apache_airflow::example_branch_dop_operator_v3": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.8,
+  "state": "success",
+  "tasks": {
+   "empty_task_1": "success",
+   "empty_task_2": "skipped",
+   "should_run": "success"
+  }
+ },
+ "apache_airflow::example_branch_labels": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.1,
+  "state": "success",
+  "tasks": {
+   "analyze": "success",
+   "check_integrity": "success",
+   "describe_integrity": "success",
+   "email_error": "success",
+   "ingest": "success",
+   "report": "success",
+   "save": "success"
+  }
+ },
+ "apache_airflow::example_branch_operator": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 14.4,
+  "state": "failed",
+  "tasks": {
+   "branch_a": "success",
+   "branch_b": "skipped",
+   "branch_c": "skipped",
+   "branch_d": "skipped",
+   "branching": "success",
+   "branching_ext_python": "success",
+   "branching_venv": "failed",
+   "ext_py_a": "skipped",
+   "ext_py_b": "success",
+   "ext_py_c": "skipped",
+   "ext_py_d": "skipped",
+   "follow_a": "success",
+   "follow_b": "skipped",
+   "follow_c": "skipped",
+   "follow_d": "skipped",
+   "join": "success",
+   "join_ext_python": "success",
+   "join_venv": "upstream_failed",
+   "run_this_first": "success",
+   "venv_a": "upstream_failed",
+   "venv_b": "upstream_failed",
+   "venv_c": "upstream_failed",
+   "venv_d": "upstream_failed"
+  }
+ },
+ "apache_airflow::example_branch_python_operator_decorator": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 14.7,
+  "state": "failed",
+  "tasks": {
+   "branch_a": "skipped",
+   "branch_b": "skipped",
+   "branch_c": "skipped",
+   "branch_d": "success",
+   "branching": "success",
+   "branching_ext_python": "success",
+   "branching_virtualenv": "failed",
+   "ext_py_a": "skipped",
+   "ext_py_b": "success",
+   "ext_py_c": "skipped",
+   "ext_py_d": "skipped",
+   "follow_a": "skipped",
+   "follow_b": "skipped",
+   "follow_c": "skipped",
+   "follow_d": "success",
+   "join": "success",
+   "join_ext_py": "success",
+   "join_venv": "upstream_failed",
+   "run_this_first": "success",
+   "venv_a": "upstream_failed",
+   "venv_b": "upstream_failed",
+   "venv_c": "upstream_failed",
+   "venv_d": "upstream_failed"
+  }
+ },
+ "apache_airflow::example_complex": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 9.6,
+  "state": "success",
+  "tasks": {
+   "create_entry_gcs": "success",
+   "create_entry_gcs_result": "success",
+   "create_entry_gcs_result2": "success",
+   "create_entry_group": "success",
+   "create_entry_group_result": "success",
+   "create_entry_group_result2": "success",
+   "create_tag": "success",
+   "create_tag_result": "success",
+   "create_tag_result2": "success",
+   "create_tag_template": "success",
+   "create_tag_template_field": "success",
+   "create_tag_template_field_result": "success",
+   "create_tag_template_field_result2": "success",
+   "create_tag_template_result": "success",
+   "create_tag_template_result2": "success",
+   "delete_entry": "success",
+   "delete_entry_group": "success",
+   "delete_tag": "success",
+   "delete_tag_template": "success",
+   "delete_tag_template_field": "success",
+   "get_entry": "success",
+   "get_entry_group": "success",
+   "get_entry_group_result": "success",
+   "get_entry_result": "success",
+   "get_tag_template": "success",
+   "get_tag_template_result": "success",
+   "list_tags": "success",
+   "list_tags_result": "success",
+   "lookup_entry": "success",
+   "lookup_entry_result": "success",
+   "rename_tag_template_field": "success",
+   "search_catalog": "success",
+   "search_catalog_result": "success",
+   "update_entry": "success",
+   "update_tag": "success",
+   "update_tag_template": "success",
+   "update_tag_template_field": "success"
+  }
+ },
+ "apache_airflow::example_custom_weight": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: SerializationError: Failed to serialize DAG 'example_custom_weight': Unknown priority strategy airflow.example_dags.plugins.decreasing_priority_weight_strategy.DecreasingPriorityStrategy",
+  "seconds": 4.4,
+  "state": null,
+  "tasks": {}
+ },
+ "apache_airflow::example_dag_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 7.0,
+  "state": "success",
+  "tasks": {
+   "echo_ip_info": "success",
+   "get_external_ip": "success",
+   "get_ip": "success"
+  }
+ },
+ "apache_airflow::example_deadline_alert": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: StatementError: (builtins.AttributeError) 'dict' object has no attribute 'hex'\n[SQL: SELECT deadline_alert.id, deadline_alert.created_at, deadline_alert.serialized_dag_id, deadline_alert.name, deadline_alert.description, deadline_alert.refe",
+  "seconds": 66.8,
+  "state": null,
+  "tasks": {}
+ },
+ "apache_airflow::example_display_name": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.6,
+  "state": "success",
+  "tasks": {
+   "sample_task_1": "success",
+   "sample_task_2": "success"
+  }
+ },
+ "apache_airflow::example_dynamic_task_mapping": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.7,
+  "state": "success",
+  "tasks": {
+   "add_one": "success",
+   "sum_it": "success"
+  }
+ },
+ "apache_airflow::example_dynamic_task_mapping_with_no_taskflow_operators": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.7,
+  "state": "success",
+  "tasks": {
+   "add_one": "success",
+   "sum_it": "success"
+  }
+ },
+ "apache_airflow::example_failed_dag": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 7.1,
+  "state": "failed",
+  "tasks": {
+   "fail_task": "failed"
+  }
+ },
+ "apache_airflow::example_hitl_operator": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 153.5,
+  "state": null,
+  "tasks": {}
+ },
+ "apache_airflow::example_kubernetes_executor": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 10.5,
+  "state": "failed",
+  "tasks": {
+   "base_image_override_task": "upstream_failed",
+   "non_root_task": "upstream_failed",
+   "start_task": "success",
+   "task_with_resource_limits": "upstream_failed",
+   "test_sharedvolume_mount": "success",
+   "test_volume_mount": "failed"
+  }
+ },
+ "apache_airflow::example_local_kubernetes_executor": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 8.1,
+  "state": "success",
+  "tasks": {
+   "task_with_kubernetes_executor": "success",
+   "task_with_local_executor": "success"
+  }
+ },
+ "apache_airflow::example_measurement_correction_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 8.2,
+  "state": "success",
+  "tasks": {
+   "apply_correction": "success",
+   "read_measurement": "success",
+   "store_result": "success",
+   "validate_measurement": "success"
+  }
+ },
+ "apache_airflow::example_measurement_correction_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "apply_correction": "success",
+   "read_measurement": "success",
+   "store_result": "success",
+   "validate_measurement": "success"
+  }
+ },
+ "apache_airflow::example_nested_branch_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 9.0,
+  "state": "success",
+  "tasks": {
+   "branch_1": "success",
+   "branch_2": "skipped",
+   "false_1": "skipped",
+   "false_2": "skipped",
+   "false_3": "skipped",
+   "join_1": "success",
+   "join_2": "skipped",
+   "true_1": "success",
+   "true_2": "skipped"
+  }
+ },
+ "apache_airflow::example_params_trigger_ui": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.8,
+  "state": "success",
+  "tasks": {
+   "generate_english_greeting": "success",
+   "generate_french_greeting": "success",
+   "generate_german_greeting": "success",
+   "get_names": "success",
+   "print_greetings": "success",
+   "select_languages": "success"
+  }
+ },
+ "apache_airflow::example_params_ui_tutorial": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: ParamValidationError: Invalid input for param required_field: No value passed",
+  "seconds": 3.6,
+  "state": null,
+  "tasks": {}
+ },
+ "apache_airflow::example_passing_params_via_test_command": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 7.1,
+  "state": "failed",
+  "tasks": {
+   "also_run_this": "failed",
+   "env_var_test_task": "success",
+   "run_this": "success"
+  }
+ },
+ "apache_airflow::example_python_decorator": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (returned non-zero exit status 2): 2026-11-26T00:55:39.023687Z [info     ] Found credentials in environment variables. [botocore.credentials] loc=credentials.py:1263",
+  "seconds": 17.9,
+  "state": "failed",
+  "tasks": {
+   "async_sleep_for_0": "success",
+   "async_sleep_for_1": "success",
+   "async_sleep_for_2": "success",
+   "async_sleep_for_3": "success",
+   "async_sleep_for_4": "success",
+   "external_python": "success",
+   "log_sql_query": "success",
+   "print_the_context": "success",
+   "sleep_for_0": "success",
+   "sleep_for_1": "success",
+   "sleep_for_2": "success",
+   "sleep_for_3": "success",
+   "sleep_for_4": "success",
+   "virtualenv_python": "failed"
+  }
+ },
+ "apache_airflow::example_python_operator": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (returned non-zero exit status 2): 2026-11-26T00:55:43.733559Z [info     ] Found credentials in environment variables. [botocore.credentials] loc=credentials.py:1263",
+  "seconds": 19.5,
+  "state": "failed",
+  "tasks": {
+   "async_sleep_for_0": "success",
+   "async_sleep_for_1": "success",
+   "async_sleep_for_2": "success",
+   "async_sleep_for_3": "success",
+   "async_sleep_for_4": "success",
+   "external_python": "success",
+   "log_sql_query": "success",
+   "print_the_context": "success",
+   "sleep_for_0": "success",
+   "sleep_for_1": "success",
+   "sleep_for_2": "success",
+   "sleep_for_3": "success",
+   "sleep_for_4": "success",
+   "virtualenv_python": "failed"
+  }
+ },
+ "apache_airflow::example_retry_policy": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.7,
+  "state": "success",
+  "tasks": {
+   "call_external_api": "success"
+  }
+ },
+ "apache_airflow::example_sensor_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.9,
+  "state": "success",
+  "tasks": {
+   "dummy_operator": "success",
+   "wait_for_upstream": "success"
+  }
+ },
+ "apache_airflow::example_setup_teardown": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "normal": "success",
+   "root_setup": "success",
+   "root_teardown": "success",
+   "section_1.normal": "success",
+   "section_1.taskgroup_setup": "success",
+   "section_1.taskgroup_teardown": "success"
+  }
+ },
+ "apache_airflow::example_setup_teardown_taskflow": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "my_first_task": "success",
+   "my_second_task": "success",
+   "my_third_task": "success",
+   "outer_setup": "success",
+   "outer_teardown": "success",
+   "outer_work": "success",
+   "section_1.inner_setup": "success",
+   "section_1.inner_teardown": "success",
+   "section_1.inner_work": "success"
+  }
+ },
+ "apache_airflow::example_short_circuit_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.1,
+  "state": "success",
+  "tasks": {
+   "condition_is_false": "success",
+   "condition_is_true": "success",
+   "false_1": "skipped",
+   "false_2": "skipped",
+   "short_circuit": "success",
+   "task_1": "success",
+   "task_2": "success",
+   "task_3": "success",
+   "task_4": "skipped",
+   "task_5": "success",
+   "task_6": "skipped",
+   "task_7": "success",
+   "true_1": "success",
+   "true_2": "success"
+  }
+ },
+ "apache_airflow::example_short_circuit_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "condition_is_False": "success",
+   "condition_is_True": "success",
+   "false_1": "skipped",
+   "false_2": "skipped",
+   "short_circuit": "success",
+   "task_1": "success",
+   "task_2": "success",
+   "task_3": "success",
+   "task_4": "skipped",
+   "task_5": "success",
+   "task_6": "skipped",
+   "task_7": "success",
+   "true_1": "success",
+   "true_2": "success"
+  }
+ },
+ "apache_airflow::example_simplest_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.9,
+  "state": "success",
+  "tasks": {
+   "my_task": "success"
+  }
+ },
+ "apache_airflow::example_skip_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.5,
+  "state": "success",
+  "tasks": {
+   "all_success": "skipped",
+   "always_true_1": "success",
+   "always_true_2": "success",
+   "final_1": "skipped",
+   "final_2": "success",
+   "one_success": "success",
+   "skip_operator_1": "skipped",
+   "skip_operator_2": "skipped"
+  }
+ },
+ "apache_airflow::example_task_group": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 7.1,
+  "state": "success",
+  "tasks": {
+   "end": "success",
+   "section_1.task_1": "success",
+   "section_1.task_2": "success",
+   "section_1.task_3": "success",
+   "section_2.inner_section_2.task_2": "success",
+   "section_2.inner_section_2.task_3": "success",
+   "section_2.inner_section_2.task_4": "success",
+   "section_2.task_1": "success",
+   "start": "success"
+  }
+ },
+ "apache_airflow::example_task_group_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 7.9,
+  "state": "success",
+  "tasks": {
+   "task_end": "success",
+   "task_group_function.task_1": "success",
+   "task_group_function.task_2": "success",
+   "task_group_function.task_3": "success",
+   "task_group_function__1.task_1": "success",
+   "task_group_function__1.task_2": "success",
+   "task_group_function__1.task_3": "success",
+   "task_group_function__2.task_1": "success",
+   "task_group_function__2.task_2": "success",
+   "task_group_function__2.task_3": "success",
+   "task_group_function__3.task_1": "success",
+   "task_group_function__3.task_2": "success",
+   "task_group_function__3.task_3": "success",
+   "task_group_function__4.task_1": "success",
+   "task_group_function__4.task_2": "success",
+   "task_group_function__4.task_3": "success",
+   "task_start": "success"
+  }
+ },
+ "apache_airflow::example_task_group_mapping": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 7.4,
+  "state": "success",
+  "tasks": {
+   "op.add_1": "success",
+   "op.mul_2": "success"
+  }
+ },
+ "apache_airflow::example_task_mapping_second_order": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 7.8,
+  "state": "success",
+  "tasks": {
+   "add_10": "success",
+   "get_nums": "success",
+   "times_2": "success"
+  }
+ },
+ "apache_airflow::example_task_state_store": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 14.3,
+  "state": "success",
+  "tasks": {
+   "run_job": "success"
+  }
+ },
+ "apache_airflow::example_task_state_store_async": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 19.8,
+  "state": "failed",
+  "tasks": {
+   "ingest_pages": "failed"
+  }
+ },
+ "apache_airflow::example_task_state_store_mapped": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 7.0,
+  "state": "success",
+  "tasks": {
+   "get_tables": "success",
+   "process_table": "success"
+  }
+ },
+ "apache_airflow::example_time_delta_sensor_async": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 35.0,
+  "state": "success",
+  "tasks": {
+   "finish": "success",
+   "wait": "success"
+  }
+ },
+ "apache_airflow::example_trigger_target_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.5,
+  "state": "success",
+  "tasks": {
+   "bash_task": "success",
+   "run_this": "success"
+  }
+ },
+ "apache_airflow::example_weekday_branch_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.1,
+  "state": "success",
+  "tasks": {
+   "branch_false": "success",
+   "branch_mid_week": "success",
+   "branch_true": "skipped",
+   "branch_weekend": "skipped",
+   "make_choice": "success",
+   "make_weekend_choice": "success"
+  }
+ },
+ "apache_airflow::example_workday_timetable": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: SerializationError: Failed to serialize DAG 'example_workday_timetable': Timetable class 'airflow.example_dags.plugins.workday.AfterWorkdayTimetable' is not registered or you have a top level database access that disrupted the session. Plea",
+  "seconds": 4.2,
+  "state": null,
+  "tasks": {}
+ },
+ "apache_airflow::example_xcom": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.9,
+  "state": "success",
+  "tasks": {
+   "bash_pull": "success",
+   "bash_push": "success",
+   "pull_value_from_bash_push": "success",
+   "puller": "success",
+   "push": "success",
+   "push_by_returning": "success"
+  }
+ },
+ "apache_airflow::example_xcom_args": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.6,
+  "state": "success",
+  "tasks": {
+   "generate_value": "success",
+   "print_value": "success"
+  }
+ },
+ "apache_airflow::example_xcom_args_with_operators": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.8,
+  "state": "success",
+  "tasks": {
+   "c": "success",
+   "d": "success",
+   "print_value": "success",
+   "print_value__1": "success"
+  }
+ },
+ "apache_airflow::fixed_task_loop": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.8,
+  "state": "success",
+  "tasks": {
+   "accumulate.__loop_gate": "success",
+   "accumulate.increment": "success"
+  }
+ },
+ "apache_airflow::ingest_region_stats": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.0,
+  "state": "success",
+  "tasks": {
+   "ingest_region": "success"
+  }
+ },
+ "apache_airflow::ingest_regional_sales": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "ingest_sales": "success"
+  }
+ },
+ "apache_airflow::ingest_team_a_player_stats": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.5,
+  "state": "success",
+  "tasks": {
+   "ingest_team_a_stats": "success"
+  }
+ },
+ "apache_airflow::latest_only": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.5,
+  "state": "success",
+  "tasks": {
+   "latest_only": "success",
+   "task1": "success"
+  }
+ },
+ "apache_airflow::latest_only_with_trigger": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.5,
+  "state": "success",
+  "tasks": {
+   "latest_only": "success",
+   "task1": "success",
+   "task2": "success",
+   "task3": "success",
+   "task4": "success"
+  }
+ },
+ "apache_airflow::live_region_player_stats": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.5,
+  "state": "success",
+  "tasks": {
+   "live_region_player_stats": "success"
+  }
+ },
+ "apache_airflow::mapped_task_loop": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.8,
+  "state": "success",
+  "tasks": {
+   "process_batch.batch_ready": "success",
+   "process_batch.choose_items": "success",
+   "process_batch.process": "success"
+  }
+ },
+ "apache_airflow::monthly_team_a_rollup": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "summarise_team_a_month": "success"
+  }
+ },
+ "apache_airflow::multi_region_player_stats": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.1,
+  "state": "success",
+  "tasks": {
+   "multi_region_player_stats": "success"
+  }
+ },
+ "apache_airflow::partial_override_loop": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.6,
+  "state": "success",
+  "tasks": {
+   "accumulate_more.__loop_gate": "success",
+   "accumulate_more.increment": "success"
+  }
+ },
+ "apache_airflow::player_odds_quality_check_wont_ever_to_trigger": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "check_partition_alignment": "success"
+  }
+ },
+ "apache_airflow::read_asset_event": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "read_asset_event": "success"
+  }
+ },
+ "apache_airflow::read_asset_event_from_classic": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 7.5,
+  "state": "failed",
+  "tasks": {
+   "read_asset_event_from_classic": "failed"
+  }
+ },
+ "apache_airflow::refine_estimate": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.8,
+  "state": "success",
+  "tasks": {
+   "finished": "success",
+   "refine.accurate_enough": "success",
+   "refine.evaluate": "success",
+   "refine.improve": "success"
+  }
+ },
+ "apache_airflow::regional_stats_breakdown": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "regional_stats_breakdown": "success"
+  }
+ },
+ "apache_airflow::scatter_live_region_to_segments": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "process_region_segment": "success"
+  }
+ },
+ "apache_airflow::segment_region_stats_early_rollup": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "aggregate_available_regions": "success"
+  }
+ },
+ "apache_airflow::segment_region_stats_rollup": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "aggregate_all_regions": "success"
+  }
+ },
+ "apache_airflow::summarize_live_region_stats": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.5,
+  "state": "success",
+  "tasks": {
+   "summarize_live_region": "success"
+  }
+ },
+ "apache_airflow::team_analytics_producer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "produce_shared_data": "success"
+  }
+ },
+ "apache_airflow::team_b_player_stats": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.5,
+  "state": "success",
+  "tasks": {
+   "team_b_player_stats": "success"
+  }
+ },
+ "apache_airflow::team_c_player_stats": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.9,
+  "state": "success",
+  "tasks": {
+   "team_c_player_stats": "success"
+  }
+ },
+ "apache_airflow::team_ml_consumer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.4,
+  "state": "success",
+  "tasks": {
+   "consume_shared_data": "success"
+  }
+ },
+ "apache_airflow::trailing_week_inference": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.4,
+  "state": "success",
+  "tasks": {
+   "run_trailing_inference": "success"
+  }
+ },
+ "apache_airflow::train_weekly_model": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.3,
+  "state": "success",
+  "tasks": {
+   "train_model": "success"
+  }
+ },
+ "apache_airflow::tutorial": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 12.3,
+  "state": "success",
+  "tasks": {
+   "print_date": "success",
+   "sleep": "success",
+   "templated": "success"
+  }
+ },
+ "apache_airflow::tutorial_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.2,
+  "state": "success",
+  "tasks": {
+   "extract": "success",
+   "load": "success",
+   "transform": "success"
+  }
+ },
+ "apache_airflow::tutorial_objectstorage": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 10.1,
+  "state": "failed",
+  "tasks": {
+   "analyze": "upstream_failed",
+   "get_air_quality_data": "failed"
+  }
+ },
+ "apache_airflow::tutorial_taskflow_api": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.7,
+  "state": "success",
+  "tasks": {
+   "extract": "success",
+   "load": "success",
+   "transform": "success"
+  }
+ },
+ "apache_airflow::tutorial_taskflow_api_virtualenv": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (returned non-zero exit status 2): 2026-11-26T00:55:44.204570Z [info     ] Found credentials in environment variables. [botocore.credentials] loc=credentials.py:1263",
+  "seconds": 12.4,
+  "state": "failed",
+  "tasks": {
+   "extract": "failed",
+   "load": "upstream_failed",
+   "transform": "upstream_failed"
+  }
+ },
+ "apache_airflow::tutorial_taskflow_templates": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.9,
+  "state": "success",
+  "tasks": {
+   "template_test": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::UI_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.2,
+  "state": "success",
+  "tasks": {
+   "log_coloring": "success",
+   "log_groups": "success",
+   "t1": "success",
+   "task_docs_one": "success",
+   "task_docs_three": "success",
+   "task_docs_two": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::attach_extra_info": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.3,
+  "state": "success",
+  "tasks": {
+   "attach_extra_using_metadata": "success",
+   "use_outlet_events": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::babel_format": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.1,
+  "state": "success",
+  "tasks": {
+   "welcher_tag_ist_heute": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::basic_dataset_schedule_downstream": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.4,
+  "state": "success",
+  "tasks": {
+   "combine": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::basic_dataset_schedule_upstream_1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.4,
+  "state": "success",
+  "tasks": {
+   "write_to_s3_1": "success",
+   "write_to_s3_3": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::basic_dataset_schedule_upstream_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.8,
+  "state": "success",
+  "tasks": {
+   "write_to_s3": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::dag_test_example": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.8,
+  "state": "success",
+  "tasks": {
+   "dog_check_availability": "success",
+   "dog_print_picture_url": "success",
+   "only_test_this_task": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::datasetalias_deferrable": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 4.2,
+  "state": "failed",
+  "tasks": {
+   "t1": "failed"
+  }
+ },
+ "astronomer_2-10-example-dags::datasetalias_traditional": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: PendingRollbackError: This Session's transaction has been rolled back due to a previous exception during flush. To begin a new transaction with this Session, first issue Session.rollback(). Original exception was: Can't flush None value fou",
+  "seconds": 4.6,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_2-10-example-dags::direct_deferrable": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 4.8,
+  "state": "failed",
+  "tasks": {
+   "downstream": "upstream_failed",
+   "never_meet_a_worker": "failed",
+   "upstream": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::downstream_on_alias": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 15.4,
+  "state": "success",
+  "tasks": {
+   "downstream": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::downstream_on_alias_dtm": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 15.2,
+  "state": "success",
+  "tasks": {
+   "downstream": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::downstream_on_alias_dtm_bucket_4": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 15.5,
+  "state": "success",
+  "tasks": {
+   "downstream": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::downstream_on_dataset_A": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 15.4,
+  "state": "success",
+  "tasks": {
+   "downstream": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::fetch_extra_info": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 5.0,
+  "state": "failed",
+  "tasks": {
+   "get_extra_inlet": "success",
+   "get_extra_inlet_bash_callable": "failed",
+   "get_extra_inlet_bash_jinja": "failed",
+   "get_extra_triggering_run": "failed",
+   "get_extra_triggering_run_bash_callable": "failed",
+   "get_extra_triggering_run_bash_jinja": "failed"
+  }
+ },
+ "astronomer_2-10-example-dags::run_if_skip_if_example": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.8,
+  "state": "success",
+  "tasks": {
+   "say_bye_1234": "success",
+   "say_bye_skip_me": "skipped",
+   "say_hi_1234": "skipped",
+   "say_hi_do_run": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::task_group_branching": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.1,
+  "state": "success",
+  "tasks": {
+   "my_task_group.t1": "success",
+   "my_task_group.t2": "success",
+   "outside_task": "skipped",
+   "upstream_task": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::tdro_downstream": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 103.2,
+  "state": "success",
+  "tasks": {
+   "sleep": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::upstream_alias_dtm": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: PendingRollbackError: This Session's transaction has been rolled back due to a previous exception during flush. To begin a new transaction with this Session, first issue Session.rollback(). Original exception was: Can't flush None value fou",
+  "seconds": 5.0,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_2-10-example-dags::upstream_produce_dataset_A": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.6,
+  "state": "success",
+  "tasks": {
+   "update_dataset": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::upstream_produce_to_alias_A": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: PendingRollbackError: This Session's transaction has been rolled back due to a previous exception during flush. To begin a new transaction with this Session, first issue Session.rollback(). Original exception was: Can't flush None value fou",
+  "seconds": 5.1,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_2-10-example-dags::upstream_produce_to_alias_B": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: PendingRollbackError: This Session's transaction has been rolled back due to a previous exception during flush. To begin a new transaction with this Session, first issue Session.rollback(). Original exception was: Can't flush None value fou",
+  "seconds": 4.8,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_2-10-example-dags::xcom_concat_taskflow": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 30.9,
+  "state": "success",
+  "tasks": {
+   "map_me": "success",
+   "t1": "success",
+   "t2": "success"
+  }
+ },
+ "astronomer_2-10-example-dags::xcom_concat_traditional": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 30.9,
+  "state": "success",
+  "tasks": {
+   "map_me": "success",
+   "t1": "success",
+   "t2": "success"
+  }
+ },
+ "astronomer_2-4-example-dags::2_3_example_toy_dag_mapping_xcoms": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.8,
+  "state": "success",
+  "tasks": {
+   "one_two_three_TF": "success",
+   "one_two_three_TF_2": "success",
+   "one_two_three_task": "success",
+   "one_two_three_task_2": "success",
+   "plus_10_TF": "success",
+   "plus_10_TF_2": "success",
+   "plus_10_task": "success",
+   "plus_10_task_both_traditional": "success"
+  }
+ },
+ "astronomer_2-4-example-dags::2_4_example_toy_dag_map_function": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.6,
+  "state": "success",
+  "tasks": {
+   "list_strings": "success",
+   "mapped_printing_function": "success"
+  }
+ },
+ "astronomer_2-4-example-dags::2_4_example_toy_dag_mapping_multiple_parameters": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.2,
+  "state": "success",
+  "tasks": {
+   "TaskFlow_add_numbers": "success",
+   "cross_product_example": "success",
+   "expand_kwargs_XComArg": "success",
+   "mix_cross_and_zip": "success",
+   "standard_add_numbers": "success",
+   "turn_into_XComArg": "success"
+  }
+ },
+ "astronomer_2-4-example-dags::dataset_downstream_1_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 9.5,
+  "state": "success",
+  "tasks": {
+   "downstream_2": "success"
+  }
+ },
+ "astronomer_2-4-example-dags::dataset_upstream1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 9.5,
+  "state": "success",
+  "tasks": {
+   "upstream_task_1": "success"
+  }
+ },
+ "astronomer_2-4-example-dags::dataset_upstream2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 39.6,
+  "state": "success",
+  "tasks": {
+   "upstream_task_2": "success",
+   "upstream_task_3": "success"
+  }
+ },
+ "astronomer_2-4-example-dags::datasets_ml_example_publish": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 6.3,
+  "state": "failed",
+  "tasks": {
+   "upload_data_to_s3": "failed"
+  }
+ },
+ "astronomer_2-5-example-dags::downstream_datasets_taskflow_toy": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.4,
+  "state": "success",
+  "tasks": {
+   "create_new_dataset_from_dataset": "success"
+  }
+ },
+ "astronomer_2-5-example-dags::pythonsensor_example": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.3,
+  "state": "success",
+  "tasks": {
+   "check_shibe_availability": "success",
+   "print_shibe_picture_url": "success"
+  }
+ },
+ "astronomer_2-5-example-dags::second_downstream_toy": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.2,
+  "state": "success",
+  "tasks": {
+   "say_hi": "success"
+  }
+ },
+ "astronomer_2-5-example-dags::sensor_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.2,
+  "state": "success",
+  "tasks": {
+   "check_shibe_availability": "success",
+   "print_shibe_picture_url": "success"
+  }
+ },
+ "astronomer_2-5-example-dags::task_group_mapping_and_pulling_usecase": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 6.2,
+  "state": "failed",
+  "tasks": {
+   "fetch_and_save_holidays.extract_holidays": "success",
+   "fetch_and_save_holidays.write_holidays_to_S3": "failed",
+   "print_holidays_in_country_2": "upstream_failed"
+  }
+ },
+ "astronomer_2-5-example-dags::task_group_mapping_toy": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.4,
+  "state": "success",
+  "tasks": {
+   "group1.add_42": "success",
+   "group1.print_num": "success",
+   "group2.add_42": "success",
+   "group2.print_string": "success",
+   "group3.add_42": "success",
+   "group3.print_string": "success",
+   "pull_xcom": "success"
+  }
+ },
+ "astronomer_2-5-example-dags::upstream_datasets_taskflow_toy": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.7,
+  "state": "success",
+  "tasks": {
+   "define_dataset": "success",
+   "get_folder_name": "success",
+   "say_hi": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::UI_features_toy": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.7,
+  "state": "success",
+  "tasks": {
+   "big_tg.nested_tg_1.subnested_tg.t1": "success",
+   "big_tg.nested_tg_1.subnested_tg.t2": "success",
+   "big_tg.nested_tg_2.subnested_tg_1.t1": "success",
+   "big_tg.nested_tg_2.subnested_tg_1.t2": "success",
+   "big_tg.nested_tg_2.subnested_tg_2.t1": "success",
+   "big_tg.nested_tg_2.subnested_tg_2.t2": "success",
+   "big_tg.nested_tg_2.task_0": "success",
+   "big_tg.nested_tg_2.task_1": "success",
+   "big_tg.nested_tg_2.task_2": "success",
+   "big_tg.t1": "success",
+   "big_tg.t2": "success",
+   "end": "success",
+   "path_A_step_1": "success",
+   "path_A_step_2": "success",
+   "path_A_step_3": "success",
+   "path_A_step_4": "success",
+   "path_B_step_1": "success",
+   "path_B_step_2": "success",
+   "path_B_step_3": "success",
+   "path_B_step_4": "success",
+   "path_C_step_1": "success",
+   "path_C_step_2": "success",
+   "path_C_step_3": "success",
+   "path_C_step_4": "success",
+   "path_D_step_1": "success",
+   "path_D_step_2": "success",
+   "path_D_step_3": "success",
+   "path_D_step_4": "success",
+   "start": "success",
+   "t7": "success",
+   "t8": "success",
+   "tg_1.t1": "success",
+   "tg_1.t2": "success",
+   "tg_2.t3": "success",
+   "tg_2.t4": "success",
+   "tg_3.t5": "success",
+   "tg_3.t6": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::callbacks_overview": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 16.0,
+  "state": "failed",
+  "tasks": {
+   "task_failing": "failed",
+   "task_failing_task_level_callback": "failed",
+   "task_succeeding": "success",
+   "task_succeeding_task_level_callback": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::continuous_toy": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 14.6,
+  "state": "success",
+  "tasks": {
+   "sleep_randomly": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::downstream_trigger_dagrun": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 8.6,
+  "state": "success",
+  "tasks": {
+   "wait_X_seconds": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::json_yaml_macros_toy": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.6,
+  "state": "success",
+  "tasks": {
+   "print_json_macro": "success",
+   "print_yaml_macro": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::load_file_to_S3": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 6.2,
+  "state": "failed",
+  "tasks": {
+   "copy_file_to_S3": "failed"
+  }
+ },
+ "astronomer_2-6-example-dags::max_active_tis_per_dagrun": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 58.0,
+  "state": "success",
+  "tasks": {
+   "return_n": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::notifier_file_toy_example": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (FileNotFoundError): FileNotFoundError: [Errno 2] No such file or directory: 'include/Failure_DAG_level_callback'",
+  "seconds": 6.1,
+  "state": "failed",
+  "tasks": {
+   "task_failing": "failed",
+   "task_failing_task_level_callback": "failed",
+   "task_succeeding": "success",
+   "task_succeeding_task_level_callback": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::pandas_xcom": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.4,
+  "state": "success",
+  "tasks": {
+   "pull_pd_df": "success",
+   "push_pd_df": "success"
+  }
+ },
+ "astronomer_2-6-example-dags::retry_example": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 87.7,
+  "state": "failed",
+  "tasks": {
+   "t1": "failed",
+   "t2": "failed",
+   "t3": "failed",
+   "t4": "failed"
+  }
+ },
+ "astronomer_2-6-example-dags::trigger_with_params": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.4,
+  "state": "success",
+  "tasks": {
+   "assess_dog_state": "success",
+   "give_treats": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::helper_dag_wait_30_seconds": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 32.5,
+  "state": "success",
+  "tasks": {
+   "wait_for_it": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::setup_teardown_cleanup_xcom": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (Cannot connect to host): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun setup_teardown_cleanup_xcom @ 2026-11-26 00:55:51.743387+00:00: manual__2026-11-26T00:55:51.743387+00:00, state:running, queued_at: None. exter",
+  "seconds": 7.1,
+  "state": "failed",
+  "tasks": {
+   "cards_on_the_table": "upstream_failed",
+   "clean_up_xcom": "upstream_failed",
+   "evaluate_cards": "upstream_failed",
+   "player_one_draws_cards": "upstream_failed",
+   "player_two_draws_cards": "upstream_failed",
+   "shuffle_cards": "failed"
+  }
+ },
+ "astronomer_2-7-example-dags::setup_teardown_complex_sqlite_decorators": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (unable to open database file): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun setup_teardown_complex_sqlite_decorators @ 2026-11-26 00:55:52.145136+00:00: manual__2026-11-26T00:55:52.145136+00:00, state:running, queued_at",
+  "seconds": 9.2,
+  "state": "failed",
+  "tasks": {
+   "create_perm_db": "failed",
+   "create_table_perm_ratings": "upstream_failed",
+   "create_table_ratings": "upstream_failed",
+   "create_table_star_trek_series": "upstream_failed",
+   "create_temp_db": "failed",
+   "data_transformation.data_quality_check": "upstream_failed",
+   "data_transformation.empty_ratings_table": "upstream_failed",
+   "data_transformation.empty_series_table": "upstream_failed",
+   "data_transformation.fetch_data": "upstream_failed",
+   "data_transformation.insert_into_perm": "upstream_failed",
+   "data_transformation.insert_ratings_data": "upstream_failed",
+   "data_transformation.tables_empty": "upstream_failed",
+   "data_transformation.update_star_trek_series": "upstream_failed",
+   "delete_temp_db": "upstream_failed",
+   "delete_temp_tables": "upstream_failed",
+   "query_perm": "upstream_failed"
+  }
+ },
+ "astronomer_2-7-example-dags::setup_teardown_csv_NO_setup_teardown": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 15.0,
+  "state": "success",
+  "tasks": {
+   "create_csv": "success",
+   "delete_csv": "success",
+   "fetch_data": "success",
+   "get_average_age": "success",
+   "write_to_csv": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::setup_teardown_csv_decorators": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 14.9,
+  "state": "success",
+  "tasks": {
+   "create_csv": "success",
+   "delete_csv": "success",
+   "end": "success",
+   "fetch_data": "success",
+   "get_average_age": "success",
+   "report_filepath": "success",
+   "start": "success",
+   "write_to_csv": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::setup_teardown_csv_methods": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 13.7,
+  "state": "success",
+  "tasks": {
+   "create_csv": "success",
+   "delete_csv": "success",
+   "end": "success",
+   "fetch_data": "success",
+   "get_average_age": "success",
+   "report_filepath": "success",
+   "start": "success",
+   "write_to_csv": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::toy_chain_linear_task_group": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 1.9,
+  "state": "success",
+  "tasks": {
+   "t1_TF": "success",
+   "t1_traditional": "success",
+   "t2_TF": "success",
+   "t2_traditional": "success",
+   "t3_traditional": "success",
+   "t4_traditional": "success",
+   "t5_traditional": "success",
+   "t6_traditional": "success",
+   "tg1_TF.t4_TF_in_tg": "success",
+   "tg1_TF.t4_traditional_in_tg": "success",
+   "tg1_traditional.t3_TF_in_tg": "success",
+   "tg1_traditional.t3_traditional_in_tg": "success",
+   "tg2_TF.t4_TF_in_tg": "success",
+   "tg2_TF.t4_traditional_in_tg": "success",
+   "tg2_traditional.t10": "success",
+   "tg2_traditional.t11": "success",
+   "tg2_traditional.t12": "success",
+   "tg2_traditional.t13": "success",
+   "tg2_traditional.t9": "success",
+   "tg3_traditional.t10": "success",
+   "tg3_traditional.t11": "success",
+   "tg3_traditional.t12": "success",
+   "tg3_traditional.t13": "success",
+   "tg3_traditional.t9": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::toy_chain_linear_vs_chain_complex": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 1.9,
+  "state": "success",
+  "tasks": {
+   "chain_linear_t0": "success",
+   "chain_linear_t1": "success",
+   "chain_linear_t2": "success",
+   "chain_linear_t3": "success",
+   "chain_linear_t4": "success",
+   "chain_linear_t5": "success",
+   "chain_linear_t6": "success",
+   "chain_linear_t7": "success",
+   "chain_linear_t8": "success",
+   "chain_linear_t9": "success",
+   "chain_t10": "success",
+   "chain_t11": "success",
+   "chain_t12": "success",
+   "chain_t13": "success",
+   "chain_t14": "success",
+   "chain_t15": "success",
+   "chain_t16": "success",
+   "chain_t17": "success",
+   "chain_t18": "success",
+   "chain_t19": "success",
+   "empty_1": "success",
+   "empty_2": "success",
+   "end_chain": "success",
+   "end_chain_linear": "success",
+   "start_chain": "success",
+   "start_chain_linear": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::toy_chain_linear_vs_chain_simple": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.4,
+  "state": "success",
+  "tasks": {
+   "chain_linear_t0": "success",
+   "chain_linear_t1": "success",
+   "chain_linear_t2": "success",
+   "chain_linear_t3": "success",
+   "chain_t4": "success",
+   "chain_t5": "success",
+   "chain_t6": "success",
+   "chain_t7": "success",
+   "end_chain": "success",
+   "end_chain_linear": "success",
+   "start_chain": "success",
+   "start_chain_linear": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::toy_cross_downstream": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.5,
+  "state": "success",
+  "tasks": {
+   "t1_cross_downstream": "success",
+   "t2_cross_downstream": "success",
+   "t3_cross_downstream": "success",
+   "t4_cross_downstream": "success",
+   "t5_cross_downstream": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::toy_fail_stop": {
+  "class": "unstable",
+  "reason": "the baseline's outcome differs between its two runs",
+  "seconds": 163.1,
+  "state": "failed",
+  "tasks": {
+   "downstream_1": "skipped",
+   "downstream_2": "skipped",
+   "downstream_3": "skipped",
+   "fails_after_10s": "failed",
+   "waits_120s": "success",
+   "waits_150s": "skipped",
+   "waits_2s": "success",
+   "waits_3s": "success",
+   "waits_60s": "failed"
+  }
+ },
+ "astronomer_2-7-example-dags::toy_setup_teardown_nesting": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.1,
+  "state": "success",
+  "tasks": {
+   "inner_setup": "success",
+   "inner_teardown": "success",
+   "inner_worker_1": "success",
+   "inner_worker_2": "success",
+   "outer_setup": "success",
+   "outer_teardown": "success",
+   "outer_worker_1": "success",
+   "outer_worker_2": "success",
+   "outer_worker_3": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::toy_setup_teardown_simple": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.1,
+  "state": "success",
+  "tasks": {
+   "create_cluster": "success",
+   "delete_cluster": "success",
+   "run_query1": "success",
+   "run_query2": "success"
+  }
+ },
+ "astronomer_2-7-example-dags::toy_setup_teardown_task_group_and_failures": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.4,
+  "state": "success",
+  "tasks": {
+   "final_teardown": "success",
+   "run_after_taskgroup": "success",
+   "work_in_the_cluster.setup_1": "success",
+   "work_in_the_cluster.setup_2": "success",
+   "work_in_the_cluster.teardown_1": "success",
+   "work_in_the_cluster.teardown_2": "success",
+   "work_in_the_cluster.worker_1": "success",
+   "work_in_the_cluster.worker_2": "success",
+   "work_in_the_cluster.worker_3": "success",
+   "work_in_the_cluster.worker_4": "success"
+  }
+ },
+ "astronomer_2-8-example-dags::consumer_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 23.3,
+  "state": "success",
+  "tasks": {
+   "celebrate_bears": "success"
+  }
+ },
+ "astronomer_2-8-example-dags::deltalake_example": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 4.9,
+  "state": "failed",
+  "tasks": {
+   "create_deltalake_table": "success",
+   "delete_deltalake_table": "upstream_failed",
+   "print_deltalake_table": "failed"
+  }
+ },
+ "astronomer_2-8-example-dags::docs_example_dag": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 3.9,
+  "state": "failed",
+  "tasks": {
+   "tell_me_what_to_do": "failed"
+  }
+ },
+ "astronomer_2-8-example-dags::literal_wrapper_example": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 3.9,
+  "state": "failed",
+  "tasks": {
+   "echo_a_jinja_template": "success",
+   "use_literal_wrapper_to_ignore_jinja_template": "failed"
+  }
+ },
+ "astronomer_2-8-example-dags::new_branching_decorators_example": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 23.9,
+  "state": "failed",
+  "tasks": {
+   "branch_a": "success",
+   "branch_b": "skipped",
+   "branch_c": "skipped",
+   "branch_d": "skipped",
+   "branching": "success",
+   "branching_ext_python": "success",
+   "branching_virtualenv": "failed",
+   "ext_py_a": "skipped",
+   "ext_py_b": "success",
+   "ext_py_c": "skipped",
+   "ext_py_d": "skipped",
+   "follow_a": "success",
+   "follow_b": "skipped",
+   "follow_c": "skipped",
+   "follow_d": "skipped",
+   "join": "success",
+   "join_ext_py": "success",
+   "join_venv": "upstream_failed",
+   "run_this_first": "success",
+   "venv_a": "upstream_failed",
+   "venv_b": "upstream_failed",
+   "venv_c": "upstream_failed",
+   "venv_d": "upstream_failed"
+  }
+ },
+ "astronomer_2-8-example-dags::object_storage_ftp_backend": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (FileNotFoundError): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun object_storage_ftp_backend @ 2026-11-26 00:55:59.747019+00:00: manual__2026-11-26T00:55:59.747019+00:00, state:running, queued_at: None. extern",
+  "seconds": 6.8,
+  "state": "failed",
+  "tasks": {
+   "print_known_fsspec_implementations": "success",
+   "read_remote_ftp": "failed"
+  }
+ },
+ "astronomer_2-8-example-dags::object_storage_list_read_remote": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (ImportError): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun object_storage_list_read_remote @ 2026-11-26 00:55:59.653143+00:00: manual__2026-11-26T00:55:59.653143+00:00, state:running, queued_at: None. e",
+  "seconds": 4.7,
+  "state": "failed",
+  "tasks": {
+   "copy_file_to_local": "upstream_failed",
+   "list_files": "failed",
+   "read_file_content": "upstream_failed"
+  }
+ },
+ "astronomer_2-8-example-dags::object_storage_load_file_to_duckdb": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (FileNotFoundError): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun object_storage_load_file_to_duckdb @ 2026-11-26 00:56:00.890091+00:00: manual__2026-11-26T00:56:00.890091+00:00, state:running, queued_at: None",
+  "seconds": 6.3,
+  "state": "failed",
+  "tasks": {
+   "create_parquet_file": "failed",
+   "ingest_to_duckdb": "upstream_failed",
+   "read_from_duckdb": "upstream_failed"
+  }
+ },
+ "astronomer_2-8-example-dags::object_storage_showcase": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (ImportError): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun object_storage_showcase @ 2026-11-26 00:56:00.602251+00:00: manual__2026-11-26T00:56:00.602251+00:00, state:running, queued_at: None. externall",
+  "seconds": 8.3,
+  "state": "failed",
+  "tasks": {
+   "create_new_file": "upstream_failed",
+   "delete_file": "upstream_failed",
+   "list_files": "failed",
+   "print_properties_methods_file": "upstream_failed",
+   "read_file_content": "upstream_failed",
+   "rename_file": "upstream_failed",
+   "write_to_new_file": "upstream_failed"
+  }
+ },
+ "astronomer_2-8-example-dags::object_storage_use_case": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (ImportError): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun object_storage_use_case @ 2026-11-26 00:56:05.030548+00:00: manual__2026-11-26T00:56:05.030548+00:00, state:running, queued_at: None. externall",
+  "seconds": 8.2,
+  "state": "failed",
+  "tasks": {
+   "copy_files_ingest_to_train": "upstream_failed",
+   "copy_files_train_to_archive": "upstream_failed",
+   "empty_train": "upstream_failed",
+   "get_text_from_file": "upstream_failed",
+   "list_files_ingest": "failed",
+   "list_files_train": "upstream_failed",
+   "train_model": "upstream_failed",
+   "use_model": "upstream_failed"
+  }
+ },
+ "astronomer_2-8-example-dags::pool_example": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 233.2,
+  "state": "failed",
+  "tasks": {
+   "count_guests": "success",
+   "jump_into_the_pool": "failed"
+  }
+ },
+ "astronomer_2-8-example-dags::producer_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.2,
+  "state": "success",
+  "tasks": {
+   "get_bear": "success"
+  }
+ },
+ "astronomer_2-8-example-dags::simple_venv_branching_example": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (pip', 'install', '-r', '~/airflow-eval-scr): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun simple_venv_branching_example @ 2026-11-26 00:56:06.981017+00:00: manual__2026-11-26T00:56:06.981017+00:00, state:running, queued_a",
+  "seconds": 27.8,
+  "state": "failed",
+  "tasks": {
+   "buy_broccoli": "upstream_failed",
+   "buy_noodles": "skipped",
+   "buy_potatoes": "success",
+   "buy_rice": "skipped",
+   "buy_spinach": "upstream_failed",
+   "buy_tomatoes": "upstream_failed",
+   "decide_on_base_food": "success",
+   "decide_on_vegetable": "failed",
+   "end": "upstream_failed",
+   "start": "success",
+   "start_cooking": "success"
+  }
+ },
+ "astronomer_2-8-example-dags::trigger_with_params": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.7,
+  "state": "success",
+  "tasks": {
+   "assess_dog_state": "success",
+   "give_treats": "success"
+  }
+ },
+ "astronomer_2-8-example-dags::xcom_tab_example": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.6,
+  "state": "success",
+  "tasks": {
+   "get_fruit_info": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::complex_dag_structure_rainbow": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.8,
+  "state": "success",
+  "tasks": {
+   "cre_integration.cre_extract": "success",
+   "cre_integration.cre_load": "success",
+   "cre_integration.cre_transform": "success",
+   "determine_load_type": "success",
+   "end": "success",
+   "internal_api_extract": "success",
+   "internal_api_load_full": "skipped",
+   "internal_api_load_incremental": "success",
+   "mlops.set_up_cluster": "success",
+   "mlops.tear_down_cluster": "success",
+   "mlops.train_model": "success",
+   "sales_data_extract": "success",
+   "sales_data_load": "success",
+   "sales_data_reporting.prepare_report": "success",
+   "sales_data_reporting.publish_report": "success",
+   "sales_data_transform": "success",
+   "start": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::downstream1_on_any": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 14.0,
+  "state": "success",
+  "tasks": {
+   "say_hello": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::downstream2_one_in_each_group": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 14.0,
+  "state": "success",
+  "tasks": {
+   "say_hello": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::ingest_customer_data": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 154.1,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_2-9-example-dags::ingest_customer_feedback": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 153.8,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_2-9-example-dags::ingest_sales_reports": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 152.6,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_2-9-example-dags::toy_auto_pause": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 2.9,
+  "state": "failed",
+  "tasks": {
+   "say_hello": "failed"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_custom_names_dynamic_tasks_taskflow": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 2.6,
+  "state": "failed",
+  "tasks": {
+   "get_fruits": "failed",
+   "map_fruits": "upstream_failed"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_custom_names_dynamic_tasks_traditional_operators": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 2.3,
+  "state": "failed",
+  "tasks": {
+   "get_fruits": "failed",
+   "map_fruits": "upstream_failed"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_custom_operator_push_multiple_xcom": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.5,
+  "state": "success",
+  "tasks": {
+   "multiple_outputs_task": "success",
+   "no_multiple_outputs_task": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_downstream3_dataset_and_time_schedule": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 13.5,
+  "state": "success",
+  "tasks": {
+   "say_hello": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_downstream_obj_storage_dataset": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (FileNotFoundError): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun toy_downstream_obj_storage_dataset @ 2026-11-26 00:56:28.459723+00:00: manual__2026-11-26T00:56:28.459723+00:00, state:running, queued_at: None",
+  "seconds": 2.8,
+  "state": "failed",
+  "tasks": {
+   "read_text_from_file": "failed"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_dynamic_task_default_index": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 3.0,
+  "state": "failed",
+  "tasks": {
+   "get_fruits": "failed",
+   "map_fruits": "upstream_failed"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_task_duration_page": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 88.5,
+  "state": "success",
+  "tasks": {
+   "five_second_plus_delay_task": "success",
+   "ten_second_plus_delay_task": "success",
+   "thirty_second_plus_delay_task": "success",
+   "twenty_second_plus_delay_task": "success",
+   "two_second_plus_delay_task": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_taskflow_bash": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.5,
+  "state": "success",
+  "tasks": {
+   "bash_task": "success",
+   "upstream_task": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_upstream_obj_storage_dataset": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (FileNotFoundError): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun toy_upstream_obj_storage_dataset @ 2026-11-26 00:56:31.277771+00:00: manual__2026-11-26T00:56:31.277771+00:00, state:running, queued_at: None. ",
+  "seconds": 3.0,
+  "state": "failed",
+  "tasks": {
+   "write_to_text_file": "failed"
+  }
+ },
+ "astronomer_2-9-example-dags::toy_xcom_big_vs_small": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.3,
+  "state": "success",
+  "tasks": {
+   "pull_objects": "success",
+   "push_objects": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::upstream1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 33.0,
+  "state": "success",
+  "tasks": {
+   "update_dataset_1": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::upstream2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.8,
+  "state": "success",
+  "tasks": {
+   "update_dataset_2": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::upstream3": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.8,
+  "state": "success",
+  "tasks": {
+   "update_dataset_3": "success"
+  }
+ },
+ "astronomer_2-9-example-dags::upstream4": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.8,
+  "state": "success",
+  "tasks": {
+   "update_dataset_4": "success"
+  }
+ },
+ "astronomer_airflow-data-quality-demo::simple_redshift_1": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 4.1,
+  "state": "failed",
+  "tasks": {
+   "begin": "success",
+   "end": "upstream_failed",
+   "upload_to_s3": "failed",
+   "validate_etag": "upstream_failed"
+  }
+ },
+ "astronomer_airflow-dbt-demo::dbt_basic_dag": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (AirflowNotFoundException): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun dbt_basic_dag @ 2026-11-26 00:56:32.495887+00:00: manual__2026-11-26T00:56:32.495887+00:00, state:running, queued_at: None. externally triggere",
+  "seconds": 4.1,
+  "state": "failed",
+  "tasks": {
+   "dbt_run": "upstream_failed",
+   "dbt_seed": "failed",
+   "dbt_test": "upstream_failed"
+  }
+ },
+ "astronomer_airflow-duckdb-examples::duckdb_in_taskflow": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (extensions/v1.1.3/osx_arm64/motherduck.duckdb_extension\" thr): ERROR [airflow.models.dagrun.DagRun] Marking run <DagRun duckdb_in_taskflow @ 2026-11-26 00:56:34.747685+00:00: manual__2026-11-26T00:56:34.747685+00:00, state:running, queued_at: None. ex",
+  "seconds": 4.7,
+  "state": "failed",
+  "tasks": {
+   "create_pandas_df": "success",
+   "create_table_from_pandas_df": "failed",
+   "create_table_in_local_persistent_storage": "success",
+   "create_table_in_memory_db_1": "success",
+   "create_table_in_memory_db_2": "success",
+   "csv_file_to_motherduck": "failed",
+   "local_table_to_motherduck": "failed",
+   "print_count": "success",
+   "print_count__1": "success",
+   "print_count__2": "upstream_failed",
+   "query_persistent_local_storage": "success"
+  }
+ },
+ "astronomer_airflow-example-dags::s3_upload": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 151.5,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_airflow-example-dags::s3_upload_copy": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 151.5,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_airflow-example-dags::s3_upload_copy_delete": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 151.4,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_airflow-testing-ebook-companion::my_dag_task_flow": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.9,
+  "state": "success",
+  "tasks": {
+   "print_info": "success"
+  }
+ },
+ "astronomer_airflow-testing-ebook-companion::my_dag_traditional": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.5,
+  "state": "success",
+  "tasks": {
+   "print_hello": "success"
+  }
+ },
+ "astronomer_airflow-testing-ebook-companion::test_fridge_api_connection_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.2,
+  "state": "success",
+  "tasks": {
+   "test_fridge_api_connection": "success"
+  }
+ },
+ "astronomer_airflow-testing-ebook-companion::test_policies_dag": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 4.0,
+  "state": "failed",
+  "tasks": {
+   "test_policies": "failed"
+  }
+ },
+ "astronomer_astro-example-dags::example_astronauts": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 151.5,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_astro-ide-example-dags-airflow3::child_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 10.2,
+  "state": "success",
+  "tasks": {
+   "child_task": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_astronauts": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.1,
+  "state": "success",
+  "tasks": {
+   "get_astronauts": "success",
+   "print_astronaut_craft": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_bash_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 7.3,
+  "state": "success",
+  "tasks": {
+   "also_run_this": "success",
+   "also_run_this_again": "success",
+   "get_file_stats": "success",
+   "make_dynamic_dirs": "success",
+   "run_after_loop": "success",
+   "run_this_last": "success",
+   "runme_0": "success",
+   "runme_1": "success",
+   "runme_2": "success",
+   "sleep_in": "skipped",
+   "this_will_skip": "skipped"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_bash_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 7.5,
+  "state": "success",
+  "tasks": {
+   "also_run_this": "success",
+   "run_after_loop": "success",
+   "run_this_last": "skipped",
+   "runme_0": "success",
+   "runme_1": "success",
+   "runme_2": "success",
+   "this_will_skip": "skipped"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_branch_datetime_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.7,
+  "state": "success",
+  "tasks": {
+   "date_in_range": "skipped",
+   "date_outside_range": "success",
+   "datetime_branch": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_branch_datetime_operator_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.7,
+  "state": "success",
+  "tasks": {
+   "date_in_range": "skipped",
+   "date_outside_range": "success",
+   "datetime_branch": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_branch_datetime_operator_3": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.8,
+  "state": "success",
+  "tasks": {
+   "date_in_range": "skipped",
+   "date_outside_range": "success",
+   "datetime_branch": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_branch_operator": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 8.0,
+  "state": "failed",
+  "tasks": {
+   "branch_a": "skipped",
+   "branch_b": "skipped",
+   "branch_c": "skipped",
+   "branch_d": "success",
+   "branching": "success",
+   "branching_ext_python": "success",
+   "branching_venv": "failed",
+   "ext_py_a": "success",
+   "ext_py_b": "skipped",
+   "ext_py_c": "skipped",
+   "ext_py_d": "skipped",
+   "follow_a": "skipped",
+   "follow_b": "skipped",
+   "follow_c": "skipped",
+   "follow_d": "success",
+   "join": "success",
+   "join_ext_python": "success",
+   "join_venv": "upstream_failed",
+   "run_this_first": "success",
+   "venv_a": "upstream_failed",
+   "venv_b": "upstream_failed",
+   "venv_c": "upstream_failed",
+   "venv_d": "upstream_failed"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_branch_python_operator_decorator": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 7.6,
+  "state": "failed",
+  "tasks": {
+   "branch_a": "success",
+   "branch_b": "skipped",
+   "branch_c": "skipped",
+   "branch_d": "skipped",
+   "branching": "success",
+   "branching_ext_python": "success",
+   "branching_virtualenv": "failed",
+   "ext_py_a": "skipped",
+   "ext_py_b": "success",
+   "ext_py_c": "skipped",
+   "ext_py_d": "skipped",
+   "follow_a": "success",
+   "follow_b": "skipped",
+   "follow_c": "skipped",
+   "follow_d": "skipped",
+   "join": "success",
+   "join_ext_py": "success",
+   "join_venv": "upstream_failed",
+   "run_this_first": "success",
+   "venv_a": "upstream_failed",
+   "venv_b": "upstream_failed",
+   "venv_c": "upstream_failed",
+   "venv_d": "upstream_failed"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_hitl_operator": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 152.4,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_python_decorator": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 10.6,
+  "state": "failed",
+  "tasks": {
+   "async_sleep_for_0": "upstream_failed",
+   "async_sleep_for_1": "upstream_failed",
+   "async_sleep_for_2": "upstream_failed",
+   "async_sleep_for_3": "upstream_failed",
+   "async_sleep_for_4": "upstream_failed",
+   "external_python": "success",
+   "log_sql_query": "failed",
+   "print_the_context": "success",
+   "sleep_for_0": "upstream_failed",
+   "sleep_for_1": "upstream_failed",
+   "sleep_for_2": "upstream_failed",
+   "sleep_for_3": "upstream_failed",
+   "sleep_for_4": "upstream_failed",
+   "virtualenv_python": "upstream_failed"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_python_operator": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 10.1,
+  "state": "failed",
+  "tasks": {
+   "async_sleep_for_0": "upstream_failed",
+   "async_sleep_for_1": "upstream_failed",
+   "async_sleep_for_2": "upstream_failed",
+   "async_sleep_for_3": "upstream_failed",
+   "async_sleep_for_4": "upstream_failed",
+   "external_python": "success",
+   "log_sql_query": "failed",
+   "print_the_context": "success",
+   "sleep_for_0": "upstream_failed",
+   "sleep_for_1": "upstream_failed",
+   "sleep_for_2": "upstream_failed",
+   "sleep_for_3": "upstream_failed",
+   "sleep_for_4": "upstream_failed",
+   "virtualenv_python": "upstream_failed"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_sensor_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.2,
+  "state": "success",
+  "tasks": {
+   "dummy_operator": "success",
+   "wait_for_upstream": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_short_circuit_decorator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.3,
+  "state": "success",
+  "tasks": {
+   "condition_is_false": "success",
+   "condition_is_true": "success",
+   "false_1": "skipped",
+   "false_2": "skipped",
+   "short_circuit": "success",
+   "task_1": "success",
+   "task_2": "success",
+   "task_3": "success",
+   "task_4": "skipped",
+   "task_5": "success",
+   "task_6": "skipped",
+   "task_7": "success",
+   "true_1": "success",
+   "true_2": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_short_circuit_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.4,
+  "state": "success",
+  "tasks": {
+   "condition_is_False": "success",
+   "condition_is_True": "success",
+   "false_1": "skipped",
+   "false_2": "skipped",
+   "short_circuit": "success",
+   "task_1": "success",
+   "task_2": "success",
+   "task_3": "success",
+   "task_4": "skipped",
+   "task_5": "success",
+   "task_6": "skipped",
+   "task_7": "success",
+   "true_1": "success",
+   "true_2": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::example_weekday_branch_operator": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.2,
+  "state": "success",
+  "tasks": {
+   "branch_false": "success",
+   "branch_mid_week": "success",
+   "branch_true": "skipped",
+   "branch_weekend": "skipped",
+   "make_choice": "success",
+   "make_weekend_choice": "success"
+  }
+ },
+ "astronomer_astro-ide-example-dags-airflow3::latest_only": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.2,
+  "state": "success",
+  "tasks": {
+   "latest_only": "success",
+   "task1": "success"
+  }
+ },
+ "astronomer_backfill-dag-demo::backfill": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: ParamValidationError: Invalid input for param backfill_start_date: '2024-01-01' is not a 'date-time'\n\nFailed validating 'format' in schema:\n    {'type': 'string', 'format': 'date-time'}\n\nOn instance:\n    '2024-01-01'",
+  "seconds": 1.6,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_backfill-dag-demo::tutorial": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 6.9,
+  "state": "success",
+  "tasks": {
+   "print_date": "success",
+   "sleep": "success",
+   "templated": "success"
+  }
+ },
+ "astronomer_ded-ultimate-guide-to-dags::launch_readiness_report": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.9,
+  "state": "success",
+  "tasks": {
+   "fetch_conditions_table": "success",
+   "fetch_planet": "success",
+   "fetch_solar_activity": "success",
+   "fetch_storm_risk": "success",
+   "fetch_temperature": "success",
+   "fetch_visibility": "success",
+   "generate_report": "success"
+  }
+ },
+ "astronomer_ded-ultimate-guide-to-dags::launch_window_history": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.5,
+  "state": "success",
+  "tasks": {
+   "determine_data_to_get": "success",
+   "get_id_for_one_planet": "success",
+   "get_solar_activity": "success",
+   "get_storm_risk": "success",
+   "get_temperature": "success",
+   "get_visibility": "success",
+   "reformat_date": "success"
+  }
+ },
+ "astronomer_ded-ultimate-guide-to-dags::planet_conditions": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.3,
+  "state": "success",
+  "tasks": {
+   "create_conditions_table": "success",
+   "decide_timeframe": "success",
+   "get_conditions_from_response": "success",
+   "get_conditions_today": "success",
+   "get_conditions_today_and_tomorrow": "skipped",
+   "get_conditions_yesterday": "skipped",
+   "get_id_for_one_planet": "success",
+   "get_planets": "success"
+  }
+ },
+ "astronomer_ded-ultimate-guide-to-dags::top_level_code": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.3,
+  "state": "success",
+  "tasks": {
+   "reveal_the_trajectory_correction": "success"
+  }
+ },
+ "astronomer_dynamic-dags-tutorial::dag_file_1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.1,
+  "state": "success",
+  "tasks": {
+   "say_hello": "success"
+  }
+ },
+ "astronomer_dynamic-dags-tutorial::dag_file_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 1.8,
+  "state": "success",
+  "tasks": {
+   "say_hello": "success"
+  }
+ },
+ "astronomer_dynamic-dags-tutorial::loop_hello_world_1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 1.9,
+  "state": "success",
+  "tasks": {
+   "hello_world": "success"
+  }
+ },
+ "astronomer_dynamic-dags-tutorial::loop_hello_world_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.3,
+  "state": "success",
+  "tasks": {
+   "hello_world": "success"
+  }
+ },
+ "astronomer_dynamic-dags-tutorial::loop_hello_world_3": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.6,
+  "state": "success",
+  "tasks": {
+   "hello_world": "success"
+  }
+ },
+ "astronomer_dynamic-dags-tutorial::variable_hello_world_1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.6,
+  "state": "success",
+  "tasks": {
+   "hello_world": "success"
+  }
+ },
+ "astronomer_dynamic-dags-tutorial::variable_hello_world_2": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.4,
+  "state": "success",
+  "tasks": {
+   "hello_world": "success"
+  }
+ },
+ "astronomer_get-started-with-airflow-2-tutorial::example_astronauts": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 151.3,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_get-started-with-airflow-2-tutorial::my_astronauts_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.8,
+  "state": "success",
+  "tasks": {
+   "print_num_people_in_space": "success",
+   "print_reaction": "success"
+  }
+ },
+ "astronomer_get-started-with-airflow-2-tutorial::taskflow_api_example_dag": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 151.3,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_gsd-airflow-basics::example_asset_consumer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.5,
+  "state": "success",
+  "tasks": {
+   "celebrate_new_crew_data": "success"
+  }
+ },
+ "astronomer_gsd-airflow-basics::example_astronauts": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.5,
+  "state": "success",
+  "tasks": {
+   "get_astronauts": "success",
+   "print_astronaut_craft": "success"
+  }
+ },
+ "astronomer_gsd-airflow-basics::example_basic": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.9,
+  "state": "success",
+  "tasks": {
+   "say_goodbye": "success",
+   "say_hello": "success"
+  }
+ },
+ "astronomer_gsd-airflow-basics::example_complex": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 20.7,
+  "state": "success",
+  "tasks": {
+   "crew_roster.any_astronauts_in_space": "success",
+   "crew_roster.get_astronauts": "success",
+   "crew_roster.print_astronaut_craft": "success",
+   "decide_crew_roster_branch": "success",
+   "decommission.decommission_crew_dragon_mission": "success",
+   "decommission.decommission_iss_mission": "success",
+   "decommission.decommission_tiangong_mission": "success",
+   "launch.launch_crew_dragon_mission": "success",
+   "launch.launch_iss_mission": "success",
+   "launch.launch_tiangong_mission": "success",
+   "mission_control.establish_comms": "success",
+   "post_mission_report": "success",
+   "skip_crew_roster": "skipped",
+   "track.track_crew_dragon": "success",
+   "track.track_iss": "success",
+   "track.track_tiangong": "success",
+   "wait_for_launch_window": "success"
+  }
+ },
+ "astronomer_gsd-airflow-basics::example_sql_templates": {
+  "class": "baseline-failed",
+  "reason": "the baseline could not run: timeout 150s",
+  "seconds": 152.3,
+  "state": null,
+  "tasks": {}
+ },
+ "astronomer_practical-guide-to-apache-airflow-3::formatted_newsletter": {
+  "class": "baseline-failed",
+  "reason": "the baseline failed for an environmental reason (FileNotFoundError): 2026-11-26T00:58:50.602818Z [info     ] Found credentials in environment variables. [botocore.credentials] loc=credentials.py:1263",
+  "seconds": 3.6,
+  "state": "failed",
+  "tasks": {
+   "formatted_newsletter": "failed"
+  }
+ },
+ "astronomer_practical-guide-to-apache-airflow-3::raw_zen_quotes": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.7,
+  "state": "success",
+  "tasks": {
+   "raw_zen_quotes": "success"
+  }
+ },
+ "astronomer_practical-guide-to-apache-airflow-3::selected_quotes": {
+  "class": "by-design-failure",
+  "reason": "the baseline fails and the error is not environmental: the DAG's own code fails",
+  "seconds": 3.6,
+  "state": "failed",
+  "tasks": {
+   "selected_quotes": "failed"
+  }
+ },
+ "astronomer_quickstart-etl-with-airflow-videos::example_astronauts": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 2.2,
+  "state": "success",
+  "tasks": {
+   "get_astronauts": "success",
+   "print_astronaut_craft": "success"
+  }
+ },
+ "astronomer_reusable_dag_examples::example_astronauts": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.1,
+  "state": "success",
+  "tasks": {
+   "get_astronauts": "success",
+   "print_astronaut_craft": "success"
+  }
+ },
+ "astronomer_sample_open_lineage_dags::example_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 8.8,
+  "state": "success",
+  "tasks": {
+   "print_date": "success",
+   "sleep": "success",
+   "templated": "success"
+  }
+ },
+ "astronomer_sample_open_lineage_dags::openlineage_base_complex_dag": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.1,
+  "state": "success",
+  "tasks": {
+   "check_events_number": "success",
+   "section_1.section_2.section_3.task_7": "success",
+   "section_1.section_2.task_6": "success",
+   "section_1.task_5": "success",
+   "task_0": "success",
+   "task_1.id.with.dots": "success",
+   "task_2": "success",
+   "task_3": "success",
+   "task_4": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_cron_trigger_timetable": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.3,
+  "state": "success",
+  "tasks": {
+   "print_data_interval": "success",
+   "print_date": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_dataset_consumer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.3,
+  "state": "success",
+  "tasks": {
+   "consumer": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_dataset_consumer_with_and_condition": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.3,
+  "state": "success",
+  "tasks": {
+   "consumer": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_dataset_consumer_with_or_condition": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.0,
+  "state": "success",
+  "tasks": {
+   "consumer": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_dataset_producer": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 15.0,
+  "state": "success",
+  "tasks": {
+   "producer": "success",
+   "wait": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_dataset_producer_with_and_condition": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 24.9,
+  "state": "success",
+  "tasks": {
+   "start": "success",
+   "wait15": "success",
+   "wait5": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_dataset_producer_with_or_condition": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 24.9,
+  "state": "success",
+  "tasks": {
+   "wait15": "success",
+   "wait5": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_dtm_non_taskflow_api": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 5.5,
+  "state": "success",
+  "tasks": {
+   "dtm_skip_task": "skipped",
+   "dtm_task": "success",
+   "end": "success",
+   "start": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_task_group1": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.2,
+  "state": "success",
+  "tasks": {
+   "end": "success",
+   "group1.task1": "success",
+   "group1.task2": "success",
+   "start": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_task_group_nest": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 4.3,
+  "state": "success",
+  "tasks": {
+   "end": "success",
+   "group1.group1_1.task2": "success",
+   "group1.group1_1.task3": "success",
+   "group1.group1_2.task_tg1_2_1": "success",
+   "group1.group1_2.task_tg1_2_2": "success",
+   "group1.task1": "success",
+   "start": "success"
+  }
+ },
+ "matsudan_airflow-dag-examples::example_taskflow_api": {
+  "class": "ok",
+  "reason": "baseline succeeded",
+  "seconds": 3.9,
+  "state": "success",
+  "tasks": {
+   "extract": "success",
+   "load_multiple": "success",
+   "load_total": "success",
+   "transform": "success"
+  }
+ }
+}

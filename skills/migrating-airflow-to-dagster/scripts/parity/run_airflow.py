@@ -19,7 +19,7 @@ cfg = json.loads(Path(sys.argv[1]).read_text())
 sys.path.insert(0, str(Path(__file__).parent))
 from sandbox import Sandbox  # noqa: E402
 
-sb = Sandbox(Path(cfg["sandbox"]["root"]), cfg["sandbox"].get("connections"), cfg["sandbox"].get("variables"), cfg["sandbox"].get("sleep_cap")).install()
+sb = Sandbox(Path(cfg["sandbox"]["root"]), cfg["sandbox"].get("connections"), cfg["sandbox"].get("variables"), cfg["sandbox"].get("sleep_cap"), seed=cfg["sandbox"].get("seed")).install()
 repo = cfg["repo_root"]
 sys.path.insert(0, repo)
 for extra in cfg.get("pythonpath", []):

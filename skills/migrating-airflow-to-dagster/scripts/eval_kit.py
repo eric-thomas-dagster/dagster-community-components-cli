@@ -72,12 +72,12 @@ schedule, retries, pools and dependencies. You will not see those results.
 
 ## The sandbox your code runs in (the same for the original DAG)
 
-- The working directory is an empty scratch folder. Write files relative to it (the spec's paths are what the original wrote); do not use absolute paths outside it.
+- The working directory is a scratch folder that holds the project files shown in `source/` at their repository paths (for example `include/data.csv`), unchanged. Write files relative to it (the spec's paths are what the original wrote); do not use absolute paths outside it.
 - Connections are environment variables `AIRFLOW_CONN_<CONN_ID>` holding a connection URI (what Airflow itself reads): read the host, login, schema from there instead of hardcoding. Defaults exist
   for `sqlite_default`, `http_default`, `smtp_default`, `aws_default`. Variables are `AIRFLOW_VAR_<NAME>` (upper case). Never put a credential in code.
 - There is no network. HTTP through `requests` or `urllib` is answered with 200 `{{"ok": true}}` and recorded (method, URL, body). `smtplib` is a recorder. S3 through boto3 is a local stand-in (moto).
   SQLite files are real. `time.sleep` is real.
-- Try it: `out/{project}/.venv/bin/python tools/run_in_sandbox.py --project out/{project} --dag-id {dag_id} --spec spec.json` runs your job there and prints outcomes, values, files, requests.
+- Try it: `out/{project}/.venv/bin/python tools/run_in_sandbox.py --project out/{project} --dag-id {dag_id} --spec spec.json --source source` runs your job there and prints outcomes, values, files, requests.
 
 ## Rules
 
