@@ -1,0 +1,179 @@
+{
+ "note": "public Airflow example repositories (shallow clones); `prefer` is the Airflow major tried first",
+ "repos": [
+  {
+   "name": "astronomer_2-4-example-dags",
+   "github": "astronomer/2-4-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_2-5-example-dags",
+   "github": "astronomer/2-5-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_2-6-example-dags",
+   "github": "astronomer/2-6-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_2-7-example-dags",
+   "github": "astronomer/2-7-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_2-8-example-dags",
+   "github": "astronomer/2-8-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_2-9-example-dags",
+   "github": "astronomer/2-9-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_2-10-example-dags",
+   "github": "astronomer/2-10-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_astro-example-dags",
+   "github": "astronomer/astro-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_airflow-example-dags",
+   "github": "astronomer/airflow-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_reusable_dag_examples",
+   "github": "astronomer/reusable_dag_examples",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_ds-ml-example-dags",
+   "github": "astronomer/ds-ml-example-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_ded-ultimate-guide-to-dags",
+   "github": "astronomer/ded-ultimate-guide-to-dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_gsd-airflow-basics",
+   "github": "astronomer/gsd-airflow-basics",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_airflow-duckdb-examples",
+   "github": "astronomer/airflow-duckdb-examples",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_airflow-testing-ebook-companion",
+   "github": "astronomer/airflow-testing-ebook-companion",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_dynamic-dags-tutorial",
+   "github": "astronomer/dynamic-dags-tutorial",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_get-started-with-airflow-2-tutorial",
+   "github": "astronomer/get-started-with-airflow-2-tutorial",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_airflow-data-quality-demo",
+   "github": "astronomer/airflow-data-quality-demo",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_cosmos-demo",
+   "github": "astronomer/cosmos-demo",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_airflow-dbt-elt",
+   "github": "astronomer/airflow-dbt-elt",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_backfill-dag-demo",
+   "github": "astronomer/backfill-dag-demo",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_external-event-driven-scheduling-example-project",
+   "github": "astronomer/external-event-driven-scheduling-example-project",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_airflow-databricks-tutorial",
+   "github": "astronomer/airflow-databricks-tutorial",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_sample_open_lineage_dags",
+   "github": "astronomer/sample_open_lineage_dags",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_quickstart-etl-with-airflow-videos",
+   "github": "astronomer/quickstart-etl-with-airflow-videos",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_airflow-dbt-demo",
+   "github": "astronomer/airflow-dbt-demo",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_cosmos-use-case",
+   "github": "astronomer/cosmos-use-case",
+   "prefer": "2"
+  },
+  {
+   "name": "astronomer_astro-ide-example-dags-airflow3",
+   "github": "astronomer/astro-ide-example-dags-airflow3",
+   "prefer": "3"
+  },
+  {
+   "name": "astronomer_practical-guide-to-apache-airflow-3",
+   "github": "astronomer/practical-guide-to-apache-airflow-3",
+   "prefer": "3"
+  },
+  {
+   "name": "astronomer_airflow-3-demos",
+   "github": "astronomer/airflow-3-demos",
+   "prefer": "3"
+  },
+  {
+   "name": "astronomer_airflow-version-release-demos",
+   "github": "astronomer/airflow-version-release-demos",
+   "prefer": "3"
+  },
+  {
+   "name": "astronomer_learn-demos",
+   "github": "astronomer/learn-demos",
+   "prefer": "3"
+  },
+  {
+   "name": "matsudan_airflow-dag-examples",
+   "github": "matsudan/airflow-dag-examples",
+   "prefer": "3"
+  },
+  {
+   "name": "apache_airflow",
+   "github": "apache/airflow",
+   "prefer": "3",
+   "dag_folders": [
+    "airflow-core/src/airflow/example_dags",
+    "providers/standard/src/airflow/providers/standard/example_dags"
+   ]
+  }
+ ]
+}
