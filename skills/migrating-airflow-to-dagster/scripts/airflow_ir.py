@@ -411,6 +411,29 @@ def _cosmos_groups(dag: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _task_params(task: Any) -> dict[str, Any]:
+    """The task's own `params` (merged with the DAG's by Airflow), as plain values: `{{ params.x }}` and `context["params"]` read them."""
+    p = getattr(task, "params", None)
+    if p is None:
+        return {}
+    try:
+        return {str(k): _jsonable(v) for k, v in (p.dump() if hasattr(p, "dump") else dict(p)).items()}
+    except Exception:  # noqa: BLE001
+        return {}
+
+
+def _mapped_group(task: Any) -> str | None:
+    """The id of the nearest mapped task group (`@task_group.expand(...)`) the task sits in. The converter cannot map a group, so it says so instead of wiring a dangling argument.
+    `task.task_group` is a weak proxy, so the group's type is read from the DAG's group dictionary (a nested group's id is its parents' ids joined with dots)."""
+    gid = getattr(getattr(task, "task_group", None), "group_id", None)
+    groups = getattr(getattr(task, "dag", None), "task_group_dict", None) or {}
+    while gid:
+        if type(groups.get(gid)).__name__ == "MappedTaskGroup":
+            return gid
+        gid = gid.rpartition(".")[0]
+    return None
+
+
 def _task_ir(task: Any) -> dict[str, Any]:
     t: dict[str, Any] = {
         "task_id": task.task_id, "type": task.task_type, "module": type(task).__module__,
@@ -446,6 +469,8 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "outlet_assets": [{"uri": str(getattr(o, "uri", None) or ""), "name": str(getattr(o, "name", None) or "")} for o in (getattr(task, "outlets", None) or []) if getattr(o, "uri", None) and getattr(o, "name", None)],
         "inlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "inlets", None) or [])],
         "template_fields": {},
+        "params": _task_params(task),
+        "mapped_group": _mapped_group(task),
     }
     for f in getattr(task, "template_fields", ()) or ():
         if hasattr(task, f):
@@ -477,7 +502,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
                     break
     if files:
         t["template_files"] = files
-    fn = getattr(task, "python_callable", None)
+    fn = getattr(task, "python_callable", None) or (getattr(task, "partial_kwargs", None) or {}).get("python_callable")      # a mapped classic PythonOperator keeps it in partial_kwargs
     if fn is not None:
         t["callable"] = _callable_info(fn)
         t["op_args"] = _jsonable(list(getattr(task, "op_args", None) or []))

@@ -129,8 +129,8 @@ def test_pool_is_first_class_on_the_asset_and_on_graph_ops_not_the_graph_asset()
     g = task("g", "BashOperator", template_fields={"bash_command": "true"}, pool="launch_pad", trigger_rule="all_done")
     gb = task("b", "_ShortCircuitDecoratedOperator", callable=fn("numbers"), op_args=[], op_kwargs={}, up=[])
     code, s = C.convert_dag(dag([gb, {**g, "upstream": ["b"]}], kind="once"), "n", {})
-    head = code.split("@dg.graph_multi_asset")[1].split("def ")[0]
-    assert "pool=" not in head and "pool='launch_pad'" in code.split("@dg.graph_multi_asset")[0]
+    head = code.split("@dg.graph(")[1].split("def ")[0]      # updated: the graph asset is now @dg.graph + from_graph (it declares internal deps)
+    assert "pool=" not in head and "pool='launch_pad'" in code.split("@dg.graph(")[0]
 
 
 # ---- execution tests ---------------------------------------------------------------------------------------------------------------------------

@@ -169,6 +169,7 @@ Writes `cutover-<dag_id>.md` for each converted DAG (pause plan, catchup and bac
 | DAG factories, Blueprint, dag-factory, loops that generate DAGs | `reference/factories.md` |
 | Dynamic task mapping (`.expand`): static and dynamic partitions | `reference/dynamic-mapping.md` |
 | Converting the mechanical DAGs by code generation from the runtime IR, and where existing components fit | `reference/conversion.md` |
+| Why the converter was `different` on real behaviour, what was fixed, and what it cannot do (train numbers) | `reference/converter-triage.md` |
 | A converted repo with the parity harness | `examples/runtime_conversion/` |
 | Which component and integration enhancements would convert more DAGs, ranked by measured impact | `reference/component-wishlist.md` |
 | Compatibility across Airflow releases (2.2 to 3.4): what was tested, results, what changes by release | `reference/compatibility.md` |

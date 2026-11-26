@@ -212,7 +212,7 @@ Added after measuring which operators were still stubbed (below). Each is transl
 - `retry_exponential_backoff` becomes `Backoff.EXPONENTIAL`; a named XCom of a `multiple_outputs` task reads that key of the returned dict.
 - Not enforced here, so a `degraded` caveat (the DAG converts and the report says what is missing): `depends_on_past`, `wait_for_downstream`, `max_active_tis_per_dagrun`, `pool_slots`, `execution_timeout` on a Python task, `fail_stop`, `max_consecutive_failed_dag_runs`, `render_template_as_native_obj`, task callbacks that cannot be attached, and `reset_dag_run` / `logical_date` on a trigger.
 - Two DAGs that produce the same asset: the second DAG's output keeps its own asset under `<key>/by_<dag>`, with a caveat.
-- Asset schedules with nested AND/OR become the same combination of automation conditions. A graph-form DAG (mapping, branching, setup/teardown) triggered by assets runs on an automation condition on those assets; a graph asset cannot declare dependencies, so that lineage edge is not drawn.
+- Asset schedules with nested AND/OR become the same combination of automation conditions. A graph-form DAG (mapping, branching, setup/teardown) triggered by assets runs on an automation condition on those assets; the edges between the DAG's own tasks are declared as asset dependencies, but the lineage edge from the triggering (external) assets is not drawn.
 
 ## Also translated
 
@@ -312,7 +312,7 @@ Loading a converted project proves nothing about behavior. Running both sides (b
 | `max_active_tis_per_dagrun`, `pool_slots != 1` | degraded (not enforced; one slot is used) |
 | `max_active_tis_per_dag` | translated to a Dagster pool of that size (the limit goes in `concurrency_limits.yaml`); defers with a named pool or a value that is not a positive number |
 | task callbacks (`on_failure_callback`, `on_success_callback`, `on_retry_callback`) | translated with `@on_hooks` in the asset form; degraded in the graph form |
-| other hooks (`pre_execute=`, `post_execute=`, `@task.run_if`, `skip_if`, `on_skipped_callback`, `on_execute_callback`) | degraded (Airflow keeps the hook in `_pre_execute_hook`; the default no-op methods are not hooks) |
+| other hooks (`pre_execute=`, `post_execute=`, `@task.run_if`, `skip_if`, `on_skipped_callback`, `on_execute_callback`) | degraded in the component output (the Python output does convert lambda `run_if` / `skip_if` conditions) (Airflow keeps the hook in `_pre_execute_hook`; the default no-op methods are not hooks) |
 | DAG `fail_stop=True` | degraded (Airflow cancels running tasks on the first failure; Dagster lets independent steps finish) |
 | DAG `max_active_runs` / `max_active_tasks` other than 16 | translated to a run-queue tag limit and a per-run executor limit written to `concurrency_limits.yaml` for the deployment to apply; a value that is not a positive number defers |
 | DAG `dagrun_timeout` | translated to a `dagster/max_runtime` tag (enforced only with run monitoring); defers when not a number of seconds |

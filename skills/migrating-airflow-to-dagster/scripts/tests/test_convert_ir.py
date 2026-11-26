@@ -109,7 +109,7 @@ def test_s3_operators_map_to_runtime_helpers():
 @pytest.mark.parametrize("mut,why", [
     (lambda d: d["tasks"][0].update(trigger_rule="custom_rule"), "trigger_rule custom_rule"),
     (lambda d: d["tasks"][0].update(is_mapped=True), "dynamic task mapping"),
-    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ var.value.x }}"}), "does not provide"),
+    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ conn.my_conn.host }}"}), "does not provide"),
     (lambda d: d["tasks"][0].update(type="DataprocSubmitJobOperator"), "operator DataprocSubmitJobOperator"),
     (lambda d: d["timetable"].update(kind="asset_triggered", assets=["a", "b"], asset_logic="mixed"), "mixes AND and OR"),
     (lambda d: d["timetable"].update(kind="other"), "schedule type"),
@@ -124,9 +124,10 @@ def test_s3_operators_map_to_runtime_helpers():
     (lambda d: d.update(dag_settings={"dagrun_timeout": {"repr": "weird"}}), "dagrun_timeout"),
     (lambda d: d["tasks"][0].update(max_active_tis_per_dag=1, pool="p"), "together with a named pool"),
     (lambda d: d["tasks"][0].update(max_active_tis_per_dagrun=1), "max_active_tis_per_dagrun"),
-    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ macros.ds_format_locale(ds, 'a', 'b', 'c') }}"}), "macros"),
+    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ macros.nope(ds) }}"}), "macros"),
     (lambda d: d["tasks"][0].update(type="PythonOperator", execution_timeout_s=30.0), "execution_timeout on a non-shell task"),
 ])
+# updated: the template-variable case now uses conn (var.value.x is supported by the runtime since the macros/var fix)
 def test_unsupported_constructs_defer_the_whole_dag_with_a_reason(mut, why):
     d = dag([task("t", "BashOperator", template_fields={"bash_command": "true"})])
     mut(d)
@@ -208,7 +209,7 @@ def test_sql_on_a_non_snowflake_connection_is_a_generic_sql_step_and_unsupported
     q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select 1", "conn_id": "postgres_default"})
     code, s = convert(dag([q], kind="manual"))
     assert "sql_run(context, 'postgres_default', ['select 1']" in code and s["provider_connections"] == {"postgres_default": "sql"}
-    q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select '{{ var.value.x }}'", "conn_id": "snowflake_default"})
+    q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select '{{ conn.x.host }}'", "conn_id": "snowflake_default"})
     with pytest.raises(C.Defer, match="does not provide"):
         convert(dag([q], kind="manual"))
 
@@ -348,8 +349,8 @@ def test_xcom_pull_reads_upstream_values_and_refuses_what_it_cannot_mirror():
     assert ctx["ti"].xcom_pull(task_ids="a") == 41 and ctx["ti"].xcom_pull(task_ids=["a", "b"]) == [41, "x"]
     assert ctx["ti"].xcom_pull(task_ids="zzz") is None and ctx["ti"].xcom_pull(task_ids="zzz", default="d") == "d"      # Airflow: an unknown id gives None
     assert ctx["ti"].xcom_pull(task_ids="a", key="other") is None
-    with pytest.raises(NotImplementedError):
-        ctx["ti"].xcom_push("return_value", 1)
+    ctx["ti"].xcom_push("return_value", 1)           # updated: a pushed return_value is kept (it was NotImplementedError)
+    assert ctx["ti"]._rv == 1
 
 
 def test_render_supports_filters_and_macros_and_is_strict(monkeypatch):

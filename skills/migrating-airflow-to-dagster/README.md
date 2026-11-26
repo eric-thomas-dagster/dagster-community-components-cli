@@ -68,7 +68,7 @@ Details and the full list are in [reference/conversion.md](reference/conversion.
 | Schedule: one asset, any of several, all of several | `AutomationCondition.eager()`; all-of uses a per-asset `newly_updated().since_last_handled()` condition |
 | Task groups, retries, retry delay, backoff, pool | Key prefix, `RetryPolicy`, `pool` |
 | Connections | Resources under the same key (`resources.py`) |
-| Branch, short-circuit, mapped tasks (`.expand`), setup/teardown, trigger rules | One graph asset with an op per task (default), or independently runnable partitions with `--mapping partitions`; see [reference/dynamic-mapping.md](reference/dynamic-mapping.md) |
+| Branch, short-circuit, mapped tasks (`.expand`), setup/teardown, trigger rules | One graph-backed multi-asset with an op and an asset per task, every Airflow edge declared as an asset dependency (default), or independently runnable partitions with `--mapping partitions`; see [reference/dynamic-mapping.md](reference/dynamic-mapping.md) |
 | `PythonVirtualenvOperator`, `ExternalPythonOperator` | Callable run in its own interpreter (`af_isolated`) |
 | `TriggerDagRunOperator` (no `wait_for_completion`), task `sla`, `ExternalTaskSensor` and time sensors (some forms) | Translated, with caveats where behavior differs; see [reference/conversion.md](reference/conversion.md) |
 | `CronPartitionTimetable`, `PartitionedAssetTimetable` with identity and start-of-period mappers | Partitioned assets and per-partition automation; see [reference/partitions.md](reference/partitions.md) |
