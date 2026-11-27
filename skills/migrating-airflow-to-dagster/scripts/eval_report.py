@@ -128,7 +128,7 @@ def strict_unobserved_lines(recs: list[dict[str, Any]], route: str) -> list[str]
         return []
     thin_rows = [r for r in strict if thin(r, route)]
     L = [f"### `{route}`: what the {len(strict)} strict `equivalent` DAGs did not observe", "",
-         f"**{len(thin_rows)} of {len(strict)} are thin** (nothing was compared but the outcome, the task states and the structure); {len(strict) - len(thin_rows)} compared at least one value, file, row, request, mail, object or printed line. "
+         f"**{len(thin_rows)} of {len(strict)} are thin** (nothing was compared but the outcome, the task states and the structure); {len(strict) - len(thin_rows)} compared at least one value, file, row, request, mail, object, printed line, user-function call or command. "
          "A thin `equivalent` says: it ran, the tasks ended in the same states, the metadata matches. It does not say the data or output matched.", ""]
     per = collections.Counter(n for r in thin_rows for n in unobserved_of(route_x(r, route)))
     if per:

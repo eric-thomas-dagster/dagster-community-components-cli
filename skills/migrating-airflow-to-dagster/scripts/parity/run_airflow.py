@@ -19,7 +19,7 @@ cfg = json.loads(Path(sys.argv[1]).read_text())
 sys.path.insert(0, str(Path(__file__).parent))
 from sandbox import Sandbox  # noqa: E402
 
-sb = Sandbox(Path(cfg["sandbox"]["root"]), cfg["sandbox"].get("connections"), cfg["sandbox"].get("variables"), cfg["sandbox"].get("sleep_cap"), seed=cfg["sandbox"].get("seed")).install()
+sb = Sandbox(Path(cfg["sandbox"]["root"]), cfg["sandbox"].get("connections"), cfg["sandbox"].get("variables"), cfg["sandbox"].get("sleep_cap"), seed=cfg["sandbox"].get("seed"), trace=cfg["sandbox"].get("trace")).install()
 repo = cfg["repo_root"]
 sys.path.insert(0, repo)
 for extra in cfg.get("pythonpath", []):
@@ -104,8 +104,13 @@ def alarm(*_):
 if dag is not None:
     signal.signal(signal.SIGALRM, alarm)
     signal.alarm(int(cfg.get("timeout_s", 300)))
+    trace_data = None
     try:
-        dr = dag.test()
+        sb.trace_start()                                                             # the observation layer: user calls and commands, from the run start (the DAG file is already imported)
+        try:
+            dr = dag.test()
+        finally:
+            trace_data = sb.trace_stop()
         if dr is None:
             from airflow.models import DagRun
             dr = sorted(DagRun.find(dag_id=cfg["dag_id"]), key=lambda r: r.start_date or r.execution_date)[-1]
@@ -154,6 +159,7 @@ if res["tasks"]:
         res["errors"].append(f"harness note: the run state was {res['state']}: using the task states")
         res["state"] = res["computed_state"]
 res["errors"] += errs.items[:20]
+sb.write_trace(locals().get("trace_data"), Path(cfg["out"]))
 try:                                                                                 # task logs: Airflow writes a failing task's traceback there, not to the root logger
     for lf in sorted(Path(os.environ["AIRFLOW_HOME"], "logs").rglob("*.log"))[:60]:
         txt = lf.read_text(errors="replace")

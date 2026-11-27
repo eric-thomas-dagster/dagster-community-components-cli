@@ -37,7 +37,8 @@ def rank(verdict: str | None, baseline: str | None = None) -> int:
     if verdict == "matches-baseline-failure" and baseline == BY_DESIGN:
         return max(RANK.values()) + 1
     return RANK.get(verdict or "", 0)
-OBSERVABLE = ("values", "files", "sqlite", "http", "smtp", "s3", "stdout", "failure")
+OBSERVABLE = ("values", "files", "sqlite", "http", "smtp", "s3", "stdout", "failure", "calls", "commands")
+SUBSTANTIVE = ("values", "files", "sqlite", "http", "smtp", "s3", "stdout", "calls", "commands")
 
 
 def behavior_files(work: Path) -> list[Path]:
@@ -92,6 +93,7 @@ def collect(work_dirs: list[Path], conv_dirs: list[Path] | None = None, route: s
         dims = x.get("dimensions") or {}
         out[key] = {"verdict": ru.get("detail") or ru.get("verdict"), "detail": ru.get("why"), "thin": thin, "kind": "n/a" if thin is None else "thin" if thin else "substantive",
                     "unobserved": sorted(ru.get("unobserved") or [n for n in OBSERVABLE if dims.get(n, {}).get("verdict") == "not-compared"]) if thin else [],
+                    "observed_by": sorted(n for n in (ru.get("matching") or []) if n in SUBSTANTIVE),
                     "baseline": ((d.get("baseline") or {}).get("class") or [None])[0], "converter": digest_of(index.get((d.get("repo"), d.get("dag_id"))))}
     return out
 

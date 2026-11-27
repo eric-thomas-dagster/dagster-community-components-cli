@@ -24,12 +24,17 @@ from __future__ import annotations
 import ast
 import json
 import re
+import sys
+from pathlib import Path
 from typing import Any
 
+sys.path.insert(0, str(Path(__file__).parent)) if str(Path(__file__).parent) not in sys.path else None
+import trace_compare as TC  # noqa: E402
+
 MATCH, DIFFER, NOT = "match", "differ", "not-compared"
-BEHAVIOUR = ("outcome", "tasks", "values", "files", "sqlite", "http", "smtp", "s3", "failure")
+BEHAVIOUR = ("outcome", "tasks", "values", "files", "sqlite", "http", "smtp", "s3", "failure", "calls", "commands")
 METADATA = ("schedule", "retries", "pools", "dependencies", "job")
-SUBSTANTIVE = ("values", "files", "sqlite", "http", "smtp", "s3", "stdout")           # a dimension that compared a value, file, row, request, mail, object or printed line: an `equivalent` without one is `thin`
+SUBSTANTIVE = ("values", "files", "sqlite", "http", "smtp", "s3", "stdout", "calls", "commands")           # a dimension that compared a value, file, row, request, mail, object, printed line, user-function call or command: an `equivalent` without one is `thin`
 ENV_ERRORS = re.compile(
     r"ModuleNotFoundError|No module named|ImportError|cannot import name|Name or service not known|NameResolutionError|Temporary failure in name resolution|Connection refused|Failed to establish a new connection|"
     r"Max retries exceeded|gaierror|NoCredentialsError|EndpointConnectionError|isn't defined|conn_id .* (?:not found|is not defined)|AirflowNotFoundException|Variable \S+ does not exist|"
@@ -445,16 +450,19 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
     nd_states = {t: sorted({norm_state(a_tasks[t].get("state"))} | {norm_state((r.get("tasks") or {}).get(t, {}).get("state")) for r in runs if t in (r.get("tasks") or {})}) for t in a_tasks}
     nd_tasks = {t for t, v in nd_states.items() if len(v) > 1}
     cmp_rows, bad, skipped, accepted = [], [], [], []
+    excused_tasks: dict[str, str] = {}                                   # tasks whose own code is not expected to have run on the route: their callables are not required in the call trace
     nd_dec = nondeterministic_decisions(spec)
     nd_skip = descendants(spec, set(nd_dec)) if nd_dec else set()
     for tid in sorted(tasks_spec):
         if tid in nd_skip:
             skipped.append(f"{tid}: nondeterministic: not compared ({'; '.join(sorted(set(nd_dec.values())))[:140]})")
+            excused_tasks[tid] = "descendant of a nondeterministic decision"
             continue
         tm = taskmap.get(tid, {"mode": None, "asset": None})
         at = norm_state(a_tasks.get(tid, {}).get("state"))
         if tid in nd_tasks:
             skipped.append(f"{tid}: nondeterministic: not compared (the Airflow baseline's runs disagree: {', '.join(nd_states[tid])})")
+            excused_tasks[tid] = "nondeterministic in the baseline"
             continue
         if tid not in a_tasks:
             skipped.append(f"{tid}: not run by Airflow")
@@ -462,6 +470,7 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         asset = tm.get("asset")
         if tm.get("mode") == "dropped":
             skipped.append(f"{tid}: dropped by the route (header)")
+            excused_tasks[tid] = "dropped by the route by design (glue)"
             continue
         if not asset or asset not in ds:
             bad.append({"task": tid, "airflow": at, "route": "no asset accounts for this task" + (f" (header says {tm.get('mode')} but names no loadable asset)" if tm.get("mode") else "")})
@@ -556,6 +565,8 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         dims[name] = compare_maps(name, base_o[name], rep_o[name] if rep_o else None, rt_o[name])
 
     dims["stdout"] = compare_stdout(a1, a2, route)
+    dims["calls"] = TC.compare_calls(spec, a1, a2, route, taskmap, route_kind, excused_tasks)
+    dims["commands"] = TC.compare_commands(a1, a2, route, route_kind, spec)
 
     # --- failure behaviour
     af = {t for t, v in a_tasks.items() if norm_state(v.get("state")) == "failed" and t not in nd_tasks}

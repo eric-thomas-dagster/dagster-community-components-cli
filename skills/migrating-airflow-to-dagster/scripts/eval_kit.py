@@ -158,7 +158,7 @@ FEEDBACK_A = """## Behaviour feedback: run it, read it, iterate
 
 
 TOOLS_TOP = ("accept_rewrite.py", "gen_tests.py", "status.py", "rewrite_patterns.py", "rewrite_project.py")
-TOOLS_PARITY = ("sandbox.py", "run_dagster.py", "run_in_sandbox.py", "behavior_compare.py", "harness_cfg.py", "compare_behavior.py")
+TOOLS_PARITY = ("sandbox.py", "run_dagster.py", "run_in_sandbox.py", "behavior_compare.py", "harness_cfg.py", "compare_behavior.py", "call_trace.py", "trace_compare.py")
 
 
 def bake_baseline(a: argparse.Namespace, work: Path, manifest: dict[str, Any], row: dict[str, Any], name: str, spec: dict[str, Any], dest: Path) -> str:

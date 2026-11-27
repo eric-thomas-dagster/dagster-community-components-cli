@@ -24,6 +24,7 @@ import os
 import re
 import shutil
 import sqlite3
+import sys
 import tempfile
 import time
 from pathlib import Path
@@ -53,7 +54,7 @@ def _text(b: Any) -> str:
 
 
 class Sandbox:
-    def __init__(self, root: Path, connections: dict[str, str] | None = None, variables: dict[str, str] | None = None, sleep_cap: float | None = None, moto: bool = True, seed: dict[str, str] | None = None) -> None:
+    def __init__(self, root: Path, connections: dict[str, str] | None = None, variables: dict[str, str] | None = None, sleep_cap: float | None = None, moto: bool = True, seed: dict[str, str] | None = None, trace: dict[str, Any] | None = None) -> None:
         self.root = Path(root).resolve()
         self.cwd = self.root / "cwd"
         self.home = self.root / "home"
@@ -65,6 +66,8 @@ class Sandbox:
         self.moto_on = moto
         self.seed = seed or {}                                                       # repo-relative path -> source file: copied into the cwd, as the DAG's project files are where an Airflow project runs
         self.seed_hash: dict[str, str] = {}
+        self.trace_cfg = trace if (trace and os.environ.get("EVAL_TRACE", "1") != "0") else None      # {"roots": [...], "exclude": [...], "cap": n}: the call and command trace (call_trace.py); EVAL_TRACE=0 switches it off
+        self._tracer: Any = None
         self.http: list[dict[str, Any]] = []
         self.smtp: list[dict[str, Any]] = []
         self._moto = None
@@ -98,6 +101,27 @@ class Sandbox:
         self._patch_smtp()
         self._start_moto()
         return self
+
+    # ---- the observation layer (call_trace.py): start AFTER the DAG module is imported and BEFORE the run -----------------------------------
+    def trace_start(self) -> None:
+        if self.trace_cfg is None:
+            return
+        sys.path.insert(0, str(Path(__file__).parent)) if str(Path(__file__).parent) not in sys.path else None
+        from call_trace import Tracer
+        c = self.trace_cfg
+        self._tracer = Tracer([*c.get("roots", []), str(self.cwd)], c.get("exclude"), c.get("cap", 20000)).start()
+
+    def trace_stop(self) -> dict[str, Any] | None:
+        if self._tracer is None:
+            return None
+        self._tracer.stop()
+        return self._tracer.snapshot()
+
+    @staticmethod
+    def write_trace(data: dict[str, Any] | None, out: Path) -> None:
+        """the trace next to the raw result: `<out stem>.trace.json`."""
+        if data is not None:
+            Path(out).with_suffix(".trace.json").write_text(json.dumps(data, default=str))
 
     def _patch_tmpdirs(self) -> None:
         """Airflow's BashOperator runs the command in a temporary directory (`airflowtmp*`) that is deleted afterwards, so a file it writes with a relative path is gone when the task ends.

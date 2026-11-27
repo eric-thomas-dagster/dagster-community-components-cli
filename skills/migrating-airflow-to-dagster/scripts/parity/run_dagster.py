@@ -23,7 +23,7 @@ cfg = json.loads(Path(sys.argv[1]).read_text())
 sys.path.insert(0, str(Path(__file__).parent))
 from sandbox import Sandbox  # noqa: E402
 
-sb = Sandbox(Path(cfg["sandbox"]["root"]), cfg["sandbox"].get("connections"), cfg["sandbox"].get("variables"), cfg["sandbox"].get("sleep_cap", 0.05)).install()
+sb = Sandbox(Path(cfg["sandbox"]["root"]), cfg["sandbox"].get("connections"), cfg["sandbox"].get("variables"), cfg["sandbox"].get("sleep_cap", 0.05), seed=cfg["sandbox"].get("seed"), trace=cfg["sandbox"].get("trace")).install()          # the project files the DAG reads (`include/...`) are in the route's working directory too, as in Airflow's
 for p in cfg.get("pythonpath", []):
     sys.path.insert(0, p)
 if cfg.get("repo_root"):
@@ -32,6 +32,9 @@ import dagster as dg  # noqa: E402
 
 safe = lambda n: re.sub(r"\W", "_", n) if not re.sub(r"\W", "_", n)[:1].isdigit() else "_" + re.sub(r"\W", "_", n)  # noqa: E731
 res = {"dag_id": cfg["dag_id"], "kind": cfg["kind"], "dagster_version": dg.__version__, "state": None, "assets": {}, "error": None, "notes": [], "structure": {}, "checks": [], "observed": None, "load": None}
+
+
+trace_data = None
 
 
 def ident(key):
@@ -194,6 +197,15 @@ try:
         ks = pdef.get_partition_keys(dynamic_partitions_store=inst)
         return ks[-1] if ks else None
 
+    def traced(fn):
+        """run the job or the materialization with the observation layer on (the module is already imported: only run-time calls and commands are recorded)."""
+        global trace_data
+        sb.trace_start()
+        try:
+            return fn()
+        finally:
+            trace_data = sb.trace_stop()
+
     with dg.DagsterInstance.ephemeral() as inst:
         try:
             job = None
@@ -207,7 +219,7 @@ try:
                     pk = {"partition_key": k_} if k_ else {}
                     res["notes"].append(f"the job is partitioned: ran partition {pk.get('partition_key')}")
                 res["partition_key"] = pk.get("partition_key")
-                r = job.execute_in_process(instance=inst, **pk, **kwargs)
+                r = traced(lambda: job.execute_in_process(instance=inst, **pk, **kwargs))
             else:
                 if cfg["kind"] == "rewrite":
                     res["notes"].append(f"no job named `{cfg['dag_id']}`: every asset was materialized")
@@ -218,7 +230,7 @@ try:
                     pk = {"partition_key": k_} if k_ else {}
                     res["notes"].append(f"assets are partitioned: ran partition {pk.get('partition_key')}")
                 res["partition_key"] = pk.get("partition_key")
-                r = dg.materialize(assets + checks, instance=inst, resources=resources or None, **pk, **kwargs)
+                r = traced(lambda: dg.materialize(assets + checks, instance=inst, resources=resources or None, **pk, **kwargs))
             res["state"] = "success" if r.success else "failed"
             ev = r.all_events
             mat = {e.asset_key.to_user_string() for e in r.get_asset_materialization_events()}
@@ -315,3 +327,4 @@ try:
 finally:
     sb.stop()
 Path(cfg["out"]).write_text(json.dumps(res, indent=1, default=str))
+sb.write_trace(trace_data, Path(cfg["out"]))

@@ -30,7 +30,7 @@ import rewrite_project as RPJ
 
 sys.path.insert(0, str(C.HERE / "parity"))
 import behavior_compare as B  # noqa: E402
-from harness_cfg import conn_uri, sandbox_cfg  # noqa: E402,F401
+from harness_cfg import conn_uri, safe_module, sandbox_cfg, trace_cfg  # noqa: E402,F401
 
 PARITY = C.HERE / "parity"
 
@@ -117,7 +117,7 @@ def run_one(a: argparse.Namespace, entry: dict[str, Any], key: str) -> dict[str,
             conv = {"src": src, "report": rep}
     res = execute(priv / "behavior" / name, priv / "sandboxes" / name, spec, row["dag_id"], C.dag_file(work, manifest, row), work / "repos" / row["repo"],
                   a.venv_2 if row["airflow"] == "2" else a.venv_3, a.dagster_python, conv, work / a.run / name / "out" / entry["project"], routes, a.timeout, a.sleep_cap,
-                  deferred=stratum == "deferred", seed=seed_for(C.dag_file(work, manifest, row), work / "repos" / row["repo"]), extra_runs=earlier_baseline_runs(work, a.run, name))
+                  deferred=stratum == "deferred", seed=seed_for(C.dag_file(work, manifest, row), work / "repos" / row["repo"]), extra_runs=earlier_baseline_runs(work, a.run, name), trace=not getattr(a, "no_trace", False))
     res.update({"key": key, "stratum": stratum, "manifest_stratum": row["converter"], "pattern": row["pattern"], "repo": row["repo"]})
     (priv / "behavior" / name / "behavior.json").write_text(json.dumps(res, indent=1, sort_keys=True, default=str) + "\n")
     return res
@@ -137,7 +137,7 @@ def earlier_baseline_runs(work: Path, run: str, name: str) -> list[dict[str, Any
 
 
 def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path: Path, root: Path, af_py: str, dagster_python: str, conv: dict[str, Any] | None, project: Path,
-            routes: list[str], timeout: int = 300, cap: float | None = None, deferred: bool = False, seed: dict[str, str] | None = None, extra_runs: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+            routes: list[str], timeout: int = 300, cap: float | None = None, deferred: bool = False, seed: dict[str, str] | None = None, extra_runs: list[dict[str, Any]] | None = None, trace: bool = True) -> dict[str, Any]:
     """The four executions and the comparison for one DAG. `conv` is {"src": converted source dir, "report": the converter's report entry} or None; `project` is the rewrite's project root."""
     out_dir, sb, dag_path, root, project = (Path(p).resolve() for p in (out_dir, sb, dag_path, root, project))
     af_py, dagster_python = str(Path(af_py).absolute()), str(Path(dagster_python).absolute())          # absolute, but not resolved: a virtualenv's python is a symlink and its bin directory must stay on the PATH
@@ -150,9 +150,10 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
     path_with = lambda py: {"PATH": str(Path(py).parent) + os.pathsep + os.environ.get("PATH", "")}      # noqa: E731  # `python`, `uv`, `dbt` of the route's own environment are on the PATH
     for label in ("airflow1", "airflow2"):
         r = fresh(sb / label)
-        cfg = {"dag_file": str(dag_path), "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed), "out": str(out_dir / f"{label}.json"), "timeout_s": timeout}
+        cfg = {"dag_file": str(dag_path), "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed, trace_cfg([root, dag_path.parent]) if trace else None), "out": str(out_dir / f"{label}.json"), "timeout_s": timeout}
         (r / "config.json").write_text(json.dumps(cfg))
         (out_dir / f"{label}.json").unlink(missing_ok=True)
+        (out_dir / f"{label}.trace.json").unlink(missing_ok=True)
         procs[label] = (launch([af_py, "-W", "ignore", str(PARITY / "run_airflow.py"), str(r / "config.json")], {**base_env, **path_with(af_py)}, timeout, out_dir / f"{label}.log"), r)
     rep = (conv or {}).get("report")
     notes: dict[str, str] = {}
@@ -163,9 +164,10 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
             notes["converter"] = "no-output: the converter produced nothing for this DAG"
         else:
             r = fresh(sb / "converter")
-            cfg = {"kind": "converter", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed), "out": str(out_dir / "converter.json"), "timeout_s": timeout, "converter": {"src": str(conv["src"]), "pkg": "pkg"}}
+            cfg = {"kind": "converter", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed, trace_cfg([conv["src"] / "pkg" / "defs" / f"{safe_module(dag_id)}.py", root]) if trace else None), "out": str(out_dir / "converter.json"), "timeout_s": timeout, "converter": {"src": str(conv["src"]), "pkg": "pkg"}}
             (r / "config.json").write_text(json.dumps(cfg))
             (out_dir / "converter.json").unlink(missing_ok=True)
+            (out_dir / "converter.trace.json").unlink(missing_ok=True)
             procs["converter"] = (launch([dagster_python, str(PARITY / "run_dagster.py"), str(r / "config.json")], {**base_env, **path_with(dagster_python), "PYTHONPATH": os.pathsep.join([str(conv["src"]), str(root)])}, timeout, out_dir / "converter.log"), r)
     if "rewrite" in routes:
         if not (project / "src").exists():
@@ -173,9 +175,10 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
         else:
             r = fresh(sb / "rewrite")
             py = project / ".venv" / "bin" / "python"
-            cfg = {"kind": "rewrite", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed), "out": str(out_dir / "rewrite.json"), "timeout_s": timeout, "rewrite": {"project": str(project), "module": None}}
+            cfg = {"kind": "rewrite", "dag_id": dag_id, "repo_root": str(root), "sandbox": sandbox_cfg(r, spec, cap, seed, trace_cfg([project / "src", root], [project / ".venv"]) if trace else None), "out": str(out_dir / "rewrite.json"), "timeout_s": timeout, "rewrite": {"project": str(project), "module": None}}
             (r / "config.json").write_text(json.dumps(cfg))
             (out_dir / "rewrite.json").unlink(missing_ok=True)
+            (out_dir / "rewrite.trace.json").unlink(missing_ok=True)
             procs["rewrite"] = (launch([str(py) if py.exists() else dagster_python, str(PARITY / "run_dagster.py"), str(r / "config.json")], {**base_env, **path_with(str(py) if py.exists() else dagster_python)}, timeout, out_dir / "rewrite.log"), r)
     killed = {k: wait(p, timeout + 120) for k, (p, _) in procs.items()}
     elapsed = round(time.time() - t0, 1)
@@ -184,10 +187,25 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
             if "sandboxes" in r.parts and (r / sub).exists():
                 shutil.rmtree(r / sub, ignore_errors=True)
 
+    return assess(out_dir, spec, dag_id, rep, project, routes, notes, killed, elapsed, extra_runs)
+
+
+
+def assess(out_dir: Path, spec: dict[str, Any], dag_id: str, rep: dict[str, Any] | None, project: Path, routes: list[str], notes: dict[str, str], killed: dict[str, str | None], elapsed: float | None,
+           extra_runs: list[dict[str, Any]] | None = None) -> dict[str, Any]:
+    """The comparison of one DAG's finished executions: reads the raw results in `out_dir` (airflow1/2.json, <route>.json, their `.trace.json` and `.log` files) and writes `behavior.json`. Split from `execute` so a
+    comparison rule can be re-applied to recorded runs without running anything again (`recompare`)."""
+    trace_stats: dict[str, Any] = {}
+
     def load(label: str) -> dict[str, Any]:
         f = out_dir / f"{label}.json"
         if f.exists():
-            return json.loads(f.read_text())
+            d = json.loads(f.read_text())
+            tf = out_dir / f"{label}.trace.json"
+            if tf.exists():                                                   # the observation layer's record (calls, commands), next to the raw result
+                d["calltrace"] = json.loads(tf.read_text())
+                trace_stats[label] = {"calls": len(d["calltrace"].get("calls", [])), "commands": len(d["calltrace"].get("commands", [])), "bytes": tf.stat().st_size, "run_seconds": d["calltrace"].get("seconds"), "dropped": d["calltrace"].get("dropped")}
+            return d
         log = out_dir / f"{label}.log"
         tail = log.read_text()[-600:] if log.exists() else ""
         return {"error": f"the run left no result ({killed.get(label) or 'process exited'}): {tail.strip().splitlines()[-1] if tail.strip() else ''}"[:400], "state": None, "errors": [tail]}
@@ -204,7 +222,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
             raw = json.loads((out_dir / f"{label}.json").read_text()) if (out_dir / f"{label}.json").exists() else {}
             if raw:
                 (out_dir / f"{label}.json").write_text(json.dumps({**raw, "stdout_lines": a_["stdout_lines"]}, indent=1, default=str))
-    result: dict[str, Any] = {"dag_id": dag_id, "airflow": a1.get("airflow_version"), "seconds": elapsed, "routes": {}}
+    result: dict[str, Any] = {"dag_id": dag_id, "airflow": a1.get("airflow_version"), "seconds": elapsed, "routes": {}, "trace_stats": trace_stats}
     for route in routes:
         if route in notes:
             result["routes"][route] = {"rollup": {"verdict": "no-output", "why": notes[route]}, "dimensions": {}}
@@ -257,10 +275,37 @@ def batch(a: argparse.Namespace) -> int:
     return 0
 
 
+def recompare(a: argparse.Namespace) -> int:
+    """Re-apply the CURRENT comparison rules to the runs already recorded in `<work>/<run>-private/behavior/<dag>/` (nothing is executed): rewrites each `behavior.json`. For a change to how traces or values are read."""
+    work = a.work.resolve()
+    priv = work / f"{a.run}-private"
+    index = json.loads((priv / "kit_index.json").read_text())
+    manifest = C.load_manifest(a.manifest)
+    n = 0
+    for key, entry in sorted(index.items()):
+        name = entry["dir"]
+        out_dir = priv / "behavior" / name
+        old = out_dir / "behavior.json"
+        if not (out_dir / "airflow1.json").exists() or not old.exists():
+            continue
+        prev = json.loads(old.read_text())
+        if "converter" not in prev.get("routes", {}) or not (out_dir / "converter.json").exists():
+            continue
+        row = C.row_for(manifest, key)
+        spec = json.loads((priv / "specs" / f"{name}.spec.json").read_text())
+        _, rep = converter_src(work, row, CONV_DIR, manifest)
+        res = assess(out_dir, spec, row["dag_id"], rep, work / a.run / name / "out" / entry["project"], ["converter"], {}, {}, prev.get("seconds"), earlier_baseline_runs(work, a.run, name))
+        res.update({k: prev[k] for k in ("key", "stratum", "manifest_stratum", "pattern", "repo") if k in prev})
+        old.write_text(json.dumps(res, indent=1, sort_keys=True, default=str) + "\n")
+        n += 1
+    print(f"recompared {n} DAG(s)")
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
-    for n in ("one", "batch"):
+    for n in ("one", "batch", "recompare"):
         p = sub.add_parser(n)
         p.add_argument("--work", type=Path, required=True)
         p.add_argument("--run", required=True)
@@ -272,6 +317,7 @@ def main(argv: list[str] | None = None) -> int:
         p.add_argument("--routes", default="converter,rewrite")
         p.add_argument("--conv-dir", type=Path, help="where to cache the converter's --return-all output (default <work>/conv); point it at a fresh folder to convert with the CURRENT converter")
         p.add_argument("--timeout", type=int, default=300)
+        p.add_argument("--no-trace", action="store_true", help="do not record the call and command trace (the observation layer)")
         if n == "one":
             p.add_argument("--key", required=True)
         else:
@@ -282,6 +328,8 @@ def main(argv: list[str] | None = None) -> int:
     CONV_DIR = getattr(a, "conv_dir", None)
     if a.cmd == "batch":
         return batch(a)
+    if a.cmd == "recompare":
+        return recompare(a)
     index = json.loads((a.work.resolve() / f"{a.run}-private" / "kit_index.json").read_text())
     res = run_one(a, index[a.key], a.key)
     for r, x in res["routes"].items():
