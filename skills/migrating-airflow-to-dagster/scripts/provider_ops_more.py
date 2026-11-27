@@ -30,7 +30,7 @@ DOCKER_DEFAULTS = {"mount_tmp_dir": True, "tmp_dir": "/tmp/airflow", "cpus": 1.0
 # ---- Slack API (chat.postMessage through dagster-slack's SlackResource) ----------------------------------------------------------------
 def _slack_api_check(t):
     a = _a(t)
-    return _refuse(a, ("api_params", "method", "proxy", "base_url", "timeout", "retry_handlers"), "SlackAPIPostOperator"), [UNV.format(what="Slack workspace (a recording fake of the client was used)")]
+    return _refuse(a, ("api_params", "method", "proxy", "base_url", "timeout", "retry_handlers"), "SlackAPIPostOperator"), [UNV.format(what="Slack workspace (the real slack-sdk WebClient was run against a local HTTP server)")]
 
 
 def _slack_api_build(t, ex):
@@ -72,7 +72,7 @@ def _gcs_check(t):
         stubs.append("GCSDeleteObjectsOperator needs exactly one of objects or prefix")
     if ty == "GCSToLocalFilesystemOperator" and (a.get("store_to_xcom_key") or not a.get("filename")):
         stubs.append("GCSToLocalFilesystemOperator without a filename (it stores to XCom)")
-    return stubs, [UNV.format(what="GCS bucket (a recording fake client was used)")]
+    return stubs, [UNV.format(what="GCS bucket (the real google-cloud-storage client was run against a local fake of the JSON API)")]
 
 
 def _gcs_build(t, ex):
@@ -103,7 +103,7 @@ def _ssh_check(t):
     stubs = _refuse(a, ("remote_host", "conn_timeout", "banner_timeout", "environment"), "SSHOperator", SSH_DEFAULTS)         # ssh_hook is built by the operator from the connection id: not a refusal
     if callable(a.get("command")) or not isinstance(a.get("command"), (str, dict)):
         stubs.append("SSHOperator command is not a string")
-    return stubs, [UNV.format(what="SSH server (a recording fake connection was used)"), "the value is the command's stdout as text (Airflow pushes it base64-encoded)"] + (
+    return stubs, [UNV.format(what="SSH server (the real paramiko client was run against an in-process SSH server)"), "the value is the command's stdout as text (Airflow pushes it base64-encoded)"] + (
         ["get_pty is not applied"] if a.get("get_pty") else [])
 
 
@@ -121,7 +121,7 @@ def _docker_check(t):
                         "mem_limit", "cpus", "shm_size", "container_name", "hostname", "domainname", "ipc_mode", "log_opts"), "DockerOperator", DOCKER_DEFAULTS)
     if a.get("entrypoint") is not None and not isinstance(a.get("entrypoint"), (str, list)):
         stubs.append("DockerOperator entrypoint is not a string or list")
-    return stubs, [UNV.format(what="Docker daemon (a recording fake of the docker SDK was used)")] + (["auto_remove is applied as remove-after-run for 'success' and 'force'"] if a.get("auto_remove") in ("success", "force", True) else [])
+    return stubs, [UNV.format(what="Docker daemon (the real docker-py client was run against a fake Docker Engine API)")] + (["auto_remove is applied as remove-after-run for 'success' and 'force'"] if a.get("auto_remove") in ("success", "force", True) else [])
 
 
 def _docker_build(t, ex):
@@ -158,7 +158,7 @@ def _bq_check(t):
         extra = set(q) - {"query", "useLegacySql", "priority"}
         if extra or not isinstance(q.get("query"), str):
             stubs.append(f"BigQueryInsertJobOperator query settings {sorted(extra) or ['query (not a string)']} are not carried over")
-    return stubs, [UNV.format(what="BigQuery project (a recording fake client was used)"), "the value is the job id"]
+    return stubs, [UNV.format(what="BigQuery project (the real google-cloud-bigquery client was run against a local fake of the REST API)"), "the value is the job id"]
 
 
 def _bq_build(t, ex):
@@ -227,7 +227,7 @@ MORE_RUNTIME = '''
 def slack_api_post(resource, channel, text, username, icon_url, attachments, blocks):
     """chat.postMessage through the SlackResource's client (SlackAPIPostOperator calls the same Web API method)."""
     kw = {k: v for k, v in {"channel": channel, "text": text, "username": username, "icon_url": icon_url, "attachments": attachments, "blocks": blocks}.items() if v is not None}
-    resp = resource.get_client().chat_postMessage(**kw)
+    resp = af_client(resource).chat_postMessage(**kw)
     if not resp["ok"]:
         raise dg.Failure(description=f"Slack API error: {resp.get('error')}")
 
@@ -263,7 +263,7 @@ def s3_list_prefixes(client, bucket, prefix=None, delimiter=None):
 def gcs_upload(resource, src, dst, bucket, mime_type=None):
     """LocalFilesystemToGCSOperator: a file (or every file of a directory) to gs://bucket/dst."""
     import os
-    client = resource.get_client()
+    client = af_client(resource)
     b = client.bucket(bucket)
     if os.path.isdir(src):
         for root, _, files in os.walk(src):
@@ -275,17 +275,17 @@ def gcs_upload(resource, src, dst, bucket, mime_type=None):
 
 
 def gcs_download(resource, bucket, object_name, filename):
-    resource.get_client().bucket(bucket).blob(object_name).download_to_filename(filename)
+    af_client(resource).bucket(bucket).blob(object_name).download_to_filename(filename)
     return filename
 
 
 def gcs_list(resource, bucket, prefix=None, delimiter=None, match_glob=None):
     kw = {k: v for k, v in {"prefix": prefix, "delimiter": delimiter, "match_glob": match_glob}.items() if v}
-    return [b.name for b in resource.get_client().list_blobs(bucket, **kw)]
+    return [b.name for b in af_client(resource).list_blobs(bucket, **kw)]
 
 
 def gcs_delete(resource, bucket, objects=None, prefix=None):
-    client = resource.get_client()
+    client = af_client(resource)
     names = [objects] if isinstance(objects, str) else list(objects) if objects else [b.name for b in client.list_blobs(bucket, prefix=prefix)]
     for n in names:
         client.bucket(bucket).blob(n).delete()
@@ -293,7 +293,7 @@ def gcs_delete(resource, bucket, objects=None, prefix=None):
 
 def gcs_create_bucket(resource, bucket, location="US", project=None):
     """GCSCreateBucketOperator (name and location only): create the bucket; an existing bucket of that name is left as it is (the hook's `create_bucket` logs and continues on a conflict)."""
-    client = resource.get_client()
+    client = af_client(resource)
     try:
         client.create_bucket(bucket, location=location, project=project)
     except Exception as e:  # noqa: BLE001
@@ -303,7 +303,7 @@ def gcs_create_bucket(resource, bucket, location="US", project=None):
 
 def gcs_delete_bucket(resource, bucket, force=True):
     """GCSDeleteBucketOperator: delete the bucket (with its objects when `force`)."""
-    resource.get_client().bucket(bucket).delete(force=force)
+    af_client(resource).bucket(bucket).delete(force=force)
 
 
 def s3_create_bucket(client, bucket, region=None):
@@ -328,7 +328,7 @@ def s3_delete_bucket(client, bucket, force=False):
 
 
 def gcs_exists(resource, bucket, obj):
-    return resource.get_client().bucket(bucket).blob(obj).exists()
+    return af_client(resource).bucket(bucket).blob(obj).exists()
 
 
 def ssh_run(resource, command, timeout=None):
@@ -388,7 +388,7 @@ def bigquery_query(resource, sql, use_legacy_sql=True, priority=None, location=N
     """BigQueryInsertJobOperator with a query configuration: run the query and wait; the value is the job id."""
     from google.cloud import bigquery
     cfg = bigquery.QueryJobConfig(use_legacy_sql=use_legacy_sql, **({"priority": priority} if priority else {}))
-    with resource.get_client() as client:
+    with af_bq_client(resource) as client:
         job = client.query(sql, job_config=cfg, location=location, project=project)
         job.result()
         return job.job_id

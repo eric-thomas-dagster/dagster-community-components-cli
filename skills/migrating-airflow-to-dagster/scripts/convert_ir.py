@@ -48,6 +48,7 @@ from urllib.parse import urlparse
 import connections as CN
 import cosmos_ops as K
 import gen_tests as G
+import isolation_ops as IS
 import pattern_emit as PE
 import provider_ops as P
 import provider_ops_more
@@ -90,11 +91,11 @@ SHIM_IMPORTS = {(m, "WeekDay") for m in ("airflow.providers.standard.utils.weekd
     {("airflow.sdk.execution_time.context", "NEVER_EXPIRE"), ("airflow.configuration", "conf"), ("asgiref.sync", "sync_to_async")} | \
     {(m, n) for m in ("airflow.triggers.base", "airflow.sdk.triggers.base", "airflow.sdk") for n in ("BaseTrigger", "TriggerEvent", "StartTriggerArgs")}
 ELIDED = {"EmptyOperator", "DummyOperator", "LatestOnlyOperator", "ExternalTaskMarker"}      # nothing to run; LatestOnly and ExternalTaskMarker have no effect once schedules do not backfill
-ISOLATED = {"PythonVirtualenvOperator", "_PythonVirtualenvDecoratedOperator", "ExternalPythonOperator", "_PythonExternalDecoratedOperator"}   # a callable run in its own interpreter
+ISOLATED = IS.VENV | IS.EXTERNAL | set(IS.CONTAINER)           # a callable run in another environment (isolation_ops.py): in-process for a virtualenv, Pipes for the rest
 PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator", "_AssetMainOperator"} | ISOLATED      # _AssetMainOperator: an Airflow 3 @asset function
 BASH = {"BashOperator"}
 BASH_DEC = {"_BashDecoratedOperator"}
-ISOLATED_BRANCH = {"BranchExternalPythonOperator", "_BranchExternalPythonDecoratedOperator", "BranchPythonVirtualenvOperator", "_BranchPythonVirtualenvDecoratedOperator"}
+ISOLATED_BRANCH = IS.VENV_BRANCH | IS.EXTERNAL_BRANCH
 BRANCH = {"BranchPythonOperator", "_BranchPythonDecoratedOperator"} | ISOLATED_BRANCH
 SHORT = {"ShortCircuitOperator", "_ShortCircuitDecoratedOperator"}
 TRIGGER = {"TriggerDagRunOperator"}          # launches another converted DAG's job and waits for it (wait_for_completion=True)
@@ -930,7 +931,7 @@ HINTS: dict[str, dict[str, Any]] = {
     "SnowflakeOperator": {"official": "dagster-snowflake SnowflakeResource", "registry": ["snowflake_resource", "snowflake_stored_procedure_call_asset"], "gap": "no run-SQL-statements asset (multi-statement split, USE overrides)"},
     "SQLExecuteQueryOperator": {"official": "dagster-snowflake SnowflakeResource (Snowflake connections)", "registry": ["snowflake_resource"], "gap": "no run-SQL-statements asset"},
     "KubernetesPodOperator": {"official": "dagster-k8s execute_k8s_job (PipesK8sClient needs a container that speaks the Pipes protocol)", "registry": ["k8s_job_asset"],
-                              "gap": "k8s_job_asset has no args, labels, node selector or kubeconfig fields; the converter calls execute_k8s_job itself"},
+                              "gap": "0.10.194's k8s_job_asset has args, labels, node selector, tolerations, affinity, kubeconfig and use_pipes fields, but the converter does not route to it yet: it calls execute_k8s_job itself"},
     "SimpleHttpOperator": {"registry": ["http_external_asset", "http_webhook_job", "http_resource"], "gap": "no component returns the response body as the asset value; the converter calls requests itself"},
     "HttpOperator": {"registry": ["http_external_asset", "http_webhook_job", "http_resource"], "gap": "no component returns the response body as the asset value; the converter calls requests itself"},
     "HttpSensor": {"registry": ["http_poll_sensor"], "gap": "http_poll_sensor starts a run when a response changes; it does not hold a pipeline step open until an endpoint answers"},
@@ -945,8 +946,9 @@ HINTS: dict[str, dict[str, Any]] = {
     "TriggerDagRunOperator": {"registry": ["asset_to_job_trigger_sensor"], "gap": "usually an asset dependency or automation condition instead"},
     "ExternalTaskSensor": {"registry": [], "gap": "usually an asset dependency; no sensor component for a task state in another job"},
     "TimeSensor": {"registry": [], "gap": "no time-of-day wait component; usually a schedule"},
-    "PythonVirtualenvOperator": {"official": "Dagster Pipes (PipesSubprocessClient)", "registry": [], "gap": "no run-a-callable-in-a-virtualenv component"},
-    "ExternalPythonOperator": {"official": "Dagster Pipes (PipesSubprocessClient)", "registry": [], "gap": "no run-a-callable-in-a-virtualenv component"},
+    "PythonVirtualenvOperator": {"official": "no equivalent: Dagster has no per-step virtualenv built at run time (code locations, Dagster Pipes on a pre-built interpreter, or a container per step isolate dependencies)", "registry": [],
+                                 "gap": "converted in-process in the project's environment with its requirements added to converted_requirements.txt (isolation_ops.py)"},
+    "ExternalPythonOperator": {"official": "Dagster Pipes (PipesSubprocessClient)", "registry": [], "gap": "no run-a-callable-on-a-given-interpreter component; converted through PipesSubprocessClient with a generated script (isolation_ops.py)"},
 }
 
 
@@ -1418,6 +1420,8 @@ def sla_wrap(body: str, t: dict[str, Any], key: str) -> str:
 COMPONENT_TASKS = {"BashOperator", "EmptyOperator", "DummyOperator", "DockerOperator"} | {"PythonOperator", "_PythonDecoratedOperator"} | {"BashSensor", "TimeSensor"}
 # Service-calling operators are NOT asset components here: each is an asset in `defs/<dag>_steps.py` that calls a resource in plain Python (see registry_map.py).
 STEP_TASKS = (S3_OPS | PROV_STEPS | {"SqlQuery"} | RM.PLAN_ONLY_TYPES | RM.SENSOR_PLAN_TYPES) - {"DockerOperator"}
+CONTAINER_COMPONENTS = {"DockerOperator": ("DockerContainerAssetComponent", lambda t, a: RM.docker_container_attrs(t, a), "dagster-docker"),
+                        "KubernetesPodOperator": ("K8sJobAssetComponent", lambda t, a: RM.k8s_job_attrs(t, a), "dagster-k8s")}
 REG_RESOURCES: dict[str, tuple[str, dict[str, Any]]] = {}      # resource key -> (registry component type, attributes), written once to defs/registry_resources/defs.yaml
 
 
@@ -1430,6 +1434,23 @@ def _plain(v: Any) -> bool:
     if isinstance(v, (list, tuple)):
         return all(_plain(x) for x in v)
     return True
+
+
+def _loader_safe(v: Any) -> Any:
+    """dagster's component loader runs `ast.literal_eval` on every string attribute it reads, so the quoted YAML string "1" (an environment value, a CPU limit, a text argument) reaches a `str`
+    field as the int 1 and fails validation (found by loading the generated component with the real loader). A string that evaluates to anything is written as its Python literal, which
+    evaluates back to exactly the string; other strings (including templates like `{{ env.X }}`) are written as they are."""
+    if isinstance(v, str):
+        try:
+            ast.literal_eval(v)
+        except (ValueError, SyntaxError, MemoryError, RecursionError):
+            return v
+        return repr(v)
+    if isinstance(v, dict):
+        return {k: _loader_safe(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_loader_safe(x) for x in v]
+    return v
 
 
 def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> tuple[dict[str, str], dict[str, Any]] | None:
@@ -1476,7 +1497,7 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     uses_os = False
 
     def doc(typ: str, attrs: dict[str, Any]) -> None:
-        docs.append(f"type: dagster_community_components.{typ}\nattributes:\n" + "\n".join(f"  {k}: {json.dumps(v)}" for k, v in attrs.items() if v is not None))
+        docs.append(f"type: dagster_community_components.{typ}\nattributes:\n" + "\n".join(f"  {k}: {json.dumps(_loader_safe(v))}" for k, v in attrs.items() if v is not None))
 
     for t in real:
         tid, ty, tf = t["task_id"], t["type"], t["template_fields"]
@@ -1489,6 +1510,13 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
             attrs["retry_policy_max_retries"] = int(t["retries"])
             attrs["retry_policy_delay_seconds"] = retry_delay_s(t)
             attrs["retry_policy_backoff"] = "exponential" if t.get("retry_exponential_backoff") else "linear"
+        container, container_why = None, None                      # a container to completion is a job: an asset component when the component can carry every argument, else the plain-Python shim
+        if ty in CONTAINER_COMPONENTS:
+            comp_, build_, req_ = CONTAINER_COMPONENTS[ty]
+            try:
+                container = build_(t, P._a(t))
+            except RM.NoPlan as e:
+                container_why = str(e)
         if ty == "BashOperator":
             cmd = (t.get("template_files") or {}).get("bash_command") or tf.get("bash_command")
             env, cwd = tf.get("env"), tf.get("cwd")
@@ -1512,9 +1540,24 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
             attrs.update(asset_key=aname[tid], callable_path=f"{pkg}.callables.{name}:{fn}", args=t.get("op_args") or None, kwargs=t.get("op_kwargs") or None,
                          timeout_seconds=None)
             doc("PythonCallableAssetComponent", attrs)
-        elif ty in STEP_TASKS:                                    # a service call: an asset in defs/<dag>_steps.py that calls a resource in plain Python
+        elif container is not None:                               # registry component docker_container_asset / k8s_job_asset
+            comp_, _, req_ = CONTAINER_COMPONENTS[ty]
+            attrs.update({k: v for k, v in container[0].items() if v is not None})
+            if t.get("execution_timeout_s") and ty == "KubernetesPodOperator":
+                attrs["timeout_seconds"] = min(int(t["execution_timeout_s"]), attrs.get("timeout_seconds") or 10 ** 9)
+            doc(comp_, attrs)
+            step_reqs.add(req_)
+            step_caveats += [{"task": tid, "kind": "degraded", "reason": f"registry component {RM.COMPONENT_IDS[comp_]}: {c}"} for c in container[1]]
+            step_caveats.append({"task": tid, "kind": "degraded", "reason": f"registry component {RM.COMPONENT_IDS[comp_]} " + (
+                "was run with the real execute_k8s_job (it builds the real Job) against a recording fake of the cluster calls, not a live cluster: check it against yours" if ty == "KubernetesPodOperator" else
+                "was run with the real execute_docker_container and docker-py against a fake Docker Engine API, not a live daemon: check it against yours")})
+        elif ty in STEP_TASKS or ty == "DockerOperator":          # a service call: an asset in defs/<dag>_steps.py that calls a resource in plain Python
             a_ = RM.prepare_args(t, P._a(t))
-            if t.get("execution_timeout_s") or not _plain([a_, tf]):
+            try:
+                plain_view = [P.k8s_obj(a_), P.k8s_obj(tf)] if ty == "KubernetesPodOperator" else [a_, tf]       # a Kubernetes object is recorded as its repr: the shim reads it back
+            except ValueError:
+                return None
+            if t.get("execution_timeout_s") or not _plain(plain_view):
                 return None
             ex_ = lambda v: expr(v, {}, None)
             try:
@@ -1547,6 +1590,8 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
                     step_reqs.update(P.REQUIREMENTS.get(pv.kind, []))
                     stmt, keys_, kind_ = pv.stmt, ({pv.conn} if pv.resource else set()), pv.kinds_tag
                     step_caveats += [c for c in summary.get("caveats") or [] if c.get("task") == tid]
+                    if container_why:                             # an operator with a registry component, but not for these arguments
+                        step_caveats.append({"task": tid, "kind": "degraded", "reason": f"registry component {RM.COMPONENT_IDS[CONTAINER_COMPONENTS[ty][0]]} not used for this task: {container_why}; the plain-Python call in resources.py / runtime.py carries it"})
                     if no_plan:                                   # the operator has a registry resource, but not for these arguments: the plain-Python shim carries the call, and the report says why
                         step_caveats.append({"task": tid, "kind": "degraded", "reason": f"registry resource not used for this task: {no_plan}; the plain-Python call in resources.py / runtime.py carries it"})
             except Defer:
@@ -1559,16 +1604,6 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
             step_fns.append(f"@dg.asset(key=dg.AssetKey({aname[tid]!r}), group_name={name!r}, deps=[{', '.join(f'dg.AssetKey({u!r})' for u in ups)}], "
                             f"required_resource_keys={('{' + ', '.join(repr(k) for k in sorted(keys_)) + '}') if keys_ else 'set()'}, kinds={{{kind_!r}}}{retry})\n"
                             f"def {safe(aname[tid])}(context: dg.AssetExecutionContext):\n" + "".join(f"    {ln}\n" for ln in stmt.split("\n")) + "    return None\n")
-        elif ty == "DockerOperator":                              # registry component docker_container_asset: a container run to completion is a job, not a service call
-            a_ = P._a(t)
-            if P.handler_for(t).check(t)[0] or not _plain(a_):
-                return None
-            import shlex
-            if any(a_.get(k) for k in ("user", "working_dir", "entrypoint", "tty", "force_pull", "auto_remove")) or not isinstance(a_.get("image"), str):
-                return None
-            cmd_ = a_.get("command")
-            attrs.update(image=a_["image"], command=(shlex.split(cmd_) if isinstance(cmd_, str) else cmd_) or None, env_vars=a_.get("environment") or None, network=a_.get("network_mode") or None)
-            doc("DockerContainerAssetComponent", attrs)
         elif ty in ("BashSensor", "TimeSensor"):                 # wait_until_asset
             sn = t.get("sensor") or {}
             attrs.update(poll_seconds=sn.get("poke_interval"), timeout_seconds=sn.get("timeout"))
@@ -2198,6 +2233,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
 
     # pre-pass: which callables need the Airflow context, which tasks pull upstream values (ti.xcom_pull), which templates need dates
     resolved: dict[str, tuple[str, list[str], dict[str, Any]]] = {}
+    iso_files: dict[str, str] = {}                                     # wrapper scripts of Pipes tasks, by path relative to the package (written next to runtime.py)
+    isolation: dict[str, dict[str, Any]] = {}                          # task -> isolation_ops plan (virtualenv in-process, or Pipes), set while the callables are resolved
     ctx_tasks: set[str] = set()
     ti_inputs: dict[str, list[str]] = {}
     for t in real:
@@ -2214,9 +2251,24 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 code, sup = resolve_operator_class(t.get("operator_class"), shims_used, meta)
                 resolved[tid] = (code, sup, meta)
                 ctx_tasks.add(tid)
+            elif ty in ISOLATED | ISOLATED_BRANCH and IS.kind_of(ty) != "venv":       # a function run through Pipes: a standalone script, so it may not use the runtime's shims
+                local_shims: set[str] = set()
+                code, sup = resolve_callable(t.get("callable"), local_shims, meta)
+                if local_shims:
+                    raise Defer(f"{ty}: the callable uses Airflow names that only the converter's runtime provides {sorted(local_shims)}, which a separate environment does not have")
+                if ppart or pplan:
+                    raise Defer(f"{ty}: a task run in another environment is not wired into a partitioned or runtime-mapped DAG")
+                try:
+                    iso = IS.plan(t, tid, dag["dag_id"], code, sup, meta)
+                except ValueError as e:
+                    raise Defer(str(e)) from e
+                isolation[tid] = iso
+                resolved[tid] = (code, sup, meta)
             elif ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
                 code, sup = resolve_callable(t.get("callable"), shims_used, meta)
                 resolved[tid] = (code, sup, meta)
+                if ty in ISOLATED | ISOLATED_BRANCH:                     # a virtualenv task: no equivalent in Dagster, so it runs in the project's environment
+                    isolation[tid] = IS.plan(t, tid, dag["dag_id"], code, sup, meta)
         except Defer as e:
             if CAVEATS == "off" or is_custom(t):          # a custom operator class is built and called as a whole; no stub shape yet
                 raise
@@ -2229,6 +2281,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         if meta.get("needs_xcom") or {"ti", "task_instance"} & names:
             ti_inputs[tid] = [u for u in ancestors(tid) if u in keyparts]      # xcom_pull may name any task that ran before
             consumed |= set(ti_inputs[tid])
+    iso_reqs: dict[str, list[str]] = {}                               # virtualenv task -> its requirements (they join the project's)
+    for tid_, iso_ in isolation.items():
+        for c_ in iso_["caveats"]:
+            soften(c_, tid_)
+        notes.extend(iso_["notes"])
+        if iso_["requirements"]:
+            iso_reqs[tid_] = iso_["requirements"]
+    if iso_reqs:                                                       # requirements that cannot live in one environment, or that clash with Dagster's own
+        for msg_ in IS.req_conflicts([(f"{dag['dag_id']}.{k_}", r_) for k_, v_ in iso_reqs.items() for r_ in v_], IS.dagster_requirements()):
+            soften(f"{msg_}: Dagster runs these tasks in ONE environment (there is no per-task virtualenv), so move one of them to a separate Dagster code location "
+                   "(its own environment or container) or run it on a pre-built interpreter with Dagster Pipes", "")
     map_fns: dict[str, list[str]] = {}                                # mapped task -> names of its `.map(f)` functions, in source order
     map_blocks: list[str] = []
     for tid, m_ in ((gplan or {}).get("mapped") or {}).items():
@@ -2503,29 +2566,26 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 body = ctx_line + sensor_body(t, params, ctxn)
             elif ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL:
                 code, sup, meta = resolved[tid]
-                for sline in sup:
-                    support.setdefault(sline, len(support))
+                iso = isolation.get(tid)
                 pyname = "_af_" + safe(tid)
-                ops.append(re.sub(r"^(async\s+)?def\s+\w+", lambda mm: f"{mm.group(1) or ''}def {pyname}", code, count=1) + "\n")
-                if meta.get("async"):
-                    ops.append(f"{pyname} = af_sync({pyname})\n")
-                for run_, cond_ in meta.get("conds") or []:
-                    ops.append(f"{pyname} = af_run_if({pyname}, {cond_}, run={run_!r})\n")
-                if ty in ISOLATED | ISOLATED_BRANCH and not code.startswith("def _stub"):
-                    ia, itf = t.get("args") or {}, t.get("template_fields") or {}
-                    reqs = itf.get("requirements") if isinstance(itf, dict) else None
-                    cfg = {"requirements": reqs if reqs else None, "python": itf.get("python") if isinstance(itf, dict) else None,
-                           "python_version": ia.get("python_version"), "system_site_packages": bool(ia.get("system_site_packages")),
-                           "pip_options": ia.get("pip_install_options"), "index_urls": ia.get("index_urls"), "env_vars": ia.get("env_vars"),
-                           "inherit_env": ia.get("inherit_env", True), "support": list(sup)}
-                    cfg = {k: v for k, v in cfg.items() if v not in (None, [], False) or k == "inherit_env"}
-                    ops.append(f"{pyname} = af_isolated({pyname}, **{cfg!r})\n")
-                    if cfg.get("python"):
-                        notes.append(f"{tid}: runs with the interpreter {cfg['python']!r} from the Airflow DAG; point `python` at one that exists where Dagster runs")
+                if iso and iso["spec"] is not None:                    # run through Pipes: the function lives in a script, the op only calls the client
+                    iso_files[iso["script"][0]] = iso["script"][1]
+                    ops.append(f"_AF_PIPES_{safe(tid)} = {iso['spec']!r}\n")
+                else:
+                    for sline in sup:
+                        support.setdefault(sline, len(support))
+                    ops.append(re.sub(r"^(async\s+)?def\s+\w+", lambda mm: f"{mm.group(1) or ''}def {pyname}", code, count=1) + "\n")
+                    if meta.get("async"):
+                        ops.append(f"{pyname} = af_sync({pyname})\n")
+                    for run_, cond_ in meta.get("conds") or []:
+                        ops.append(f"{pyname} = af_run_if({pyname}, {cond_}, run={run_!r})\n")
+                    if iso and iso["env_vars"]:
+                        ops.append(f"{pyname} = af_with_env({pyname}, {iso['env_vars']!r})\n")
                 if m:
                     kw = f"{{**{m['fixed']!r}, **combo.get('op_kwargs', {{}})}}" if m["mode"] == "opargs" else f"{{**{m['fixed']!r}, **combo}}"
                     posl = "list(item)" if m["mode"] == "args" else "list(combo.get('op_args', ()))" if m["mode"] == "opargs" else "[]"
                     inner = (f"call_with_context({pyname}, {posl}, {kw}, ctx)" if meta.get("needs_ctx")
+                             else f"af_pipes_run(context, _AF_PIPES_{safe(tid)}, {posl}, {kw}, op=True)" if iso and iso["spec"] is not None
                              else f"{pyname}(*{posl}, **{kw})")
                 else:
                     try:
@@ -2535,7 +2595,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                             kws["templates_dict"] = expr(t["template_fields"]["templates_dict"], params, ctxn)      # rendered templates handed to the callable
                         asset_fn_kwargs(t, kws)
                         inner = (f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
-                                 if meta.get("needs_ctx") else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
+                                 if meta.get("needs_ctx") else
+                                 f"af_pipes_run(context, _AF_PIPES_{safe(tid)}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, op=True)" if iso and iso["spec"] is not None
+                                 else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
                     except Defer as e:
                         if CAVEATS == "off":
                             raise
@@ -2637,7 +2699,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 body = ("    def _run():\n" + inner_lines +
                         f"\n    return af_guard(context, _run, {int(t['retries'] or 0)}, {retry_delay_s(t)})")
             body = sla_wrap(body, t, "/".join(keyparts[tid]))
-            ops.append("@dg.op(" + ", ".join(deco) + ")\ndef " + fname + "(" + ", ".join(sig) + "):\n" + prefix + body + "\n")
+            typed = "@af_typed_result\n" if (isolation.get(tid) or {}).get("spec") is not None else ""      # a Pipes session was opened in this op
+            ops.append("@dg.op(" + ", ".join(deco) + ")\n" + typed + "def " + fname + "(" + ", ".join(sig) + "):\n" + prefix + body + "\n")
             if m:                                                       # the fan-out op, then the mapped op
                 lit_names = [n for n, v in m["srcs"].items() if v[0] == "lit"]
                 srcs = list(m["srcs"].items())
@@ -2950,12 +3013,22 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             ret_none = False
         elif ty in PY_TASKS | BASH_DEC | SENSOR_CALL:
             code, sup, meta = resolved[tid]
-            for sline in sup:
-                support.setdefault(sline, len(support))
+            iso = isolation.get(tid)
+            pipes_ = bool(iso and iso["spec"] is not None)
             pyname = "_af_" + safe(tid)
-            code = re.sub(r"^(async\s+)?def\s+\w+", lambda mm: f"{mm.group(1) or ''}def {pyname}", code, count=1)
-            if meta.get("async"):
-                code += f"\n\n\n{pyname} = af_sync({pyname})"
+            if pipes_:
+                ret_none = False                                        # the asset returns the Pipes result (an Output or a MaterializeResult), never a bare None
+            if pipes_:                                                  # run through Pipes: the function lives in a script, the asset only calls the client
+                iso_files[iso["script"][0]] = iso["script"][1]
+                code = f"_AF_PIPES_{safe(tid)} = {iso['spec']!r}"
+            else:
+                for sline in sup:
+                    support.setdefault(sline, len(support))
+                code = re.sub(r"^(async\s+)?def\s+\w+", lambda mm: f"{mm.group(1) or ''}def {pyname}", code, count=1)
+                if meta.get("async"):
+                    code += f"\n\n\n{pyname} = af_sync({pyname})"
+                if iso and iso["env_vars"]:
+                    code += f"\n\n\n{pyname} = af_with_env({pyname}, {iso['env_vars']!r})"
             arg_caveat = ""
             try:
                 pos = [expr(a, params, ctxn) for a in (t.get("op_args") or [])]
@@ -2974,6 +3047,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             is_producer = bool(pplan and pplan.get("producer") == tid)
             if meta.get("needs_ctx"):
                 inner = f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
+            elif pipes_:
+                inner = (f"af_pipes_run(context, _AF_PIPES_{safe(tid)}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}"
+                         + ("" if (tid in consumed or RETURN_ALL) else ", keep=False") + ")")
             else:
                 inner = f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")"
             if arg_caveat:
@@ -3000,7 +3076,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                         "    return result")
                 deco.append("kinds={'python'}")
             else:
-                body = ctx_line + (f"    return {inner}" if not ret_none else f"    {inner}")
+                body = ctx_line + (f"    return {inner}" if not ret_none or pipes_ else f"    {inner}")
                 deco.append("kinds={'python'}")
         elif ty in COSMOS_STEP:
             cs = t["cosmos_step"]
@@ -3269,8 +3345,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "provider_connections": dict(sorted(prov_conns.items())), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "catalog_keys": [list(v) for v in rt_outlets.values()], "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
-                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"babel"} if any("ds_format_locale" in json.dumps(task_templates(t), default=str) for t in tasks.values()) else set()) | ({"universal-pathlib"} if "ObjectStoragePath" in shims_used or any("object_storage_path" in json.dumps(t, default=str) for t in tasks.values()) else set()) | prov_reqs | cosmos_reqs | ({"dagster-community-components"} if any(k != "on_execute_callback" for v_ in cb_code.values() for k, _ in v_) or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | {r_ for v_ in iso_reqs.values() for r_ in v_} | {r_ for v_ in isolation.values() for r_ in v_.get("extra_requirements", [])} | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"babel"} if any("ds_format_locale" in json.dumps(task_templates(t), default=str) for t in tasks.values()) else set()) | ({"universal-pathlib"} if "ObjectStoragePath" in shims_used or any("object_storage_path" in json.dumps(t, default=str) for t in tasks.values()) else set()) | prov_reqs | cosmos_reqs | ({"dagster-community-components"} if any(k != "on_execute_callback" for v_ in cb_code.values() for k, _ in v_) or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
                  "cosmos": cosmos_out, "cosmos_steps": cosmos_steps, "cosmos_files": cosmos_files,
+                 "isolated": {k_: {"kind": v_["kind"], "requirements": v_["requirements"], **({"python_env": v_["spec"].get("python_env"), "python": v_["spec"].get("python")} if v_["spec"] and v_["spec"]["kind"] == "external" else {}),
+                                   **({"script": v_["script"][0]} if v_["script"] else {})} for k_, v_ in isolation.items()},
+                 "external_files": iso_files,
                  "cosmos_tasks": {m: ["/".join(k) for k in c["keys"]] for c in cosmos_clusters for m in c["members"]},
                  "cosmos_sinks": {m: ["/".join(k) for k in c["sink_keys"]] for c in cosmos_clusters for m in c["members"]},
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
@@ -4372,69 +4451,6 @@ def af_guard(context, run, retries, delay):
         return Failed(f"{type(e).__name__}: {str(e)[:300]}")
 
 
-def af_isolated(fn, requirements=None, python=None, python_version=None, system_site_packages=False, pip_options=None, index_urls=None,
-                env_vars=None, inherit_env=True, support=()):
-    """PythonVirtualenvOperator / ExternalPythonOperator: run the callable in its own interpreter and return its pickled result.
-    With `python` that interpreter is used; otherwise a virtualenv with `requirements` is built once and reused."""
-    import hashlib
-    import inspect
-    import os
-    import pickle
-    import shutil
-    import subprocess
-    import sys
-    import tempfile
-    import textwrap
-    NL = chr(10)
-    src = textwrap.dedent(inspect.getsource(fn))
-    name = fn.__name__
-
-    def interpreter():
-        if python:                                                  # the verified venv pattern: a missing interpreter fails loudly, never the current one
-            if not (os.path.exists(python) or shutil.which(python)):
-                raise dg.Failure(description=f"the interpreter for this task's virtualenv ({python!r}) is missing; build it and point `python` at it: not falling back to the current interpreter")
-            return python
-        reqs = [requirements] if isinstance(requirements, str) else list(requirements or [])
-        key = hashlib.sha256(repr((reqs, python_version, system_site_packages, pip_options, index_urls)).encode()).hexdigest()[:16]
-        root = os.path.join(os.environ.get("AF_VENV_CACHE", os.path.join(tempfile.gettempdir(), "af_venvs")), key)
-        py = os.path.join(root, "bin", "python")
-        if os.path.exists(py):
-            return py
-        uv = shutil.which("uv")
-        if uv:
-            cmd = [uv, "venv", root] + (["--python", str(python_version)] if python_version else []) + (["--system-site-packages"] if system_site_packages else [])
-        else:
-            cmd = [sys.executable, "-m", "venv", root] + (["--system-site-packages"] if system_site_packages else [])
-        subprocess.run(cmd, check=True, capture_output=True)
-        if reqs:
-            opts = (pip_options if isinstance(pip_options, list) else str(pip_options or "").split()) + sum([["--index-url" if i == 0 else "--extra-index-url", u] for i, u in enumerate(index_urls or [])], [])
-            cmd = [uv, "pip", "install", "--python", py] + opts + reqs if uv else [py, "-m", "pip", "install"] + opts + reqs
-            done = subprocess.run(cmd, capture_output=True, text=True)
-            if done.returncode:
-                shutil.rmtree(root, ignore_errors=True)
-                raise dg.Failure(description="could not build the virtualenv: " + done.stderr[-2000:])
-        return py
-
-    def run(*args, **kwargs):
-        py = interpreter()
-        with tempfile.TemporaryDirectory() as d:
-            with open(os.path.join(d, "in.pkl"), "wb") as f:
-                pickle.dump((list(args), dict(kwargs)), f)
-            script = NL.join([*support, src, "import pickle, sys", "args, kwargs = pickle.load(open(sys.argv[1], 'rb'))",
-                              f"result = {name}(*args, **kwargs)", "pickle.dump(result, open(sys.argv[2], 'wb'))", ""])
-            with open(os.path.join(d, "run.py"), "w") as f:
-                f.write(script)
-            env = {**(os.environ if inherit_env else {}), **(env_vars or {})}
-            done = subprocess.run([py, os.path.join(d, "run.py"), os.path.join(d, "in.pkl"), os.path.join(d, "out.pkl")], capture_output=True, text=True, env=env)
-            if done.stdout:
-                print(done.stdout)
-            if done.returncode:
-                raise dg.Failure(description=f"{name} failed in its own interpreter ({py}): " + done.stderr[-3000:])
-            with open(os.path.join(d, "out.pkl"), "rb") as f:
-                return pickle.load(f)
-    return run
-
-
 def af_sla_check(context, seconds, key):
     """Airflow's task `sla`: the task should finish within `seconds` of the scheduled time (the schedule tick). A miss is recorded as an observation on the asset;
     the task is not stopped. A run without a scheduler tick (a manual launch) is measured from the run's start."""
@@ -5051,6 +5067,7 @@ RUNTIME += ITEM_SRC + GATE_SRC
 
 RUNTIME += P.PROVIDER_RUNTIME
 RUNTIME += K.RUNTIME
+RUNTIME += IS.RUNTIME
 # depends_on_past: the library's VERIFIED step-event check, embedded from reference/rewrite-patterns/depends_on_past.py (index.json is read now, so a refined library is picked up);
 # `previous_run_failed` is the library's own function, the wrapper only turns it into Airflow's wording.
 DOP_GUARD = PE.status("depends_on_past", "STEP_FAILURE") == "VERIFIED"      # emitted only while the library still says VERIFIED; otherwise the old degraded caveat
@@ -5125,6 +5142,7 @@ def main(argv: list[str] | None = None) -> int:
             "(trigger timetable) and Airflow 2 (data-interval timetable).")
     report: dict[str, Any] = {"airflow_version": ir.get("airflow_version"), "dataset_keys": DATASET_KEYS, "dags": {}}
     produced: dict[str, str] = {}
+    IS.reset()
     resources: set[str] = set()
     sf_resources: set[str] = set()
     prov_conns: dict[str, str] = {}
@@ -5139,6 +5157,12 @@ def main(argv: list[str] | None = None) -> int:
                 dest.parent.mkdir(parents=True, exist_ok=True)
                 dest.write_text(text)
             summary = {**summary, "cosmos_files": sorted((summary.get("cosmos_files") or {}))}
+            for rel, text in (summary.get("external_files") or {}).items():          # wrapper scripts of tasks run through Pipes (external_python/<dag>__<task>.py), next to runtime.py
+                compile(text, rel, "exec")
+                dest = a.out_dir.parent / rel
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_text(text)
+            summary = {**summary, "external_files": sorted((summary.get("external_files") or {}))}
             comp = component_files(dag, summary, a.out_dir.parent.name) if OUTPUT == "components" and not summary.get("cosmos") and not summary.get("cosmos_steps") else None
             if comp:
                 files, over = comp
@@ -5243,6 +5267,16 @@ def main(argv: list[str] | None = None) -> int:
                 "pools:\n" + "".join(f"  {k}: {n if n is not None else 'null  # set to the slot count of this Airflow pool (it lives in the Airflow metadata database)'}\n"
                                        for k, n in sorted(pools.items())))
         (a.out_dir.parent / "concurrency_limits.yaml").write_text(text)
+    iso_by_task = {f"{k}.{tk}": v["isolated"][tk]["requirements"] for k, v in report["dags"].items() if v["status"] == "converted" for tk in v.get("isolated") or {} if v["isolated"][tk]["requirements"]}
+    dags_of = {lbl: lbl.split(".")[0] for lbl in iso_by_task}
+    cross = [m for m in IS.req_conflicts([(lbl, r) for lbl, rs in iso_by_task.items() for r in rs], IS.dagster_requirements())]
+    if len({d for d in dags_of.values()}) > 1 and cross:       # the same check over every DAG of the project: pins that clash across DAGs
+        report["dependency_conflicts"] = cross
+        for k, v in report["dags"].items():
+            if v["status"] == "converted" and any(lbl.startswith(k + ".") for lbl in iso_by_task):
+                for m in cross:
+                    if k + "." in m and not any(m.split(":")[0] in c.get("reason", "") for c in v["caveats"]):
+                        v["caveats"].append({"task": "", "kind": "degraded", "reason": f"{m} (across the converted DAGs: one project environment holds every requirement): move one of them to a separate Dagster code location, or run it on a pre-built interpreter with Dagster Pipes"})
     reqs = sorted({r for v in report["dags"].values() if v["status"] == "converted" for r in v["requirements"]})
     if reqs:
         (a.out_dir.parent / "converted_requirements.txt").write_text("\n".join(reqs) + "\n")

@@ -35,7 +35,7 @@ ANNOUNCED_NOT_VERIFIED: list[str] = []
 OPERATOR_MAP: list[dict[str, str]] = [
     {"operator": "BashOperator", "shape": "asset", "verdict": "keep asset component", "uses": "shell_command_asset", "why": "runs a command that produces files: a job, not a service call"},
     {"operator": "PythonOperator, @task", "shape": "asset", "verdict": "keep asset component", "uses": "python_callable_asset", "why": "the user's own callable is the asset"},
-    {"operator": "DockerOperator", "shape": "asset", "verdict": "keep asset component", "uses": "docker_container_asset", "why": "a container run to completion is a long-running job"},
+    {"operator": "DockerOperator", "shape": "asset", "verdict": "keep asset component", "uses": "docker_container_asset", "why": "a container run to completion is a long-running job; entrypoint, user, working_dir, tty, mem_limit, shm_size, hostname, cpus ... travel as `container_kwargs`; mounts, ports, force_pull, auto_remove, container_name keep the plain-Python shim", "run": "RUN 0.10.194 (real execute_docker_container and docker-py against a fake Docker Engine API)"},
     {"operator": "BashSensor, TimeSensor", "shape": "asset", "verdict": "keep asset component", "uses": "wait_until_asset", "why": "holds a step open; no service call"},
     {"operator": "schedule", "shape": "asset", "verdict": "keep component", "uses": "CronScheduleComponent", "why": "schedules are not assets"},
     {"operator": "HttpOperator, SimpleHttpOperator", "shape": "resource", "verdict": "move to resource + plain Python", "uses": "http_resource", "why": "an HTTP call (`request`, GET data as `params`)", "run": "RUN 0.10.194"},
@@ -65,7 +65,8 @@ OPERATOR_MAP: list[dict[str, str]] = [
      "why": "the component is self-hosted `/api/v1/` basic auth only (an Airbyte Cloud connection cannot be told from the IR) and does not wait unless wait_for_completion is set, where Airflow waits by default"},
     {"operator": "Cosmos per-task dbt operators, DbtRunOperator", "shape": "plain", "verdict": "existing Cosmos path (dagster-dbt DbtCliResource), not dbt_command_resource", "uses": "cosmos_ops.py",
      "why": "dbt_command_resource has no counterpart for Cosmos profile_mapping and the DbtCliResource path is already run; it would add nothing but lose the profile"},
-    {"operator": "KubernetesPodOperator, other provider operators", "shape": "plain", "verdict": "plain Python (existing shims)", "uses": "provider_ops.py handlers", "why": "no registry resource fits"},
+    {"operator": "KubernetesPodOperator", "shape": "asset", "verdict": "keep asset component", "uses": "k8s_job_asset", "why": "a pod run to completion is a job; command, args, env, labels, node_selector, tolerations, affinity, volumes, kubeconfig and context travel; a template, a secret-valued env var, resource requests or the default kubeconfig keep the plain-Python shim", "run": "RUN 0.10.194 (real execute_k8s_job against a recording fake of the cluster calls)"},
+    {"operator": "other provider operators", "shape": "plain", "verdict": "plain Python (existing shims)", "uses": "provider_ops.py handlers", "why": "no registry resource fits"},
 ]
 
 
@@ -76,6 +77,7 @@ RESOURCE_TYPE_IDS = {"HTTPResourceComponent": "http_resource", "DatabricksJobsRe
                      "SQLUrlResourceComponent": "sql_url_resource", "EmrResourceComponent": "emr_resource", "DataprocResourceComponent": "dataproc_resource",
                      "PubsubResourceComponent": "pubsub_resource", "AthenaResourceComponent": "athena_resource", "RedshiftDataApiResourceComponent": "redshift_data_api_resource",
                      "BigQueryDdlResourceComponent": "bigquery_ddl_resource"}
+COMPONENT_IDS = {"DockerContainerAssetComponent": "docker_container_asset", "K8sJobAssetComponent": "k8s_job_asset"}      # asset components the converter emits (registry id)
 # operators with a resource plan but no plain-Python handler: with no plan (an argument the resource cannot carry) the DAG keeps the Python route, where the task is a stub
 PLAN_ONLY_TYPES = {"EmrAddStepsOperator", "EmrCreateJobFlowOperator", "EmrTerminateJobFlowOperator", "AthenaOperator", "RedshiftDataOperator",
                    "DataprocCreateClusterOperator", "DataprocDeleteClusterOperator", "DataprocSubmitJobOperator", "DataprocCreateBatchOperator",
@@ -1033,3 +1035,115 @@ def plan_or_reason(t: dict[str, Any], ex: Callable[[Any], str]) -> tuple[Plan | 
 def plan_for(t: dict[str, Any], ex: Callable[[Any], str]) -> Plan | None:
     """The resource plan of a task, or None when the operator has none or its arguments need something the resource cannot do."""
     return plan_or_reason(t, ex)[0]
+
+
+# ---------------------------------------------------------------------------------------------------------------------
+# Asset components for containers: docker_container_asset and k8s_job_asset (registry 0.10.194)
+# ---------------------------------------------------------------------------------------------------------------------
+# Both run a container to completion, so both stay ASSET components (a job, not a service call). The builders return the component's attributes and the caveats,
+# or raise NoPlan with the reason: the caller then keeps the plain-Python shim for that task and reports the reason.
+DOCKER_CONTAINER_KWARGS = ("user", "working_dir", "tty", "mem_limit", "shm_size", "hostname", "domainname", "privileged", "cap_add", "dns", "dns_search", "extra_hosts", "ipc_mode")
+# not carried by docker_container_asset: `name` is set by dagster-docker itself (a `name` in container_kwargs is a duplicate-keyword TypeError, found by running the real execute_docker_container),
+# the container is not removed or force-pulled, and the connection, mounts, TLS and output capture have no field
+DOCKER_NO_COMPONENT = ("mounts", "tls_ca_cert", "tls_client_cert", "tls_client_key", "tls_hostname", "tls_ssl_version", "device_requests", "mount_tmp_dir", "tmp_dir", "host_tmp_dir",
+                       "retrieve_output", "retrieve_output_path", "xcom_all", "ports", "docker_conn_id", "log_opts", "container_name", "force_pull", "auto_remove")
+
+
+def _no_template(v: Any) -> bool:
+    """No Jinja marker in any string of a component attribute (a component attribute is written as is: Airflow would render the template at run time)."""
+    if isinstance(v, str):
+        return not any(m in v for m in ("{{", "{%", "{#"))
+    if isinstance(v, dict):
+        return all(_no_template(k) and _no_template(x) for k, x in v.items())
+    if isinstance(v, (list, tuple)):
+        return all(_no_template(x) for x in v)
+    return True
+
+
+def docker_container_attrs(t: dict[str, Any], a: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """DockerOperator -> DockerContainerAssetComponent attributes: image, command (shell-split when a string), entrypoint, env_vars, network (docker-py's `network=`, which sets the network mode),
+    and container_kwargs for the docker-py create options the operator has (user, working_dir, tty, mem_limit, shm_size, hostname, ..., cpus as cpu_quota/cpu_period)."""
+    import shlex
+    import provider_ops_more as PM
+    if not isinstance(a.get("image"), str):
+        raise NoPlan("image is not a string")
+    _refuse(a, DOCKER_NO_COMPONENT, PM.DOCKER_DEFAULTS)
+    if a.get("docker_url") not in (None, "", "unix://var/run/docker.sock"):
+        raise NoPlan(f"docker_url={a['docker_url']!r}: the component reads the daemon from DOCKER_HOST, not from an argument")
+    cmd = a.get("command")
+    if cmd is not None and not isinstance(cmd, (str, list)):
+        raise NoPlan("command is not a string or list")
+    ent = a.get("entrypoint")
+    if ent is not None and not isinstance(ent, (str, list)):
+        raise NoPlan("entrypoint is not a string or list")
+    env = a.get("environment") or {}
+    if not isinstance(env, dict):
+        raise NoPlan("environment is not a dict")
+    kw = {k: a[k] for k in DOCKER_CONTAINER_KWARGS if not _empty(a.get(k)) and a.get(k) != PM.DOCKER_DEFAULTS.get(k)}
+    if a.get("cpus") not in (None, 1.0):
+        kw.update(cpu_quota=int(float(a["cpus"]) * 100_000), cpu_period=100_000)
+    if not all(_plain_json(v) for v in kw.values()):
+        raise NoPlan("a container option is not plain data")
+    attrs = {"image": a["image"], "entrypoint": (shlex.split(ent) if isinstance(ent, str) else ent) or None, "command": (shlex.split(cmd) if isinstance(cmd, str) else cmd) or None,
+             "env_vars": {str(k): str(v) for k, v in env.items()} or None, "network": a.get("network_mode") or None, "container_kwargs": kw or None}
+    if not _no_template(attrs) or not _plain_json(attrs):
+        raise NoPlan("a value holds a template (Airflow renders it at run time) or refers to another task, which a component attribute cannot")
+    cav = ["docker_container_asset (execute_docker_container) pulls the image only when it is missing, leaves the finished container in place (Airflow's auto_remove default is never) and reads the daemon from DOCKER_HOST"]
+    return attrs, cav
+
+
+def k8s_job_attrs(t: dict[str, Any], a: dict[str, Any]) -> tuple[dict[str, Any], list[str]]:
+    """KubernetesPodOperator -> K8sJobAssetComponent attributes (execute_k8s_job; use_pipes stays off because a pod operator's image does not speak the Pipes protocol)."""
+    stubs, deg = P._k8s_check({**t, "args": a, "template_fields": {}})
+    if stubs:
+        raise NoPlan("; ".join(stubs))
+    if not isinstance(a.get("namespace"), str) or not a["namespace"]:
+        raise NoPlan("no namespace is set (k8s_job_asset requires one; the operator reads it from the connection or the cluster)")
+    try:
+        env = P._env_list(a.get("env_vars"))
+        pull = [(x["name"] if isinstance(x, dict) else x) for x in (P.k8s_obj(a.get("image_pull_secrets")) or [])]
+        env_from = P.k8s_obj(a.get("env_from")) or []
+        volumes, mounts = P.k8s_obj(a.get("volumes")) or None, P.k8s_obj(a.get("volume_mounts")) or None
+        tol, aff = P.k8s_obj(a.get("tolerations")) or None, P.k8s_obj(a.get("affinity")) or None
+        res = P.k8s_obj(a.get("container_resources")) or {}
+        sel = P.k8s_obj(a.get("node_selector")) or None
+        labels = P.k8s_obj(a.get("labels")) or None
+    except ValueError as e:
+        raise NoPlan(str(e)) from e
+    cfg, sec = [], []
+    for e in env_from:
+        extra = {k for k, v in e.items() if v not in (None, {}) and k not in ("config_map_ref", "secret_ref")}
+        ref = e.get("config_map_ref") or e.get("secret_ref") or {}
+        if extra or set(ref) - {"name", "optional"} or ref.get("optional"):
+            raise NoPlan("env_from has a prefix or an optional reference, which the component's env_from_config_maps / env_from_secrets cannot say")
+        (cfg if e.get("config_map_ref") else sec).append(ref["name"])
+    cfg += list(a.get("configmaps") or [])
+    limits = res.get("limits") or {}
+    if res.get("requests") or res.get("claims") or set(limits) - {"cpu", "memory"}:
+        raise NoPlan("container_resources has requests, claims or limits other than cpu and memory (the component has cpu_limit and memory_limit only)")
+    if not all(isinstance(x, str) for x in (sel or {}).values()) or not all(isinstance(x, str) for x in (labels or {}).values()):
+        raise NoPlan("labels or node_selector hold a value that is not a string")
+    for k, v in (("cmds", a.get("cmds")), ("arguments", a.get("arguments"))):
+        if v is not None and not (isinstance(v, list) and all(isinstance(x, str) for x in v)):
+            raise NoPlan(f"{k} is not a list of strings")
+    if a.get("in_cluster"):
+        kube = {}                                                # execute_k8s_job: in-cluster configuration whenever no kubeconfig_file is given
+    elif a.get("config_file"):
+        kube = {"kubeconfig_file": a["config_file"], "kube_context": a.get("cluster_context") or None}
+    elif a.get("in_cluster") is False or a.get("cluster_context"):
+        raise NoPlan("the default kubeconfig (in_cluster=False or a cluster_context without config_file) cannot be selected: the component loads the in-cluster configuration when no kubeconfig_file is set")
+    else:
+        kube = {}
+    timeout = a.get("active_deadline_seconds")
+    attrs: dict[str, Any] = {"image": a["image"], "command": a.get("cmds") or None, "args": a.get("arguments") or None, "namespace": a["namespace"],
+                             "env_vars": {e["name"]: str(e.get("value", "")) for e in env} or None, "cpu_limit": limits.get("cpu"), "memory_limit": limits.get("memory"),
+                             "image_pull_policy": a.get("image_pull_policy") or None, "image_pull_secrets": pull or None, "service_account_name": a.get("service_account_name") or None,
+                             "volumes": volumes, "volume_mounts": mounts, "labels": labels, "node_selector": sel, "tolerations": tol, "affinity": aff,
+                             "env_from_config_maps": cfg or None, "env_from_secrets": sec or None, **kube,
+                             "timeout_seconds": int(timeout) if timeout else None}
+    if a.get("on_finish_action") not in (None, "delete_pod"):
+        attrs["delete_failed_k8s_jobs"] = False
+    if not _no_template(attrs) or not _plain_json(list(attrs.values())):
+        raise NoPlan("a value holds a template (Airflow renders it at run time) or refers to another task, which a component attribute cannot")
+    cav = [c for c in deg if not c.startswith(P.UNVERIFIED.split("{")[0])]
+    return attrs, cav

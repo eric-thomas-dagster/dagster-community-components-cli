@@ -315,6 +315,10 @@ def _base_params() -> set[str]:
 
 
 _BASE_PARAMS = _base_params()
+# decorated operators whose settings are the parameters of the operator they wrap (their own __init__ only takes python_callable, op_args, op_kwargs and **kwargs)
+_DECORATED_ISOLATED = {"_PythonVirtualenvDecoratedOperator", "_PythonExternalDecoratedOperator", "_BranchPythonVirtualenvDecoratedOperator", "_BranchExternalPythonDecoratedOperator",
+                       "_DockerDecoratedOperator", "_KubernetesDecoratedOperator"}
+_ISOLATED_BASES = {"PythonVirtualenvOperator", "ExternalPythonOperator", "DockerOperator", "KubernetesPodOperator"}
 
 
 def _class_info(cls: type) -> dict[str, Any] | None:
@@ -574,6 +578,10 @@ def _task_ir(task: Any) -> dict[str, Any]:
     # constructor arguments (many are not template fields, e.g. a Snowflake operator's stage and table)
     try:
         own = set(inspect.signature(type(task).__init__).parameters) - _BASE_PARAMS - {"self", "args", "kwargs"}
+        if type(task).__name__ in _DECORATED_ISOLATED:      # `@task.virtualenv(requirements=...)`, `@task.docker(image=...)`: the decorated class takes **kwargs, the settings are the wrapped operator's own parameters
+            for base in type(task).__mro__[1:]:
+                if base.__name__ in _ISOLATED_BASES:
+                    own |= set(inspect.signature(base.__init__).parameters) - _BASE_PARAMS - {"self", "args", "kwargs", "python_callable"}
         t["args"] = {n: _jsonable(getattr(task, n)) for n in sorted(own) if hasattr(task, n) and not callable(getattr(task, n, None))}
         if t["operator_class"]:                              # a user-defined operator whose own __init__ names a parameter that the instance keeps under another name (`deferrable=` stored as `_defer`) or that Airflow's
             given = getattr(task, "_BaseOperator__init_kwargs", None) or {}          # BaseOperator also has: the class reads it, so the value the DAG passed is kept

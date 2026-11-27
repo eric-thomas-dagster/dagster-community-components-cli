@@ -151,22 +151,22 @@ def test_depends_on_past_blocks_after_a_failed_previous_run_executed(tmp_path, m
                    for e in r.all_events if e.event_type_value == "STEP_FAILURE")
 
 
-def test_venv_missing_interpreter_fails_loudly_and_never_runs_in_the_current_one(tmp_path):
+def test_venv_missing_interpreter_fails_loudly_and_never_runs_in_the_current_one(tmp_path, monkeypatch):
     rt = runtime_module(tmp_path)
-
-    def work():
-        return "ran in " + __import__("sys").executable
-    run = rt.af_isolated(work, python=str(tmp_path / "no" / "such" / "python"))
+    spec = {"kind": "external", "name": "d.t", "script": "external_python/d__t.py", "python": str(tmp_path / "no" / "such" / "python"), "python_env": "T_PYTHON", "env": {}}
+    monkeypatch.delenv("T_PYTHON", raising=False)
     with pytest.raises(dg.Failure, match="not falling back"):
-        run()
+        rt.af_pipes_run(None, spec, [], {})                       # the interpreter is checked before anything runs; the context is not needed
+    monkeypatch.setenv("T_PYTHON", str(tmp_path / "other" / "python"))     # the environment override replaces the constant, and is checked the same way
+    with pytest.raises(dg.Failure, match="other"):
+        rt.af_pipes_run(None, spec, [], {})
 
 
-def test_venv_existing_interpreter_runs_the_callable(tmp_path):
+def test_pipes_arguments_that_are_not_json_fail_before_anything_runs(tmp_path):
     rt = runtime_module(tmp_path)
-
-    def work():
-        return 41 + 1
-    assert rt.af_isolated(work, python=sys.executable)() == 42
+    spec = {"kind": "external", "name": "d.t", "script": "x.py", "python": sys.executable, "python_env": "T_PYTHON", "env": {}}
+    with pytest.raises(dg.Failure, match="JSON only"):
+        rt.af_pipes_run(None, spec, [{1, 2}], {})
 
 
 def test_mapped_empty_expansion_skips_the_step_below_executed(tmp_path):

@@ -34,8 +34,8 @@ def envname(conn_id: str) -> str:
     return re.sub(r"\W", "_", conn_id).upper()
 
 
-UNVERIFIED = ("UNVERIFIED against a live {what}: the call and its arguments were checked against the library's signature and a recording fake, "
-              "not against a real {what}")
+UNVERIFIED = ("UNVERIFIED against a live {what}: the call and its arguments were checked against the real library (its signature, and where noted its client run against a local fake of the service) "
+              "or a recording fake, not against a real {what}")
 
 
 def _a(t: dict[str, Any]) -> dict[str, Any]:
@@ -699,9 +699,37 @@ def fivetran_sync(context, resource, connector_id, poll_interval=15.0, poll_time
     resource.sync_and_poll(connector_id, poll_interval=poll_interval, poll_timeout=poll_timeout)
 
 
+def af_client(resource):
+    """What a step gets for `context.resources.<key>` is not always the configured resource: dagster-databricks, dagster-gcp (GCS) and dagster-aws hand the step the CLIENT they build
+    (a `DatabricksClient`, a `storage.Client`, a boto3 client) and only a plain resource (dagster-slack) still has `get_client()`. Use `get_client()` when it is there, else the object itself."""
+    return resource.get_client() if hasattr(resource, "get_client") else resource
+
+
+def af_bq_client(resource):
+    """A context manager for a BigQuery client from whatever the step was given: dagster-gcp's BigQueryResource attaches a GENERATOR that yields the open client (close it to release the
+    client), a plain resource has the `get_client()` context manager, and a bare client is used as it is."""
+    import contextlib
+    import inspect
+
+    @contextlib.contextmanager
+    def cm():
+        if inspect.isgenerator(resource):
+            client = next(resource)
+            try:
+                yield client
+            finally:
+                resource.close()
+        elif hasattr(resource, "get_client"):
+            with resource.get_client() as client:
+                yield client
+        else:
+            yield resource
+    return cm()
+
+
 def databricks_run(context, resource, path, body, wait=True, poll_interval=30.0):
     """DatabricksRunNowOperator / DatabricksSubmitRunOperator: POST the same JSON body to the Jobs API, then wait for the run to finish; the run id is the value."""
-    client = resource.get_client()
+    client = af_client(resource)
     run_id = client.workspace_client.api_client.do("POST", path, body=body)["run_id"]
     context.log.info(f"Databricks run {run_id} started")
     if wait:
