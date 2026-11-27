@@ -542,23 +542,27 @@ def http_run(context, conn_id, method, endpoint, data=None, headers=None, option
     return response.text
 
 
-def http_resource_call(resource, method, endpoint, data=None, headers=None, options=None):
+def http_resource_call(resource, method, endpoint, data=None, headers=None, options=None, log=None):
     """HttpOperator.execute through the registry's http_resource (`resource.request`): the connection's base URL and auth live in the resource.
-    A GET sends the data as a query string and other methods as a form body (the resource's `request` has no `params`); the body text is returned."""
+    A GET sends dict data as the query string (`params`), other methods send a form body (a dict) or the text as given; the body text is returned."""
     import urllib.parse
     options = options or {}
     method = method.upper()
-    path, body, hdrs = endpoint or "", None, dict(headers or {})
+    path, params, body, hdrs = endpoint or "", None, None, dict(headers or {})
     if method == "GET":
-        if data:
-            path += ("&" if "?" in path else "?") + (urllib.parse.urlencode(data) if isinstance(data, (dict, list)) else str(data))
+        if isinstance(data, dict):
+            params = data
+        elif data:
+            path += ("&" if "?" in path else "?") + (urllib.parse.urlencode(data) if isinstance(data, list) else str(data))
     elif method != "HEAD" and data is not None:
         if isinstance(data, (dict, list)):
             body = urllib.parse.urlencode(data)
             hdrs.setdefault("Content-Type", "application/x-www-form-urlencoded")
         else:
             body = data
-    result = resource.request(method, path, headers=hdrs or None, body=body, timeout_seconds=options.get("timeout"), raise_on_failure=options.get("check_response", True))
+    result = resource.request(method, path, headers=hdrs or None, params=params, body=body, timeout_seconds=options.get("timeout"), raise_on_failure=options.get("check_response", True))
+    if log is not None:
+        log.info(result.body)
     return result.body
 
 

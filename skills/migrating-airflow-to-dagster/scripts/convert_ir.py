@@ -1417,7 +1417,7 @@ def sla_wrap(body: str, t: dict[str, Any], key: str) -> str:
 
 COMPONENT_TASKS = {"BashOperator", "EmptyOperator", "DummyOperator", "DockerOperator"} | {"PythonOperator", "_PythonDecoratedOperator"} | {"BashSensor", "TimeSensor"}
 # Service-calling operators are NOT asset components here: each is an asset in `defs/<dag>_steps.py` that calls a resource in plain Python (see registry_map.py).
-STEP_TASKS = (S3_OPS | PROV_STEPS | {"SqlQuery"}) - {"DockerOperator"}
+STEP_TASKS = (S3_OPS | PROV_STEPS | {"SqlQuery"} | RM.PLAN_ONLY_TYPES | RM.SENSOR_PLAN_TYPES) - {"DockerOperator"}
 REG_RESOURCES: dict[str, tuple[str, dict[str, Any]]] = {}      # resource key -> (registry component type, attributes), written once to defs/registry_resources/defs.yaml
 
 
@@ -1467,6 +1467,7 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     callables: list[str] = ["from ..runtime import *  # noqa: F401,F403", ""]
     support: dict[str, int] = {}
     reg_res: dict[str, tuple[str, dict[str, Any]]] = {}
+    reg_env: dict[str, set[str]] = {}                               # resource key -> the environment variables its settings and calls read (names only)
     step_fns: list[str] = []
     step_caveats: list[dict[str, Any]] = []
     step_reqs: set[str] = set()
@@ -1512,17 +1513,22 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
                          timeout_seconds=None)
             doc("PythonCallableAssetComponent", attrs)
         elif ty in STEP_TASKS:                                    # a service call: an asset in defs/<dag>_steps.py that calls a resource in plain Python
-            a_ = P._a(t)
+            a_ = RM.prepare_args(t, P._a(t))
             if t.get("execution_timeout_s") or not _plain([a_, tf]):
                 return None
             ex_ = lambda v: expr(v, {}, None)
             try:
-                plan = RM.plan_for(t, ex_)
+                plan, no_plan = RM.plan_or_reason(t, ex_)
+                if plan is None and (P.handler_for(t) is None or (ty in P.SENSOR_TYPES)):
+                    return None                                   # an operator whose only conversion is a registry resource (or a sensor), and its arguments need more than the resource has: the Python route stubs it
                 if plan is not None:
+                    if reg_res.get(plan.resource_key, (plan.resource_type, plan.attrs)) != (plan.resource_type, plan.attrs):
+                        return None                               # two tasks of one DAG want the same resource key with different settings: keep this DAG as Python
                     reg_res[plan.resource_key] = (plan.resource_type, plan.attrs)
+                    reg_env.setdefault(plan.resource_key, set()).update(plan.conn_env)
                     step_reqs.update(plan.requirements)
                     step_caveats += [{"task": tid, "kind": "degraded", "reason": f"registry resource {RM.RESOURCE_TYPE_IDS[plan.resource_type]}: {c}"} for c in plan.caveats]
-                    step_caveats.append({"task": tid, "kind": "degraded", "reason": f"registry resource {RM.RESOURCE_TYPE_IDS[plan.resource_type]} was run against a recording fake, not a live service: check it against your environment"})
+                    step_caveats.append({"task": tid, "kind": "degraded", "reason": f"registry resource {RM.RESOURCE_TYPE_IDS[plan.resource_type]} was run against a recording fake or a local stand-in, not a live service: check it against your environment"})
                     stmt, keys_, kind_ = plan.body, {plan.resource_key}, RM.RESOURCE_TYPE_IDS[plan.resource_type].split("_resource")[0]
                     if plan.needs_os:
                         uses_os = True
@@ -1541,6 +1547,8 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
                     step_reqs.update(P.REQUIREMENTS.get(pv.kind, []))
                     stmt, keys_, kind_ = pv.stmt, ({pv.conn} if pv.resource else set()), pv.kinds_tag
                     step_caveats += [c for c in summary.get("caveats") or [] if c.get("task") == tid]
+                    if no_plan:                                   # the operator has a registry resource, but not for these arguments: the plain-Python shim carries the call, and the report says why
+                        step_caveats.append({"task": tid, "kind": "degraded", "reason": f"registry resource not used for this task: {no_plan}; the plain-Python call in resources.py / runtime.py carries it"})
             except Defer:
                 return None
             stmt = stmt[len("return "):] if stmt.startswith("return ") else stmt
@@ -1609,6 +1617,7 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     overrides = {"caveats": comp_caveats, "keys": [[aname[t["task_id"]]] for t in real], "task_keys": {t["task_id"]: aname[t["task_id"]] for t in real}, "output": "components",
                  "external": [], "resources": sorted(step_resources), "provider_connections": step_conns, "requirements": sorted(reqs),
                  "resource_types": sorted({typ_ for typ_, _ in reg_res.values()}), "registry_resources": sorted(reg_res),
+                 "registry_resource_env": {k_: sorted(v_) for k_, v_ in sorted(reg_env.items()) if v_},
                  "notes": [*summary.get("notes", []), "registry components: asset keys are `<dag>__<task>`, single-part; shell, Python, container and wait tasks are asset components (retries and timeouts are component settings); "
                  "service-calling tasks are assets in defs/<dag>_steps.py that call a resource in plain Python" + ("; the DAG has no schedule so no job is defined" if not summary.get("schedule") else "")]}
     return files, overrides
@@ -5139,7 +5148,7 @@ def main(argv: list[str] | None = None) -> int:
                     dest.write_text(text)
                     if rel.startswith("callables/"):
                         (dest.parent / "__init__.py").touch()
-                summary = {"resource_types": [], "registry_resources": [], **summary, **over, "converted_with_component": True, "component_types": sorted({ln.split('dagster_community_components.')[1] for t_ in files.values() for ln in t_.splitlines() if ln.startswith('type: dagster_community_components.')})}
+                summary = {"resource_types": [], "registry_resources": [], "registry_resource_env": {}, **summary, **over, "converted_with_component": True, "component_types": sorted({ln.split('dagster_community_components.')[1] for t_ in files.values() for ln in t_.splitlines() if ln.startswith('type: dagster_community_components.')})}
             else:
                 (a.out_dir / f"{name}.py").write_text(code)
                 summary = {**summary, "output": "python"}

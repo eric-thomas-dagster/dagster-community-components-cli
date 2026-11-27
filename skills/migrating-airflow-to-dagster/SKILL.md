@@ -121,7 +121,7 @@ Migrate two or three representative DAGs end to end through the gates before fan
 ```
 python3 scripts/dag_spec.py ir.json --report report.json --manifest manifest.json [--parity af_results.json] --out-dir rewrite   # facts only: rewrite/<dag>.spec.{md,json}
 python3 scripts/rewrite_prompt.py rewrite/<dag>.spec.json --converter-module <the converter's module> --project <name> --package <pkg>   # rewrite/<dag>.prompt.md
-# optional: --converter-project <converter output dir> starts the worker from the converter's project (its stubs and degraded sections become the TODO list); --spec-ref spec.md points at the spec file instead of pasting it
+# optional: --converter-project <converter output dir> gives the worker the converter's project as read-only REFERENCE (default mode: rewrite from the original and the spec; its stub list is the list of hard parts) or, with --converter-mode start, as the starting point (its list is the TODO list); --spec-ref spec.md points at the spec file instead of pasting it
 # give the prompt to Claude (with dagster-expert and dagster-community-components loaded); it writes src/<pkg>/defs/<dag>.py
 python3 scripts/accept_rewrite.py --spec rewrite/<dag>.spec.json --project <root> [--parity af_results.json] [--baseline <dir with airflow1.json>] [--source <dir>] --manifest manifest.json
 ```
@@ -193,9 +193,9 @@ Writes `cutover-<dag_id>.md` for each converted DAG (pause plan, catchup and bac
 | `scripts/inventory.py` | Scan the Airflow repo into a manifest (read-only) |
 | `scripts/airflow_ir.py` | Extract every DAG as Airflow built it (expanded loops, factories, resolved arguments, callable source) into an IR (executes DAG code; sandbox only) |
 | `scripts/convert_ir.py` | Generate Dagster code for the mechanical constructs; defer everything else with the reason |
-| `scripts/convert_ir.py --output components` | The same conversion, resource-first: asset components for shell, Python, container and wait tasks; service-calling operators as assets that call a registry resource (0.10.193) or an integration resource in plain Python (see `reference/conversion.md`, `scripts/registry_map.py`); `report.json` marks them `converted_with_component` with `component_types` and `resource_types` |
+| `scripts/convert_ir.py --output components` | The same conversion, resource-first: asset components for shell, Python, container and wait tasks; service-calling operators as assets that call a registry resource (0.10.194) or an integration resource in plain Python (see `reference/conversion.md`, `scripts/registry_map.py`; dbt Cloud, Fivetran and Airbyte stay on their integration libraries on purpose); `report.json` marks them `converted_with_component` with `component_types` and `resource_types` |
 | `scripts/dag_spec.py` | Facts-only specification of each DAG from the IR (rewrite route); no secret value |
-| `scripts/rewrite_prompt.py` | The self-contained prompt that has Claude write one DAG from its spec (rewrite route); `--converter-project` starts from the converter's output (default off) |
+| `scripts/rewrite_prompt.py` | The self-contained prompt that has Claude write one DAG from its spec (rewrite route); `--converter-project` gives the converter's output as read-only reference (`--converter-mode reference`, the default with a project) or as the starting point (`--converter-mode start`); off by default |
 | `scripts/rewrite_resources.py` | The prompt's resource-first rule, the compact registry-resource table for only the service-operator families a DAG uses, and the registry-search checklist |
 | `scripts/run_evals.py` | Skill-level evals (`evals/`): fixtures converted, then `dg check defs`, the generated tests, no invented component types and no secret values checked |
 | `scripts/accept_rewrite.py` | The gates for a rewrite, and the manifest record of which route produced each unit |

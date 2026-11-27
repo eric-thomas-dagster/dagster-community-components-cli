@@ -484,6 +484,18 @@ def _component_defs(text):
     return out
 
 
+class _SqlStandIn(dg.ConfigurableResource):
+    """The body of registry `sql_url_resource.execute` (0.10.194): that package is not installed in every interpreter this test runs under; the real class is run by test_registry_resources_194.py."""
+    connection_url: str
+
+    def execute(self, query, params=None):
+        from sqlalchemy import create_engine, text
+        with create_engine(self.connection_url).connect() as conn:
+            conn.execute(text(query), params or {})
+            conn.commit()
+        return []
+
+
 def test_sql_and_wait_steps_become_registry_components_that_validate_and_run(tmp_path, monkeypatch):
     pytest.importorskip("dagster_community_components")
     db = tmp_path / "w.db"
@@ -498,14 +510,15 @@ def test_sql_and_wait_steps_become_registry_components_that_validate_and_run(tmp
     rep = _components_output(tmp_path, ir_of(wait, clock, ins), "pkg_comp1")
     d = rep["dags"]["d1"]
     assert d["output"] == "components" and d["task_keys"] == {"wait": "d1__wait", "clock": "d1__clock", "ins": "d1__ins"}
-    assert rep["connections"]["warehouse_pg"]["read_by"] == "the step, when it runs"
+    assert d["registry_resources"] == ["warehouse_pg__sql"] and d["registry_resource_env"] == {"warehouse_pg__sql": ["WAREHOUSE_PG_URL"]}      # a SQL call is sql_url_resource (0.10.194), URL from the variable
+    assert 'connection_url_env_var: "WAREHOUSE_PG_URL"' in (tmp_path / "pkg_comp1" / "defs" / "registry_resources" / "defs.yaml").read_text()
     text = (tmp_path / "pkg_comp1" / "defs" / "d1" / "defs.yaml").read_text()
     for needle in ("WaitUntilAssetComponent", 'condition: "shell_exit_zero"', "retry_exit_code: 3", 'condition: "time_of_day"', 'time_of_day: "00:00"', 'timezone: "America/Chicago"',   # 06:00 UTC is midnight in the DAG's zone
                    ):
         assert needle in text, needle
-    assert "SqlAssetComponent" not in text                      # a SQL call is a resource-style step in plain Python, not an asset component
+    assert "SqlAssetComponent" not in text                      # a SQL call is a resource used in a step in plain Python, not an asset component
     steps = (tmp_path / "pkg_comp1" / "defs" / "d1_steps.py").read_text()
-    assert "sql_run(context, 'warehouse_pg'" in steps and "dg.RetryPolicy(max_retries=2" in steps and "deps=[dg.AssetKey('d1__clock')]" in steps
+    assert "getattr(context.resources, 'warehouse_pg__sql').execute(" in steps and "dg.RetryPolicy(max_retries=2" in steps and "deps=[dg.AssetKey('d1__clock')]" in steps
     built = _component_defs(text)
     sys.path.insert(0, str(tmp_path))
     try:
@@ -513,7 +526,7 @@ def test_sql_and_wait_steps_become_registry_components_that_validate_and_run(tmp
         step_mod = importlib.import_module("pkg_comp1.defs.d1_steps")
         assets = [a for typ, defs in built if not typ.endswith("CronScheduleComponent") for a in defs.assets] + [step_mod.d1__ins]
         assert len(assets) == 3
-        assert dg.materialize(assets).success
+        assert dg.materialize(assets, resources={"warehouse_pg__sql": _SqlStandIn(connection_url=f"sqlite:///{db}")}).success
     finally:
         sys.path.remove(str(tmp_path))
     assert sqlite3.connect(db).execute("select d from t").fetchall() == [("x",)]
@@ -542,7 +555,11 @@ def test_sql_options_the_old_component_could_not_carry_are_carried_by_the_step(t
     mut(t)
     rep = _components_output(tmp_path, ir_of(t), "pkg_comp4")
     assert rep["dags"]["d1"]["output"] == "components", why
-    assert "sql_run(" in (tmp_path / "pkg_comp4" / "defs" / "d1_steps.py").read_text()
+    steps = (tmp_path / "pkg_comp4" / "defs" / "d1_steps.py").read_text()
+    if why == "positional parameters":                    # sql_url_resource binds named parameters only: the shim carries it, and the report says why
+        assert "sql_run(" in steps and any("registry resource not used for this task: positional parameters" in c["reason"] for c in rep["dags"]["d1"]["caveats"])
+    else:
+        assert ".execute(" in steps and "sql_run(" not in steps
 
 
 def test_a_bash_sensor_without_retry_exit_code_stays_python(tmp_path):
