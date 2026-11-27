@@ -141,8 +141,9 @@ def test_a_failing_item_fails_the_run_after_the_other_items_ran_and_skips_what_i
     st = states(res)
     assert not res.success
     inner = {k: s for k, s in st.items() if "d1__grp_inner" in k}
-    assert sorted(inner.values()) == ["STEP_FAILURE", "STEP_SUCCESS", "STEP_SUCCESS"]       # the other items still ran
-    assert not any("d1__after" in k for k in st)                                           # the task after never ran
+    assert sorted(inner.values()) == ["STEP_SUCCESS", "STEP_SUCCESS", "STEP_SUCCESS"]       # every item ran: a failed item is a value (the group's members keep their own states), the run fails at the end
+    meta = {ev.asset_key.to_user_string(): getattr(ev.materialization.metadata.get("airflow/state"), "value", None) for ev in res.get_asset_materialization_events()}
+    assert meta.get("d1/grp/inner") == "failed" and meta.get("d1/after") == "upstream_failed"      # Airflow: the mapped task is failed, the task after it upstream_failed
 
 
 def test_group_members_may_read_outside_tasks_and_a_group_in_a_group_with_a_shell_member(tmp_path):

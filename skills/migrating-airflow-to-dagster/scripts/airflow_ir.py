@@ -59,7 +59,11 @@ def _jsonable(v: Any, depth: int = 0) -> Any:
     if name in ("Dataset", "Asset") and hasattr(v, "extra") and (hasattr(v, "uri") or hasattr(v, "name")):      # an Airflow Dataset/Asset passed to a callable: rebuilt as the converted runtime's small plain class
         return {"asset_obj": {"cls": name, "name": getattr(v, "name", None) if name == "Asset" else None, "uri": getattr(v, "uri", None), "extra": _jsonable(getattr(v, "extra", None), depth + 1)}}
     if name == "ObjectStoragePath":                           # str() is the full URI (`scheme://conn_id@bucket/key`); the converter rebuilds it with a pathlib / UPath shim
-        return {"object_storage_path": str(v)}
+        text = str(v)
+        cwd_uri = "file://" + os.getcwd().rstrip("/") + "/"
+        if text.startswith(cwd_uri):                          # `ObjectStoragePath("file://include/bears")` is made absolute against the extractor's working directory: record it as written (relative), so the converted task resolves it against ITS working directory
+            text = "file://" + text[len(cwd_uri):]
+        return {"object_storage_path": text}
     if name == "MappedArgument":                              # a mapped task group's argument: the converter reads it from the group's item
         return {"group_arg": getattr(v, "_key", None)}
     if name in ("XComArg", "PlainXComArg", "MappedArgument") or hasattr(v, "operator") and hasattr(v, "key"):
@@ -70,18 +74,37 @@ def _jsonable(v: Any, depth: int = 0) -> Any:
     return {"repr": repr(v)[:200]}
 
 
+def _task_ref(v: Any) -> str | None:
+    """The task id (with its group prefix) when `v` is an operator or an XComArg of one, else None."""
+    if hasattr(v, "operator") and hasattr(v, "key") and isinstance(getattr(v.operator, "task_id", None), str):
+        return v.operator.task_id
+    if isinstance(getattr(v, "task_id", None), str) and hasattr(v, "upstream_task_ids") and not isinstance(v, type):
+        return v.task_id
+    return None
+
+
 def _closure_literals(fn: Any) -> dict[str, str]:
     """DAG factory: a callable defined inside `create_dag(dag_id, n, ...)` reads the enclosing function's arguments and locals. Airflow evaluated the factory once per generated DAG, so the value each name has
     for THIS DAG is known here: {name: Python literal text} for the free variables whose value is a plain literal (it round-trips through `ast.literal_eval`)."""
     import ast
     code = getattr(fn, "__code__", None)
     cells = getattr(fn, "__closure__", None)
-    if code is None or not cells:
+    if code is None:
         return {}
     out: dict[str, str] = {}
+    for name in code.co_names:                               # a module-level name bound to a task (the DAG body runs in a `with DAG(...)` block at module level)
+        tid = _task_ref(getattr(fn, "__globals__", {}).get(name))
+        if tid is not None:
+            out[name] = f"AfTaskRef({tid!r})"
+    if not cells:
+        return out
     for name, cell in zip(code.co_freevars, cells):
         try:
             v = cell.cell_contents
+            tid = _task_ref(v)
+            if tid is not None:                              # a task (or the XCom of one) defined in the DAG body: `astronauts.operator.task_id`, `skip_roster.task_id`; the runtime's AfTaskRef answers both
+                out[name] = f"AfTaskRef({tid!r})"
+                continue
             text = repr(v)
             if not callable(v) and ast.literal_eval(text) == v and type(ast.literal_eval(text)) is type(v):
                 out[name] = text
@@ -296,11 +319,12 @@ _BASE_PARAMS = _base_params()
 
 def _class_info(cls: type) -> dict[str, Any] | None:
     """Source of a user-defined operator class, so the converter can copy it."""
+    mro = [c.__name__ for c in cls.__mro__[1:] if c is not object]          # the base classes, nearest first: a subclass that adds no behaviour is the stock operator it extends
     try:
         return {"name": cls.__name__, "module": cls.__module__, "file": inspect.getsourcefile(cls), "source": textwrap.dedent(inspect.getsource(cls)),
-                "template_fields": list(getattr(cls, "template_fields", ()) or ())}
+                "template_fields": list(getattr(cls, "template_fields", ()) or ()), "mro": mro}
     except (OSError, TypeError) as e:
-        return {"name": cls.__name__, "module": cls.__module__, "source_error": repr(e)[:120]}
+        return {"name": cls.__name__, "module": cls.__module__, "source_error": repr(e)[:120], "mro": mro}
 
 
 def _sensor_ir(task: Any) -> dict[str, Any] | None:
@@ -587,13 +611,28 @@ def _task_ir(task: Any) -> dict[str, Any]:
             if r and os.path.isfile(cand):
                 return Path(cand).read_text()
         return None
-    for f, val in t["template_fields"].items():                  # a templated container argument (`op_kwargs`, `op_args`): a string in it that names a template file is read and rendered too
-        if exts and isinstance(val, dict) and f == "op_kwargs":
-            files.update({f"{f}.{k}": c for k, v in val.items() if isinstance(v, str) and v.endswith(exts) and (c := read_template(v)) is not None})
+    missing: dict[str, str] = {}                                  # a templated string that names a template file (it ends with one of the operator's `template_ext`) which is not on the search path: Airflow fails the task with TemplateNotFound
+    for f, val in t["template_fields"].items():                  # a templated container argument (`op_kwargs`, `op_args`, `templates_dict`): a string in it that names a template file is read and rendered too
+        if exts and isinstance(val, dict) and f in ("op_kwargs", "templates_dict"):
+            for k, v in val.items():
+                if isinstance(v, str) and v.endswith(exts):
+                    c = read_template(v)
+                    if c is not None:
+                        files[f"{f}.{k}"] = c
+                    else:
+                        missing[f"{f}.{k}"] = v
         elif exts and isinstance(val, list) and f == "op_args":
-            files.update({f"{f}.{i}": c for i, v in enumerate(val) if isinstance(v, str) and v.endswith(exts) and (c := read_template(v)) is not None})
+            for i, v in enumerate(val):
+                if isinstance(v, str) and v.endswith(exts):
+                    c = read_template(v)
+                    if c is not None:
+                        files[f"{f}.{i}"] = c
+                    else:
+                        missing[f"{f}.{i}"] = v
     if files:
         t["template_files"] = files
+    if missing:
+        t["template_missing"] = missing
     fn = getattr(task, "python_callable", None) or (getattr(task, "partial_kwargs", None) or {}).get("python_callable")      # a mapped classic PythonOperator keeps it in partial_kwargs
     if fn is not None:
         t["callable"] = _callable_info(fn)

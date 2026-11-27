@@ -77,6 +77,8 @@ def missing_edges(dag_ir, mod):
     reach = _reach({k: d for k, (_, d) in ag.items()})
     miss = []
     for tid, k in key_of.items():
+        if tid not in tasks:                                 # a synthetic task (a converted task-group loop is one step named after its group)
+            continue
         for u in ancestors(tid):
             if u in key_of and key_of[u] != k and key_of[u] not in reach.get(k, set()):
                 miss.append((tid, u))

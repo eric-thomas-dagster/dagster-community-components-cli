@@ -68,10 +68,10 @@ SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "executio
                  "next_ds", "next_ds_nodash", "next_execution_date", "prev_ds", "prev_ds_nodash", "prev_execution_date",     # Airflow 2 macros
                  "tomorrow_ds", "tomorrow_ds_nodash", "yesterday_ds", "yesterday_ds_nodash", "ts_nodash_with_tz",
                  "prev_data_interval_start_success", "prev_data_interval_end_success", "task_instance_key_str", "task_state_store", "asset_state_store",
-                 "context", "var", "conn"}                                                                              # `context`: the context dict itself, `var` / `conn`: Variables and Connections from the environment
+                 "context", "var", "conn", "test_mode"}                                                                  # `test_mode` is False (a scheduled / triggered run, not `airflow tasks test`); `context`: the context dict itself, `var` / `conn`: Variables and Connections from the environment
 JINJA_VARS = SUPPORTED_CTX | {"macros", "var"}
 USER_MACROS: set[str] = set()     # the DAG's `user_defined_macros` names (set per DAG): a template may use them
-CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date", "state"}, "dag": {"dag_id"}, "task": {"task_id", "dag_id", "render_template"},
+CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date", "state"}, "dag": {"dag_id"}, "task": {"task_id", "dag_id", "render_template", "params"},
              "ti": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push", "state"},
              "task_instance": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push", "state"}}
 SUPPORTED_MACROS = {"ds_add", "ds_format", "ds_format_locale", "datetime", "timedelta", "json", "yaml", "time", "uuid", "random", "dateutil"}
@@ -382,7 +382,7 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
             if name in seen or name in class_level:
                 continue
             seen.add(name)
-            if name == "af_loop":                                # provided by the generated runtime (a converted task-group loop)
+            if name in ("af_loop", "af_loop_ti"):                                # provided by the generated runtime (a converted task-group loop)
                 continue
             hit = idx.defs.get(name)
             if hit is None:
@@ -509,7 +509,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
             if name in seen:
                 continue
             seen.add(name)
-            if name == "af_loop":                                # provided by the generated runtime (a converted task-group loop)
+            if name in ("af_loop", "af_loop_ti"):                                # provided by the generated runtime (a converted task-group loop)
                 continue
             if name == "__file__":                               # the DAG file's own path: a shim constant (overridable by env), not the converted module's path
                 file_used[0] = True
@@ -1261,8 +1261,8 @@ def plan_groups(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, A
                     t = tasks[tid]
                     if t.get("is_mapped"):
                         why = f"{tid} is a mapped task inside the mapped group"
-                    elif t["type"] in BRANCH | SHORT | CLOCK_BRANCH or t.get("is_setup") or t.get("is_teardown") or t["trigger_rule"] in GATE_RULES - PLAIN_RULES:
-                        why = f"{tid} branches, short-circuits, or has a trigger rule or setup/teardown role that decides on skipped or failed upstream steps (not converted inside a mapped group)"
+                    elif t["type"] in BRANCH | SHORT | CLOCK_BRANCH or t.get("is_setup") or t.get("is_teardown"):
+                        why = f"{tid} branches, short-circuits, or has a setup/teardown role (not converted inside a mapped group)"
                     elif t["type"] in SENSORS:
                         why = f"{tid} is a sensor inside the mapped group"
                     if why:
@@ -1312,7 +1312,8 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
                            "(only a literal list or a task's plain return value is converted)")
                 break
         else:
-            mode = "kwargs" if e["form"] == "expand_kwargs" else ("args" if list(srcs) == ["op_args"] else "kw")
+            mode = "kwargs" if e["form"] == "expand_kwargs" else ("args" if list(srcs) == ["op_args"] else
+                                                                  "opargs" if t["type"] in PY_TASKS and not is_custom(t) and set(srcs) <= {"op_args", "op_kwargs"} else "kw")      # opargs: `expand(op_args=..., op_kwargs=...)`, cross product of the two (each item's args and kwargs)
             if is_custom(t):
                 bad = ["op_args"] if mode == "args" else []                  # the item's values are constructor arguments of the user-defined operator
             elif t["type"] in S3_OPS | SNOWFLAKE_OPS:
@@ -1625,7 +1626,11 @@ def expand_loops(dag: dict[str, Any]) -> dict[str, Any]:
         grp = gate["loop"]["group"]
         body = [t for t in tasks if t.get("group") == grp and t is not gate and t["type"] != "LoopGateOperator"]
         ids = {t["task_id"] for t in body}
-        ok = bool(body) and all(t["type"] in PY_TASKS and not t.get("is_mapped") and isinstance(t.get("callable"), dict) and "source" in t["callable"] for t in body)
+        def loop_mapped_ok(t):                                               # `.expand(name=<an XCom of a task in this group>)`: the supported mapped shape inside a loop body
+            ex = t.get("expand") or {}
+            return (ex.get("form") == "expand" and not ex.get("op_args") and not ex.get("fixed") and not ex.get("partial") and bool(ex.get("args"))
+                    and all(isinstance(v, dict) and v.get("kind") == "xcom" and v.get("wrapper") == "PlainXComArg" and v.get("key") == "return_value" and v.get("task_id") in ids for v in ex["args"].values()))
+        ok = bool(body) and all(t["type"] in PY_TASKS and (not t.get("is_mapped") or loop_mapped_ok(t)) and isinstance(t.get("callable"), dict) and "source" in t["callable"] for t in body)
         refs_ok = all(r in ids for t in body for r in xcom_refs(t.get("op_args")) | xcom_refs(t.get("op_kwargs")))
         until = gate["loop"].get("until")
         if not (ok and refs_ok) or (until is not None and "source" not in until):
@@ -1656,10 +1661,20 @@ def expand_loops(dag: dict[str, Any]) -> dict[str, Any]:
                     return f"v[{v['xcom_from']!r}]"
                 return repr(v)
             a = [arg(x) for x in (t.get("op_args") or [])] + [f"{k}={arg(x)}" for k, x in (t.get("op_kwargs") or {}).items()]
-            if "loop" in (t["callable"].get("params") or []):
+            params_ = t["callable"].get("params") or []
+            if "loop" in params_:
                 a.append("loop=loop")
+            if t.get("is_mapped"):                                           # one call per item (the cross product when several arguments are mapped); `ti.map_index` is the item's position
+                keys_ = list(t["expand"]["args"])
+                srcs_ = ", ".join(f"v[{t['expand']['args'][k]['task_id']!r}]" for k in keys_)
+                ti_ = ", ti=af_loop_ti(" + repr(tid) + ", _i)" if "ti" in params_ else ""
+                a_ = ", ".join(a + [f"{k}=_x[{n}]" for n, k in enumerate(keys_)])
+                calls.append(f"        v[{tid!r}] = [{fns[tid]}({a_}{ti_}) for _i, _x in enumerate(itertools.product({srcs_}))]")
+                continue
+            if "ti" in params_:
+                a.append(f"ti=af_loop_ti({tid!r}, None)")
             calls.append(f"        v[{tid!r}] = {fns[tid]}({', '.join(a)})")
-        outer = (f"def loop_{safe(grp)}():\n" + "\n".join(src) + "\n    def _body(loop):\n        v = {}\n" + "\n".join(calls) + f"\n        return v[{terminal!r}]\n"
+        outer = (f"def loop_{safe(grp)}():\n    import itertools\n" + "\n".join(src) + "\n    def _body(loop):\n        v = {}\n" + "\n".join(calls) + f"\n        return v[{terminal!r}]\n"
                  f"    return af_loop(_body, {until_fn or 'None'}, {int(gate['loop']['max_iterations'])})\n")
         ext_up = sorted({u for t in body for u in t["upstream"] if u not in ids})
         synth = {**gate, "task_id": grp, "type": "PythonOperator", "group": None, "loop": None, "is_mapped": False, "expand": None,
@@ -1692,6 +1707,23 @@ def loop_members_report(dag: dict[str, Any], keyparts: dict[str, Any], fold_into
     return out
 
 
+def stock_base(t: dict[str, Any]) -> str | None:
+    """The stock operator a user-defined class stands for when it only overrides `__init__` (and so inherits `execute`): its nearest base the converter maps, else None."""
+    oc = t.get("operator_class") or {}
+    if not oc.get("source") or not oc.get("mro"):
+        return None
+    known = PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | TRIGGER | SENSORS | CLOCK_BRANCH | BRANCH | SHORT
+    if t["type"] in known or t["type"] in ELIDED:
+        return None
+    try:
+        cls = next(n for n in ast.parse(oc["source"]).body if isinstance(n, ast.ClassDef))
+    except (SyntaxError, StopIteration):
+        return None
+    if any(not isinstance(st, ast.FunctionDef) or st.name != "__init__" for st in cls.body if not (isinstance(st, ast.Expr) and isinstance(getattr(st, "value", None), ast.Constant))):
+        return None                                         # it defines methods or class attributes of its own: its behaviour is its own
+    return next((b for b in oc["mro"] if b in known), None)
+
+
 def normalise_provider_tasks(dag: dict[str, Any]) -> dict[str, Any]:
     """Give provider operators that share a handler one type: SimpleHttpOperator is HttpOperator, and SQL operators on a connection that is not Snowflake
     (SQLExecuteQueryOperator, PostgresOperator, MySqlOperator, ...) are `SqlQuery`. The type the DAG used stays in `orig_type` for messages."""
@@ -1699,16 +1731,29 @@ def normalise_provider_tasks(dag: dict[str, Any]) -> dict[str, Any]:
     for t in dag["tasks"]:
         ty = t["type"]
         new = None
-        tfiles = {k: v for k, v in (t.get("template_files") or {}).items() if k.startswith(("op_kwargs.", "op_args."))}
+        base_ = stock_base(t)
+        if base_:                                           # `class MyBash(BashOperator): def __init__(...)`: nothing but the constructor differs, so the task is the stock operator (the instance's own settings are already in the IR)
+            t = {**t, "type": base_, "orig_type": ty, "operator_class": None}
+            ty = base_
+        if t.get("template_missing") and ty in PY_TASKS and isinstance(t.get("callable"), dict) and t["callable"].get("name"):
+            path_ = next(iter(t["template_missing"].values()))      # Airflow loads a templated string that ends with the operator's template extension as a file; a missing file fails the task (jinja2.TemplateNotFound) before the callable runs
+            cname = t["callable"]["name"]
+            t = {**t, "callable": {**t["callable"], "name": cname, "params": [], "closure": None,
+                                   "source": f"def {cname}():\n    from jinja2 import TemplateNotFound\n    raise TemplateNotFound({path_!r})\n"},
+                 "op_args": [], "op_kwargs": {}, "template_fields": {k: v for k, v in t["template_fields"].items() if k not in ("templates_dict", "op_args", "op_kwargs")}}
+        tfiles = {k: v for k, v in (t.get("template_files") or {}).items() if k.startswith(("op_kwargs.", "op_args.", "templates_dict."))}
         if tfiles and ty in PY_TASKS:                       # `templates_exts`: a callable argument naming a template file receives the file's text (rendered like any template string)
             kw, ar = dict(t.get("op_kwargs") or {}), list(t.get("op_args") or [])
+            td = dict((t.get("template_fields") or {}).get("templates_dict") or {})
             for k, c in tfiles.items():
                 kind, name = k.split(".", 1)
                 if kind == "op_kwargs":
                     kw[name] = c
+                elif kind == "templates_dict":
+                    td[name] = c
                 else:
                     ar[int(name)] = c
-            t = {**t, "op_kwargs": kw, "op_args": ar, "template_fields": {**t["template_fields"], "op_kwargs": kw, "op_args": ar}}
+            t = {**t, "op_kwargs": kw, "op_args": ar, "template_fields": {**t["template_fields"], "op_kwargs": kw, "op_args": ar, **({"templates_dict": td} if td else {})}}
         if ty in P.ALIASES:
             new = P.ALIASES[ty]
         elif ty in P.SQL_OPS and not (ty == "SQLExecuteQueryOperator" and "snowflake" in P.sql_conn({**t, "type": ty}).lower()):
@@ -1973,7 +2018,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             pool_limits.setdefault(t["pool"], None)
         if t.get("pool_slots") not in (None, 1):
             soften(f"{tid}: pool_slots={t['pool_slots']} is not enforced (one slot is used)", tid)
-        cbs = [c for c in (t.get("callbacks") or []) if not (t["is_mapped"] and c in ("pre_execute", "post_execute"))]   # a mapped wrapper overrides them; mapping already defers
+        runif_ = bool(re.search(r"@task\.(?:run_if|skip_if)\(", (t.get("callable") or {}).get("source", "")))      # `@task.run_if` / `skip_if` ARE a pre_execute hook, and the converter runs them as the skip condition (af_run_if)
+        cbs = [c for c in (t.get("callbacks") or []) if not (t["is_mapped"] and c in ("pre_execute", "post_execute")) and not (runif_ and c == "pre_execute")]   # a mapped wrapper overrides them; mapping already defers
         cb_ok = ("on_failure_callback", "on_success_callback", "on_retry_callback", "on_execute_callback")       # converted (asset form only): @on_hooks for the first three, a call at the start of the step for on_execute
         unsupported = [c for c in cbs if c not in cb_ok or not (t.get("callback_fns") or {}).get(c)]
         in_graph = bool(cbs and (mplan and mplan["mode"] == "graph"))
@@ -2244,11 +2290,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                      "'up_for_retry' (Airflow's own transient states such as 'scheduled' are not reproduced); notifier instances run through a plain `BaseNotifier` shim (their template_fields are not rendered)")
     uses_ctx = bool(ctx_tasks)
     if gplan and any(ti_inputs.values()):
-        if CAVEATS == "off":
-            raise Defer("a graph-form DAG where a callable pulls XComs by task id (not converted yet)")
-        for tid_, ups_ in list(ti_inputs.items()):                  # the tasks that pull by id become stubs; the rest of the DAG converts
-            if ups_:
-                reason_ = "the callable pulls XComs by task id (ti.xcom_pull), which a graph-form DAG does not rebuild yet"
+        if CAVEATS == "off" and any(tid_ in {m_ for G_ in (gplan.get("groups") or {}).values() for m_ in G_["members"]} and ups_ for tid_, ups_ in ti_inputs.items()):
+            raise Defer("a mapped task group where a member pulls XComs by task id (not converted yet)")
+        grouped_ = {m_ for G_ in (gplan.get("groups") or {}).values() for m_ in G_["members"]}
+        for tid_, ups_ in list(ti_inputs.items()):                  # a task that pulls by id outside a mapped group is wired to the producers' values; one inside a group stays a stub
+            if ups_ and tid_ in grouped_:
+                reason_ = "the callable pulls XComs by task id (ti.xcom_pull) inside a mapped task group, which the graph form does not rebuild yet"
                 caveats.append({"task": tid_, "kind": "stub", "reason": reason_})
                 resolved[tid_] = (f"def _stub(*args, **kwargs):\n    # AIRFLOW-CAVEAT: {reason_!r}\n    return af_caveat({reason_!r}, skip={CAVEATS == 'skip'})\n", [], {})
                 ctx_tasks.discard(tid_)
@@ -2349,7 +2396,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         for t in real:
             visit(t["task_id"])
         mp = gplan["mapped"]
-        fail_aware = any(tasks[x]["trigger_rule"] in GATE_RULES - PLAIN_RULES for x in order)     # a failure must not stop the steps that react to it
+        fail_aware = any(tasks[x]["trigger_rule"] in GATE_RULES - PLAIN_RULES for x in order) or bool(groups)     # a failure must not stop the steps that react to it; inside a mapped task group a failed member is a value, so the group's other members keep their own states
         idx = {tid: i for i, tid in enumerate(order)}
         ops: list[str] = []
         lines: list[str] = []
@@ -2385,9 +2432,14 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             ops.append(f"@dg.op(name={gn + '__collect'!r})\ndef collect_{safe(g_)}(context, items):\n"
                        "    items = list(items)\n    return items if items else af_skip(context, False)      # Airflow skips a mapped task group that expands to nothing\n")
             for k, m_ in enumerate(members):
-                ops.append(f"@dg.op(name={gn + '__pick_' + safe(m_)!r})\ndef pick_{safe(g_)}_{k}(results):\n"
+                ops.append(f"@dg.op(name={gn + '__pick_' + safe(m_)!r})\ndef pick_{safe(g_)}_{k}(context, results):\n"
                            "    if isinstance(results, Skipped):\n        return results                                    # an empty expansion: the group and what follows are skipped\n"
-                           f"    return [None if isinstance(r[{m_!r}], Skipped) else r[{m_!r}] for r in results]      # the member's value over the items: Airflow's XCom list of its mapped instances\n")
+                           f"    vals = [None if isinstance(r[{m_!r}], Skipped) else r[{m_!r}] for r in results]      # the member's value over the items: Airflow's XCom list of its mapped instances\n"
+                           "    if any(isinstance(v, Failed) for v in vals):                    # the member's own state: a failed instance fails it, whatever its siblings did\n"
+                           "        context.add_output_metadata({'airflow/state': 'failed'})\n"
+                           "    elif vals and all(isinstance(v, UpstreamFailed) for v in vals):\n"
+                           "        context.add_output_metadata({'airflow/state': 'upstream_failed'})\n"
+                           "    return vals\n")
             fan_args = ", ".join(val[x] for x in leaf)
             ext_args = "".join(f", {val[u]}" for u, _ in ext)
             lines.append(f"    gd{i_} = fan_{safe(g_)}({fan_args}).map(lambda item: group_{safe(g_)}(item{ext_args}))")
@@ -2413,7 +2465,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 GROUP_ITEM[0] = "gitem"
             fname = safe("op_" + tid)
             deco = [f"name={safe(dag_id) + '__' + safe(tid)!r}"]
-            if t["retries"] and not fail_aware:
+            if t["retries"]:                                            # declared even when a failure guard (fail_aware) raises the RetryRequested itself: the policy then states the same limit and delay
                 deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={retry_delay_s(t)}{', backoff=dg.Backoff.EXPONENTIAL' if t.get('retry_exponential_backoff') else ''})")
             if t["pool"]:
                 deco.append(f"pool={t['pool']!r}")
@@ -2423,13 +2475,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             src_tasks = {x for v in m["srcs"].values() for x in src_leaves(v)} if m else set()
             extras = [u for u in ups if u not in src_tasks]
             params = {u: f"in_{k}" for k, u in enumerate(extras if m else ups)}
+            pulls = [u for u in ti_inputs.get(tid, []) if g is None and u not in ups and u in val and u in keyparts]      # `ti.xcom_pull(task_ids=...)` of a task that is not a direct upstream: its value is wired in too (it is not part of the skip logic)
+            pparams = {u: f"pl_{k}" for k, u in enumerate(pulls)}
             ctxn = "ctx" if tid in ctx_tasks else None
             ctx_line = (f"    ctx = af_context(context, {dag_id!r}, {tid!r}, {({**dag_params, **(t.get('params') or {})})!r}, "
-                        "{" + ", ".join(f"{u!r}: {params[u]}" for u in params) + "})\n") if ctxn else ""
-            sig = (["context: dg.OpExecutionContext"] + (["gitem"] if g is not None else []) + (["item"] if m else []) + list(params.values()))
+                        "{" + ", ".join(f"{u!r}: {v_}" for u, v_ in {**params, **pparams}.items()) + "}"
+                        + (", keys=" + repr({u: keyparts[u] for u in ti_inputs[tid] if u in keyparts}) if ti_inputs.get(tid) else "") + ")\n") if ctxn else ""
+            sig = (["context: dg.OpExecutionContext"] + (["gitem"] if g is not None else []) + (["item"] if m else []) + list(params.values()) + list(pparams.values()))
             if m:
                 single = len(m["srcs"]) == 1
-                kwexpr = ({"kw": f"{{{list(m['srcs'])[0]!r}: item}}", "args": "{}", "kwargs": "dict(item)"}[m["mode"]] if single else "dict(item)")
+                kwexpr = ({"kw": f"{{{list(m['srcs'])[0]!r}: item}}", "opargs": f"{{{list(m['srcs'])[0]!r}: item}}", "args": "{}", "kwargs": "dict(item)"}[m["mode"]] if single else "dict(item)")
                 combo = f"    combo = {kwexpr}\n"
             if is_custom(t):
                 body = (combo if m else "") + custom_body(t, ctx_line, params, mapped=bool(m))
@@ -2459,8 +2514,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     if cfg.get("python"):
                         notes.append(f"{tid}: runs with the interpreter {cfg['python']!r} from the Airflow DAG; point `python` at one that exists where Dagster runs")
                 if m:
-                    kw = f"{{**{m['fixed']!r}, **combo}}"
-                    posl = "list(item)" if m["mode"] == "args" else "[]"
+                    kw = f"{{**{m['fixed']!r}, **combo.get('op_kwargs', {{}})}}" if m["mode"] == "opargs" else f"{{**{m['fixed']!r}, **combo}}"
+                    posl = "list(item)" if m["mode"] == "args" else "list(combo.get('op_args', ()))" if m["mode"] == "opargs" else "[]"
                     inner = (f"call_with_context({pyname}, {posl}, {kw}, ctx)" if meta.get("needs_ctx")
                              else f"{pyname}(*{posl}, **{kw})")
                 else:
@@ -2487,7 +2542,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 elif ty in BRANCH:
                     body = ctx_line + f"    return BranchResult({inner})"
                 elif ty in SHORT:
-                    body = ctx_line + f"    return ShortCircuit(bool({inner}), hard={t.get('short_circuit_hard', True)!r})"
+                    body = ctx_line + f"    return bool({inner})"      # the value is the plain bool Airflow records; downstream gates read short-circuit-ness from the graph (sc=)"
                 else:
                     body = (combo if m else "") + ctx_line + f"    return {inner}"
             elif ty in S3_OPS and m:                                        # a mapped provider operator: the fixed arguments merged with the item's, at run time
@@ -2560,7 +2615,9 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if params:                                                  # skip semantics: branch choices, short-circuits and trigger rules
                 names = list(params.values())
                 setup_arg = (f", setup={[bool(tasks[u].get('is_setup')) for u in params]!r}" if t["trigger_rule"] == "all_done_setup_success" else "")
-                prefix = (f"    skip = af_gate(context, {t['trigger_rule']!r}, [{', '.join(names)}], {tid!r}{setup_arg})\n    if skip is not None:\n        return skip\n"
+                sc_flags = [(bool(tasks[u].get("short_circuit_hard", True)) if tasks[u]["type"] in SHORT else None) for u in params]
+                sc_arg = f", sc={sc_flags!r}" if any(f is not None for f in sc_flags) else ""
+                prefix = (f"    skip = af_gate(context, {t['trigger_rule']!r}, [{', '.join(names)}], {tid!r}{setup_arg}{sc_arg})\n    if skip is not None:\n        return skip\n"
                           f"    {', '.join(names)} = {', '.join(f'af_data({n})' for n in names)}\n")
             skips = (ty in PY_TASKS | BASH_DEC | BRANCH | SHORT | SENSOR_CALL and resolved.get(tid, ("", [], {}))[2].get("skips")) or bash_skips(t)
             if skips and not fail_aware:
@@ -2576,7 +2633,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 lit_names = [n for n, v in m["srcs"].items() if v[0] == "lit"]
                 srcs = list(m["srcs"].items())
                 chain = len(srcs) == 1 and srcs[0][1][0] == "task" and tasks[srcs[0][1][1]].get("is_mapped")
-                extra_call = "".join(f", {val[u]}" for u in extras)
+                extra_call = "".join(f", {val[u]}" for u in [*extras, *pulls])
                 if chain:
                     dyn[tid] = f"d{i}"
                     lines.append(f"    d{i} = {dyn[srcs[0][1][1]]}.map(lambda item: {fname}(item{extra_call}))")
@@ -2626,7 +2683,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 lines.append(f"    v{i} = collect_{safe(tid)}(d{i}.collect())")
                 val[tid] = f"v{i}"
             else:
-                args = ", ".join((["gitem"] if g is not None else []) + [val[u] for u in ups])
+                args = ", ".join((["gitem"] if g is not None else []) + [val[u] for u in [*ups, *pulls]])
                 lines.append(f"    v{i} = {fname}({args})")
                 val[tid] = f"v{i}"
             outs[tid] = f"o{i}"
@@ -2735,9 +2792,35 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     gran_decisions[tid] = {"role": "step", "into": c_, "reason": f"its value feeds only {c_} and nothing persists it or needs its own restart point: plain Python inside {c_}'s asset"}
                     continue
             gran_decisions[tid] = {"role": "product", "reason": why or "it is not a foldable step"}
-        for tid in fold_into:                                   # a chain folds into the final consumer
-            while fold_into[tid] in fold_into:
-                fold_into[tid] = fold_into[fold_into[tid]]
+        direct_fold = dict(fold_into)
+
+        def collapse(d: dict[str, str]) -> dict[str, str]:       # a chain folds into the final consumer
+            out_ = dict(d)
+            for tid_ in out_:
+                while out_[tid_] in out_:
+                    out_[tid_] = out_[out_[tid_]]
+            return out_
+        while True:                                              # folding makes every folded step wait for ALL the asset's upstream assets: a step whose Airflow ancestors lack one of them stays its own asset
+            fold_into = collapse(direct_fold)
+            groups_: dict[str, list[str]] = {}
+            for tid_, c_ in fold_into.items():
+                groups_.setdefault(c_, []).append(tid_)
+            offender = None
+            for c_, members_ in groups_.items():
+                ext_ = {u for x in [c_, *members_] for u in eff_up(x) if u not in fold_into}
+                for f_ in members_:
+                    missing_ = ext_ - set(ancestors(f_))
+                    if missing_:
+                        offender = (f_, sorted(missing_))
+                        break
+                if offender:
+                    break
+            if offender is None:
+                break
+            f_, missing_ = offender
+            del direct_fold[f_]
+            gran_decisions[f_] = {"role": "product", "reason": f"folding it into its consumer would make it wait for {', '.join(missing_)}, which Airflow does not make it wait for"}
+        fold_into = collapse(direct_fold)
         for tid, c_ in fold_into.items():
             gran_decisions[tid]["into"] = c_
         real = [t for t in real if t["task_id"] not in fold_into]
@@ -3242,14 +3325,27 @@ class _TaskInstance:
 
     def __init__(self, dag_id, task_id, run_id, try_number, upstream, context=None, keys=None):
         self.dag_id, self.task_id, self.run_id, self.try_number, self._up = dag_id, task_id, run_id, try_number, upstream
+        self._dg_run_id = run_id                             # Dagster's run id (event lookups); `run_id` is replaced by the Airflow-style id in af_context
         self._ctx, self._keys = context, keys or {}
         self._rv = _MISSING
         self.state = "running"                               # a callback adapter sets it ('running', 'success', 'failed', 'up_for_retry') before calling the callback
         self.map_index = -1                                  # Airflow's value for a task that is not mapped; a mapped op sets its index (see af_context)
 
     def xcom_pull(self, task_ids=None, dag_id=None, key="return_value", include_prior_dates=False, map_indexes=None, default=None):
-        if map_indexes is not None or task_ids is None:
-            raise NotImplementedError("xcom_pull with map_indexes or without task_ids is not mirrored: read the mapped op's collected output (a graph asset's list), or name the task")
+        if task_ids is None:
+            raise NotImplementedError("xcom_pull without task_ids is not mirrored: name the task")
+        if map_indexes is not None and key == "return_value" and dag_id in (None, self.dag_id) and not include_prior_dates:
+            ids = [task_ids] if isinstance(task_ids, str) else list(task_ids)
+            idxs = [map_indexes] if isinstance(map_indexes, int) else list(map_indexes)
+            out = []
+            for i in ids:                                    # Airflow 3: one value per (task id, map index), task-major; a mapped task's collected values are the list over its instances
+                seq = self._up.get(i)
+                for m in idxs:
+                    v = seq[m] if isinstance(seq, (list, tuple)) and -len(seq) <= m < len(seq) else None
+                    out.append(default if v is None else v)
+            return out[0] if isinstance(task_ids, str) and isinstance(map_indexes, int) else _pulled(out)
+        if map_indexes is not None:
+            raise NotImplementedError("xcom_pull with map_indexes of another DAG, a prior run or a pushed key is not mirrored")
         if dag_id not in (None, self.dag_id) or include_prior_dates:
             # another DAG's value, or a PRIOR run's: in Dagster that is the latest materialization of the asset that task became. A value pushed under a key is metadata on it;
             # the DAG's own return value cannot be read this way (load that asset as an input instead), so it stays loud.
@@ -3267,7 +3363,7 @@ class _TaskInstance:
             if i not in self._up:          # Airflow returns None for a task id it does not know (often a TaskGroup prefix left out)
                 self._warn(i)
             vals.append(self._up.get(i, default))
-        return vals[0] if isinstance(task_ids, str) else vals
+        return vals[0] if isinstance(task_ids, str) else _pulled(vals)
 
     def _pull_latest(self, dag_id, task_id, key, default):
         """the metadata `key` on the latest materialization (any run) of the asset (dag_id, task_id) became (default key path: [dag_id, task_id]); None when it was never materialized, as Airflow returns None."""
@@ -3292,7 +3388,7 @@ class _TaskInstance:
         records = self._ctx.instance.get_event_records(
             dg.EventRecordsFilter(event_type=dg.DagsterEventType.ASSET_MATERIALIZATION, asset_key=dg.AssetKey(asset_key)), limit=50, ascending=False)
         for r in records:
-            if r.event_log_entry.run_id == self.run_id and key in r.asset_materialization.metadata:
+            if r.event_log_entry.run_id == self._dg_run_id and key in r.asset_materialization.metadata:
                 ordered = r.asset_materialization.metadata.get(key + _ORDER_SUFFIX)
                 return json.loads(ordered.value) if ordered is not None else r.asset_materialization.metadata[key].value
         return default
@@ -3425,6 +3521,20 @@ class _AssetStateStore:
 
 
 AF_ISO_DT = False          # set when the runtime is written: Airflow before 2.8 prints datetimes in templates with a T (2026-07-02T05:00:00+00:00)
+AF_RT_MAJOR = 2          # the Airflow major version of the converted DAGs (written by convert_ir.py): Airflow 2's xcom_pull of several tasks / indexes returns a lazy sequence, Airflow 3's a list
+
+
+class LazySelectSequence(list):
+    """What Airflow 2's `ti.xcom_pull` returns for several task ids or map indexes: a read-only lazy sequence that prints as `LazySelectSequence([n items])`."""
+
+    def __repr__(self):
+        return f"LazySelectSequence([{len(self)} item{'' if len(self) == 1 else 's'}])"
+
+    __str__ = __repr__
+
+
+def _pulled(vals):
+    return LazySelectSequence(vals) if AF_RT_MAJOR < 3 else vals
 
 
 class _IsoDatetime(_dt.datetime):
@@ -3439,8 +3549,9 @@ def _iso(x):
 class _TaskShim:
     """The `task` of the Airflow context: its ids, and `render_template(content, context)`, which renders a string (or each string in a list, tuple, set or dict) with the runtime's Jinja environment."""
 
-    def __init__(self, task_id, dag_id):
+    def __init__(self, task_id, dag_id, params=None):
         self.task_id, self.dag_id = task_id, dag_id
+        self.params = dict(params or {})
 
     def render_template(self, content, context=None, jinja_env=None, seen_oids=None):
         ctx = context if context is not None else (_AF_CTX.get() or {})
@@ -3471,7 +3582,11 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
     elif window is not None:
         ld = window.start
     else:
-        ld = _dt.datetime.now(utc)
+        ld = None                                        # a manual run: Airflow's logical date is the moment the run started, the same for every task of the run
+        try:
+            ld = _dt.datetime.fromtimestamp(context.instance.get_run_record_by_id(run.run_id).create_timestamp.timestamp(), tz=utc)
+        except Exception:                                # noqa: BLE001  no instance or run record (a bare context)
+            ld = _dt.datetime.now(utc)
     if tags.get("airflow/data_interval_end"):
         de = _dt.datetime.fromisoformat(tags["airflow/data_interval_end"])
     else:
@@ -3484,6 +3599,8 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
     conf = json.loads(tags.get("airflow/conf", "{}"))
     run_id = run.run_id if run is not None else context.run_id        # context.run_id is deprecated in current Dagster
     ti = _TaskInstance(dag_id, task_id, run_id, getattr(context, "retry_number", 0) + 1, upstream, context, keys)
+    af_run_id = tags.get("airflow/run_id") or f"{'scheduled' if tags.get('airflow/logical_date') else 'manual'}__{ld.isoformat()}"      # Airflow's `<run type>__<logical date>`; Dagster's own id stays the key for event lookups
+    ti.run_id = af_run_id
     try:                                                 # a dynamically mapped op: the mapping key is `i<index>` (see the fan-out op), which is Airflow's map_index
         mk = context.get_mapping_key() if hasattr(context, "get_mapping_key") else None
         if mk and re.fullmatch(r"i\d+", mk):
@@ -3501,14 +3618,14 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
         pkey = tags.get("airflow/partition_key")           # a run launched for a partition key the producer records itself
     return {"ds": ds, "ds_nodash": ds.replace("-", ""), "ts": ld.isoformat(), "ts_nodash": ld.strftime("%Y%m%dT%H%M%S"),
             "logical_date": _iso(ld), "execution_date": _iso(ld), "data_interval_start": _iso(ld), "data_interval_end": _iso(de),
-            "run_id": run_id, "params": {k: v for k, v in dict(params or {}).items() if k != "__macros__"}, "conf": conf, **dict((params or {}).get("__macros__") or {}),
+            "run_id": af_run_id, "params": {k: v for k, v in dict(params or {}).items() if k != "__macros__"}, "conf": conf, **dict((params or {}).get("__macros__") or {}),
             "next_execution_date": _iso(nxt), "next_ds": nxt.strftime("%Y-%m-%d"), "next_ds_nodash": nxt.strftime("%Y%m%d"),
             "prev_execution_date": _iso(prv), "prev_ds": prv.strftime("%Y-%m-%d") if prv else None, "prev_ds_nodash": prv.strftime("%Y%m%d") if prv else None,
             "tomorrow_ds": (ld + one).strftime("%Y-%m-%d"), "tomorrow_ds_nodash": (ld + one).strftime("%Y%m%d"),
             "yesterday_ds": (ld - one).strftime("%Y-%m-%d"), "yesterday_ds_nodash": (ld - one).strftime("%Y%m%d"),
             "ts_nodash_with_tz": ld.strftime("%Y%m%dT%H%M%S%z"), "task_instance_key_str": f"{dag_id}__{task_id}__{ld.strftime('%Y%m%d')}", "prev_data_interval_start_success": None, "prev_data_interval_end_success": None,
-            "dag": types.SimpleNamespace(dag_id=dag_id), "task": _TaskShim(task_id, dag_id), "ti": ti, "task_instance": ti,
-            "dag_run": types.SimpleNamespace(state="running", run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
+            "dag": types.SimpleNamespace(dag_id=dag_id), "task": _TaskShim(task_id, dag_id, params), "test_mode": False, "ti": ti, "task_instance": ti,
+            "dag_run": types.SimpleNamespace(state="running", run_id=af_run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
             "partition_key": pkey, "outlet_events": _OutletEvents(context), "inlet_events": _InletEvents(context),
             "task_state_store": _TaskStateStore(dag_id, task_id, run_id, ti.map_index), "asset_state_store": _AssetStateStore(),
             "var": _VarNamespace(), "conn": _ConnNamespace()}
@@ -3907,19 +4024,28 @@ class UpstreamFailed:
         return "UpstreamFailed"
 
 
-class BranchResult:
-    """What a branch task chose: the task ids (or task group ids) to follow."""
+class _Branch:
+    """What a branch task chose: the task ids (or task group ids) to follow. The value IS what the callable returned (a str or a list), so the asset's value, metadata and the IO manager see exactly Airflow's XCom."""
 
-    def __init__(self, selected):
-        self.selected = [] if selected is None else ([selected] if isinstance(selected, str) else list(selected))
+    @property
+    def selected(self):
+        return [str(self)] if isinstance(self, str) else list(self)
 
     def selects(self, task_id):
         return any(task_id == s or task_id.startswith(s + ".") for s in self.selected)
 
 
-class ShortCircuit:
-    def __init__(self, passed, hard=True):
-        self.passed, self.hard = passed, hard
+class _BranchStr(_Branch, str):
+    pass
+
+
+class _BranchList(_Branch, list):
+    pass
+
+
+def BranchResult(selected):
+    """Wrap a branch callable's return value (a task id, a list of ids, or None for 'follow nothing') in a value that also carries the choice."""
+    return _BranchStr(selected) if isinstance(selected, str) else _BranchList([] if selected is None else selected)
 
 
 import enum
@@ -4043,6 +4169,20 @@ class BaseHook:
         return Connection.get(conn_id)
 
 
+class _FilePath(type(__import__("pathlib").Path())):
+    """A local ObjectStoragePath. Airflow 2's (universal_pathlib 0.2) `rename` / `replace` read a RELATIVE target as a sibling (relative to the parent directory); Airflow 3's read it against the working directory, like pathlib."""
+
+    def rename(self, target):
+        if AF_RT_MAJOR < 3 and isinstance(target, (str, os.PathLike)) and not os.path.isabs(target):
+            target = self.parent / os.path.normpath(target)
+        return super().rename(target)
+
+    def replace(self, target):
+        if AF_RT_MAJOR < 3 and isinstance(target, (str, os.PathLike)) and not os.path.isabs(target):
+            target = self.parent / os.path.normpath(target)
+        return super().replace(target)
+
+
 def ObjectStoragePath(path, conn_id=None, **storage_options):
     """Airflow's ObjectStoragePath as plain Python: pathlib.Path for file:// and bare paths; universal_pathlib's UPath for other schemes (pip install universal-pathlib plus
     the fsspec backend, e.g. s3fs). A `conn_id@bucket` netloc or conn_id= reads AIRFLOW_CONN_<ID> (key, secret, endpoint) and fails loudly if it is not set; with no
@@ -4052,7 +4192,8 @@ def ObjectStoragePath(path, conn_id=None, **storage_options):
     text = str(path)
     parts = urlsplit(text)
     if not parts.scheme or parts.scheme == "file":
-        return pathlib.Path(parts.path if parts.scheme else text)
+        # `file://include/bears` is the RELATIVE path include/bears (fsspec's local filesystem reads the host part as the first segment), resolved against the task's working directory
+        return _FilePath(parts.netloc + parts.path if parts.scheme else text)
     netloc = parts.netloc
     if "@" in netloc:
         conn_id, netloc = netloc.rsplit("@", 1)
@@ -4154,15 +4295,15 @@ def _upstream_failed(context):
     return UpstreamFailed()
 
 
-def af_gate(context, rule, inputs, task_id, setup=None):
+def af_gate(context, rule, inputs, task_id, setup=None, sc=None):
     """Airflow's decision for one task from its upstream states (TriggerRuleDep): None to run it, or a marker (Skipped, UpstreamFailed)."""
     if any(isinstance(x, Skipped) and x.hard for x in inputs):
         return _skip(context, True)
-    for x in inputs:
-        if isinstance(x, BranchResult) and not x.selects(task_id):
+    for i, x in enumerate(inputs):
+        if isinstance(x, _Branch) and not x.selects(task_id):
             return _skip(context, False)
-        if isinstance(x, ShortCircuit) and not x.passed:
-            return _skip(context, x.hard)
+        if sc and sc[i] is not None and not isinstance(x, (Skipped, Failed, UpstreamFailed)) and not x:
+            return _skip(context, sc[i])      # a ShortCircuit that returned a falsy value; its value stays the plain bool Airflow records
     states = [_state(x) for x in inputs]
     n = len(states)
     if not n:
@@ -4348,11 +4489,30 @@ def af_xcom_key(value, key):
     return value.get(key) if isinstance(value, dict) else None
 
 
+class AfTaskRef:
+    """A task defined in the DAG body that a callable names (`astronauts.operator.task_id`, `skip_roster.task_id`): the Airflow task id, group prefix included."""
+
+    def __init__(self, task_id):
+        self.task_id = task_id
+
+    @property
+    def operator(self):
+        return self
+
+    def __repr__(self):
+        return f"AfTaskRef({self.task_id!r})"
+
+
 class LoopDecision:
     """What an `until` callable of a loop returns in Airflow 3.4: whether to stop, and why."""
 
     def __init__(self, stop, reason=None):
         self.stop, self.reason = bool(stop), reason
+
+
+def af_loop_ti(task_id, map_index):
+    """The `ti` a loop body's task is handed: its id and (for a mapped task) the item's position, as `ti.map_index`."""
+    return types.SimpleNamespace(task_id=task_id, map_index=-1 if map_index is None else map_index, try_number=1)
 
 
 class _LoopState:
@@ -4870,10 +5030,10 @@ def af_data(x):
     """The value a downstream task sees: None for a skipped task, the chosen ids for a branch, the flag for a short-circuit."""
     if isinstance(x, (Skipped, Failed, UpstreamFailed)):
         return None
-    if isinstance(x, BranchResult):
-        return list(x.selected)
-    if isinstance(x, ShortCircuit):
-        return x.passed
+    if isinstance(x, _BranchStr):
+        return str(x)
+    if isinstance(x, _BranchList):
+        return list(x)
     return x
 '''
 exec(ITEM_SRC)           # item_key is also used at conversion time, so the converter and the generated runtime share one definition
@@ -4951,7 +5111,7 @@ def main(argv: list[str] | None = None) -> int:
     (a.out_dir / "__init__.py").touch()
     _v = re.match(r"(\d+)\.(\d+)", str(ir.get("airflow_version") or ""))
     iso = bool(_v) and (int(_v.group(1)), int(_v.group(2))) < (2, 8)
-    (a.out_dir.parent / "runtime.py").write_text(RUNTIME.replace("AF_ISO_DT = False", f"AF_ISO_DT = {iso}", 1).replace('DATASET_KEYS_MODE = "path"', f'DATASET_KEYS_MODE = "{DATASET_KEYS}"', 1).replace('DBT_DIR = "dbt"', f'DBT_DIR = {DBT_DIR!r}', 1))
+    (a.out_dir.parent / "runtime.py").write_text(RUNTIME.replace("AF_ISO_DT = False", f"AF_ISO_DT = {iso}", 1).replace("AF_RT_MAJOR = 2", f"AF_RT_MAJOR = {AF_MAJOR}", 1).replace('DATASET_KEYS_MODE = "path"', f'DATASET_KEYS_MODE = "{DATASET_KEYS}"', 1).replace('DBT_DIR = "dbt"', f'DBT_DIR = {DBT_DIR!r}', 1))
     note = ("Schedule semantics: tasks converted here use no date values, so a plain cron schedule is exact for Airflow 3 "
             "(trigger timetable) and Airflow 2 (data-interval timetable).")
     report: dict[str, Any] = {"airflow_version": ir.get("airflow_version"), "dataset_keys": DATASET_KEYS, "dags": {}}
