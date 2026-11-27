@@ -56,6 +56,8 @@ def _jsonable(v: Any, depth: int = 0) -> Any:
         return "{% raw %}" + str(getattr(v, "value", "")) + "{% endraw %}"
     if name == "DagParam":                                    # `dag.param("x")` / a DAG param used as an argument: Airflow resolves it like `{{ params.x }}`
         return "{{ params." + str(getattr(v, "_name", None) or getattr(v, "name", "")) + " }}"
+    if name in ("Dataset", "Asset") and hasattr(v, "extra") and (hasattr(v, "uri") or hasattr(v, "name")):      # an Airflow Dataset/Asset passed to a callable: rebuilt as the converted runtime's small plain class
+        return {"asset_obj": {"cls": name, "name": getattr(v, "name", None) if name == "Asset" else None, "uri": getattr(v, "uri", None), "extra": _jsonable(getattr(v, "extra", None), depth + 1)}}
     if name == "ObjectStoragePath":                           # str() is the full URI (`scheme://conn_id@bucket/key`); the converter rebuilds it with a pathlib / UPath shim
         return {"object_storage_path": str(v)}
     if name == "MappedArgument":                              # a mapped task group's argument: the converter reads it from the group's item
@@ -68,10 +70,42 @@ def _jsonable(v: Any, depth: int = 0) -> Any:
     return {"repr": repr(v)[:200]}
 
 
+def _closure_literals(fn: Any) -> dict[str, str]:
+    """DAG factory: a callable defined inside `create_dag(dag_id, n, ...)` reads the enclosing function's arguments and locals. Airflow evaluated the factory once per generated DAG, so the value each name has
+    for THIS DAG is known here: {name: Python literal text} for the free variables whose value is a plain literal (it round-trips through `ast.literal_eval`)."""
+    import ast
+    code = getattr(fn, "__code__", None)
+    cells = getattr(fn, "__closure__", None)
+    if code is None or not cells:
+        return {}
+    out: dict[str, str] = {}
+    for name, cell in zip(code.co_freevars, cells):
+        try:
+            v = cell.cell_contents
+            text = repr(v)
+            if not callable(v) and ast.literal_eval(text) == v and type(ast.literal_eval(text)) is type(v):
+                out[name] = text
+        except Exception:                                    # noqa: BLE001  (an empty cell, or a value that is not a literal)
+            continue
+    return out
+
+
 def _callable_info(fn: Any) -> dict[str, Any] | None:
     if fn is None or not callable(fn):
         return None
     info: dict[str, Any] = {"name": getattr(fn, "__name__", "?"), "module": getattr(fn, "__module__", None)}
+    if not hasattr(fn, "__code__") and not isinstance(fn, type) and not inspect.ismethod(fn) and not inspect.isbuiltin(fn):
+        cls = type(fn)                                        # a callable OBJECT, e.g. a notifier instance (`on_failure_callback=MyNotifier()`): the class source and the instance's state
+        if not cls.__module__.startswith(("airflow", "builtins", "functools")):
+            state: dict[str, str] = {}
+            import ast
+            for k, v in vars(fn).items():
+                try:
+                    if ast.literal_eval(repr(v)) == v:
+                        state[k] = repr(v)
+                except Exception:                            # noqa: BLE001
+                    pass
+            return {"name": cls.__name__, "module": cls.__module__, "notifier": {"class": _class_info(cls), "state": state, "state_dropped": sorted(set(vars(fn)) - set(state))}}
     if info["name"] == "<lambda>":                           # rewrite the lambda as a function: `lambda x: x + 1` -> `def _lambda(x): return x + 1`
         try:
             import ast
@@ -86,6 +120,9 @@ def _callable_info(fn: Any) -> dict[str, Any] | None:
                 return info
         except Exception:                                    # noqa: BLE001
             pass
+    closure = _closure_literals(fn)
+    if closure:
+        info["closure"] = closure
     try:
         info["source"] = textwrap.dedent(inspect.getsource(fn))
         info["file"] = inspect.getsourcefile(fn)
@@ -474,7 +511,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "task_id": task.task_id, "type": task.task_type, "module": type(task).__module__,
         "group": getattr(getattr(task, "task_group", None), "group_id", None),
         "upstream": sorted(task.upstream_task_ids), "downstream": sorted(task.downstream_task_ids),
-        "retries": task.retries, "retry_delay_s": task.retry_delay.total_seconds() if task.retry_delay else None,
+        "retries": task.retries, "retry_delay_s": task.retry_delay.total_seconds() if task.retry_delay is not None else None,
         "pool": task.pool if task.pool and task.pool != "default_pool" else None,
         "do_xcom_push": bool(getattr(task, "do_xcom_push", True)),
         "sensor": _sensor_ir(task),
@@ -497,7 +534,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "max_retry_delay_s": task.max_retry_delay.total_seconds() if getattr(task, "max_retry_delay", None) else None,
         "sla_s": task.sla.total_seconds() if getattr(task, "sla", None) else None,
         "callback_fns": {a: [_callable_info(f) for f in (getattr(task, a, None) if isinstance(getattr(task, a, None), (list, tuple)) else [getattr(task, a, None)])
-                              if callable(f)] for a in ("on_failure_callback", "on_success_callback", "on_retry_callback") if getattr(task, a, None)},
+                              if callable(f)] for a in ("on_failure_callback", "on_success_callback", "on_retry_callback", "on_execute_callback") if getattr(task, a, None)},
         "callbacks": [a for a in ("on_failure_callback", "on_success_callback", "on_retry_callback", "on_skipped_callback", "on_execute_callback")
                       if getattr(task, a, None)] + _overridden_hooks(task),
         "outlets": [str(getattr(o, "uri", None) or getattr(o, "name", None) or o) for o in (getattr(task, "outlets", None) or [])],
@@ -564,6 +601,9 @@ def _dag_ir(dag: Any, folder: Path) -> dict[str, Any]:
         "dag_settings": {k: _jsonable(getattr(dag, k, None)) for k in ("fail_stop", "max_active_tasks", "max_active_runs", "dagrun_timeout",
                          "max_consecutive_failed_dag_runs", "render_template_as_native_obj", "is_paused_upon_creation", "concurrency")
                          if getattr(dag, k, None) is not None},
+        "callback_fns": {a: [_callable_info(f) for f in (getattr(dag, a, None) if isinstance(getattr(dag, a, None), (list, tuple)) else [getattr(dag, a, None)]) if callable(f)]
+                         for a in ("on_failure_callback", "on_success_callback") if getattr(dag, a, None)},
+        "sla_miss_callback": bool(getattr(dag, "sla_miss_callback", None)),
         "has_callbacks": any(getattr(dag, a, None) for a in ("on_failure_callback", "on_success_callback", "sla_miss_callback")),
         "cosmos_groups": _cosmos_groups(dag),
         "mapped_groups": _mapped_groups(dag),

@@ -25,6 +25,7 @@ from pathlib import Path
 from typing import Any
 
 import eval_common as C
+import eval_corpus as EC
 import rewrite_project as RPJ
 
 sys.path.insert(0, str(C.HERE / "parity"))
@@ -99,13 +100,17 @@ def run_one(a: argparse.Namespace, entry: dict[str, Any], key: str) -> dict[str,
     spec = json.loads((priv / "specs" / f"{name}.spec.json").read_text())
     routes = [x for x in a.routes.split(",") if x]
     conv = None
-    if "converter" in routes and row["converter"] != "deferred":
+    stratum = row["converter"]                                              # the manifest's stratum is from when the corpus was built; the converter changes, so it is recomputed from this run's report
+    if "converter" in routes:
         src, rep = converter_src(work, row, CONV_DIR)
-        conv = {"src": src, "report": rep}
+        if rep is not None:
+            stratum = EC.converter_stratum(rep)[0]
+        if stratum != "deferred":
+            conv = {"src": src, "report": rep}
     res = execute(priv / "behavior" / name, priv / "sandboxes" / name, spec, row["dag_id"], C.dag_file(work, manifest, row), work / "repos" / row["repo"],
                   a.venv_2 if row["airflow"] == "2" else a.venv_3, a.dagster_python, conv, work / a.run / name / "out" / entry["project"], routes, a.timeout, a.sleep_cap,
-                  deferred=row["converter"] == "deferred", seed=seed_for(C.dag_file(work, manifest, row), work / "repos" / row["repo"]), extra_runs=earlier_baseline_runs(work, a.run, name))
-    res.update({"key": key, "stratum": row["converter"], "pattern": row["pattern"], "repo": row["repo"]})
+                  deferred=stratum == "deferred", seed=seed_for(C.dag_file(work, manifest, row), work / "repos" / row["repo"]), extra_runs=earlier_baseline_runs(work, a.run, name))
+    res.update({"key": key, "stratum": stratum, "manifest_stratum": row["converter"], "pattern": row["pattern"], "repo": row["repo"]})
     (priv / "behavior" / name / "behavior.json").write_text(json.dumps(res, indent=1, sort_keys=True, default=str) + "\n")
     return res
 

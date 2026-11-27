@@ -67,12 +67,12 @@ SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "executio
                  "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf", "outlet_events", "inlet_events",
                  "next_ds", "next_ds_nodash", "next_execution_date", "prev_ds", "prev_ds_nodash", "prev_execution_date",     # Airflow 2 macros
                  "tomorrow_ds", "tomorrow_ds_nodash", "yesterday_ds", "yesterday_ds_nodash", "ts_nodash_with_tz",
-                 "prev_data_interval_start_success", "prev_data_interval_end_success", "task_instance_key_str", "task_state_store"}
+                 "prev_data_interval_start_success", "prev_data_interval_end_success", "task_instance_key_str", "task_state_store", "asset_state_store"}
 JINJA_VARS = SUPPORTED_CTX | {"macros", "var"}
 USER_MACROS: set[str] = set()     # the DAG's `user_defined_macros` names (set per DAG): a template may use them
-CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date"}, "dag": {"dag_id"}, "task": {"task_id"},
-             "ti": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push"},
-             "task_instance": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push"}}
+CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date", "state"}, "dag": {"dag_id"}, "task": {"task_id"},
+             "ti": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push", "state"},
+             "task_instance": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push", "state"}}
 SUPPORTED_MACROS = {"ds_add", "ds_format", "ds_format_locale", "datetime", "timedelta", "json", "yaml", "time", "uuid", "random", "dateutil"}
 SHIM_IMPORTS = {(m, "WeekDay") for m in ("airflow.providers.standard.utils.weekday", "airflow.utils.weekday")} | {("airflow.sdk", "LoopDecision"), ("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
                 ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
@@ -80,8 +80,9 @@ SHIM_IMPORTS = {(m, "WeekDay") for m in ("airflow.providers.standard.utils.weekd
                 ("airflow.exceptions", "AirflowNotFoundException"), ("airflow.sdk.exceptions", "AirflowNotFoundException")} | \
     {(m, "Connection") for m in ("airflow.models", "airflow.models.connection", "airflow.sdk", "airflow.sdk.definitions.connection")} | \
     {(m, "ObjectStoragePath") for m in ("airflow.io.path", "airflow.sdk", "airflow.sdk.io", "airflow.sdk.io.path")} | \
+    {(m, "BaseNotifier") for m in ("airflow.notifications.basenotifier", "airflow.sdk.bases.notifier", "airflow.sdk")} | \
     {(m, "BaseOperator") for m in ("airflow.models", "airflow.models.baseoperator", "airflow.sdk", "airflow.sdk.bases.operator")} | \
-    {(m, n) for m in ("airflow.sdk", "airflow.datasets", "airflow.assets", "airflow.sdk.definitions.asset", "airflow.datasets.metadata") for n in ("Asset", "Dataset", "Metadata", "AssetAlias", "DatasetAlias")} | \
+    {(m, n) for m in ("airflow", "airflow.sdk", "airflow.datasets", "airflow.assets", "airflow.sdk.definitions.asset", "airflow.datasets.metadata") for n in ("Asset", "Dataset", "Metadata", "AssetAlias", "DatasetAlias")} | \
     {("airflow.utils.decorators", "apply_defaults")} | {(m, "Context") for m in ("airflow.utils.context", "airflow.sdk", "airflow.sdk.definitions.context")} | \
     {(m, n) for m in ("airflow.exceptions", "airflow.sdk.exceptions", "airflow.sdk") for n in ("AirflowException", "AirflowSkipException", "AirflowFailException")} | \
     {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")}
@@ -294,8 +295,8 @@ def inline_local_helper(modfile: Path, name: str, out: dict[int, str], counter: 
     out[counter[0]] = seg
 
 
-def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None) -> tuple[str, list[str]]:
-    """The source of a user-defined operator class (an `execute` method on a BaseOperator subclass) and the module-level code it needs."""
+def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None, entry: str = "execute", base: str = "BaseOperator") -> tuple[str, list[str]]:
+    """The source of a user-defined operator class (an `execute` method on a BaseOperator subclass) and the module-level code it needs. Also used for a notifier (`entry="notify"`, `base="BaseNotifier"`)."""
     shims = shims if shims is not None else set()
     meta = meta if meta is not None else {}
     if not info or "source" not in info:
@@ -306,8 +307,8 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
         raise Defer(f"operator class source does not parse: {e.msg}") from e
     cls = next((n for n in tree.body if isinstance(n, ast.ClassDef)), None)
     methods = {m.name: m for m in (cls.body if cls else []) if isinstance(m, ast.FunctionDef)}
-    if cls is None or "execute" not in methods:
-        raise Defer("operator class without an execute method")
+    if cls is None or entry not in methods:
+        raise Defer(f"operator class without a {entry} method")
     inner_shims = [n for n in ast.walk(cls) if isinstance(n, ast.ImportFrom) and n.module and all((n.module, a.name) in SHIM_IMPORTS for a in n.names)]
     for n in inner_shims:
         shims.update(a.name for a in n.names)
@@ -358,10 +359,12 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
             free |= _loads(st)
     for b in cls.bases:
         free |= _loads(b)
-    need(free - {"BaseOperator", "apply_defaults", "Context", "super", "self"}, cls.name)
+    need(free - {base, "apply_defaults", "Context", "super", "self"}, cls.name)
     for n in cls.bases:
-        if not (isinstance(n, ast.Name) and n.id == "BaseOperator"):
-            raise Defer(f"operator class extends {ast.unparse(n)}, not BaseOperator")
+        if not (isinstance(n, ast.Name) and n.id == base):
+            raise Defer(f"operator class extends {ast.unparse(n)}, not {base}")
+    if base != "BaseOperator":
+        shims.add(base)
     lines = textwrap.dedent(info["source"]).splitlines()
     for n in inner_shims:
         indent = re.match(r"\s*", lines[n.lineno - 1]).group(0)
@@ -451,6 +454,9 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
                 continue
             if name == "__file__":                               # the DAG file's own path: a shim constant (overridable by env), not the converted module's path
                 file_used[0] = True
+                continue
+            if name in (info.get("closure") or {}):               # DAG factory: the enclosing function's argument or local, as it was for THIS generated DAG (recorded at extraction)
+                needed[-30_000_000 + len(needed)] = f"{name} = {info['closure'][name]}"
                 continue
             hit = idx.defs.get(name)
             if hit is None:
@@ -556,7 +562,7 @@ def ctor_expr(v: Any, params: dict[str, str]) -> str:
             return f"af_time.fromisoformat({v['time']!r})"
         if "seconds" in v:
             return f"af_timedelta(seconds={v['seconds']!r})"
-        if {"object_storage_path", "xcom_from", "group_arg", "repr"} & set(v):
+        if {"object_storage_path", "xcom_from", "group_arg", "repr", "asset_obj"} & set(v):
             return expr(v, params)
         return "{" + ", ".join(f"{k!r}: {ctor_expr(x, params)}" for k, x in v.items()) + "}"
     if isinstance(v, list):
@@ -654,6 +660,11 @@ def expr(v: Any, params: dict[str, str], ctx: str | None = None) -> str:
             return params[v["xcom_from"]]
         if "object_storage_path" in v:                          # an ObjectStoragePath argument: rebuilt at run time by the runtime's pathlib/UPath shim
             return f"ObjectStoragePath({v['object_storage_path']!r})"
+        if "asset_obj" in v:                                    # an airflow Dataset / Asset handed to a callable: the runtime's plain class (uri, name, extra)
+            a_ = v["asset_obj"]
+            if a_["cls"] == "Dataset":
+                return f"Dataset({a_['uri']!r}, {expr(a_.get('extra'), params, ctx)})"
+            return f"Asset(name={a_.get('name')!r}, uri={a_.get('uri')!r}, extra={expr(a_.get('extra'), params, ctx)})"
         if "repr" in v:
             raise Defer(f"argument {v['repr'][:60]!r} cannot be serialised")
         if "seconds" in v:
@@ -1315,6 +1326,11 @@ def plan_partitions(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[st
     return plan, []
 
 
+def retry_delay_s(t: dict[str, Any]) -> int:
+    """The task's retry delay in seconds: Airflow's default is 5 minutes, but an explicit zero is zero."""
+    return 300 if t.get("retry_delay_s") is None else int(t["retry_delay_s"])
+
+
 def sla_wrap(body: str, t: dict[str, Any], key: str) -> str:
     """An Airflow `sla` is a deadline after the scheduled time; a miss is recorded and the task still runs. The step reports a breach as an observation on its asset."""
     if not t.get("sla_s"):
@@ -1394,7 +1410,7 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
             attrs["deps"] = ups
         if t["retries"]:
             attrs["retry_policy_max_retries"] = int(t["retries"])
-            attrs["retry_policy_delay_seconds"] = int(t["retry_delay_s"] or 300)
+            attrs["retry_policy_delay_seconds"] = retry_delay_s(t)
             attrs["retry_policy_backoff"] = "exponential" if t.get("retry_exponential_backoff") else "linear"
         if ty == "BashOperator":
             cmd = (t.get("template_files") or {}).get("bash_command") or tf.get("bash_command")
@@ -1454,7 +1470,7 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
             stmt = stmt[len("return "):] if stmt.startswith("return ") else stmt
             retry = ""
             if t["retries"]:
-                retry = (f", retry_policy=dg.RetryPolicy(max_retries={int(t['retries'])}, delay={int(t['retry_delay_s'] or 300)}, "
+                retry = (f", retry_policy=dg.RetryPolicy(max_retries={int(t['retries'])}, delay={retry_delay_s(t)}, "
                          f"backoff=dg.Backoff.{'EXPONENTIAL' if t.get('retry_exponential_backoff') else 'LINEAR'})")
             step_fns.append(f"@dg.asset(key=dg.AssetKey({aname[tid]!r}), group_name={name!r}, deps=[{', '.join(f'dg.AssetKey({u!r})' for u in ups)}], "
                             f"required_resource_keys={('{' + ', '.join(repr(k) for k in sorted(keys_)) + '}') if keys_ else 'set()'}, kinds={{{kind_!r}}}{retry})\n"
@@ -1726,7 +1742,11 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             rt_names = {RUNTIME_PARTS.get("/".join(key_from_asset(a))) for a in leaves}
             if leaves and None not in rt_names and len(rt_names) == 1:           # the upstream's partition keys are chosen at run time
                 if mapper_kind(ser.get("default_partition_mapper"))[0] != "IdentityMapper":
-                    reasons.append(f"a runtime-partitioned upstream with the {mapper_kind(ser.get('default_partition_mapper'))[0]} (only the identity mapping is converted)")
+                    mk_ = mapper_kind(ser.get('default_partition_mapper'))[0]
+                    reasons.append(f"a runtime-partitioned upstream (the producer chooses partition keys while it runs: dynamic partitions) with the {mk_}: "
+                                   + ("each upstream key fans out to several downstream keys" if mk_ == "FanOutMapper" else "several upstream keys roll up into one downstream key" if mk_ == "RollupMapper" else "a non-identity mapping")
+                                   + ". Not converted: Dagster has no built-in mapping between dynamic partition sets of different keys (only the identity mapping is converted); the equivalent is a custom "
+                                   "`dg.PartitionMapping` subclass on the downstream asset's `AssetDep` plus a sensor that adds the downstream keys, which depends on how Airflow's mapper derives them from the key")
                 else:
                     ppart = {"role": "consumer", "info": {"dynamic": next(iter(rt_names)), "grain": "dynamic", "start": "", "tz": "UTC"}, "via": None}
             elif any(o[0] is None for o in outs):
@@ -1773,9 +1793,15 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             "the ExternalTaskSensor became a dependency on " + ", ".join("/".join(key_from_asset(x)) for x in ext_trigs) +
             ": this DAG's assets update when those do, and the DAG's own schedule no longer starts it (Airflow also waited for the same logical date, which is not matched)")
     if dag.get("has_callbacks"):
-        if CAVEATS != "off":
-            caveats.append({"task": "", "kind": "degraded", "reason": "DAG-level callbacks (on_failure_callback, on_success_callback, sla_miss_callback) were not converted; attach them with `@on_hooks` or a run-status sensor"})
+        if "callback_fns" in dag:                                   # the IR carries the callables: on_success/on_failure become run-status sensors; sla_miss_callback has no equivalent
+            dag_unconv = ["sla_miss_callback"] if dag.get("sla_miss_callback") else []
+            if not (dag.get("callback_fns") or {}) and not dag_unconv:
+                dag_unconv = ["on_success_callback / on_failure_callback (not callable objects the IR could copy)"]
         else:
+            dag_unconv = ["on_failure_callback", "on_success_callback", "sla_miss_callback"]       # an IR from before the callbacks were recorded: re-extract
+        if dag_unconv and CAVEATS != "off":
+            caveats.append({"task": "", "kind": "degraded", "reason": f"DAG-level callbacks {dag_unconv} were not converted (" + ("re-extract the IR to convert on_success_callback / on_failure_callback; " if "callback_fns" not in dag else "") + "Airflow's sla_miss_callback has no Dagster run-level equivalent: use freshness checks or an alert policy)"})
+        elif dag_unconv:
             reasons.append("DAG-level callbacks")
     ds = dag.get("dag_settings") or {}
     if ds.get("fail_stop"):
@@ -1850,11 +1876,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         if t.get("pool_slots") not in (None, 1):
             soften(f"{tid}: pool_slots={t['pool_slots']} is not enforced (one slot is used)", tid)
         cbs = [c for c in (t.get("callbacks") or []) if not (t["is_mapped"] and c in ("pre_execute", "post_execute"))]   # a mapped wrapper overrides them; mapping already defers
-        cb_ok = ("on_failure_callback", "on_success_callback", "on_retry_callback")       # converted with @on_hooks (asset form only)
+        cb_ok = ("on_failure_callback", "on_success_callback", "on_retry_callback", "on_execute_callback")       # converted (asset form only): @on_hooks for the first three, a call at the start of the step for on_execute
         unsupported = [c for c in cbs if c not in cb_ok or not (t.get("callback_fns") or {}).get(c)]
-        if unsupported or (cbs and (mplan and mplan["mode"] == "graph")):
-            soften(f"{tid}: task callbacks or hooks {cbs} were not converted (attach them with `@on_hooks`)", tid)
-            if CAVEATS != "off":
+        in_graph = bool(cbs and (mplan and mplan["mode"] == "graph"))
+        if unsupported or in_graph:
+            what_ = cbs if in_graph else unsupported
+            soften(f"{tid}: task callbacks or hooks {what_} were not converted (on_skipped_callback, pre_execute and post_execute have no Dagster equivalent; the callbacks that are converted need the asset form)", tid)
+            if CAVEATS != "off" and in_graph:
                 t["callback_fns"] = {}
         if t.get("execution_timeout_s") and ty not in BASH | BASH_DEC:
             soften(f"{tid}: execution_timeout on a non-shell task is not enforced (a Python callable cannot be interrupted safely)", tid)
@@ -2068,22 +2096,54 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if v[0] == "expr":
                 collect(v[1])
     cb_code: dict[str, list[tuple[str, str]]] = {}                 # task -> [(kind, function name)] and the generated adapters
+    dag_cb: list[tuple[str, str]] = []                             # DAG-level callbacks: (kind, function name), run in run-status sensors
     cb_blocks: list[str] = []
+    notifier_classes: set[str] = set()
+
+    def copy_callback(info: Any, fn_name: str, owner: str, kind: str) -> bool:
+        """Write one callback (a function, or a notifier instance) as `fn_name`; False (with a degraded caveat) when it cannot be copied."""
+        try:
+            if info and info.get("notifier"):                      # `on_failure_callback=MyNotifier()`: the class (BaseNotifier is a runtime shim) and an instance with the state it had
+                n_ = info["notifier"]
+                body_src, sup_ = resolve_operator_class(n_["class"], shims_used, {}, entry="notify", base="BaseNotifier")
+                cname = n_["class"]["name"]
+                for sline in sup_:
+                    support.setdefault(sline, len(support))
+                if cname not in notifier_classes:
+                    notifier_classes.add(cname)
+                    cb_blocks.append(body_src)
+                cb_blocks.append(f"{fn_name} = {cname}.__new__({cname})\n{fn_name}.__dict__.update({{{', '.join(f'{k!r}: {v}' for k, v in n_['state'].items())}}})")
+                if n_.get("state_dropped"):
+                    caveats.append({"task": owner, "kind": "degraded", "reason": f"{kind}: notifier {cname} attributes {n_['state_dropped']} are not plain values and were not copied (its __init__ is not run)"})
+                return True
+            code, sup = resolve_callable(info, shims_used, {}, context_arg=True)
+        except Defer as e:
+            if CAVEATS == "off":
+                raise
+            caveats.append({"task": owner, "kind": "degraded", "reason": f"{kind} could not be copied and was dropped: {e}"})
+            return False
+        for sline in sup:
+            support.setdefault(sline, len(support))
+        cb_blocks.append(re.sub(r"^def\s+\w+", f"def {fn_name}", code, count=1))
+        return True
+
     for t in real:
         for kind, fns in (t.get("callback_fns") or {}).items():
             for k, info in enumerate(fns):
-                try:
-                    code, sup = resolve_callable(info, shims_used, {}, context_arg=True)
-                except Defer as e:
-                    if CAVEATS == "off":
-                        raise
-                    caveats.append({"task": t["task_id"], "kind": "degraded", "reason": f"{kind} could not be copied and was dropped: {e}"})
-                    continue
-                for sline in sup:
-                    support.setdefault(sline, len(support))
                 fn_name = f"_af_cb_{safe(t['task_id'])}_{kind[3:-9]}_{k}"
-                cb_blocks.append(re.sub(r"^def\s+\w+", f"def {fn_name}", code, count=1))
-                cb_code.setdefault(t["task_id"], []).append((kind, fn_name))
+                if copy_callback(info, fn_name, t["task_id"], kind):
+                    cb_code.setdefault(t["task_id"], []).append((kind, fn_name))
+    for kind, fns in (dag.get("callback_fns") or {}).items():
+        for k, info in enumerate(fns):
+            fn_name = f"_af_dagcb_{safe(dag_id)}_{kind[3:-9]}_{k}"
+            if copy_callback(info, fn_name, "", kind):
+                dag_cb.append((kind, fn_name))
+    if dag_cb:
+        notes.append("DAG-level callbacks run in run-status sensors on this DAG's job (" + ", ".join(sorted({k_ for k_, _ in dag_cb})) + "): they need the sensor daemon, run after the run ends rather than inside it, "
+                     "and receive a minimal context (dag, dag_run, run_id, logical_date, reason, exception message; no task instance)")
+    if cb_code:
+        notes.append("task callbacks: on_execute_callback is called at the start of each attempt; on_success/on_failure/on_retry through `@on_hooks`; ti.state is set to 'running', 'success', 'failed' or "
+                     "'up_for_retry' (Airflow's own transient states such as 'scheduled' are not reproduced); notifier instances run through a plain `BaseNotifier` shim (their template_fields are not rendered)")
     uses_ctx = bool(ctx_tasks)
     if gplan and any(ti_inputs.values()):
         if CAVEATS == "off":
@@ -2256,7 +2316,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             fname = safe("op_" + tid)
             deco = [f"name={safe(dag_id) + '__' + safe(tid)!r}"]
             if t["retries"] and not fail_aware:
-                deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)}{', backoff=dg.Backoff.EXPONENTIAL' if t.get('retry_exponential_backoff') else ''})")
+                deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={retry_delay_s(t)}{', backoff=dg.Backoff.EXPONENTIAL' if t.get('retry_exponential_backoff') else ''})")
             if t["pool"]:
                 deco.append(f"pool={t['pool']!r}")
             elif f"{safe(dag_id)}__{safe(tid)}" in pool_limits:
@@ -2412,7 +2472,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             if fail_aware:                                              # the body runs inside a guard that turns a failure into a value
                 inner_lines = "\n".join(("    " + ln if ln.strip() else ln) for ln in body.split("\n"))
                 body = ("    def _run():\n" + inner_lines +
-                        f"\n    return af_guard(context, _run, {int(t['retries'] or 0)}, {int(t['retry_delay_s'] or 300)})")
+                        f"\n    return af_guard(context, _run, {int(t['retries'] or 0)}, {retry_delay_s(t)})")
             body = sla_wrap(body, t, "/".join(keyparts[tid]))
             ops.append("@dg.op(" + ", ".join(deco) + ")\ndef " + fname + "(" + ", ".join(sig) + "):\n" + prefix + body + "\n")
             if m:                                                       # the fan-out op, then the mapped op
@@ -2654,7 +2714,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         elif ppart:
             deco.append(f"partitions_def={part_var}")
         if t["retries"]:
-            deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={int(t['retry_delay_s'] or 300)}{', backoff=dg.Backoff.EXPONENTIAL' if t.get('retry_exponential_backoff') else ''})")
+            deco.append(f"retry_policy=dg.RetryPolicy(max_retries={t['retries']}, delay={retry_delay_s(t)}{', backoff=dg.Backoff.EXPONENTIAL' if t.get('retry_exponential_backoff') else ''})")
         if t["pool"]:
             deco.append(f"pool={t['pool']!r}")
         elif t.get("max_active_tis_per_dag") and f"{safe(dag_id)}__{safe(tid)}" in pool_limits:
@@ -2810,22 +2870,27 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             retries_cb = [fn for kind, fn in cb_code[tid] if kind == "on_retry_callback"]
             succ = [fn for kind, fn in cb_code[tid] if kind == "on_success_callback"]
             ad = f"_cb_{safe(tid)}"
+            execs = [fn for kind, fn in cb_code[tid] if kind == "on_execute_callback"]
             ctx_new = f"    ctx = af_context(context, {dag_id!r}, {tid!r}, {({**dag_params, **(t.get('params') or {})})!r}, {{}})\n"
+            state_line = lambda st: f"    ctx['ti'].state = {st!r}\n"          # noqa: E731  (the callback reads ctx['ti'].state)
             adapters = ""
             kw = []
+            if execs:                                           # on_execute_callback: called at the start of every attempt, before the task's own code
+                adapters += f"def {ad}_execute(context):\n{ctx_new}{state_line('running')}" + "".join(f"    {fn}(ctx)\n" for fn in execs) + "\n\n"
+                body = f"    {ad}_execute(context)\n" + body
             if fails or retries_cb:
                 adapters += f"def {ad}_failure(context, exc):\n{ctx_new}    ctx['exception'] = exc\n"
                 if fails:
-                    adapters += f"    if context.retry_number >= {int(t['retries'] or 0)}:          # on_failure_callback: after the last attempt only\n" + "".join(f"        {fn}(ctx)\n" for fn in fails)
+                    adapters += f"    if context.retry_number >= {int(t['retries'] or 0)}:          # on_failure_callback: after the last attempt only\n        ctx['ti'].state = 'failed'\n" + "".join(f"        {fn}(ctx)\n" for fn in fails)
                 if retries_cb:
-                    adapters += f"    if context.retry_number < {int(t['retries'] or 0)}:           # on_retry_callback: before another attempt\n" + "".join(f"        {fn}(ctx)\n" for fn in retries_cb)
+                    adapters += f"    if context.retry_number < {int(t['retries'] or 0)}:           # on_retry_callback: before another attempt\n        ctx['ti'].state = 'up_for_retry'\n" + "".join(f"        {fn}(ctx)\n" for fn in retries_cb)
                 adapters += "\n\n"
                 kw.append(f"on_failure=[f'{{__name__}}:{ad}_failure']")
             if succ:
-                adapters += f"def {ad}_success(context, result):\n{ctx_new}" + "".join(f"    {fn}(ctx)\n" for fn in succ) + "\n\n"
+                adapters += f"def {ad}_success(context, result):\n{ctx_new}{state_line('success')}" + "".join(f"    {fn}(ctx)\n" for fn in succ) + "\n\n"
                 kw.append(f"on_success=[f'{{__name__}}:{ad}_success']")
             pre = pre + adapters
-            hook_deco = "@on_hooks(" + ", ".join(kw) + ")\n"
+            hook_deco = ("@on_hooks(" + ", ".join(kw) + ")\n") if kw else ""
         if chain_:                                              # the folded steps run first, in order, as plain Python inside this asset
             prelude = ""
             for f_ in chain_:
@@ -2894,7 +2959,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
 
     blocks.extend(check_blocks)
     keys = [keyparts[t["task_id"]] for t in real] + ([[safe(dag_id), "run_check"]] if graph_outs else []) + cosmos_keys
-    imports = (["import itertools"] if gplan else []) + ["import dagster as dg"] + (["from dagster_community_components import on_hooks"] if cb_code else []) \
+    imports = (["import itertools"] if gplan else []) + ["import dagster as dg"] + (["from dagster_community_components import on_hooks"] if any(k != "on_execute_callback" for v_ in cb_code.values() for k, _ in v_) else []) \
         + (["from dagster_community_components import PartitionWindowSensorComponent"] if ppart and ppart.get("via") else []) + ["", "from ..runtime import *  # noqa: F401,F403"]
     mod = [f'"""Converted from Airflow DAG `{dag_id}` ({dag["file"]}) by convert_ir.py.', "", note, '"""', *imports, ""]
     if support:
@@ -2953,6 +3018,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     out += (f"\n{safe(dag_id)}_job = dg.define_asset_job({safe(dag_id)!r}, selection=[dg.AssetKey(k) for k in {job_keys!r}]{pd_arg}"
             + (f", tags={job_tags!r}" if job_tags else "")
             + (f", executor_def=dg.multiprocess_executor.configured({{'max_concurrent': {max_tasks}}})" if max_tasks else "") + ")\n")
+    for kind_ in dict.fromkeys(k_ for k_, _ in dag_cb):             # DAG-level callbacks: a run-status sensor on this DAG's job (needs the sensor daemon), one per kind, calling every function of that kind
+        status_ = "SUCCESS" if kind_ == "on_success_callback" else "FAILURE"
+        nm_ = f"{safe(dag_id)}_{kind_}"
+        fns_ = [f_ for k_, f_ in dag_cb if k_ == kind_]
+        out += (f"\n\n@dg.run_status_sensor(name={nm_!r}, run_status=dg.DagsterRunStatus.{status_}, monitored_jobs=[{safe(dag_id)}_job], default_status=dg.DefaultSensorStatus.RUNNING)\n"
+                f"def {nm_}(context):\n    af_dag_callbacks(context, {dag_id!r}, {('success' if status_ == 'SUCCESS' else 'failed')!r}, [{', '.join(fns_)}])\n")
     if pplan and pplan["kind"] == "xcom":
         out += (f"\n{safe(dag_id)}_items_job = dg.define_asset_job({safe(dag_id) + '_items'!r}, selection=[dg.AssetKey(k) for k in {mapped_keys!r}], "
                 f"partitions_def={safe(dag_id)}_items)\n"
@@ -3010,7 +3081,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "provider_connections": dict(sorted(prov_conns.items())), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "catalog_keys": [list(v) for v in rt_outlets.values()], "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
-                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"babel"} if any("ds_format_locale" in json.dumps(task_templates(t), default=str) for t in tasks.values()) else set()) | ({"universal-pathlib"} if "ObjectStoragePath" in shims_used or any("object_storage_path" in json.dumps(t, default=str) for t in tasks.values()) else set()) | prov_reqs | cosmos_reqs | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"babel"} if any("ds_format_locale" in json.dumps(task_templates(t), default=str) for t in tasks.values()) else set()) | ({"universal-pathlib"} if "ObjectStoragePath" in shims_used or any("object_storage_path" in json.dumps(t, default=str) for t in tasks.values()) else set()) | prov_reqs | cosmos_reqs | ({"dagster-community-components"} if any(k != "on_execute_callback" for v_ in cb_code.values() for k, _ in v_) or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
                  "cosmos": cosmos_out, "cosmos_steps": cosmos_steps, "cosmos_files": cosmos_files,
                  "cosmos_tasks": {m: ["/".join(k) for k in c["keys"]] for c in cosmos_clusters for m in c["members"]},
                  "cosmos_sinks": {m: ["/".join(k) for k in c["sink_keys"]] for c in cosmos_clusters for m in c["members"]},
@@ -3076,6 +3147,7 @@ class _TaskInstance:
         self.dag_id, self.task_id, self.run_id, self.try_number, self._up = dag_id, task_id, run_id, try_number, upstream
         self._ctx, self._keys = context, keys or {}
         self._rv = _MISSING
+        self.state = "running"                               # a callback adapter sets it ('running', 'success', 'failed', 'up_for_retry') before calling the callback
         self.map_index = -1                                  # Airflow's value for a task that is not mapped; a mapped op sets its index (see af_context)
 
     def xcom_pull(self, task_ids=None, dag_id=None, key="return_value", include_prior_dates=False, map_indexes=None, default=None):
@@ -3179,6 +3251,54 @@ class _TaskStateStore:
         self._save({})
 
 
+class BaseNotifier:
+    """Airflow's `BaseNotifier` (a callable object whose `notify(context)` is called with the callback context), as a plain class: a notifier subclass copied from the DAG file runs unchanged.
+    Airflow also renders the notifier's `template_fields` against the context first; that is not mirrored."""
+    template_fields = ()
+
+    def __init__(self, *args, **kwargs):
+        pass
+
+    def notify(self, context):
+        raise NotImplementedError
+
+    def __call__(self, *args):
+        self.notify(args[-1])
+
+
+def af_dag_callbacks(context, dag_id, state, fns):
+    """Run a DAG's `on_success_callback` / `on_failure_callback` functions from a Dagster run-status sensor, with the context dict Airflow hands them (the parts a Dagster run can supply:
+    dag, dag_id, run_id, dag_run (run_id, dag_id, state, conf, logical_date), logical_date, execution_date, ds, ts, params, conf, reason, exception = the run failure message). Not provided:
+    task_instance / ti (a DAG callback has none in Airflow 3), the DAG object's own attributes."""
+    run = context.dagster_run
+    ld = None
+    try:
+        tag = (run.tags or {}).get("airflow/logical_date")
+        ld = _dt.datetime.fromisoformat(tag) if tag else _dt.datetime.fromtimestamp(context.instance.get_run_record_by_id(run.run_id).create_timestamp.timestamp(), tz=_dt.timezone.utc)
+    except Exception:                                    # noqa: BLE001
+        ld = _dt.datetime.now(_dt.timezone.utc)
+    dag_run = types.SimpleNamespace(run_id=run.run_id, dag_id=dag_id, state=state, conf={}, logical_date=ld, execution_date=ld)
+    ctx = {"dag": types.SimpleNamespace(dag_id=dag_id), "dag_id": dag_id, "run_id": run.run_id, "dag_run": dag_run, "logical_date": ld, "execution_date": ld,
+           "ds": ld.astimezone(_dt.timezone.utc).strftime("%Y-%m-%d"), "ts": ld.isoformat(), "params": {}, "conf": {},
+           "reason": "success" if state == "success" else "task_failure", "exception": None if state == "success" else getattr(context.dagster_event, "message", None)}
+    for fn in fns:
+        fn(ctx)
+
+
+class _AssetStateStore:
+    """Airflow 3.4's `asset_state_store[asset]` (key/value state kept ON THE ASSET across runs, e.g. a watermark): a JSON file per asset (its URI, else its name) under AIRFLOW_ASSET_STATE_DIR
+    (default: <tempdir>/af_asset_state). Same `get`/`set`/`delete`/`clear` as the task store. A plain-Python shim: Dagster has no per-asset key/value store (the nearest durable records are the
+    asset's materialization metadata, or a resource you back with a database); point AIRFLOW_ASSET_STATE_DIR at durable storage to keep the state between deployments."""
+
+    def __getitem__(self, asset):
+        import tempfile
+        d = os.environ.get("AIRFLOW_ASSET_STATE_DIR") or os.path.join(tempfile.gettempdir(), "af_asset_state")
+        ref = asset if isinstance(asset, str) else (getattr(asset, "uri", None) or getattr(asset, "name", None) or str(asset))
+        store = _TaskStateStore.__new__(_TaskStateStore)
+        store._path = os.path.join(d, re.sub(r"[^A-Za-z0-9_.-]", "_", ref) + ".json")
+        return store
+
+
 AF_ISO_DT = False          # set when the runtime is written: Airflow before 2.8 prints datetimes in templates with a T (2026-07-02T05:00:00+00:00)
 
 
@@ -3246,9 +3366,9 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
             "yesterday_ds": (ld - one).strftime("%Y-%m-%d"), "yesterday_ds_nodash": (ld - one).strftime("%Y%m%d"),
             "ts_nodash_with_tz": ld.strftime("%Y%m%dT%H%M%S%z"), "task_instance_key_str": f"{dag_id}__{task_id}__{ld.strftime('%Y%m%d')}", "prev_data_interval_start_success": None, "prev_data_interval_end_success": None,
             "dag": types.SimpleNamespace(dag_id=dag_id), "task": types.SimpleNamespace(task_id=task_id), "ti": ti, "task_instance": ti,
-            "dag_run": types.SimpleNamespace(run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
+            "dag_run": types.SimpleNamespace(state="running", run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
             "partition_key": pkey, "outlet_events": _OutletEvents(context), "inlet_events": _InletEvents(context),
-            "task_state_store": _TaskStateStore(dag_id, task_id, run_id, ti.map_index)}
+            "task_state_store": _TaskStateStore(dag_id, task_id, run_id, ti.map_index), "asset_state_store": _AssetStateStore()}
 
 
 def call_with_context(fn, args, kwargs, ctx):
@@ -4276,18 +4396,38 @@ def asset_key_of(ref):
 
 
 class Asset:
-    """An Airflow Asset or Dataset: a name or URI that maps to a Dagster asset key."""
+    """An Airflow Asset: a name or URI that maps to a Dagster asset key. A plain class with the attributes callables read (`name`, `uri`, `group`, `extra`), so a callable that is handed one
+    (or builds one to return) runs; the key mapping for outlets and inlets is separate (`key`)."""
 
-    def __init__(self, name=None, uri=None, *, group=None, extra=None, **kwargs):
-        self.name, self.uri, self.extra = name, uri, extra or {}
+    def __init__(self, name=None, uri=None, *, group="asset", extra=None, **kwargs):
+        self.uri = uri if uri is not None else name              # Airflow: one of the two given, the other defaults to it
+        self.name = name if name is not None else uri
+        self.group, self.extra = group, (extra if extra is not None else {})
         self.ref = uri or name
 
     @property
     def key(self):
         return asset_key_of(self.ref)
 
+    def __repr__(self):
+        return f"Asset(name={self.name!r}, uri={self.uri!r}, group={self.group!r}, extra={self.extra!r})"
 
-Dataset = Asset
+    def __eq__(self, other):
+        return isinstance(other, Asset) and (self.name, self.uri) == (other.name, other.uri)
+
+    def __hash__(self):
+        return hash((self.name, self.uri))
+
+
+class Dataset(Asset):
+    """Airflow 2's `Dataset(uri, extra=None)`: the same plain class (`uri`, `extra`; `name` is the URI)."""
+
+    def __init__(self, uri=None, extra=None, **kwargs):
+        super().__init__(name=uri, uri=uri, extra=extra, **kwargs)
+        self.extra = extra
+
+    def __repr__(self):
+        return f"Dataset(uri={self.uri!r}, extra={self.extra!r})"
 
 
 class AssetAlias:

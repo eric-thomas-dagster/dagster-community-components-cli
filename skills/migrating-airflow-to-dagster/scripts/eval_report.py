@@ -20,7 +20,7 @@ from typing import Any
 
 import eval_common as C
 
-VERDICTS = ["equivalent", "equivalent-with-differences", "matches-baseline-failure", "different", "not-comparable", "no-output", "baseline-failed"]
+VERDICTS = ["equivalent", "equivalent-with-differences", "matches-baseline-failure", "stub-matches-failure", "different", "not-comparable", "no-output", "baseline-failed"]
 GOOD_STRICT = {"equivalent"}
 GOOD_LENIENT = {"equivalent", "equivalent-with-differences", "matches-baseline-failure"}
 DIMS = ["outcome", "tasks", "values", "files", "sqlite", "http", "smtp", "s3", "stdout", "failure", "schedule", "retries", "pools", "dependencies", "job"]
@@ -62,7 +62,10 @@ def gather(work: Path, run: str) -> dict[str, dict[str, Any]]:
         for name, path in (("behavior", priv / "behavior" / d / "behavior.json"), ("gates", priv / "gates" / f"{d}.gates.json"), ("report", priv / "gates" / f"{d}.report.json")):
             if path.exists():
                 rec[name] = json.loads(path.read_text())
-        rec["verdicts"] = {r: x["rollup"]["verdict"] for r, x in (rec["behavior"] or {}).get("routes", {}).items()} if rec["behavior"] else {}
+        # a route whose failing step is a loud converter stub that "matches" a failing baseline is reported as its own verdict, never as a success
+        rec["verdicts"] = {r: x["rollup"].get("detail") or x["rollup"]["verdict"] for r, x in (rec["behavior"] or {}).get("routes", {}).items()} if rec["behavior"] else {}
+        if rec["behavior"] and rec["behavior"].get("stratum"):               # the stratum of the CURRENT converter report (behavior.json), not the one the manifest was built with
+            rec["manifest_stratum"], rec["stratum"] = rec["stratum"], rec["behavior"]["stratum"]
         rec["baseline_failed"] = bool(rec["behavior"]) and rec["behavior"]["baseline"]["class"][0] == "baseline-failed"
         out[key] = rec
     return out
@@ -116,12 +119,12 @@ def route_table(recs: list[dict[str, Any]], route: str) -> list[str]:
 
 def split_table(recs: list[dict[str, Any]], route: str, field: str) -> list[str]:
     vals = sorted({r[field] for r in recs})
-    rows = [f"| {field} | evaluated | equivalent | of which substantive | of which thin | equivalent-with-differences | different | no-output | not-comparable / matches-baseline-failure |", "|---|---|---|---|---|---|---|---|---|"]
+    rows = [f"| {field} | evaluated | equivalent | of which substantive | of which thin | equivalent-with-differences | different | no-output | not-comparable / matches-baseline-failure / stub-matches-failure |", "|---|---|---|---|---|---|---|---|---|"]
     for val in vals:
         sub = [r for r in recs if r[field] == val]
         c = counts(sub, route)
         n = len(sub) - c["baseline-failed"] - c["not run"]
-        rows.append(f"| {val} | {n} | {pct(c['equivalent'], n)} | {c['equivalent:substantive']} | {c['equivalent:thin']} | {c['equivalent-with-differences']} | {c['different']} | {c['no-output']} | {c['not-comparable'] + c['matches-baseline-failure']} |")
+        rows.append(f"| {val} | {n} | {pct(c['equivalent'], n)} | {c['equivalent:substantive']} | {c['equivalent:thin']} | {c['equivalent-with-differences']} | {c['different']} | {c['no-output']} | {c['not-comparable'] + c['matches-baseline-failure'] + c['stub-matches-failure']} |")
     return rows
 
 
@@ -274,7 +277,7 @@ def render(a: argparse.Namespace) -> str:
       "(scratch working directory, SQLite, local HTTP and SMTP recorders, moto for S3). Compared separately: overall outcome and every task's outcome, XCom values against asset values, files created or changed (names and content hashes), "
       "SQLite rows, HTTP requests sent (method, URL, body), mails sent, S3 objects, failure behaviour, and the metadata (schedule, retries, pools, dependencies, job). Verdicts: **equivalent** (every compared dimension matches), "
       "**equivalent-with-differences** (only metadata differs, or the only value difference is a value nothing consumes), **different** (a behavioural dimension differs), **not-comparable**, and **baseline-failed** "
-      "(Airflow itself failed for an environmental reason: excluded from every share and listed below). **matches-baseline-failure** is reported separately: the DAG's own code fails in Airflow and the route fails the same way. "
+      "(Airflow itself failed for an environmental reason: excluded from every share and listed below). **matches-baseline-failure** is reported separately: the DAG's own code fails in Airflow and the route fails the same way. **stub-matches-failure** is the same outcome where the route's failing step is a loud converter stub (`AIRFLOW-CAVEAT`): nothing was converted, so it is counted separately and never as a success. "
       "**no-output** means the route produced nothing (the converter deferred the DAG, or the worker produced no project); it counts against the route.")
     A("")
     if manifest:

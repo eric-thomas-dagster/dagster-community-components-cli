@@ -13,7 +13,8 @@ nondeterministic and are excluded (listed as such), not counted as a difference.
 Roll-up (`rollup`):
     baseline-failed             the baseline failed for an environmental reason (missing package, unreachable service, undefined connection or variable, or a virtualenv / external-interpreter task that cannot build in the sandbox): excluded from rates
     not-comparable              the baseline is unstable (outcome differs between its two runs) or the harness itself failed
-    matches-baseline-failure    the baseline fails by design (the DAG's own code fails) and the route fails the same way, with nothing else different
+    matches-baseline-failure    the baseline fails by design (the DAG's own code fails) and the route fails the same way, with nothing else different.
+                                If the route's failing step is a loud converter stub (AIRFLOW-CAVEAT) the rollup carries detail `stub-matches-failure`: reported separately, not counted as success
     different                   a behavioural dimension differs (outcome, a task's outcome, consumed values, files, SQLite rows, HTTP requests, mail, S3 objects, failure behaviour)
     equivalent-with-differences only metadata differs (schedule, retries, pools, dependencies, job) or the only value difference is a value nothing consumes
     equivalent                  every compared dimension matches
@@ -488,7 +489,12 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
 
     # --- metadata
     dims.update(metadata_dims(spec, route, taskmap, route_kind))
-    return finish(dims, bclass, breason, spec, route_kind, a1, ran)
+    out = finish(dims, bclass, breason, spec, route_kind, a1, ran)
+    stub_errs = stub_failures(route)
+    if out["rollup"]["verdict"] == "matches-baseline-failure" and stub_errs:           # the route "fails the same way" only because a loud stub (AIRFLOW-CAVEAT) fails: nothing was converted
+        out["rollup"]["detail"] = "stub-matches-failure"
+        out["rollup"]["why"] += f"; BUT the route's failing step is a loud converter stub, not converted code ({stub_errs[0][:120]}): not a success"
+    return out
 
 
 def metadata_dims(spec: dict[str, Any], route: dict[str, Any], taskmap: dict[str, dict[str, Any]], route_kind: str) -> dict[str, dict[str, Any]]:
@@ -556,6 +562,15 @@ def metadata_dims(spec: dict[str, Any], route: dict[str, Any], taskmap: dict[str
         out["dependencies"] = dim(NOT, "no ordering between tasks that map to different assets")
     jobs = st.get("jobs", [])
     out["job"] = dim(MATCH if spec["dag_id"] in jobs else DIFFER, evidence=None if spec["dag_id"] in jobs else {"expected_job": spec["dag_id"], "route_jobs": jobs}) if route_kind == "rewrite" else dim(MATCH if jobs else NOT, reason=None if jobs else "the converter defines no job in the module (it schedules assets)")
+    return out
+
+
+def stub_failures(route: dict[str, Any]) -> list[str]:
+    """Errors of failed assets that are the converter's own loud stubs (`AIRFLOW-CAVEAT`), not the DAG's code failing."""
+    out = []
+    for a in (route.get("assets") or {}).values():
+        if a.get("state") == "failed":
+            out += [e for e in (a.get("errors") or []) if "AIRFLOW-CAVEAT" in str(e)]
     return out
 
 
