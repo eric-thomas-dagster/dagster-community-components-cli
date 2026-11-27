@@ -75,7 +75,10 @@ CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "da
 SUPPORTED_MACROS = {"ds_add", "ds_format", "ds_format_locale", "datetime", "timedelta", "json", "yaml", "time", "uuid", "random", "dateutil"}
 SHIM_IMPORTS = {(m, "WeekDay") for m in ("airflow.providers.standard.utils.weekday", "airflow.utils.weekday")} | {("airflow.sdk", "LoopDecision"), ("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
                 ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
-                ("airflow.providers.amazon.aws.hooks.s3", "S3Hook")} | \
+                ("airflow.providers.amazon.aws.hooks.s3", "S3Hook"), ("airflow.hooks.base", "BaseHook"), ("airflow.hooks.base_hook", "BaseHook"), ("airflow.sdk", "BaseHook"),
+                ("airflow.exceptions", "AirflowNotFoundException"), ("airflow.sdk.exceptions", "AirflowNotFoundException")} | \
+    {(m, "Connection") for m in ("airflow.models", "airflow.models.connection", "airflow.sdk", "airflow.sdk.definitions.connection")} | \
+    {(m, "ObjectStoragePath") for m in ("airflow.io.path", "airflow.sdk", "airflow.sdk.io", "airflow.sdk.io.path")} | \
     {(m, "BaseOperator") for m in ("airflow.models", "airflow.models.baseoperator", "airflow.sdk", "airflow.sdk.bases.operator")} | \
     {(m, n) for m in ("airflow.sdk", "airflow.datasets", "airflow.assets", "airflow.sdk.definitions.asset", "airflow.datasets.metadata") for n in ("Asset", "Dataset", "Metadata", "AssetAlias", "DatasetAlias")} | \
     {("airflow.utils.decorators", "apply_defaults")} | {(m, "Context") for m in ("airflow.utils.context", "airflow.sdk", "airflow.sdk.definitions.context")} | \
@@ -176,6 +179,19 @@ def _free_names(fn: ast.FunctionDef) -> set[str]:
     return used - local - set(dir(builtins))
 
 
+_PLAIN_CALLS = {"dict", "list", "set", "tuple", "str", "int", "float", "bool", "len", "range", "sorted", "min", "max", "sum", "frozenset", "reversed", "abs", "round"}
+
+
+def _plain_local(value: ast.AST) -> bool:
+    """A DAG-function local whose value is plain data: literals, containers, names, attribute reads, operators, f-strings, comprehensions, and builtin calls over those."""
+    for n in ast.walk(value):
+        if isinstance(n, (ast.Await, ast.Yield, ast.YieldFrom, ast.NamedExpr, ast.Lambda)):
+            return False
+        if isinstance(n, ast.Call) and not (isinstance(n.func, ast.Name) and n.func.id in _PLAIN_CALLS):
+            return False
+    return True
+
+
 class ModuleIndex:
     def __init__(self, path: str) -> None:
         self.src = Path(path).read_text()
@@ -201,6 +217,12 @@ class ModuleIndex:
             for node in body:
                 if isinstance(node, ast.FunctionDef) and not node.decorator_list and node.name not in self.defs:
                     self.defs[node.name] = ("def", node)
+            # a helper that closes over the DAG function's locals: the locals it reads are copied in too when they are plain values (constants, containers, f-strings,
+            # arithmetic over other such names; no call except a builtin). A local that holds a task's output, an Airflow object or any other call stays unresolved: loud.
+            for node in body:
+                tgt = (node.targets[0] if isinstance(node, ast.Assign) and len(node.targets) == 1 else getattr(node, "target", None)) if isinstance(node, (ast.Assign, ast.AnnAssign)) else None
+                if isinstance(tgt, ast.Name) and getattr(node, "value", None) is not None and tgt.id not in self.defs and _plain_local(node.value):
+                    self.defs[tgt.id] = ("assign", node)
 
     def seg(self, node: ast.AST) -> str:
         text = ast.get_source_segment(self.src, node) or ""
@@ -223,6 +245,25 @@ def repo_local_module_file(source_file: str, mod: str) -> Path | None:
             if cand.exists() and "site-packages" not in cand.parts:
                 return cand
     return None
+
+
+AIRFLOW_METADATA_EQUIVALENTS = [
+    (r"\bDagRun\b|\bDagBag\b|\bDagModel\b|\bDagRunState\b", "DagRun / DagBag", "context.instance.get_runs(...) and context.run (a DagsterInstance), or run tags for the logical date"),
+    (r"\bTaskInstance\b|\bTaskInstanceKey\b|\bTaskInstanceState\b", "TaskInstance", "context.instance.get_run_records(...) / the run's step events (DagsterInstance); for the current step, the op context"),
+    (r"\bXCom\b|\bBaseXCom\b", "XCom", "the value a step returns (an upstream asset's value through the IO manager) or context.instance.get_latest_materialization_event(AssetKey(...)).asset_materialization.metadata"),
+    (r"\bprovide_session\b|\bcreate_session\b|\bsettings\b|\bSession\b|\bsession\b", "provide_session / a SQLAlchemy session on the Airflow metadata DB",
+     "a DagsterInstance (context.instance): there is no SQL session on Dagster's storage to hand a callable"),
+    (r"\bPool\b|\bTrigger\b|\bLog\b|\bSlaMiss\b", "an Airflow metadata model", "the matching Dagster concept (pool= on an op, a sensor, the event log) through context.instance"),
+]
+
+
+def airflow_api_hint(text: str, what: str = "") -> str:
+    """For a callable that reaches the Airflow metadata database or its session: which call, and the Dagster equivalent. Empty when the text uses none of them."""
+    for pat, call, eq in AIRFLOW_METADATA_EQUIVALENTS:
+        m = re.search(pat, text)
+        if m:
+            return f" [{what or m.group(0)}: {call}; the Dagster equivalent is {eq}]"
+    return ""
 
 
 def inline_local_helper(modfile: Path, name: str, out: dict[int, str], counter: list[int], seen: set[tuple[str, str]], where: str) -> None:
@@ -300,7 +341,7 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
                         needed[node.lineno] = f"{al.asname} = {al.name}"
                     continue
                 if mod.split(".")[0] == "airflow":
-                    raise Defer(f"operator class depends on an Airflow import ({mod})")
+                    raise Defer(f"operator class depends on an Airflow import ({mod}.{al.name if al is not None else ''})" + airflow_api_hint(al.name if al is not None else mod, al.name if al is not None else mod))
                 needed[node.lineno] = idx.seg(node)
                 continue
             if re.search(r"\bairflow\b", idx.seg(node)):
@@ -368,7 +409,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     for n in inner_shims:
         body_text = body_text.replace(ast.unparse(n), "")
     if re.search(r"\bairflow\b|\bset_xcom\b", body_text):
-        raise Defer("callable uses the Airflow API (a direct airflow reference)")
+        raise Defer("callable uses the Airflow API (a direct airflow reference)" + airflow_api_hint("\n".join(ln for ln in body_text.splitlines() if "airflow" in ln)))
     for n in (m for stmt in [*fn.body, *fn.args.defaults, *[d for d in fn.args.kw_defaults if d is not None]] for m in ast.walk(stmt)):    # the body, not the decorators (`@task.sensor` is not the `task` context object)
         obj = n.value if isinstance(n, ast.Attribute) else None
         if isinstance(obj, ast.Subscript) and isinstance(obj.slice, ast.Constant):
@@ -425,7 +466,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
                 if mod.split(".")[0] == "airflow":
                     lf = repo_local_module_file(info["file"], mod) if al is not None else None
                     if lf is None:
-                        raise Defer(f"callable depends on an Airflow import ({mod})")
+                        raise Defer(f"callable depends on an Airflow import ({mod}.{al.name if al is not None else ''})" + airflow_api_hint(al.name if al is not None else mod, al.name if al is not None else mod))
                     loc: dict[int, str] = {}                      # the project's own helper that happens to live under the `airflow.` namespace: copied in as plain Python
                     inline_local_helper(lf, al.name, loc, local_counter, set(), info["name"])
                     needed.update({-10_000_000 + k: v for k, v in loc.items()})
@@ -487,7 +528,39 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
 def is_custom(t: dict[str, Any]) -> bool:
     """A user-defined operator (an `execute` method on a BaseOperator subclass in the project, not a provider's) that nothing else here maps."""
     known = ELIDED | PY_TASKS | BASH | BASH_DEC | BRANCH | SHORT | CLOCK_BRANCH | SENSORS | TRIGGER | S3_OPS | SNOWFLAKE_OPS | PROV | COSMOS_STEP | {"ExternalTaskSensor"}
-    return bool(t.get("operator_class")) and t["type"] not in known and not t.get("is_mapped")
+    return bool(t.get("operator_class")) and t["type"] not in known
+
+
+def _walk_values(v: Any):
+    yield v
+    if isinstance(v, dict):
+        for x in v.values():
+            yield from _walk_values(x)
+    elif isinstance(v, list):
+        for x in v:
+            yield from _walk_values(x)
+
+
+def unplain_ctor_args(t: dict[str, Any]) -> list[str]:
+    """Constructor arguments of a user-defined operator that cannot be written as code: an object the IR could only describe with its repr."""
+    return [k for k, v in (t.get("args") or {}).items() if any(isinstance(x, dict) and "repr" in x for x in _walk_values(v))]
+
+
+def ctor_expr(v: Any, params: dict[str, str]) -> str:
+    """A constructor argument as Python: plain values as literals, and the structured forms the IR uses (datetime, time, timedelta, an ObjectStoragePath, an upstream value, a group item)."""
+    if isinstance(v, dict):
+        if "datetime" in v:
+            return f"af_datetime.fromisoformat({v['datetime']!r})"
+        if "time" in v:
+            return f"af_time.fromisoformat({v['time']!r})"
+        if "seconds" in v:
+            return f"af_timedelta(seconds={v['seconds']!r})"
+        if {"object_storage_path", "xcom_from", "group_arg", "repr"} & set(v):
+            return expr(v, params)
+        return "{" + ", ".join(f"{k!r}: {ctor_expr(x, params)}" for k, x in v.items()) + "}"
+    if isinstance(v, list):
+        return "[" + ", ".join(ctor_expr(x, params) for x in v) + "]"
+    return repr(v)
 
 
 def local_modules(mods: set[str], files: Any) -> set[str]:
@@ -563,14 +636,23 @@ def xcom_refs(x: Any) -> set[str]:
     return set()
 
 
+GROUP_ITEM: list[str | None] = [None]                    # the variable holding the mapped task group's item while a member task's step is written
+
+
 def expr(v: Any, params: dict[str, str], ctx: str | None = None) -> str:
     if isinstance(v, dict):
+        if "group_arg" in v:                                   # an argument of the mapped task group the task sits in: the group's current item
+            if GROUP_ITEM[0] is None or v["group_arg"] is None:
+                raise Defer("a mapped task group argument outside its group")
+            return f"{GROUP_ITEM[0]}[{v['group_arg']!r}]"
         if "xcom_from" in v:
             if v["xcom_from"] not in params:
                 raise Defer(f"XCom reference to {v['xcom_from']!r}, which is not an upstream task the converter can wire")
             if v.get("key") not in (None, "return_value"):         # a key of a task that returns a dict with multiple_outputs
                 return f"af_xcom_key({params[v['xcom_from']]}, {v['key']!r})"
             return params[v["xcom_from"]]
+        if "object_storage_path" in v:                          # an ObjectStoragePath argument: rebuilt at run time by the runtime's pathlib/UPath shim
+            return f"ObjectStoragePath({v['object_storage_path']!r})"
         if "repr" in v:
             raise Defer(f"argument {v['repr'][:60]!r} cannot be serialised")
         if "seconds" in v:
@@ -1061,6 +1143,50 @@ def bash_skips(t: dict[str, Any]) -> bool:
     return any(int(c) in bash_skip_codes(t) for c in re.findall(r"\bexit\s+(\d+)", text))
 
 
+def plan_groups(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any], dict[str, str]]:
+    """Mapped task groups (`@task_group.expand(...)`): ({group id: plan}, {group id: why it is not converted}).
+    A convertible group is a literal list, a task's plain return value, or `expand_kwargs` over one of those; its members are plain steps (no branches, mapping or gated trigger rules).
+    The plan is the verified native form (rewrite-patterns/mapped_tasks.py, `mapped_group`): a `@dg.graph` of the member steps mapped over a DynamicOut of the group's items."""
+    ids = {t["mapped_group"] for t in tasks.values() if t.get("mapped_group")}
+    good: dict[str, Any] = {}
+    bad: dict[str, str] = {}
+    for gid in sorted(ids):
+        members = [tid for tid, t in tasks.items() if t.get("mapped_group") == gid]
+        g = (dag.get("mapped_groups") or {}).get(gid)
+        why = None
+        if not g:
+            why = "the extractor did not record what the group iterates over (re-extract the IR)"
+        elif g.get("form") not in ("expand", "expand_kwargs") or not g.get("args"):
+            why = f"the group is mapped with {g.get('form')}"
+        else:
+            srcs: dict[str, tuple[str, Any]] = {}
+            for name, a in g["args"].items():
+                if a.get("kind") == "literal" and isinstance(a.get("value"), list):
+                    srcs[name] = ("lit", a["value"])
+                elif a.get("kind") == "xcom" and a.get("wrapper") in ("PlainXComArg", "XComArg") and a.get("key") == "return_value" and a.get("task_id") in tasks \
+                        and tasks[a["task_id"]].get("mapped_group") != gid:
+                    srcs[name] = ("task", a["task_id"])
+                else:
+                    why = f"the group iterates over {a.get('wrapper') or a.get('kind')} for `{name}` (only a literal list or a task's plain return value is converted)"
+                    break
+            if why is None:
+                for tid in members:
+                    t = tasks[tid]
+                    if t.get("is_mapped"):
+                        why = f"{tid} is a mapped task inside the mapped group"
+                    elif t["type"] in BRANCH | SHORT | CLOCK_BRANCH or t.get("is_setup") or t.get("is_teardown") or t["trigger_rule"] in GATE_RULES - PLAIN_RULES:
+                        why = f"{tid} branches, short-circuits, or has a trigger rule or setup/teardown role that decides on skipped or failed upstream steps (not converted inside a mapped group)"
+                    elif t["type"] in SENSORS:
+                        why = f"{tid} is a sensor inside the mapped group"
+                    if why:
+                        break
+        if why:
+            bad[gid] = why
+        else:
+            good[gid] = {"members": members, "srcs": srcs, "mode": "kwargs" if g["form"] == "expand_kwargs" else "kw"}
+    return good, bad
+
+
 def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     """Dynamic task mapping as Dagster dynamic outputs: the whole DAG becomes one graph asset in which a mapped task is a mapped op
     and a task after it receives the collected list. Python and shell tasks only; `expand` with literal lists or other tasks' outputs."""
@@ -1068,7 +1194,8 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
     gated = any(t["type"] in BRANCH | SHORT | CLOCK_BRANCH or (t["type"] in SENSORS and (t.get("sensor") or {}).get("soft_fail"))
                 or t["trigger_rule"] in GATE_RULES - PLAIN_RULES or t.get("is_setup") or t.get("is_teardown")
                 or re.search(r"AirflowSkipException|task\.(run_if|skip_if)\(", (t.get("callable") or {}).get("source", "")) or bash_skips(t) for t in tasks.values())
-    if not mapped and not gated:
+    groups = dag.get("_mapped_groups_plan") or {}
+    if not mapped and not gated and not groups:
         return None, []
     why: list[str] = []
     for tid, t in tasks.items():
@@ -1099,7 +1226,9 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
                 break
         else:
             mode = "kwargs" if e["form"] == "expand_kwargs" else ("args" if list(srcs) == ["op_args"] else "kw")
-            if t["type"] in S3_OPS | SNOWFLAKE_OPS:
+            if is_custom(t):
+                bad = ["op_args"] if mode == "args" else []                  # the item's values are constructor arguments of the user-defined operator
+            elif t["type"] in S3_OPS | SNOWFLAKE_OPS:
                 bad = ["op_args"] if mode == "args" else []                  # the item's values are the operator's own arguments
             elif mode != "kw":
                 bad = [] if t["type"] in PY_TASKS | BASH_DEC or mode == "kwargs" else ["op_args"]
@@ -1119,13 +1248,13 @@ def plan_graph(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, An
                 mp[tid] = {"srcs": srcs, "fixed": e.get("fixed") or {}, "partial": e.get("partial") or {}, "mode": mode}
     if why:
         return None, why
-    return {"mode": "graph", "mapped": mp}, []
+    return {"mode": "graph", "mapped": mp, "groups": groups}, []
 
 
 def plan_mapping(dag: dict[str, Any], tasks: dict[str, Any]) -> tuple[dict[str, Any] | None, list[str]]:
     if tasks and all(t["type"] in ELIDED for t in tasks.values()):
         return {"mode": "graph", "mapped": {}}, []              # nothing to run, but the steps and their trigger rules are kept
-    if MAP_MODE == "graph" or any(t["type"] in BRANCH | SHORT | CLOCK_BRANCH or (t["type"] in SENSORS and (t.get("sensor") or {}).get("soft_fail"))
+    if MAP_MODE == "graph" or dag.get("_mapped_groups_plan") or any(t["type"] in BRANCH | SHORT | CLOCK_BRANCH or (t["type"] in SENSORS and (t.get("sensor") or {}).get("soft_fail"))
                                   or t["trigger_rule"] in GATE_RULES - PLAIN_RULES or t.get("is_setup") or t.get("is_teardown")
                                   or re.search(r"AirflowSkipException|task\.(run_if|skip_if)\(", (t.get("callable") or {}).get("source", "")) or bash_skips(t) for t in tasks.values()):
         return plan_graph(dag, tasks)
@@ -1203,7 +1332,7 @@ def _plain(v: Any) -> bool:
     if isinstance(v, str):
         return "{{" not in v and "{%" not in v and "{#" not in v
     if isinstance(v, dict):
-        return all(_plain(x) for x in v.values()) and not ({"xcom_from", "repr", "seconds", "datetime"} & set(v))
+        return all(_plain(x) for x in v.values()) and not ({"xcom_from", "repr", "seconds", "datetime", "object_storage_path", "group_arg"} & set(v))
     if isinstance(v, (list, tuple)):
         return all(_plain(x) for x in v)
     return True
@@ -1517,17 +1646,19 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 reasons += why
         dag = {**dag, "tasks": [({**t, "type": "EmptyOperator"} if t["task_id"] in ext_ids else t) for t in dag["tasks"]]}
     dag = expand_loops(dag)
+    mg_good, mg_bad = plan_groups(dag, {t["task_id"]: t for t in dag["tasks"]})
+    dag = {**dag, "_mapped_groups_plan": mg_good}
     if CAVEATS == "off":
         reasons += [f"{tid}: {why}" for tid, why in cosmos_stubs.items()]
-        reasons += [f"{t['task_id']}: in the mapped task group {t['mapped_group']!r} (mapped task groups are not converted)" for t in dag["tasks"] if t.get("mapped_group")]
+        reasons += [f"{t['task_id']}: in the mapped task group {t['mapped_group']!r} (not converted: {mg_bad[t['mapped_group']]})" for t in dag["tasks"] if t.get("mapped_group") in mg_bad]
     if CAVEATS != "off":                                     # tasks the converter cannot translate become marked stubs; the DAG keeps its shape
         soft_known = ELIDED | PY_TASKS | BASH | BASH_DEC | S3_OPS | SNOWFLAKE_OPS | PROV | SENSORS | TRIGGER | BRANCH | SHORT | CLOCK_BRANCH | COSMOS_STEP
 
         def soft_reason(t: dict[str, Any]) -> str | None:
             if t["task_id"] in cosmos_stubs:
                 return cosmos_stubs[t["task_id"]]
-            if t.get("mapped_group"):                          # the group's expand() values reach its tasks as arguments the IR cannot wire: say so instead of running with a dangling argument
-                return f"{tname(t)} is in the mapped task group {t['mapped_group']!r} (@task_group.expand(...)): mapped task groups are not converted"
+            if t.get("mapped_group") in mg_bad:                # the group's expand() values reach its tasks as arguments that cannot be wired: say so instead of running with a dangling argument
+                return f"{tname(t)} is in the mapped task group {t['mapped_group']!r} (@task_group.expand(...)): this group is not converted: {mg_bad[t['mapped_group']]}"
             if t["type"] in TRIGGER:
                 tgt = (t.get("args") or {}).get("trigger_dag_id")
                 if isinstance(tgt, str) and "{{" not in tgt and tgt not in ALL_DAG_IDS:
@@ -1543,8 +1674,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 hint = OPERATOR_COMPONENTS.get(t["type"])
                 return f"operator {t['type']} has no conversion yet" + (f" (registry: {hint})" if hint else "")
             if is_custom(t):                                   # a user-defined operator that cannot be copied or built from plain arguments
-                if any(isinstance(v, dict) and "repr" in v for v in (t.get("args") or {}).values()):
-                    return f"a constructor argument of {t['type']} that cannot be written as a plain value"
+                if unplain_ctor_args(t):
+                    return f"constructor argument(s) {unplain_ctor_args(t)} of {t['type']} cannot be written as a plain value (the IR could only record their repr)"
                 try:
                     resolve_operator_class(t.get("operator_class"), set(), {})
                 except Defer as e:
@@ -1898,8 +2029,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             continue
         try:
             if is_custom(t):
-                if any(isinstance(v, dict) and "repr" in v for v in (t.get("args") or {}).values()):
-                    raise Defer(f"{tid}: a constructor argument of {t['type']} that cannot be written as a plain value")
+                if unplain_ctor_args(t):
+                    raise Defer(f"{tid}: constructor argument(s) {unplain_ctor_args(t)} of {t['type']} cannot be written as a plain value (the IR could only record their repr)")
                 code, sup = resolve_operator_class(t.get("operator_class"), shims_used, meta)
                 resolved[tid] = (code, sup, meta)
                 ctx_tasks.add(tid)
@@ -1983,14 +2114,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         prov_reqs.update(P.REQUIREMENTS.get(pv.kind, []))
         return pv
 
-    def custom_body(t: dict[str, Any], ctx_line: str, pyname_support: bool = True) -> str:
+    def custom_body(t: dict[str, Any], ctx_line: str, params: dict[str, str] | None = None, mapped: bool = False) -> str:
         """A user-defined operator: its copied class, created with the operator's own arguments, then execute(context)."""
         code, sup, _ = resolved[t["task_id"]]
         for sline in sup:
             support.setdefault(sline, len(support))
         support.setdefault(code, len(support))
         args = {k: v for k, v in (t.get("args") or {}).items() if k not in ("task_id",)}
-        return ctx_line + f"    op = {t['operator_class']['name']}(task_id={t['task_id']!r}, **{args!r})\n    return run_operator(op, ctx)"
+        special = any(isinstance(x, dict) and ({"datetime", "time", "seconds", "object_storage_path", "xcom_from", "group_arg"} & set(x)) for v in args.values() for x in _walk_values(v))
+        base = "{" + ", ".join(f"{k!r}: {ctor_expr(v, params or {})}" for k, v in args.items()) + "}" if special else repr(args)
+        kw = f"**{{**{base}, **combo}}" if mapped else f"**{base}"        # a mapped operator: the fixed (partial) arguments with this item's
+        return ctx_line + f"    op = {t['operator_class']['name']}(task_id={t['task_id']!r}, {kw})\n    return run_operator(op, ctx)"
 
     def sensor_body(t: dict[str, Any], params: dict[str, str], ctxn: str | None, call_inner: str | None = None) -> str:
         """A sensor as a polling step: Airflow's default `poke` loop (check, give up after the timeout, sleep poke_interval)."""
@@ -2021,9 +2155,35 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         """One graph asset for the whole DAG: every task is an op, a mapped task a mapped op, a task after it gets the collected list."""
         order: list[str] = []
         seen_t: set[str] = set()
+        groups = gplan.get("groups") or {}                                 # mapped task groups: their member steps are written together, as the body of one graph
+        grp_of = {m_: g_ for g_, G_ in groups.items() for m_ in G_["members"]}
+        for G_ in groups.values():
+            G_.update(lines=[], val={}, ext={}, done=[])
 
         def visit(x: str) -> None:
             if x in seen_t:
+                return
+            g_ = grp_of.get(x)
+            if g_ is not None and x not in seen_t:
+                G_ = groups[g_]
+                for m_ in G_["members"]:
+                    for u in eff_up(m_):
+                        if grp_of.get(u) != g_:
+                            visit(u)
+                for v_ in G_["srcs"].values():
+                    if v_[0] == "task":
+                        visit(v_[1])
+
+                def inner(y: str) -> None:
+                    if y in seen_t:
+                        return
+                    seen_t.add(y)
+                    for u in eff_up(y):
+                        if grp_of.get(u) == g_:
+                            inner(u)
+                    order.append(y)
+                for m_ in G_["members"]:
+                    inner(m_)
                 return
             seen_t.add(x)
             for u in eff_up(x):
@@ -2039,11 +2199,61 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         outs: dict[str, str] = {}
         val: dict[str, str] = {}          # task -> variable holding its value (a collected list for a mapped task)
         dyn: dict[str, str] = {}          # mapped task -> variable holding its dynamic output
+        def emit_group(g_: str, i_: int) -> None:
+            """The whole mapped task group: fan-out over its items, the member steps as a graph mapped over them, the collected results, one value per member (a list over the items)."""
+            G_ = groups[g_]
+            gn = safe(dag_id) + "__" + safe(g_)
+            members = G_["members"]
+            names = list(G_["srcs"])
+            leaf = [v_[1] for v_ in G_["srcs"].values() if v_[0] == "task"]
+            leaf = list(dict.fromkeys(leaf))
+            fp = [f"src_{k}" for k in range(len(leaf))]
+            lists = ", ".join(repr(v_[1]) if v_[0] == "lit" else fp[leaf.index(v_[1])] for v_ in G_["srcs"].values())
+            if G_["mode"] == "kwargs":
+                item_loop = "    for n, vals in enumerate(lists[0]):\n        yield dg.DynamicOutput(dict(vals), mapping_key=f'i{n}')\n"
+            else:
+                item_loop = (f"    for n, vals in enumerate(itertools.product(*lists)):\n        yield dg.DynamicOutput(dict(zip({names!r}, vals)), mapping_key=f'i{{n}}')\n")
+            ops.append(f"@dg.op(name={gn + '__fan'!r}, out=dg.DynamicOut())\ndef fan_{safe(g_)}({', '.join(fp)}):\n"
+                       f"    srcs = [{', '.join(fp)}]\n"
+                       "    if any(isinstance(x, Skipped) for x in srcs):\n        return\n"
+                       "    if not all(isinstance(x, (list, tuple)) for x in srcs):\n        raise dg.Failure(description='expected a list of items to map over')\n"
+                       f"    lists = [{lists}]\n"
+                       "    if not all(isinstance(x, (list, tuple)) for x in lists):\n        raise dg.Failure(description='expected a list of items to map over')\n" + item_loop)
+            mv = [G_["val"][m_] for m_ in members]
+            ops.append(f"@dg.op(name={gn + '__pack'!r})\ndef pack_{safe(g_)}({', '.join(f'm_{k}' for k in range(len(members)))}):\n"
+                       f"    return {{{', '.join(f'{m_!r}: m_{k}' for k, m_ in enumerate(members))}}}\n")
+            ext = list(G_["ext"].items())
+            ops.append(f"@dg.graph(name={gn + '__body'!r})\ndef group_{safe(g_)}({', '.join(['gitem'] + [e for _, e in ext])}):\n"
+                       + "\n".join(G_["lines"]) + f"\n    return pack_{safe(g_)}({', '.join(mv)})\n")
+            ops.append(f"@dg.op(name={gn + '__collect'!r})\ndef collect_{safe(g_)}(context, items):\n"
+                       "    items = list(items)\n    return items if items else af_skip(context, False)      # Airflow skips a mapped task group that expands to nothing\n")
+            for k, m_ in enumerate(members):
+                ops.append(f"@dg.op(name={gn + '__pick_' + safe(m_)!r})\ndef pick_{safe(g_)}_{k}(results):\n"
+                           "    if isinstance(results, Skipped):\n        return results                                    # an empty expansion: the group and what follows are skipped\n"
+                           f"    return [None if isinstance(r[{m_!r}], Skipped) else r[{m_!r}] for r in results]      # the member's value over the items: Airflow's XCom list of its mapped instances\n")
+            fan_args = ", ".join(val[x] for x in leaf)
+            ext_args = "".join(f", {val[u]}" for u, _ in ext)
+            lines.append(f"    gd{i_} = fan_{safe(g_)}({fan_args}).map(lambda item: group_{safe(g_)}(item{ext_args}))")
+            lines.append(f"    gr{i_} = collect_{safe(g_)}(gd{i_}.collect())")
+            for k, m_ in enumerate(members):
+                lines.append(f"    v{idx[m_]} = pick_{safe(g_)}_{k}(gr{i_})")
+                val[m_] = f"v{idx[m_]}"
+
         for tid in order:
             t = tasks[tid]
             ty = t["type"]
             ups = [u for u in eff_up(tid) if u in keyparts]
             i = idx[tid]
+            g = grp_of.get(tid)
+            if g is not None:                                           # a member of a mapped task group: written into the group's body, its outside inputs passed in
+                G = groups[g]
+                for u in ups:
+                    if grp_of.get(u) != g and u not in G["ext"]:
+                        G["ext"][u] = f"ext_{len(G['ext'])}"
+                        G["val"][u] = G["ext"][u]
+                saved_ctx = (lines, val)
+                lines, val = G["lines"], G["val"]
+                GROUP_ITEM[0] = "gitem"
             fname = safe("op_" + tid)
             deco = [f"name={safe(dag_id) + '__' + safe(tid)!r}"]
             if t["retries"] and not fail_aware:
@@ -2059,13 +2269,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             ctxn = "ctx" if tid in ctx_tasks else None
             ctx_line = (f"    ctx = af_context(context, {dag_id!r}, {tid!r}, {({**dag_params, **(t.get('params') or {})})!r}, "
                         "{" + ", ".join(f"{u!r}: {params[u]}" for u in params) + "})\n") if ctxn else ""
-            sig = (["context: dg.OpExecutionContext"] + (["item"] if m else []) + list(params.values()))
+            sig = (["context: dg.OpExecutionContext"] + (["gitem"] if g is not None else []) + (["item"] if m else []) + list(params.values()))
             if m:
                 single = len(m["srcs"]) == 1
                 kwexpr = ({"kw": f"{{{list(m['srcs'])[0]!r}: item}}", "args": "{}", "kwargs": "dict(item)"}[m["mode"]] if single else "dict(item)")
                 combo = f"    combo = {kwexpr}\n"
             if is_custom(t):
-                body = custom_body(t, ctx_line)
+                body = (combo if m else "") + custom_body(t, ctx_line, params, mapped=bool(m))
             elif ty in SENSORS - SENSOR_CALL:
                 if ty in P.SENSOR_TYPES and prov_for(t, params, ctxn).resource:
                     deco.append(f"required_resource_keys={{{prov_for(t, params, ctxn).conn!r}}}")
@@ -2260,10 +2470,16 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 lines.append(f"    v{i} = collect_{safe(tid)}(d{i}.collect())")
                 val[tid] = f"v{i}"
             else:
-                args = ", ".join(val[u] for u in ups)
+                args = ", ".join((["gitem"] if g is not None else []) + [val[u] for u in ups])
                 lines.append(f"    v{i} = {fname}({args})")
                 val[tid] = f"v{i}"
             outs[tid] = f"o{i}"
+            if g is not None:
+                lines, val = saved_ctx
+                GROUP_ITEM[0] = None
+                G["done"].append(tid)
+                if len(G["done"]) == len(G["members"]):
+                    emit_group(g, i)
         def is_effective_leaf(x: str) -> bool:                          # Airflow's DagRun._tis_for_dagrun_state: teardowns do not decide the run unless they ask to
             for y in order:
                 if x in tasks[y]["upstream"] and (not tasks[y].get("is_teardown") or tasks[y].get("on_failure_fail_dagrun")):
@@ -2471,7 +2687,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             ret_none = True
             notes.append(f"{tid} launches the job of DAG {t['args']['trigger_dag_id']!r} " + ("and waits for it; its run fails if the launched run fails" if t["args"].get("wait_for_completion") else "and does not wait (the run executes in the background of this step's process)") + " (the DAG must be converted into the same package)")
         elif is_custom(t):
-            body = custom_body(t, ctx_line)
+            body = custom_body(t, ctx_line, params)
             if tid not in consumed and not RETURN_ALL:
                 body = body.replace("    return run_operator(", "    run_operator(")
             deco.append("kinds={'python'}")
@@ -2718,6 +2934,12 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     lm = local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})
     if lm:
         notes.append(f"the copied code imports the project's own module(s) {sorted(lm)}: copy them into the Dagster project (they are not pip packages)")
+    if shims_used & {"Connection", "BaseHook"}:
+        notes.append("callables use Connection / BaseHook.get_connection through an environment shim: it reads AIRFLOW_CONN_<CONN_ID> (a URI or JSON, as Airflow's environment backend does) and "
+                     "raises AirflowNotFoundException naming the variable when it is not set; the Dagster-native form is a ConfigurableResource fed from EnvVar")
+    if "ObjectStoragePath" in shims_used or any("object_storage_path" in json.dumps(t, default=str) for t in tasks.values()):
+        notes.append("ObjectStoragePath became a pathlib.Path (file://) or a universal_pathlib UPath (s3://, gs://, ...): install universal-pathlib and the fsspec backend; a connection id in the URI "
+                     "reads AIRFLOW_CONN_<ID> and fails loudly if it is not set. A file:// path is the absolute path seen when the IR was extracted: point it where the data lives")
     if "S3Hook" in shims_used:
         notes.append("callables use S3Hook through a compatibility shim (default AWS credentials; the connection id is not applied)")
     if notes:
@@ -2789,7 +3011,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     return out, {"assets": len(real), "elided": len(tasks) - len(real), "schedule": tt.get("cron"),
                  "timezone": tz_name(tt["timezone"]) if tt.get("cron") else None, "triggers": triggers,
                  "resources": sorted(resources), "snowflake_resources": sorted(sf_resources), "provider_connections": dict(sorted(prov_conns.items())), "shims": sorted(shims_used), "notes": notes, "caveats": caveats, "catalog_keys": [list(v) for v in rt_outlets.values()], "local_modules": sorted(local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})),
-                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"babel"} if any("ds_format_locale" in json.dumps(task_templates(t), default=str) for t in tasks.values()) else set()) | prov_reqs | cosmos_reqs | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
+                 "requirements": sorted((third_party(support) - local_modules(third_party(support), {t["callable"].get("file") for t in real if t.get("callable")})) | ({"croniter"} if uses_ctx and tt["kind"] == "cron_data_interval" else set()) | ({"babel"} if any("ds_format_locale" in json.dumps(task_templates(t), default=str) for t in tasks.values()) else set()) | ({"universal-pathlib"} if "ObjectStoragePath" in shims_used or any("object_storage_path" in json.dumps(t, default=str) for t in tasks.values()) else set()) | prov_reqs | cosmos_reqs | ({"dagster-community-components"} if cb_code or (ppart and ppart.get("via")) else set())), "external": sorted("/".join(e) for e in external), "keys": keys,
                  "cosmos": cosmos_out, "cosmos_steps": cosmos_steps, "cosmos_files": cosmos_files,
                  "cosmos_tasks": {m: ["/".join(k) for k in c["keys"]] for c in cosmos_clusters for m in c["members"]},
                  "cosmos_sinks": {m: ["/".join(k) for k in c["sink_keys"]] for c in cosmos_clusters for m in c["members"]},
@@ -3464,6 +3686,117 @@ class AirflowSkipException(AirflowException):
 
 class AirflowFailException(AirflowException):
     """Raised by a task to fail without retrying."""
+
+
+class AirflowNotFoundException(AirflowException):
+    """Raised for a connection (or variable) that is not defined, as Airflow does."""
+
+
+def _conn_env_name(conn_id):
+    return "AIRFLOW_CONN_" + str(conn_id).upper()
+
+
+class Connection:
+    """Airflow connections from the environment (AIRFLOW_CONN_<CONN_ID>, a URI or Airflow's JSON form), which is what Airflow's own environment backend reads.
+    Loud when the variable is missing: nothing is guessed. Dagster's native form is a ConfigurableResource or EnvVar; this keeps `Connection.get(...)` and
+    `BaseHook.get_connection(...)` calls working unchanged while you move the secrets there."""
+
+    def __init__(self, conn_id=None, conn_type=None, host=None, login=None, password=None, schema=None, port=None, extra=None, uri=None, description=None):
+        self.conn_id, self.conn_type, self.host, self.login, self.password, self.schema, self.port = conn_id, conn_type, host, login, password, schema, port
+        self.description = description
+        self.extra = json.dumps(extra) if isinstance(extra, dict) else extra
+        if uri:
+            self._from_uri(uri)
+
+    def _from_uri(self, uri):
+        from urllib.parse import unquote, urlsplit, parse_qsl
+        parts = urlsplit(uri if "://" in uri else "//" + uri)
+        self.conn_type = (parts.scheme or "").replace("-", "_") or self.conn_type
+        if self.conn_type == "postgresql":
+            self.conn_type = "postgres"
+        self.host = unquote(parts.hostname) if parts.hostname else None
+        self.login = unquote(parts.username) if parts.username else None
+        self.password = unquote(parts.password) if parts.password else None
+        self.port = parts.port
+        self.schema = unquote(parts.path[1:]) if parts.path else None
+        if parts.query:
+            q = dict(parse_qsl(parts.query, keep_blank_values=True))
+            self.extra = q["__extra__"] if list(q) == ["__extra__"] else json.dumps(q)
+
+    @classmethod
+    def from_json(cls, value, conn_id=None):
+        d = json.loads(value)
+        d.pop("conn_id", None)
+        if "conn_type" not in d:
+            raise AirflowException(f"The connection JSON for {conn_id} has no conn_type")
+        return cls(conn_id=conn_id, **d)
+
+    @classmethod
+    def get(cls, conn_id):
+        raw = os.environ.get(_conn_env_name(conn_id))
+        if raw is None:
+            raise AirflowNotFoundException(
+                f"The conn_id `{conn_id}` isn't defined: set the environment variable {_conn_env_name(conn_id)} (a URI or JSON, as Airflow's environment backend reads it), "
+                "or move the call to a Dagster ConfigurableResource")
+        return cls.from_json(raw, conn_id) if raw.lstrip().startswith("{") else cls(conn_id=conn_id, uri=raw)
+
+    get_connection_from_secrets = get
+
+    @property
+    def extra_dejson(self):
+        return json.loads(self.extra) if self.extra else {}
+
+    def get_uri(self):
+        from urllib.parse import quote
+        auth = (quote(self.login or "", safe="") + (":" + quote(self.password or "", safe="") if self.password else "") + "@") if self.login else ""
+        host = (self.host or "") + (f":{self.port}" if self.port else "")
+        return f"{(self.conn_type or '').replace('_', '-')}://{auth}{host}" + (f"/{self.schema}" if self.schema else "") + (f"?__extra__={quote(self.extra, safe='')}" if self.extra else "")
+
+    def __repr__(self):
+        return f"Connection(conn_id={self.conn_id!r}, conn_type={self.conn_type!r}, host={self.host!r})"        # never prints the password
+
+
+class BaseHook:
+    """`BaseHook.get_connection(conn_id)` from the environment (see Connection). A provider hook subclass is not mirrored: its methods raise instead of guessing."""
+
+    @classmethod
+    def get_connection(cls, conn_id):
+        return Connection.get(conn_id)
+
+
+def ObjectStoragePath(path, conn_id=None, **storage_options):
+    """Airflow's ObjectStoragePath as plain Python: pathlib.Path for file:// and bare paths; universal_pathlib's UPath for other schemes (pip install universal-pathlib plus
+    the fsspec backend, e.g. s3fs). A `conn_id@bucket` netloc or conn_id= reads AIRFLOW_CONN_<ID> (key, secret, endpoint) and fails loudly if it is not set; with no
+    connection the backend's default credentials apply, as in Airflow."""
+    import pathlib
+    from urllib.parse import urlsplit
+    text = str(path)
+    parts = urlsplit(text)
+    if not parts.scheme or parts.scheme == "file":
+        return pathlib.Path(parts.path if parts.scheme else text)
+    netloc = parts.netloc
+    if "@" in netloc:
+        conn_id, netloc = netloc.rsplit("@", 1)
+    uri = f"{parts.scheme}://{netloc}{parts.path}"
+    if conn_id:
+        c = Connection.get(conn_id)
+        if parts.scheme in ("s3", "s3a"):
+            if c.login:
+                storage_options.setdefault("key", c.login)
+            if c.password:
+                storage_options.setdefault("secret", c.password)
+            ep = c.extra_dejson.get("endpoint_url") or c.extra_dejson.get("host")
+            if ep:
+                storage_options.setdefault("endpoint_url", ep)
+        elif c.login:
+            storage_options.setdefault("username", c.login)
+            if c.password:
+                storage_options.setdefault("password", c.password)
+    try:
+        from upath import UPath
+    except ImportError as e:
+        raise ImportError("ObjectStoragePath for " + parts.scheme + ":// needs `pip install universal-pathlib` and the fsspec backend for the scheme (s3fs, gcsfs, adlfs)") from e
+    return UPath(uri, **storage_options)
 
 
 class PokeReturnValue:

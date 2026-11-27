@@ -54,6 +54,12 @@ def _jsonable(v: Any, depth: int = 0) -> Any:
     name = type(v).__name__
     if name == "LiteralValue":                               # airflow.sdk.literal(): the string is not rendered as a template
         return "{% raw %}" + str(getattr(v, "value", "")) + "{% endraw %}"
+    if name == "DagParam":                                    # `dag.param("x")` / a DAG param used as an argument: Airflow resolves it like `{{ params.x }}`
+        return "{{ params." + str(getattr(v, "_name", None) or getattr(v, "name", "")) + " }}"
+    if name == "ObjectStoragePath":                           # str() is the full URI (`scheme://conn_id@bucket/key`); the converter rebuilds it with a pathlib / UPath shim
+        return {"object_storage_path": str(v)}
+    if name == "MappedArgument":                              # a mapped task group's argument: the converter reads it from the group's item
+        return {"group_arg": getattr(v, "_key", None)}
     if name in ("XComArg", "PlainXComArg", "MappedArgument") or hasattr(v, "operator") and hasattr(v, "key"):
         op = getattr(v, "operator", None)
         return {"xcom_from": getattr(op, "task_id", None), "key": getattr(v, "key", None)}
@@ -179,6 +185,26 @@ def _overridden_hooks(task: Any) -> list[str]:
     return out
 
 
+def _expand_source_ir(v: Any) -> dict[str, Any]:
+    if isinstance(v, (list, tuple)):
+        try:
+            return {"kind": "literal", "value": json.loads(json.dumps(list(v), default=str))}
+        except (TypeError, ValueError):
+            return {"kind": "other", "repr": repr(v)[:120]}
+    if type(v).__name__.endswith("XComArg"):
+        w = type(v).__name__
+        if w == "MapXComArg":                                  # `.map(f)`: the inner source with each item passed through f
+            return {"kind": "xcom", "wrapper": w, "inner": _expand_source_ir(v.arg), "callables": [_callable_info(f) for f in v.callables]}
+        if w in ("ConcatXComArg", "ZipXComArg"):             # `a.concat(b)` / `a.zip(b)`
+            out = {"kind": "xcom", "wrapper": w, "parts": [_expand_source_ir(x) for x in v.args]}
+            if w == "ZipXComArg":
+                out["fillvalue"] = None if type(getattr(v, "fillvalue", None)).__name__ == "ArgNotSet" else getattr(v, "fillvalue", None)
+            return out
+        op = getattr(v, "operator", None)
+        return {"kind": "xcom", "wrapper": w, "task_id": getattr(op, "task_id", None), "key": getattr(v, "key", None)}
+    return {"kind": "other", "repr": repr(v)[:120]}
+
+
 def _expand_ir(task: Any) -> dict[str, Any] | None:
     """What a mapped task iterates over: literal values, an upstream task's output, or something this extractor cannot name."""
     if not (any(c.__name__ == "MappedOperator" for c in type(task).__mro__) or getattr(task, "is_mapped", False)):
@@ -195,24 +221,7 @@ def _expand_ir(task: Any) -> dict[str, Any] | None:
         return {"form": "unknown", "error": repr(e)[:120]}
     val = getattr(ei, "value", None)
 
-    def one(v: Any) -> dict[str, Any]:
-        if isinstance(v, (list, tuple)):
-            try:
-                return {"kind": "literal", "value": json.loads(json.dumps(list(v), default=str))}
-            except (TypeError, ValueError):
-                return {"kind": "other", "repr": repr(v)[:120]}
-        if type(v).__name__.endswith("XComArg"):
-            w = type(v).__name__
-            if w == "MapXComArg":                                  # `.map(f)`: the inner source with each item passed through f
-                return {"kind": "xcom", "wrapper": w, "inner": one(v.arg), "callables": [_callable_info(f) for f in v.callables]}
-            if w in ("ConcatXComArg", "ZipXComArg"):             # `a.concat(b)` / `a.zip(b)`
-                out = {"kind": "xcom", "wrapper": w, "parts": [one(x) for x in v.args]}
-                if w == "ZipXComArg":
-                    out["fillvalue"] = None if type(getattr(v, "fillvalue", None)).__name__ == "ArgNotSet" else getattr(v, "fillvalue", None)
-                return out
-            op = getattr(v, "operator", None)
-            return {"kind": "xcom", "wrapper": w, "task_id": getattr(op, "task_id", None), "key": getattr(v, "key", None)}
-        return {"kind": "other", "repr": repr(v)[:120]}
+    one = _expand_source_ir
 
     if type(ei).__name__ == "DictOfListsExpandInput" and isinstance(val, dict):
         pk = getattr(task, "partial_kwargs", None) or {}
@@ -411,6 +420,24 @@ def _cosmos_groups(dag: Any) -> list[dict[str, Any]]:
     return out
 
 
+def _mapped_groups(dag: Any) -> dict[str, Any]:
+    """What each mapped task group (`@task_group.expand(...)` / `.expand_kwargs(...)`) iterates over: the same source description a mapped task has."""
+    out: dict[str, Any] = {}
+    for gid, tg in (getattr(dag, "task_group_dict", None) or {}).items():
+        if type(tg).__name__ != "MappedTaskGroup":
+            continue
+        ei = getattr(tg, "_expand_input", None)
+        val = getattr(ei, "value", None)
+        kind = type(ei).__name__
+        if kind == "DictOfListsExpandInput" and isinstance(val, dict):
+            out[gid] = {"form": "expand", "args": {k: _expand_source_ir(v) for k, v in val.items()}}
+        elif kind == "ListOfDictsExpandInput":
+            out[gid] = {"form": "expand_kwargs", "args": {"*": _expand_source_ir(val)}}
+        else:
+            out[gid] = {"form": kind, "args": {}}
+    return out
+
+
 def _task_params(task: Any) -> dict[str, Any]:
     """The task's own `params` (merged with the DAG's by Airflow), as plain values: `{{ params.x }}` and `context["params"]` read them."""
     p = getattr(task, "params", None)
@@ -434,6 +461,14 @@ def _mapped_group(task: Any) -> str | None:
     return None
 
 
+def _operator_class_info(task: Any) -> dict[str, Any] | None:
+    """The source of a user-defined operator class, for a plain task or for a mapped one (`MyOp.partial(...).expand(...)`: the class is the mapped operator's `operator_class`)."""
+    cls = getattr(task, "operator_class", None) if any(c.__name__ == "MappedOperator" for c in type(task).__mro__) else type(task)
+    if not isinstance(cls, type) or cls.__module__.startswith(("airflow", "cosmos")) or not hasattr(cls, "execute"):
+        return None
+    return _class_info(cls)
+
+
 def _task_ir(task: Any) -> dict[str, Any]:
     t: dict[str, Any] = {
         "task_id": task.task_id, "type": task.task_type, "module": type(task).__module__,
@@ -443,7 +478,7 @@ def _task_ir(task: Any) -> dict[str, Any]:
         "pool": task.pool if task.pool and task.pool != "default_pool" else None,
         "do_xcom_push": bool(getattr(task, "do_xcom_push", True)),
         "sensor": _sensor_ir(task),
-        "operator_class": (_class_info(type(task)) if not type(task).__module__.startswith(("airflow", "cosmos")) and hasattr(type(task), "execute") else None),     # Cosmos operators are mapped by cosmos_ops.py, not copied
+        "operator_class": _operator_class_info(task),     # Cosmos operators are mapped by cosmos_ops.py, not copied
         "trigger_rule": str(getattr(task.trigger_rule, "value", task.trigger_rule)),
         "owner": task.owner, "queue": task.queue if getattr(task, "queue", None) != "default" else None,
         "execution_timeout_s": task.execution_timeout.total_seconds() if getattr(task, "execution_timeout", None) else None,
@@ -486,6 +521,11 @@ def _task_ir(task: Any) -> dict[str, Any]:
         # the source of those functions too (a sensor's `response_check`, an HTTP `response_filter`, ...): the converter refuses such an operator, but the rewrite route needs the logic
         t["callable_arg_info"] = {n: info for n in sorted(own) if getattr(task, n, None) is not None and callable(getattr(task, n, None))
                                   for info in [_callable_info(getattr(task, n))] if "site-packages" not in (info or {}).get("file", "")}      # the user's functions, not the library's defaults
+        if t["operator_class"] and t["is_mapped"]:        # a mapped user-defined operator: the partial arguments are the constructor arguments that do not change per item
+            cls = task.operator_class
+            pk = getattr(task, "partial_kwargs", None) or {}
+            cown = set(inspect.signature(cls.__init__).parameters) - _BASE_PARAMS - {"self", "args", "kwargs"}
+            t["args"] = {n: _jsonable(pk[n]) for n in sorted(cown) if n in pk and not callable(pk[n])}
     except (TypeError, ValueError):
         t["args"] = {}
         t["callable_args"] = {}
@@ -526,6 +566,7 @@ def _dag_ir(dag: Any, folder: Path) -> dict[str, Any]:
                          if getattr(dag, k, None) is not None},
         "has_callbacks": any(getattr(dag, a, None) for a in ("on_failure_callback", "on_success_callback", "sla_miss_callback")),
         "cosmos_groups": _cosmos_groups(dag),
+        "mapped_groups": _mapped_groups(dag),
         "tasks": [_task_ir(t) for t in dag.tasks],
     }
 
