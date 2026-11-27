@@ -185,6 +185,12 @@ def test_stdout_dimension_requires_what_airflow_printed_and_tolerates_extra_line
     assert B.compare_stdout({}, None, {"stdout_lines": ["x"]})["verdict"] == "not-compared"                   # no record on the baseline side: not compared, never match
 
 
+def test_stdout_requires_presence_not_the_multiplicity_of_airflows_repeated_continuation_lines():
+    a = {"stdout_lines": ["0  1  3", "1  2  4", "0  1  3", "1  2  4", "a  b", "0  1  3", "1  2  4"]}
+    assert B.compare_stdout(a, a, {"stdout_lines": ["a  b", "0  1  3", "1  2  4"]})["verdict"] == "match"
+    assert B.compare_stdout(a, a, {"stdout_lines": ["a  b", "0  1  3"]})["verdict"] == "differ"
+
+
 def test_a_printed_line_match_makes_an_equivalent_substantive_and_a_miss_never_makes_it_different():
     spec = {"dag_id": "d", "schedule": {"kind": "manual"}, "tasks": [{"task_id": "a", "upstream": [], "downstream": [], "retries": 0, "reads_value_from": [], "pool": None}]}
     structure = {"jobs": ["d"], "schedules": [], "sensors": [], "assets": {"a": {"deps": [], "retry": [], "pool": [], "node": "a"}}}

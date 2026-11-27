@@ -27,6 +27,23 @@ def branch_assets():
         yield dg.Output("value-b", output_name="asset_b")
 
 
+# --- (a2) the DECISION task has its own Airflow state: keep it ALWAYS yielded next to the skippable branch specs ---------------------------------------------------------------------
+# With `outs={asset_a, asset_b}` only, a branch task folded into the multi_asset has no asset of its own, and mapping it to one branch asset reads `skipped` whenever that branch is not taken (Airflow: the
+# branch task is `success`). Verified: `decide_task` is materialized every run, exactly one of `br_a` / `br_b` is, the other is not and what is below it is skipped; the run succeeds.
+@dg.multi_asset(specs=[dg.AssetSpec("decide_task"), dg.AssetSpec("br_a", skippable=True, deps=["decide_task"]), dg.AssetSpec("br_b", skippable=True, deps=["decide_task"])], name="decision_and_branches")
+def decision_and_branches():
+    yield dg.MaterializeResult(asset_key="decide_task")                  # the branch task itself: success
+    if picks("a"):
+        yield dg.MaterializeResult(asset_key="br_a")
+    if picks("b"):
+        yield dg.MaterializeResult(asset_key="br_b")
+
+
+@dg.asset(deps=["br_a"])
+def below_br_a() -> None:
+    """skipped when branch a was not taken"""
+
+
 @dg.asset
 def under_a(asset_a: str) -> str:
     return asset_a + "+"                                                # skipped (not run) when branch a was not taken
@@ -131,4 +148,4 @@ def join_after_any() -> int:
     return 3
 
 
-defs = dg.Definitions(assets=[branch_assets, under_a, under_b, needs_both, rejoined, join_graph, marker_branches, join_on_marker, below_marker_b, top_a, top_b, join_after_any])
+defs = dg.Definitions(assets=[decision_and_branches, below_br_a, branch_assets, under_a, under_b, needs_both, rejoined, join_graph, marker_branches, join_on_marker, below_marker_b, top_a, top_b, join_after_any])

@@ -660,3 +660,50 @@ def test_nothing_below_a_failed_step_runs_in_the_same_run_a_fan_in_join_included
         return "j"
     r, mat, _ = run([failing_top, below])
     assert not r.success and "below" not in mat and "below" not in {e.step_key for e in r.all_events if e.event_type_value == "STEP_SUCCESS"}
+
+
+def test_short_circuit_decision_plus_marker_keeps_the_task_successful_and_skips_only_what_is_below():
+    m = load("short_circuit")
+    m.SC["v"] = False
+    r, mat, skipped = run([m.short_circuit_task, m.below_marker, m.all_done_after_short_circuit])
+    assert r.success and set(mat) == {"sc_task", "all_done_after_short_circuit"} and "below_marker" in skipped and "sc_go" not in mat
+    m.SC["v"] = True
+    r, mat, skipped = run([m.short_circuit_task, m.below_marker, m.all_done_after_short_circuit])
+    assert r.success and set(mat) == {"sc_task", "sc_go", "below_marker", "all_done_after_short_circuit"} and not skipped
+    m.SC["v"] = False
+
+
+def test_branching_decision_asset_is_materialized_every_run_and_only_the_chosen_branch_next_to_it():
+    m = load("branching")
+    for chosen, other in (("a", "br_b"), ("b", "br_a")):
+        m.CHOSEN["v"] = chosen
+        r, mat, skipped = run([m.decision_and_branches, m.below_br_a])
+        assert r.success and "decide_task" in mat and f"br_{chosen}" in mat and other not in mat
+        assert ("below_br_a" in skipped) == (chosen == "b")
+    m.CHOSEN["v"] = "a"
+
+
+def test_mapped_task_with_no_return_value_collects_unannotated_but_not_annotated_none():
+    m = load("mapped_tasks")
+    m.ITEMS["v"] = [1, 2, 3]
+    r, mat, _ = run([m.mapped_no_result])
+    assert r.success and "mapped_no_result" in mat
+
+    @dg.op
+    def work_none(i: int) -> None:
+        return None
+
+    @dg.graph_asset
+    def mapped_none_annotated() -> None:
+        return m.collect_none_results(m.fan_out_none().map(work_none).collect())
+    r, mat, _ = run([mapped_none_annotated])
+    assert not r.success and "mapped_none_annotated" not in mat                                  # the pitfall the pattern warns about
+
+
+def test_mapped_task_group_maps_a_graph_over_the_items_one_step_per_task_per_item():
+    m = load("mapped_tasks")
+    m.ITEMS["groups"] = ["US", "CH"]
+    r, mat, _ = run([m.mapped_group])
+    st = steps(r)
+    assert r.success and r.asset_value(dg.AssetKey("mapped_group")) == ["extracted-CH", "extracted-US"]
+    assert all(st[f"mapped_group.group_body.{t}[{k}]"] == "STEP_SUCCESS" for t in ("group_extract", "group_write") for k in ("us", "ch"))

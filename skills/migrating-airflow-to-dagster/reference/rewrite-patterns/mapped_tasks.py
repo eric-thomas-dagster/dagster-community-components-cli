@@ -20,7 +20,7 @@ def mapped_in_python() -> list[int]:
     return [process(i) for i in items]
 
 
-ITEMS = {"v": [1, 2, 3]}                                                  # the expand() argument (the tests change it)
+ITEMS = {"v": [1, 2, 3], "groups": ["US", "CH"]}                                                  # the expand() argument (the tests change it)
 
 
 @dg.op(out=dg.DynamicOut(is_required=False))
@@ -38,6 +38,59 @@ def fan_out_required():
 @dg.op(retry_policy=dg.RetryPolicy(max_retries=2))                    # per-item retries
 def process_item(i: int) -> int:
     return process(i)
+
+
+@dg.op(out=dg.DynamicOut())
+def fan_out_none():
+    for i in ITEMS["v"]:
+        yield dg.DynamicOutput(i, mapping_key=str(i))
+
+
+@dg.op
+def process_item_no_result(i: int):                                       # mapped task with NO return value (a side effect: a pool-limited call, a print): leave the return UNANNOTATED
+    process(i)                                                            # NOT `-> None`: a `None`-annotated (Nothing) mapped output cannot be collected, the collecting step fails with FileNotFoundError (verified)
+
+
+@dg.op
+def collect_none_results(results: list) -> None:
+    return None
+
+
+@dg.graph_asset
+def mapped_no_result() -> None:
+    return collect_none_results(fan_out_none().map(process_item_no_result).collect())
+
+
+# --- a MAPPED TASK GROUP (`@task_group ... .expand(country=[...])`): map a `@dg.graph` (the group body) over the items; one step per task per item, the collected list is the group's value ----------------
+@dg.op(out=dg.DynamicOut(is_required=False))
+def fan_out_groups():
+    for c in ITEMS["groups"]:
+        yield dg.DynamicOutput(c, mapping_key=c.lower())
+
+
+@dg.op
+def group_extract(country: str) -> str:
+    return f"extracted-{country}"
+
+
+@dg.op
+def group_write(country: str, data: str) -> str:
+    return data                                                           # a downstream task in the group
+
+
+@dg.graph
+def group_body(country):
+    return group_write(country, group_extract(country))
+
+
+@dg.op
+def collect_groups(results: list) -> list:
+    return sorted(results)                                                # Airflow's pulled list over the map indexes (order is not guaranteed: sort or key by item)
+
+
+@dg.graph_asset
+def mapped_group() -> list:
+    return collect_groups(fan_out_groups().map(group_body).collect())
 
 
 @dg.op
@@ -82,4 +135,4 @@ def mapped_in_graph_runs_on_empty() -> list:
     return collect_items(fan_out_required().map(process_item).collect())   # the default form: with zero items the collecting step still runs, with []
 
 
-defs = dg.Definitions(assets=[mapped_in_python, mapped_in_graph, mapped_in_graph_runs_on_empty, mapped_with_a_failure, per_item])
+defs = dg.Definitions(assets=[mapped_group, mapped_no_result, mapped_in_python, mapped_in_graph, mapped_in_graph_runs_on_empty, mapped_with_a_failure, per_item])

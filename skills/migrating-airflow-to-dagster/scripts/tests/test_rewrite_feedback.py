@@ -370,6 +370,15 @@ def test_generated_test_asserts_failure_for_a_virtualenv_task_that_cannot_build(
     assert g["passed"] and "virtualenv" in g["detail"] and "EXPECTED FAILURE" in g["detail"]
 
 
+def test_a_failure_that_follows_a_sandbox_answered_http_call_is_not_turned_into_a_must_fail_test(tmp_path):
+    a1 = {"dag_id": "br", "state": "failed", "tasks": {"decide": {"state": "success"}, "a": {"state": "failed"}, "b": {"state": "upstream_failed"}},
+          "observed": {"http": [{"method": "GET", "url": "https://x.test/api", "body": "", "content_type": ""}]}, "errors": [], "error": None}
+    bd = baseline_dir(tmp_path, a1)
+    assert A.expected_failure(BRANCH_SPEC, bd)["sandbox_http"] is True
+    g = A.g_tests(BRANCH_SPEC, "rw_br.defs.br", project(tmp_path, SUCCEEDING), bd)
+    assert g["passed"] and "EXPECTED FAILURE" not in g["detail"]                               # skipped, not failed: the sandbox's canned answer cannot be reproduced in-process
+
+
 def test_generated_test_keeps_expecting_success_without_a_baseline_or_when_airflow_failed_for_another_environmental_reason(tmp_path):
     p = project(tmp_path, FAILING)
     g = A.g_tests(BRANCH_SPEC, "rw_br.defs.br", p, None)

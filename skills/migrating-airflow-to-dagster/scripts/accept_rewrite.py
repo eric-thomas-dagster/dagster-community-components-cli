@@ -90,7 +90,8 @@ def expected_failure(spec: dict[str, Any], baseline: Path | None) -> dict[str, A
     cls, why = BC.baseline_class(a1, a2, spec)
     if cls == "by-design-failure" or (cls == "baseline-failed" and "virtualenv" in why):
         failed = sorted(t for t, v in (a1.get("tasks") or {}).items() if BC.norm_state(v.get("state")) == "failed")
-        return {"why": ("the DAG's own code fails" if cls == "by-design-failure" else "a virtualenv / external-interpreter task cannot build in the sandbox") + (f"; failed task(s) {failed}" if failed else ""), "failed_tasks": failed}
+        http = [h for a in (a1, a2) if a for h in ((a.get("observed") or {}).get("http") or [])]
+        return {"sandbox_http": bool(http) and cls == "by-design-failure", "why": ("the DAG's own code fails" if cls == "by-design-failure" else "a virtualenv / external-interpreter task cannot build in the sandbox") + (f"; failed task(s) {failed}" if failed else ""), "failed_tasks": failed}
     return None
 
 
@@ -108,11 +109,14 @@ def g_tests(spec: dict[str, Any], module: str | None, project: Path, baseline: P
     skip = None
     if spec.get("cosmos_groups") or any(any(w in o for w in EXTERNAL_OPS) for o in ops) or spec["schedule"]["assets"]:
         skip = "the DAG has an external system, a sensor, dbt or an asset trigger: only the load and shape tests apply"
+    ef = expected_failure(spec, baseline)
+    if ef and ef.get("sandbox_http") and skip is None:                       # the baseline failed after an HTTP call the sandbox answered with its canned {"ok": true}; an in-process test cannot reproduce that answer (it would hit the real service), so neither "must fail" nor "must succeed" is a fair contract
+        skip, ef = "the baseline's failure follows an HTTP call answered by the sandbox's canned response; a test run outside the sandbox cannot reproduce it: only the load and shape tests apply", None
     sched = spec["schedule"]
     pkg = RPJ.package_of(project, module.split(".")[0] if module else None) or (module or "pkg").split(".")[0]
     info = {"dag_id": spec["dag_id"], "module": module or f"{pkg}.defs.{spec['dag_id']}", "definitions_module": RPJ.definitions_module(project, pkg),
             "schedule": ({"cron": sched["cron"], "timezone": sched["timezone"]} if sched["kind"] in ("cron_trigger", "cron_data_interval") and sched["cron"] else (None if sched["kind"] in ("manual", None) else "unchecked")),
-            "materialize_skip": skip, "expect_failure": expected_failure(spec, baseline), "needs_shell": any(o in ("BashOperator", "_BashDecoratedOperator") for o in ops), "env": sandbox_env(spec)}
+            "materialize_skip": skip, "expect_failure": ef, "needs_shell": any(o in ("BashOperator", "_BashDecoratedOperator") for o in ops), "env": sandbox_env(spec)}
     tdir = project / "tests"
     tdir.mkdir(exist_ok=True)
     f = tdir / f"test_{spec['dag_id']}_rewrite.py"

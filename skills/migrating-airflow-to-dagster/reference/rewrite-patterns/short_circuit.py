@@ -23,7 +23,31 @@ def guarded(context: dg.AssetExecutionContext) -> dict:
     return out
 
 
-# --- optional-output form (Airflow's skipped state reproduced in the same run; use when assets below depend on the skip semantics) -----------------------------------
+# --- DECISION + MARKER form (PREFERRED native form when the short-circuit task is its own Airflow task): the task ENDS `success`, only what is below it is skipped ------------------
+# A bare optional-output asset (next section) is not materialized when the condition is false, so the short-circuit task itself reads as `skipped` (Airflow: `success`). Keep the task's asset
+# ALWAYS yielded and put a skippable marker next to it in the same multi_asset; the guarded tasks depend on the MARKER. Verified (tests/test_rewrite_patterns.py): condition false -> `sc_task`
+# materialized, `sc_go` not, `below_marker` STEP_SKIPPED; the run succeeds; an `all_done` / `none_failed` task that depends on `sc_task` (not on the marker) still runs.
+SC = {"v": False}
+
+
+@dg.multi_asset(specs=[dg.AssetSpec("sc_task"), dg.AssetSpec("sc_go", skippable=True, deps=["sc_task"])], name="short_circuit_task")
+def short_circuit_task():
+    yield dg.MaterializeResult(asset_key="sc_task")                    # the short-circuit task itself: always success
+    if SC["v"]:
+        yield dg.MaterializeResult(asset_key="sc_go")                  # not yielded when the condition is false: everything that depends on sc_go is skipped
+
+
+@dg.asset(deps=["sc_go"])
+def below_marker() -> None:
+    """a guarded downstream task: skipped when the condition is false"""
+
+
+@dg.asset(deps=["sc_task"])
+def all_done_after_short_circuit() -> None:
+    """trigger_rule all_done / none_failed: depends on the task, not the marker, so it runs whatever the condition (its ordering after the skipped tasks cannot be an edge: a skipped upstream skips it)"""
+
+
+# --- optional-output form (Airflow's skipped state reproduced in the same run; use ONLY when the short-circuit task has no state of its own to report, e.g. it is folded into the first guarded asset) -----------------------------------
 # Verified on the installed Dagster: `@dg.asset(output_required=False)` that RETURNS before yielding (a generator) is not materialized and every asset below it is skipped; the run succeeds.
 # A bare `return` with no `yield` in a non-generator function does NOT skip: the None return value counts as the output and the downstream assets run.
 CONDITION = {"v": False}
@@ -58,4 +82,4 @@ def guarded_graph() -> str:
     return guarded_op(short_circuit_op())                               # skipped, with its asset, when the condition is false
 
 
-defs = dg.Definitions(assets=[guarded, short_circuit_asset, below_short_circuit, guarded_graph])
+defs = dg.Definitions(assets=[guarded, short_circuit_asset, below_short_circuit, guarded_graph, short_circuit_task, below_marker, all_done_after_short_circuit])

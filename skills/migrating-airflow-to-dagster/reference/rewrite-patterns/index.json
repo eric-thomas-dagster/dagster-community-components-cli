@@ -58,6 +58,10 @@
     {
      "claim": "an always-yielded marker output lets a join run whatever was skipped; Nothing-typed inputs / deps do not",
      "status": "VERIFIED"
+    },
+    {
+     "claim": "multi_asset with an always-yielded decision spec plus skippable branch specs: the decision asset materializes every run, exactly one branch asset does, the other and what is below it are skipped",
+     "status": "VERIFIED"
     }
    ],
    "dagster_cannot_express": [
@@ -93,6 +97,14 @@
     },
     {
      "claim": "in a non-generator asset both a bare `return` and `return None` emit None (downstream runs); only a generator with output_required=False that returns before yielding skips",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "multi_asset with an always-yielded task spec and a skippable marker spec (guarded assets depend on the marker): the short-circuit task itself is materialized when the condition is false, the marker and everything below it are skipped, an all_done task depending on the task asset still runs",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "a bare optional-output asset leaves the short-circuit task itself unmaterialized (reads skipped, Airflow: success)",
      "status": "VERIFIED"
     }
    ],
@@ -205,6 +217,14 @@
     },
     {
      "claim": "DynamicOut(is_required=False): zero items = output not yielded, steps below .map()/.collect() skipped, run status SUCCESS, asset not materialized (Airflow's skip on empty expand)",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "a mapped op annotated `-> None` cannot be collected (collecting step fails with FileNotFoundError); an unannotated op returning nothing collects and the run succeeds",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "a @dg.graph (task group body) mapped over a DynamicOut and collected in a graph_asset runs one step per task per item and collects the group's return values",
      "status": "VERIFIED"
     }
    ],
