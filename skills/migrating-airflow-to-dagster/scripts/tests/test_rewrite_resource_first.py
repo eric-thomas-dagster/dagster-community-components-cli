@@ -106,7 +106,7 @@ def test_the_converter_starting_point_is_optional_and_lists_the_report_as_the_to
     cdir = converter_dir(tmp_path)
     cp = RP.converter_start(SERVICE, cdir)
     assert cp["module"].endswith("defs/svc.py") and [c["task"] for c in cp["stubs"]] == ["pay"] and [c["task"] for c in cp["degraded"]] == ["call_api"] and cp["runtime"]
-    p = prompt(SERVICE, converter_project=cp)
+    p = prompt(SERVICE, converter_project=cp, converter_mode="start")
     assert "TODO from the converter's report" in p and "STUB `pay`: FivetranOperator has no translation" in p and "DEGRADED `call_api`: response_check was not mapped" in p
     assert "Start from it" in p and "starting point" in p and "Work from the spec alone" not in p
     assert "include" in p and "gates and the behaviour comparison" in p
@@ -120,7 +120,7 @@ def test_cli_writes_both_variants(tmp_path):
     (tmp_path / "svc.spec.md").write_text("# Specification\n\n## What the converter did (reference draft, not a requirement)\n\n- no conversion report was given\n\n## Parity baseline\n\n- none\n")
     out1, out2 = tmp_path / "a", tmp_path / "b"
     assert RP.main([str(spec), "--out-dir", str(out1)]) == 0
-    assert RP.main([str(spec), "--out-dir", str(out2), "--converter-project", str(converter_dir(tmp_path)), "--spec-ref", "spec.md"]) == 0
+    assert RP.main([str(spec), "--out-dir", str(out2), "--converter-project", str(converter_dir(tmp_path)), "--converter-mode", "start", "--spec-ref", "spec.md"]) == 0
     a, b = (out1 / "svc.prompt.md").read_text(), (out2 / "svc.prompt.md").read_text()
     assert "no conversion report was given" not in a                                                  # the empty stub is not repeated
     assert "TODO from the converter's report" in b and "the file `spec.md` next to this prompt" in b and "# Specification" not in b and "# Specification" in a

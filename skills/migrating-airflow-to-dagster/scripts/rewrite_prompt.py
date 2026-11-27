@@ -10,7 +10,9 @@ reference draft and the fallback. The prompt is deterministic text around the sp
 (`SKILL.md`, "When to use the rewrite route").
 
 Options (all default off; the default prompt is the same cold-worker prompt for every DAG, sized by what the DAG's spec shows):
-  --converter-project DIR   start from the converter's emitted project (`DIR/report.json`, `DIR/src/<pkg>/defs/<dag>.py`): the prompt lists its stubs, degraded sections and notes as the TODO list and says what to verify
+  --converter-project DIR   the converter's emitted project (`DIR/report.json`, `DIR/src/<pkg>/defs/<dag>.py`); the prompt lists its stubs, degraded sections and notes
+  --converter-mode MODE     reference (default): rewrite from the original and the spec; the project is read-only reference (copy verified logic, not structure; the stub list is the hard parts).
+                            start: improve the converter's project (its list is the TODO list)
   --converter-module PATH   the older form: only name the converter's module as a reference draft
   --spec-ref NAME           do not paste the specification into the prompt; point at the file NAME in the worker's folder (a kit already has `spec.md`)
 
@@ -48,6 +50,37 @@ def converter_start(spec: dict, directory: Path) -> dict | None:
     return {"dir": str(directory), "module": str(mods[0].relative_to(directory)) if mods else (e.get("output") or None), "status": e.get("status"), "reason": e.get("reason"),
             "stubs": [c for c in cav if c.get("kind") == "stub"], "degraded": [c for c in cav if c.get("kind") != "stub"], "notes": list(e.get("notes") or []), "shims": list(e.get("shims") or []),
             "local_modules": list(e.get("local_modules") or []), "requirements": list(e.get("requirements") or []), "runtime": bool(list(directory.glob("src/*/runtime.py")))}
+
+
+CONVERTER_MODES = ("reference", "start")
+
+
+def converter_reference_section(cp: dict, task_ids: list[str] | None = None) -> str:
+    """Reference mode: the original DAG and the spec are the source of truth; the converter's project is read-only reference material."""
+    flagged = {c.get("task") for c in cp["stubs"] + cp["degraded"] if c.get("task")}
+    clean = [t for t in (task_ids or []) if t not in flagged]
+    L = [f"The converter's emitted project is at `{cp['dir']}`; its module for this DAG is `{cp['module']}` (status `{cp['status']}`" + (f", reason: {cp['reason']}" if cp.get("reason") else "") + ").",
+         "**Use it as a read-only reference, not as a starting point.** Rewrite from the original DAG and the specification. Do not copy the converter's project into yours and do not inherit its structure: no shims everywhere, no task-per-asset, "
+         "no gate runtime where a native form fits. What you may take from it is logic it verified: an operator body, a SQL string, an argument mapping, a shim that reproduces a real operator's behaviour. Copy that logic into the asset it belongs to and keep the structure from section 3. "
+         "If the converter and the spec disagree, the spec (the original DAG) wins.", "",
+         "The converter's stub list is the list of hard parts: the places it could not translate. Do the real work there (each item is fixed, or declared `not preserved: <why>` in the decision record):"]
+    L += [f"- STUB `{c.get('task') or 'DAG'}`: {c.get('reason')}" for c in cp["stubs"]]
+    L += [f"- DEGRADED `{c.get('task') or 'DAG'}`: {c.get('reason')} (a known difference from Airflow: remove it or declare it)" for c in cp["degraded"]]
+    L += [f"- note: {n}" for n in cp["notes"]]
+    if not (cp["stubs"] or cp["degraded"] or cp["notes"]):
+        L.append("- none: the report lists no stub, degraded section or note (that is not proof it is right: verify below)")
+    if clean:
+        L.append(f"- tasks the converter converted without a stub or caveat: {', '.join(clean)} (their logic is the candidate for copying; the behaviour comparison, when you have it, says whether they match Airflow)")
+    if cp["shims"]:
+        L.append(f"- shims it uses (verified against the real operator by the converter's tests; use one only where no real operator, library call or registry resource fits, and say why): {', '.join(str(x) for x in cp['shims'])}")
+    if cp["local_modules"]:
+        L.append(f"- the DAG imports project modules {cp['local_modules']}: copy them into the project (they are not pip packages)")
+    if cp["requirements"]:
+        L.append(f"- packages it needs: {', '.join(str(r) for r in cp['requirements'])}")
+    L += ["", "The same gates apply as for a rewrite from the spec alone, and the same checks: the header accounts for every task with the asset key that exists; the decision record covers every behaviour the spec flags; task end states "
+          "(`skipped` kept or declared); service calls use the registry resource where one exists (table in section 3) and say so in the registry-search lines; no secret value; then run the gates and the behaviour comparison.",
+          "In the decision record, say what you took from the converter (which logic, which shims) and what you did not take and why."]
+    return "\n".join(L)
 
 
 def converter_section(cp: dict) -> str:
@@ -93,7 +126,11 @@ PRINCIPLE_SHORT = """**The principle: native Dagster forms first; plain Python i
 ops or plain Python. Dagster fixes a run's shape before it starts: a runtime decision is an optional output or code inside an asset, never a different set of assets chosen at run time."""
 
 
-def render(spec: dict, spec_md: str, converter_module: str | None, project: str, package: str, converter_project: dict | None = None, spec_ref: str | None = None) -> str:
+def render(spec: dict, spec_md: str, converter_module: str | None, project: str, package: str, converter_project: dict | None = None, spec_ref: str | None = None, converter_mode: str = "reference") -> str:
+    """`converter_mode` applies only when `converter_project` is given: `reference` (default: the original DAG is the source, the converter's project is read-only reference) or `start` (improve the converter's project)."""
+    if converter_mode not in CONVERTER_MODES:
+        raise ValueError(f"converter_mode must be one of {CONVERTER_MODES}, not {converter_mode!r}")
+    start_mode = converter_mode == "start"
     d = spec["dag_id"]
     cv = spec.get("converter") or {}
     pat_names = rewrite_patterns.detect(spec)
@@ -103,9 +140,12 @@ def render(spec: dict, spec_md: str, converter_module: str | None, project: str,
     resources = (rewrite_resources.RESOURCE_RULE.format(version=rewrite_resources.REGISTRY_VERSION) + ("\n\n" + rewrite_resources.resource_table(fams) if fams else "")) + "\n"
     checklist = rewrite_resources.checklist_text(spec, pat_names)
     full = bool(set(pat_names) & rewrite_patterns.SKIP_FAMILY)
-    if converter_project:
+    if converter_project and start_mode:
         ref = converter_section(converter_project)
         intro_conv = "A converter's project is the starting point (section 6): improve it, do not transcribe the Airflow source."
+    elif converter_project:
+        ref = converter_reference_section(converter_project, [t.get("task_id") for t in spec.get("tasks", []) if t.get("task_id")])
+        intro_conv = "A converter's project is given as read-only reference (section 6); the original DAG and this specification are the source of truth: do not inherit the converter's structure."
     elif converter_module:
         ref = (f"The converter's output for this DAG is at `{converter_module}` (status `{cv.get('status')}`; stubbed tasks: {', '.join(cv.get('stubbed') or []) or 'none'}). Read it as a draft: it shows the "
                "source's behaviour translated one task at a time. Do not copy its structure; use it to check that you have not lost behaviour.\n\nIf the rewrite cannot pass the gates, the converter's output is what ships.")
@@ -183,7 +223,7 @@ where the source supports them (at least {len((cv.get('asset_checks') or []))} h
 component `type:` resolves; (7) every Airflow task is accounted for in the header and its asset exists in the loaded definitions; (8) **task states**: each task's final state (success, failed, skipped, upstream_failed) and observable effects against Airflow's where a baseline is available (a folded task with
 state `skipped`, a branch not taken, is accepted ONLY when the decision record declares it); (9) **decision record**: the `Decision record:` section covers every behaviour the spec flags. A failed gate stays deferred with the failure recorded; fix it and run again. Never mark a unit complete yourself.
 
-## 6. {"The converter's project (starting point)" if converter_project else "The converter's output"}
+## 6. {("The converter's project (starting point)" if start_mode else "The converter's project (read-only reference)") if converter_project else "The converter's output"}
 
 {ref}
 
@@ -195,7 +235,8 @@ def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("spec", type=Path, help="a <dag>.spec.json, or a folder of them")
     ap.add_argument("--converter-module", help="path to the converter's generated module for this DAG (reference draft)")
-    ap.add_argument("--converter-project", type=Path, help="the converter's emitted project (report.json + src/<pkg>/defs/<dag>.py): start from it; its stubs, degraded sections and notes become the TODO list. Default off")
+    ap.add_argument("--converter-project", type=Path, help="the converter's emitted project (report.json + src/<pkg>/defs/<dag>.py): its stubs, degraded sections and notes are the list of hard parts (see --converter-mode). Default off")
+    ap.add_argument("--converter-mode", choices=CONVERTER_MODES, default="reference", help="with --converter-project: `reference` (default; the original DAG and the spec are the source, the converter's project is read-only reference: copy logic it verified, not its structure) or `start` (improve the converter's project)")
     ap.add_argument("--spec-ref", help="do not paste the specification: point at this file in the worker's folder (for example spec.md)")
     ap.add_argument("--project", default="my_project")
     ap.add_argument("--package", default="my_pkg")
@@ -208,7 +249,7 @@ def main(argv: list[str] | None = None) -> int:
         cp = converter_start(spec, a.converter_project) if a.converter_project else None
         out = (a.out_dir or p.parent) / f"{spec['dag_id']}.prompt.md"
         out.parent.mkdir(parents=True, exist_ok=True)
-        out.write_text(render(spec, md, a.converter_module, a.project, a.package, converter_project=cp, spec_ref=a.spec_ref))
+        out.write_text(render(spec, md, a.converter_module, a.project, a.package, converter_project=cp, spec_ref=a.spec_ref, converter_mode=a.converter_mode))
         print(f"wrote {out}" + (" (no converter entry for this DAG: spec alone)" if a.converter_project and not cp else ""))
     return 0
 

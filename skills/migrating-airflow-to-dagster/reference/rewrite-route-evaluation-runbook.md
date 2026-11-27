@@ -119,6 +119,12 @@ Give those folders to a different set of fresh workers (not the ones who did sta
 
 Corpus 2 to 10 minutes; baselines 10 to 25 minutes for the whole eligible corpus; the behavior comparison about 5 to 15 seconds per DAG for a DAG with no waits (four executions run concurrently; the cost is Airflow's own start-up) and up to the timeout (default 300 s) for a DAG that sleeps or polls; a stage 1 batch at 3 DAGs at a time is under 15 minutes. The workers are the long part.
 
+## An arm with the converter's project as reference (arm C)
+
+Arm C is arm A (feedback tool and baseline) plus the converter's project for that DAG, read-only, under `reference/converter/` (its `report.json` reduced to this DAG's entry, the generated module, the shared runtime), and the prompt built with `--converter-mode reference`. Set it up with a sample entry `"arm": "C"` and `--converter-dir <the converter's output directories, <repo>.<airflow>.ra/>` on `eval_kit.py make`. `TASK.md` of that kit alone relaxes rule 2 (converter output may be read, in `reference/converter/` only) and rule 6 (there is converter output) and says so; every other kit keeps the cold text. `eval_kit.py check` fails a cold arm that holds `reference/` or any converter output, and for arm C verifies the folder holds exactly its own DAG's entry and is read-only.
+
+What an arm C result must NOT be compared to: the cold arms on the whole sample. It is built for, and measured on, the residue (the DAGs the converter stubbed, deferred or got wrong); the sample is small, so report counts and per-DAG outcomes, not rates, and do not read a difference between arms as a ranking. Say that the prompt text differs (converter section) next to the numbers. Do not build or run workers for it without the user's go-ahead.
+
 ## Prompt version
 
 The kits of `stage1`, `stage1b` and `stage2a` were built with the previous `rewrite_prompt.py`. The prompt now has the resource-first rule, per-family registry-resource tables, a registry-search checklist and is smaller (`reference/rewrite-route.md`, "The prompt after stage 2a"). A run built after that change must say so next to its numbers; do not compare it to stage 2a as if only the workers differed. `eval_kit.py make` still calls `rewrite_prompt.render` with the default options (no converter project, spec pasted).

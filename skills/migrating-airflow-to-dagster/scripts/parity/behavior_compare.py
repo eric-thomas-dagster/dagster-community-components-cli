@@ -37,6 +37,7 @@ ENV_ERRORS = re.compile(
     r"UnknownHostException|TimeoutExpired|ReadTimeout|ConnectTimeout|ProxyError|SSLError|Errno 111|Errno 61|No interpreter found|No matching distribution|Could not find a version that satisfies|"
     r"Cannot connect to host|nodename nor servname|unable to open database file|extension.*threw an exception|returned non-zero exit status 2|FileNotFoundError|Failed to download|Network is unreachable|Temporary failure|pip.*(?:returned non-zero|failed)|uv.*error:|Failed to fetch|Could not resolve|"
     r"ASSET_NOT_FOUND|Asset with name \S+ not found|InProcessSupervisorComms' object has no attribute 'asend'", re.I)    # the last two are `dag.test()` limits: an @asset DAG whose inlet asset no other DAG registered in the sandbox's metadata database, and an async task's `aget` / `aset` (dag.test's in-process supervisor has no `asend`)
+XCOM_SERIALIZATION = re.compile(r"xcom read failed:.*airflow\.serialization|xcom read failed:.*serializers?\.\w+ has no attribute", re.I)   # reading an XCom back through Airflow's serializer failed (for example `serializers.deltalake has no attribute 'stringify'`)
 VENV_BUILD = re.compile(r"Unable to create new virtual environment|virtualenv|No matching distribution|Could not find a version that satisfies", re.I)
 DEFERRAL_LIMIT = re.compile(r"execute_complete\(\) missing \d+ required|NotImplementedError")
 
@@ -215,6 +216,9 @@ def baseline_class(a1: dict[str, Any], a2: dict[str, Any] | None, spec: dict[str
     text = "\n".join(a1.get("errors", [])) + "\n" + str(a1.get("error") or "")
     if a1.get("error"):
         return "baseline-failed", f"the baseline could not run: {str(a1['error'])[:240]}"
+    if XCOM_SERIALIZATION.search(text):
+        return "baseline-failed", ("environmental (xcom-serialization): reading an XCom through Airflow's serialization failed on the Airflow side "
+                                   f"({next(ln for ln in text.splitlines() if XCOM_SERIALIZATION.search(ln))[:200].strip()}): a serializer module installed in the baseline interpreter does not match its Airflow version, so the baseline's values are unreadable and nothing was compared")
     state = (airflow_overall(a1, spec)[0] if spec else str(a1.get("state", ""))).lower()
     if "success" in state:
         if a2 and "success" not in (airflow_overall(a2, spec)[0] if spec else str(a2.get("state", ""))).lower():

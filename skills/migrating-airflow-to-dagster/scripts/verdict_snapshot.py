@@ -9,7 +9,7 @@ A WORKDIR is a work directory of `eval_behavior.py` (`<work>/<run>-private/behav
 and a digest of the converter's report for that DAG (stubbed tasks, degraded tasks, caveat count, whether it was deferred) read from the `--conv-dir`s (`<conv>/<repo>.<airflow>.ra[d]/report.json`).
 
 `check` compares a measurement run (the same kind of work directories) with the snapshot and prints
-    regressions   a verdict that got worse (the order is equivalent > equivalent-with-differences > matches-baseline-failure > stub-matches-failure > different = not-comparable > no-output), an `equivalent` that turned
+    regressions   a verdict that got worse (the order is equivalent > equivalent-with-differences > matches-baseline-failure > stub-matches-failure > different = not-comparable > no-output; where the baseline fails BY DESIGN, matches-baseline-failure is the top result and stub-matches-failure the lowest of the failure-matching ones), an `equivalent` that turned
                   from substantive to thin (less was observed), a new stub / degraded task / caveat in the converter's report
     improvements  the reverse
     changed       a DAG whose baseline became or stopped being `baseline-failed` (an environment change: not ranked)
@@ -28,6 +28,15 @@ HERE = Path(__file__).resolve().parent
 DEFAULT_SNAPSHOT = HERE.parent / "reference" / "verdict-snapshot.json"
 RANK = {"equivalent": 6, "equivalent-with-differences": 5, "matches-baseline-failure": 4, "stub-matches-failure": 3, "different": 2, "not-comparable": 2, "no-output": 1}
 UNRANKED = "baseline-failed"
+BY_DESIGN = "by-design-failure"                                              # the baseline class of a DAG whose own code fails in Airflow
+
+
+def rank(verdict: str | None, baseline: str | None = None) -> int:
+    """The order of verdicts. When the baseline FAILS BY DESIGN, failing the same way is the correct and top result (`matches-baseline-failure` outranks everything, including equivalent-with-differences, which cannot
+    be reached by a rewrite that fails where the original fails); `stub-matches-failure` (a stub that merely happens to fail) stays the lowest of the failure-matching verdicts."""
+    if verdict == "matches-baseline-failure" and baseline == BY_DESIGN:
+        return max(RANK.values()) + 1
+    return RANK.get(verdict or "", 0)
 OBSERVABLE = ("values", "files", "sqlite", "http", "smtp", "s3", "stdout", "failure")
 
 
@@ -114,9 +123,10 @@ def compare(snap: dict[str, dict[str, Any]], cur: dict[str, dict[str, Any]]) -> 
             res["changed"].append({"key": key, "why": f"baseline: {ov} -> {nv}"})
             continue
         if ov != nv and ov != UNRANKED:
-            if RANK.get(nv, 0) < RANK.get(ov, 0):
+            ro, rn = rank(ov, o.get("baseline")), rank(nv, n.get("baseline"))
+            if rn < ro:
                 reg.append(f"verdict {ov} -> {nv}")
-            elif RANK.get(nv, 0) > RANK.get(ov, 0):
+            elif rn > ro:
                 imp.append(f"verdict {ov} -> {nv}")
         if ov == nv == "equivalent" and o.get("thin") != n.get("thin"):
             if n.get("thin"):
