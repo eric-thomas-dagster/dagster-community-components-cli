@@ -44,6 +44,9 @@ BEHAVIOURS = {
 }
 
 
+VENV_OP = re.compile(r"Virtualenv|ExternalPython|PythonExternal|DockerOperator|_DockerDecorated|KubernetesPod|_KubernetesDecorated")      # virtualenv, external_python (incl. the decorated class names), docker / kubernetes operators
+
+
 def _src(t: dict[str, Any]) -> str:
     c = t.get("callable") or {}
     return (c.get("source") or "") + " " + " ".join(str(v) for v in (t.get("arguments") or {}).values())
@@ -78,7 +81,7 @@ def detect(spec: dict[str, Any]) -> list[str]:
             found.add("task_groups")
         if re.search(r"\{\{|params\.|var\.(value|json)|Variable\.get|context\[.(ds|data_interval_start|logical_date)", str(t.get("arguments")) + " " + str((t.get("callable") or {}).get("source") or "")) or t.get("connections"):
             found.add("templating_config")
-        if re.search(r"Virtualenv|ExternalPython", op):
+        if VENV_OP.search(op):
             found.add("venv_pipes")
         if t.get("execution_timeout_s") or t.get("sla_s") or any("sla" in c.lower() for c in (t.get("callbacks") or [])):
             found.add("timeouts_sla")

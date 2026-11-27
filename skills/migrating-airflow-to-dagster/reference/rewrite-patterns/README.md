@@ -53,6 +53,9 @@ Do not add `can_subset=True`: launch-time selection, verified unnecessary and ha
 | long wait / sensor `reschedule` / async job | a `@sensor` emitting `RunRequest` (`condition_sensor`, `job_done_sensor`), or Pipes | closest: the wait is outside every run, no timeout state |
 | short wait, same run needed | `poll_until` in the asset (fallback) | holds the worker like `mode='poke'` |
 | TriggerDagRun / ExternalTaskSensor / asset trigger | asset dependency + `AutomationCondition.eager()` / `on_cron`; with conf: `run_status_sensor` yielding `RunRequest(run_config=...)` (verified eager requests the downstream) | separate run: `wait_for_completion` not reproduced |
+| `PythonVirtualenvOperator`, `@task.virtualenv` (pip install at run time) | NO equivalent: run in the project's environment and add the `requirements` to the project's dependencies; a conflict means a separate code location (`venv_pipes.py`, in-process form, run) | the per-task isolation is not reproduced; say so in the record |
+| `ExternalPythonOperator`, `@task.external_python` | `PipesSubprocessClient` with extras in, logs and metadata streamed back, value out, interpreter from `<TASK>_PYTHON` (`venv_pipes.py`, run with a separate interpreter) | arguments and return value must be JSON; no task context in the script |
+| `@task.docker`, `@task.kubernetes` | `PipesDockerClient` / `PipesK8sClient` / `PipesECSClient`, or executor step tags with an image (`venv_pipes.md`; **UNVERIFIED**: no daemon or cluster here) | needs an image with Python and `dagster-pipes` |
 | XCom | return value as an asset argument; observability values as `add_output_metadata` | exact for small values |
 | TaskGroup | `group_name` + `key_prefix` (consumers name the prefixed key via `AssetIn(key=...)`); a factory for a template group | exact except the UI grouping |
 
@@ -76,3 +79,4 @@ matters, the alternative is a graph asset (`@dg.graph_asset`) with one op per st
 | pools, `max_active_tis_per_dag` | `pools.md`, `pools.py` | a task `pool` other than `default_pool` |
 | XCom between tasks | `xcom.md`, `xcom.py` | a task that `reads_value_from` another |
 | TaskGroup | `task_groups.md`, `task_groups.py` | a task with a `group` |
+| virtualenv, external_python, docker, kubernetes tasks | `venv_pipes.md`, `venv_pipes.py` (`_venv_pipes_task.py`: the script that runs in the other interpreter) | an operator name with `Virtualenv`, `ExternalPython` / `PythonExternal`, `DockerOperator` / `_DockerDecorated`, `KubernetesPod` / `_KubernetesDecorated` |

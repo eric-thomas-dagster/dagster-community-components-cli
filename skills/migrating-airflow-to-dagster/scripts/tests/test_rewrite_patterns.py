@@ -408,16 +408,50 @@ def test_templating_config_partition_window_config_envvar_resource_and_mock():
     assert r.output_for_node("uses_connection") == "mock"                                  # a mock resource in tests
 
 
-def test_pipes_runs_the_external_interpreter_and_a_missing_one_fails_loudly(monkeypatch):
+EXTERNAL_PY = os.environ.get("EVAL_EXTERNAL_PYTHON") or sys.executable                  # an interpreter with dagster-pipes (the pattern run used a separate venv's python)
+
+
+def test_external_python_pipes_extras_in_logs_metadata_and_value_out(monkeypatch):
     m = load("venv_pipes")
-    monkeypatch.setattr(m, "VENV_PYTHON", sys.executable)
-    r, mat, _ = run([m.venv_task], resources={"pipes_subprocess_client": dg.PipesSubprocessClient()})
-    assert r.success and mat["venv_task"].materialization.metadata["rows"].value == 3
-    monkeypatch.setattr(m, "VENV_PYTHON", "/nonexistent/venv/bin/python")
-    r, mat, _ = run([m.venv_task], resources={"pipes_subprocess_client": dg.PipesSubprocessClient()})
-    assert not r.success and "venv_task" not in mat                                        # no silent fallback to the current interpreter
+    monkeypatch.setenv(m.PYTHON_ENV, EXTERNAL_PY)
+    with dg.DagsterInstance.ephemeral() as inst:
+        r, mat, _ = run([m.external_python_task], instance=inst, resources={"pipes_subprocess_client": dg.PipesSubprocessClient()})
+        assert r.success
+        assert r.output_for_node("external_python_task") == {"label": "rows", "count": 3, "total": 3}                       # extras in, the value is the asset value
+        md = mat["external_python_task"].materialization.metadata
+        assert md["rows"].value == 3 and md["airflow/return_value"].data == {"label": "rows", "count": 3, "total": 3}       # streamed metadata + the converter's metadata key
+        logs = [e.message for e in inst.all_logs(r.run_id) if "own interpreter with n=3" in (e.message or "")]
+        assert logs                                                                         # the external script's log line reached the run's logs
+
+
+def test_external_python_interpreter_default_and_loud_failure(monkeypatch):
+    m = load("venv_pipes")
+    monkeypatch.delenv(m.PYTHON_ENV, raising=False)
+    monkeypatch.setattr(m, "DEFAULT_PYTHON", "/nonexistent/venv/bin/python")
+    r, mat, _ = run([m.external_python_task], resources={"pipes_subprocess_client": dg.PipesSubprocessClient()})
+    assert not r.success and "external_python_task" not in mat                              # no silent fallback to the current interpreter
     with pytest.raises(dg.Failure, match="not falling back"):
-        m.require_interpreter(None)
+        m.resolve_interpreter(env_var="NO_SUCH_VAR_X", default=None)
+    monkeypatch.setenv(m.PYTHON_ENV, EXTERNAL_PY)                                           # the env var wins over the default
+    assert m.resolve_interpreter() == EXTERNAL_PY
+
+
+def test_virtualenv_has_no_equivalent_the_in_project_form_runs_and_declares_requirements():
+    m = load("venv_pipes")
+    r, mat, _ = run([m.in_project_env])
+    assert r.success and r.output_for_node("in_project_env")["count"] == 3
+    assert m.PROJECT_REQUIREMENTS                                                           # the requirements are declared next to the in-process form; nothing builds a venv
+
+
+def test_venv_pattern_detection_covers_virtualenv_external_docker_kubernetes_operators():
+    import rewrite_patterns as RPAT
+    for op in ("PythonVirtualenvOperator", "_PythonVirtualenvDecoratedOperator", "BranchPythonVirtualenvOperator", "ExternalPythonOperator", "_PythonExternalDecoratedOperator",
+               "_BranchExternalPythonDecoratedOperator", "DockerOperator", "_DockerDecoratedOperator", "KubernetesPodOperator", "_KubernetesDecoratedOperator"):
+        assert "venv_pipes" in RPAT.detect({"tasks": [{"operator": op}]}), op
+    assert "venv_pipes" not in RPAT.detect({"tasks": [{"operator": "PythonOperator"}, {"operator": "BashOperator"}]})
+    text = RPAT.render(["venv_pipes"])
+    assert all(x in text for x in ("No direct equivalent", "PipesSubprocessClient", "UNVERIFIED", "def external_python_task"))
+    assert "virtualenv" in RPAT.flagged({"tasks": [{"operator": "_PythonVirtualenvDecoratedOperator"}]})
 
 
 def test_timeout_tag_and_freshness_policy_are_present():

@@ -489,18 +489,23 @@
    "id": "venv_pipes",
    "airflow_features": [
     "PythonVirtualenvOperator",
-    "ExternalPythonOperator",
     "@task.virtualenv",
-    "branch virtualenv variants"
+    "branch virtualenv variants",
+    "ExternalPythonOperator",
+    "@task.external_python",
+    "@task.docker",
+    "@task.kubernetes",
+    "DockerOperator",
+    "KubernetesPodOperator"
    ],
-   "detected_by": "operator name with Virtualenv/ExternalPython",
+   "detected_by": "operator name with Virtualenv / ExternalPython / PythonExternal (decorated) / DockerOperator / _DockerDecorated / KubernetesPod / _KubernetesDecorated",
    "doc": "venv_pipes.md",
    "code": [
     "venv_pipes.py",
     "_venv_pipes_task.py"
    ],
-   "native_form": "PipesSubprocessClient with the venv's interpreter, requirements declared, loud failure if missing",
-   "fallback_form": "plain Python only if the venv pins already-installed versions",
+   "native_form": "virtualenv: NO equivalent (run in the project's environment, add requirements to project dependencies; conflicts mean a separate code location); external_python: PipesSubprocessClient with extras in, logs and metadata streamed, return value out, interpreter from an env var with a default, loud failure if missing; containers: PipesDockerClient / PipesK8sClient / PipesECSClient or executor step tags",
+   "fallback_form": "in-process asset in the project's environment (also the virtualenv form)",
    "claims": [
     {
      "claim": "a Pipes subprocess run materializes the asset with the reported metadata",
@@ -511,12 +516,35 @@
      "status": "VERIFIED"
     },
     {
-     "claim": "building a real venv",
+     "claim": "extras reach the external interpreter, its logs appear in the run, the returned value is the asset value and is also recorded as metadata airflow/return_value",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "the interpreter path is taken from an environment variable with a default",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "a virtualenv task has no equivalent: the in-process asset in the project's environment runs",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "requirements conflicts need a separate code location (design statement)",
+     "status": "PARTIAL"
+    },
+    {
+     "claim": "PipesDockerClient / PipesK8sClient run the function in an image (signatures as the converter uses them; checked against a recording fake only)",
+     "status": "PARTIAL"
+    },
+    {
+     "claim": "executor step tags (dagster-k8s/config container_config.image) give a step its own image; PipesECSClient",
      "status": "PARTIAL"
     }
    ],
    "dagster_cannot_express": [
-    "building the environment at run time without network"
+    "building a virtualenv per step at run time (no equivalent by design)"
+   ],
+   "unverified": [
+    "container clients and executor step tags: no Docker daemon, cluster or ECS here, dagster-docker / dagster-k8s not installed in the test environment"
    ]
   },
   {
