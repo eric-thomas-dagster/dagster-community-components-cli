@@ -521,6 +521,9 @@ def render(a: argparse.Namespace) -> str:
       "sensors' reschedule behaviour over wall-clock time; callbacks, SLAs and notifications sent through channels other than SMTP and HTTP; the Airflow UI, logs and run history; deferrable triggers. "
       "Values are compared as JSON, so a different but equivalent representation (a date as a string against a datetime) shows as a difference.")
     A("")
+    for ln in '## The prompt changed after stage 2a\n\nThe rewrite numbers in this report for `stage1`, `stage1b` and `stage2a` belong to the previous rewrite prompt. After stage 2a the prompt gained a resource-first rule, a registry-resource table for the operator families a DAG uses, a registry-search checklist and an optional converter starting point, and was made smaller (`reference/rewrite-route.md`, "The prompt after stage 2a"). A smaller prompt is not shown to give equal accuracy; a run built with the new prompt must be reported separately.'.splitlines():
+        A(ln)
+    A("")
     A("## Earlier measurement, for context")
     A("")
     A("The first measurement (`reference/rewrite-route.md`, `examples/rewrite/sample/`) had 8 DAGs, **the rewrites were written by the agent that designed the prompts (not cold)**, and one table mixed \"loads and has the right shape\" with \"behaves like Airflow\". "

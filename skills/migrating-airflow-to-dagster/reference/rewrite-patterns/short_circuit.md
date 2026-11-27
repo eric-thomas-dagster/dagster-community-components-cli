@@ -15,6 +15,8 @@ run anyway (`all_done` / `none_failed`) need an input that is not the optional o
 <guarded_task>: replaced by asset `<key>` (skipped when the condition is false: its output is not yielded)
 ```
 
+**Registry `conditional_asset` (0.10.194; verified by running it on Dagster, `scripts/tests/test_rewrite_resource_first.py`).** `mode: short_circuit` with `asset_key: g/gate`: each run materializes an always-present decision asset (the gate key with `_decision` appended to its last path part, `g/gate_decision`, or `decision_asset_key`; value `{"passed": bool}`, metadata `passed`), and the gate asset `g/gate` only when the callable is truthy; when it is falsy the gate is not materialized and what depends on it is skipped, the run succeeds. Map the Airflow short-circuit task to the decision asset (it is `success` in Airflow either way), guarded tasks depend on the gate. An installed version older than 0.10.194 has no decision asset (nothing materializes on a falsy result): `dagster-component info conditional_asset` first. The native form above is the default when the guarded work needs ops or an `all_done` tail.
+
 **Fallback, plain Python: an early `return`** in the asset holding the guarded work, only when nothing below depends on skip semantics, the native form is not verified for the case, or it failed a gate:
 ```
 <short_circuit_task>: folded into `<asset>`

@@ -26,6 +26,8 @@
 
 Product granularity still applies (one asset per data product, not per task) but is not a reason to fold a real branch into plain Python.
 
+**Registry `conditional_asset` (0.10.194; verified by running it on Dagster, `scripts/tests/test_rewrite_resource_first.py`).** `mode: branch` with `branches: {<label>: <asset key>}` and a decision callable returning the label: each run materializes an always-present decision asset (`<common parent of the branch keys>/decision`, value `{"chosen": label}`, metadata `chosen_branch`) and ONLY the chosen branch asset; the other is not materialized. Two branch instances whose branches share a parent both derive `<parent>/decision` and fail with `Duplicate asset key`: set `decision_asset_key` on each (verified: distinct keys load and run; the field is on the class but not in `schema.json` or the README). Map the Airflow branch task to the decision asset. Use it when its shape fits (one callable, one asset per branch); the native forms above stay the choice when a branch needs its own ops, retries or checks, or a rejoin. An installed version older than 0.10.194 has no decision asset: `dagster-component info conditional_asset` first.
+
 ## Header lines (one line per Airflow task)
 
 Native form: `<task>: replaced by asset `<key>`` (or `replaced by op `<name>` in asset `<key>`` for ops inside a graph asset); the harness compares the task's skipped/success state with Airflow's.

@@ -142,6 +142,34 @@ def _read(name: str, ext: str) -> str:
     raise FileNotFoundError(f"rewrite pattern {name}{ext}")
 
 
+# Rows of the "what Dagster can express" table that matter per pattern (the first four rows, the plain states, are always kept)
+ROW_FOR = {
+    "branching": r"branch|join|skip", "short_circuit": r"short\s*circuit|branch|join", "skip": r"skip|sentinel", "trigger_rules": r"all_done|one_failed|all_failed|upstream_failed|failure",
+    "mapped_tasks": r"mapped|dynamic", "sensors": r"sensor|wait|deferred|queued|poll", "depends_on_past": r"depends_on_past", "cross_dag": r"TriggerDagRun|ExternalTask|asset trigger",
+    "pools": r"pool", "xcom": r"xcom", "task_groups": r"taskgroup", "templating_config": r"$^", "venv_pipes": r"$^", "timeouts_sla": r"$^", "latest_only": r"$^",
+}
+SKIP_FAMILY = {"branching", "short_circuit", "skip", "mapped_tasks"}
+
+
+def _state_table(names: list[str]) -> str:
+    """The README's representation table (what Dagster can and cannot express), cut to the rows these patterns need; the 'choice rule' bullets are dropped (the prompt's principle paragraph says them once)."""
+    try:
+        body = _read("README", ".md").split("## What Dagster can and cannot express")[1].split("## Index")[0]
+    except (FileNotFoundError, IndexError):
+        return ""
+    lines = body.splitlines()
+    head, rows, tail, in_table = [], [], [], False
+    for ln in lines:
+        if ln.startswith("|"):
+            in_table = True
+            rows.append(ln)
+        elif in_table:
+            tail.append(ln)
+    want = re.compile("|".join(f"(?:{ROW_FOR[n]})" for n in names if n in ROW_FOR) or "$^", re.I)
+    keep = rows[:6] + [r for r in rows[6:] if want.search(r)]          # header, separator, success, failed, up_for_retry, upstream_failed
+    return "\n".join(["## What Dagster can and cannot express (rows for the constructs above; the full table is in the pattern library)", ""] + keep + tail).rstrip()
+
+
 def render(names: list[str]) -> str:
     """The prompt text for the detected patterns ('' when none). The code is the tested code, verbatim."""
     if not names:
@@ -149,16 +177,15 @@ def render(names: list[str]) -> str:
     if ("branching" in names or "short_circuit" in names) and "skip" not in names:
         names = [n for n in ORDER if n in names or n == "skip"]       # their text points at skip.py
     out = ["### Patterns this DAG needs (verified Dagster code)", "",
-           "The spec shows the constructs below. Each pattern shows the NATIVE Dagster form first and the plain-Python-inside-one-asset form as the stated fallback; the code was executed on the installed Dagster and its skip/state behaviour asserted. Use the "
-           "native form, change the names, keep the semantics; fall back to plain Python only for the reasons the pattern lists, and then say `fallback to plain Python: <reason>` in the decision record. The representation table says what Dagster cannot express: say so in the header and the decision record instead of hiding it.", ""]
-    try:
-        out += [_read("README", ".md").split("## What Dagster can and cannot express")[1].split("## Index")[0].join(["## What Dagster can and cannot express", ""]), ""]
-    except (FileNotFoundError, IndexError):
-        pass
+           "Each pattern shows the NATIVE Dagster form first and plain Python inside one asset as the stated fallback; the code was executed on the installed Dagster and its skip/state behaviour asserted. Use the "
+           "native form, change the names, keep the semantics; fall back to plain Python only for the reasons the pattern lists, and then say `fallback to plain Python: <reason>` in the decision record. The table says what Dagster cannot express: say so in the header and the decision record.", ""]
+    tbl = _state_table(names)
+    if tbl:
+        out += [tbl, ""]
     for n in names:
         out += [_read(n, ".md").rstrip(), "", f"```python  # {n}.py (tested)", _read(n, ".py").rstrip(), "```", ""]
         if n == "branching":
-            out += ["The FALLBACK form (plain Python in one asset; use only under the conditions above and say so in the decision record), tested:", "", "```python  # branching_plain_fallback.py (tested)", _read("branching_plain_fallback", ".py").rstrip(), "```", ""]
+            out += ["The FALLBACK form (`branching_plain_fallback.py`, tested; not pasted here: it is an `if/else` calling the chosen branch's code in ONE asset, the join ordinary code after it) is for the three cases above only, said in the decision record.", ""]
     return "\n".join(out)
 
 

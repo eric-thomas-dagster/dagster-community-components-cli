@@ -62,6 +62,14 @@
     {
      "claim": "multi_asset with an always-yielded decision spec plus skippable branch specs: the decision asset materializes every run, exactly one branch asset does, the other and what is below it are skipped",
      "status": "VERIFIED"
+    },
+    {
+     "claim": "registry conditional_asset 0.10.194, branch mode: an always-present decision asset `<common parent>/decision` (metadata chosen_branch) plus ONLY the chosen branch is materialized; the other branch is not; the run succeeds (run by scripts/tests/test_rewrite_resource_first.py against the registry venv, skipped when absent)",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "registry conditional_asset 0.10.194: two branch instances sharing a parent path fail with `Duplicate asset key` on `<parent>/decision`; distinct `decision_asset_key` values load and run (the field is not in schema.json)",
+     "status": "VERIFIED"
     }
    ],
    "dagster_cannot_express": [
@@ -105,6 +113,10 @@
     },
     {
      "claim": "a bare optional-output asset leaves the short-circuit task itself unmaterialized (reads skipped, Airflow: success)",
+     "status": "VERIFIED"
+    },
+    {
+     "claim": "registry conditional_asset 0.10.194, short_circuit mode: decision asset is the gate key with `_decision` on its last part (`g/gate` -> `g/gate_decision`, metadata passed); the gate asset is materialized only when the callable is truthy",
      "status": "VERIFIED"
     }
    ],

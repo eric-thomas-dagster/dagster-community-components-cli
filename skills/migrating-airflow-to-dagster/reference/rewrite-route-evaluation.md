@@ -293,6 +293,10 @@ Rewrites judged `equivalent` where only the outcome and structure were observabl
 
 **The harness cannot compare:** durations and data volume; anything that needs a real external system (the sample excludes such DAGs; the stand-ins are SQLite, HTTP and SMTP recorders and S3 through moto, and a DAG using any other database, warehouse, queue or API is out of scope); HTTP responses other than a canned 200 `{"ok": true}` (a DAG whose logic depends on the response body is compared only for that response); Airflow scheduling (ticks, catchup, backfill, data intervals: a cron string and timezone are compared, not the runs they would create); asset-triggered and interval schedules (reported not-compared); retries as they happen (the policy is compared, no failure is injected); pool and concurrency behaviour under load; sensors' reschedule behaviour over wall-clock time; callbacks, SLAs and notifications sent through channels other than SMTP and HTTP; the Airflow UI, logs and run history; deferrable triggers. Values are compared as JSON, so a different but equivalent representation (a date as a string against a datetime) shows as a difference.
 
+## The prompt changed after stage 2a
+
+The rewrite numbers in this report for `stage1`, `stage1b` and `stage2a` belong to the previous rewrite prompt. After stage 2a the prompt gained a resource-first rule, a registry-resource table for the operator families a DAG uses, a registry-search checklist and an optional converter starting point, and was made smaller (`reference/rewrite-route.md`, "The prompt after stage 2a"). A smaller prompt is not shown to give equal accuracy; a run built with the new prompt must be reported separately.
+
 ## Earlier measurement, for context
 
 The first measurement (`reference/rewrite-route.md`, `examples/rewrite/sample/`) had 8 DAGs, **the rewrites were written by the agent that designed the prompts (not cold)**, and one table mixed "loads and has the right shape" with "behaves like Airflow". Nothing in this report reuses those numbers.
