@@ -66,7 +66,7 @@ SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "executio
                  "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf", "outlet_events", "inlet_events",
                  "next_ds", "next_ds_nodash", "next_execution_date", "prev_ds", "prev_ds_nodash", "prev_execution_date",     # Airflow 2 macros
                  "tomorrow_ds", "tomorrow_ds_nodash", "yesterday_ds", "yesterday_ds_nodash", "ts_nodash_with_tz",
-                 "prev_data_interval_start_success", "prev_data_interval_end_success", "task_instance_key_str"}
+                 "prev_data_interval_start_success", "prev_data_interval_end_success", "task_instance_key_str", "task_state_store"}
 JINJA_VARS = SUPPORTED_CTX | {"macros", "var"}
 USER_MACROS: set[str] = set()     # the DAG's `user_defined_macros` names (set per DAG): a template may use them
 CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date"}, "dag": {"dag_id"}, "task": {"task_id"},
@@ -391,6 +391,8 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     meta["var_kw"] = fn.args.kwarg.arg if fn.args.kwarg else None
     meta["ctx_named"] = ctx_named
     meta["needs_ti"] = bool({"ti", "task_instance"} & set(ctx_named)) or bool(re.search(r"\bxcom_pull\b|\bti\b|\btask_instance\b", body_text))
+    _no_pull = re.sub(r"\b(?:ti|task_instance)\.(?:map_index|dag_id|task_id|run_id|try_number|xcom_push)\b", "", body_text)
+    meta["needs_xcom"] = bool(re.search(r"\bxcom_pull\b|\bti\b|\btask_instance\b", _no_pull))           # `ti.map_index` and the like need the ti but pull nothing: only an xcom_pull needs the upstream values wired in
     meta["needs_ctx"] = bool(conds) or bool(ctx_named) or bool(fn.args.kwarg) or "get_current_context" in body_text or bool(re.search(r"\bMetadata\b|\boutlet_events\b|\binlet_events\b", body_text))
     idx = ModuleIndex(info["file"])
     needed: dict[int, str] = {}
@@ -1913,7 +1915,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
         names, _ = jinja_vars(task_templates(t))
         if meta.get("needs_ctx") or names or ty == "TimeDeltaSensor" or (ty in CLOCK_BRANCH and (t.get("args") or {}).get("use_task_logical_date")):
             ctx_tasks.add(tid)
-        if meta.get("needs_ti") or {"ti", "task_instance"} & names:
+        if meta.get("needs_xcom") or {"ti", "task_instance"} & names:
             ti_inputs[tid] = [u for u in ancestors(tid) if u in keyparts]      # xcom_pull may name any task that ran before
             consumed |= set(ti_inputs[tid])
     map_fns: dict[str, list[str]] = {}                                # mapped task -> names of its `.map(f)` functions, in source order
@@ -2574,6 +2576,10 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
             body = ctx_line + f"    {stmt}"
             pre = ""
             ret_none = True
+        elif ty in ELIDED:                                     # an EmptyOperator that declares outlets/inlets: the asset is the dataset it publishes, nothing runs
+            body = "    return None"
+            pre = ""
+            ret_none = True
         else:
             stmt, conn = s3_call(t, params, ctxn)
             resources.add(conn)
@@ -2912,6 +2918,46 @@ class _TaskInstance:
         self._ctx.add_output_metadata({key: meta})
 
 
+class _TaskStateStore:
+    """Airflow 3.4's `task_state_store` (key/value state of ONE task instance, kept across its retries): a JSON file per (dag, task, run, map_index) under AIRFLOW_TASK_STATE_DIR
+    (default: <tempdir>/af_task_state). Values must be JSON. A plain-Python shim: Dagster has no per-step key/value store (asset metadata is the nearest durable record)."""
+
+    def __init__(self, dag_id, task_id, run_id, map_index):
+        import tempfile
+        d = os.environ.get("AIRFLOW_TASK_STATE_DIR") or os.path.join(tempfile.gettempdir(), "af_task_state")
+        name = re.sub(r"[^A-Za-z0-9_.-]", "_", f"{dag_id}__{task_id}__{run_id}__{map_index}")
+        self._path = os.path.join(d, name + ".json")
+
+    def _load(self):
+        try:
+            with open(self._path) as f:
+                return json.load(f)
+        except FileNotFoundError:
+            return {}
+
+    def _save(self, data):
+        os.makedirs(os.path.dirname(self._path), exist_ok=True)
+        with open(self._path, "w") as f:
+            json.dump(data, f)
+
+    def get(self, key, default=None):
+        return self._load().get(key, default)
+
+    def set(self, key, value):
+        json.dumps(value)                                  # Airflow stores JSON: a value that is not JSON fails there too
+        data = self._load()
+        data[key] = value
+        self._save(data)
+
+    def delete(self, key):
+        data = self._load()
+        data.pop(key, None)
+        self._save(data)
+
+    def clear(self):
+        self._save({})
+
+
 AF_ISO_DT = False          # set when the runtime is written: Airflow before 2.8 prints datetimes in templates with a T (2026-07-02T05:00:00+00:00)
 
 
@@ -2980,7 +3026,8 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
             "ts_nodash_with_tz": ld.strftime("%Y%m%dT%H%M%S%z"), "task_instance_key_str": f"{dag_id}__{task_id}__{ld.strftime('%Y%m%d')}", "prev_data_interval_start_success": None, "prev_data_interval_end_success": None,
             "dag": types.SimpleNamespace(dag_id=dag_id), "task": types.SimpleNamespace(task_id=task_id), "ti": ti, "task_instance": ti,
             "dag_run": types.SimpleNamespace(run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
-            "partition_key": pkey, "outlet_events": _OutletEvents(context), "inlet_events": _InletEvents(context)}
+            "partition_key": pkey, "outlet_events": _OutletEvents(context), "inlet_events": _InletEvents(context),
+            "task_state_store": _TaskStateStore(dag_id, task_id, run_id, ti.map_index)}
 
 
 def call_with_context(fn, args, kwargs, ctx):
@@ -4162,7 +4209,7 @@ def main(argv: list[str] | None = None) -> int:
                     dest.write_text(text)
                     if rel.startswith("callables/"):
                         (dest.parent / "__init__.py").touch()
-                summary = {**summary, **over}
+                summary = {**summary, **over, "converted_with_component": True, "component_types": sorted({ln.split('dagster_community_components.')[1] for t_ in files.values() for ln in t_.splitlines() if ln.startswith('type: dagster_community_components.')})}
             else:
                 (a.out_dir / f"{name}.py").write_text(code)
                 summary = {**summary, "output": "python"}

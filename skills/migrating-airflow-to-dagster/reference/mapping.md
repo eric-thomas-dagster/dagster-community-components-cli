@@ -13,7 +13,7 @@ One asset per data product, with the steps that only help to produce it inside t
 | DAG | A job over the assets it produces, plus a schedule; or just assets with an automation condition | JUDG | Granularity is the decision: one asset per data product, not per task |
 | Task producing data | Asset | MECH | The unit of migration |
 | Task with no data output (notify, cleanup, wait) | Op in a job, a sensor, an alert, or folded into an asset | JUDG | |
-| `EmptyOperator` / `DummyOperator` | Nothing; ordering is kept through asset deps | MECH | |
+| `EmptyOperator` / `DummyOperator` | Nothing; ordering is kept through asset deps. With an `outlets`/`inlets` declaration it is an asset (returns `None`) carrying the asset key | MECH | |
 | TaskGroup | Asset `group_name` | MECH | |
 | Task dependencies (`>>`) | Asset `deps` | MECH | Edges between non-data tasks collapse |
 | Dataset / Asset outlets and inlets | Asset keys and deps | MECH | URIs become key paths; Airflow Asset URIs map naturally to Dagster keys |

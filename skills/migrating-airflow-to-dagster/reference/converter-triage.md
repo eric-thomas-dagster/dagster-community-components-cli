@@ -88,4 +88,30 @@ Source: `eval_behavior.py batch --routes converter` on the 60-DAG stage-2a sampl
 
 Movers (all `different` in v3): example_local_kubernetes_executor, example_time_delta_sensor_async, pandas_xcom, my_astronauts_dag, example_dataset_producer_with_and_condition became `equivalent`; toy_custom_names_dynamic_tasks_taskflow, toy_custom_names_dynamic_tasks_traditional_operators and toy_dynamic_task_default_index became `matches-baseline-failure` (they were a harness attribution error: the downstream mapped task is `upstream_failed` in both). Caution on the matches-baseline-failure gain: three of the 8 movers come from the harness change, not the converter, so the converter-only gain is smaller than the headline.
 
-Not done: mapped task groups, helpers closing over DAG-function locals, `ObjectStoragePath` arguments, user-defined mapped operators and operators with non-plain constructor arguments, registry-component mapping for provider operators, and the direct Airflow API calls (`Connection`, hooks). `example_dataset_producer` (the elided-outlet task now an asset that fails with `'NoneType' has no attribute 'startswith'`) and `example_task_state_store_mapped` (`process_table` still `upstream_failed`) remain `different`.
+Not done after pass 1: mapped task groups, helpers closing over DAG-function locals, `ObjectStoragePath` arguments, user-defined mapped operators and operators with non-plain constructor arguments, registry-component mapping for provider operators, and the direct Airflow API calls (`Connection`, hooks). The two remaining `different` DAGs are explained below.
+
+## Stage 2a, pass 2: the two remaining `different` DAGs (both converter bugs, now fixed)
+
+Stage 2a is training data for the converter now; both rows below were read, traced to a cause in `convert_ir.py`, and fixed by a general rule (tests in `scripts/tests/test_converter_stage2a_v5.py`).
+
+| DAG | Root cause | Fix |
+|---|---|---|
+| example_dataset_producer | Not a harness artefact. In the asset form an `EmptyOperator` that declares an outlet is an asset, but the emitter's last `else` branch is the S3 upload branch, so the asset ran `s3_upload_file(client, None, None, None, False)` (and required an `aws_default` resource): the error `'NoneType' object has no attribute 'startswith'` was the bucket/key parse of `None`. | An `ELIDED`-type task that is kept as an asset returns `None` (nothing runs; the asset is the dataset it publishes). |
+| example_task_state_store_mapped | Two causes. (1) `needs_ti` was true for any use of `ti`, so a task that only reads `ti.map_index` in a graph-form DAG was treated as pulling XComs by task id and became a stub with a misleading message. (2) Airflow 3.4's `task_state_store` context argument was not a known name, so the callable received `None` and would fail on `.set`. | (1) `needs_xcom` separates `xcom_pull` (or passing `ti` on to other code) from the `ti` attributes that need no upstream values; only the former wires upstream values in. (2) `task_state_store` is a supported context name: a plain-Python shim (`get`, `set`, `delete`, `clear`; JSON file per dag, task, run and map index under `AIRFLOW_TASK_STATE_DIR`, default the temp dir, so it survives a retry). Dagster has no per-step key/value store; asset metadata is the nearest durable record. |
+
+Also in pass 2: `report.json` carries `converted_with_component: true` and `component_types` for a DAG written as registry components (`--output components`); the behaviour harness need not compare those.
+
+| verdict (converter, 57 evaluated) | v3 | v4 | v5 |
+|---|---|---|---|
+| equivalent (strict) | 29 (51%) | 34 (60%) | 36 (63%) |
+| equivalent-with-differences | 8 | 8 | 8 |
+| matches-baseline-failure | 3 | 6 | 6 |
+| different | 15 | 7 | 5 |
+| no-output | 2 | 2 | 2 |
+| equivalent in either form (incl. matching a by-design failure) | 40 (70%) | 48 (84%) | 50 (88%) |
+
+v5 moves exactly the two DAGs above. Still `different`: deltalake_example, example_dag_decorator, example_bash_decorator, task_group_mapping_and_pulling_usecase, example_dynamic_task_mapping_with_no_taskflow_operators. This is training data, not a generalisation estimate.
+
+### Not done (honest list)
+
+Still not converted deterministically: mapped task groups (the verified native form is in `reference/rewrite-patterns/mapped_tasks.py`, `mapped_group`; the converter still stubs the tasks in such a group and names the group), helpers that close over DAG-function locals, `ObjectStoragePath` arguments, user-defined mapped operators, operators with non-plain constructor arguments, and direct Airflow API calls (`Connection`, hooks) via an `AIRFLOW_CONN_*` env shim. Registry mapping already exists for `BashOperator` (`shell_command_asset`), S3 file and object operators, SQL, `BashSensor`/`TimeSensor`, Lambda, SSH, Docker and BigQuery under `--output components`; no new operator mapping was added in pass 2, and the registry's http and email components were not evaluated.

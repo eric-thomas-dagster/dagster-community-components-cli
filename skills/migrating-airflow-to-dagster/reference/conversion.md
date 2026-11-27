@@ -262,6 +262,9 @@ Whole-DAG problems still defer the DAG: producer conflicts, schedule shapes, a S
 
 ## What it defers, always with the reason
 
+
+**Task context shims.** `ti.map_index`, `ti.xcom_push`, and Airflow 3.4's `task_state_store` (`get`, `set`, `delete`, `clear`; a JSON file per dag, task, run and map index under `AIRFLOW_TASK_STATE_DIR`, so it survives a retry) are rebuilt by the generated runtime as plain-Python shims. A task that reads only `ti` attributes pulls no upstream values, so it converts in the graph form; `ti.xcom_pull` in a graph-form DAG is still a loud stub naming the call. An `EmptyOperator` with an outlet is an asset that returns `None`. A DAG written as registry components is marked `converted_with_component` (with `component_types`) in `report.json`.
+
 A whole DAG is deferred only when part of it cannot be expressed at all (a partial conversion would silently change the graph): an asset produced by unordered tasks or by two DAGs in a way it cannot split, a SubDAG, a schedule shape with no mapping (a timetable with a mapper per asset, custom timetables), `catchup=True` (unless `--catchup ignore`), a custom operator class that cannot be copied, an operator argument that is not a plain value, the mapped or partitioned shapes under "Still deferred", and any callable whose arguments cannot be wired (with `--caveats off`). Jinja templates, task context, dynamic mapping, trigger rules, setup/teardown and callbacks are translated (see above and the settings table below), not deferred. Everything else that cannot be translated is a loud stub or a `degraded` caveat (next section) unless `--caveats off`, which turns each of them into a deferral of the whole DAG. A converter bug shows up as a deferral named `CONVERTER ERROR`, never a crash or a silent skip.
 
 ## Rules this encodes (see also factories.md and dynamic-mapping.md)
