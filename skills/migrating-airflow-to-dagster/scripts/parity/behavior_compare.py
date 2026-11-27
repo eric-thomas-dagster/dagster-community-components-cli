@@ -138,6 +138,7 @@ def compare_stdout(a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[st
         unstable = sorted(set(base) - set(need.elements()))
     else:
         unstable = []
+    need = Counter({ln: 1 for ln in need})                                  # presence, not multiplicity: Airflow repeats the continuation lines of a multi-line print (the first line carries the log prefix and is dropped, the rest reappear once per log stream), so its counts are not the task's
     if not need:
         return dim(NOT, "the original printed no stable line to compare" + (f" ({len(unstable)} line(s) differ between its two runs)" if unstable else ""))
     have = Counter(rt)
@@ -199,9 +200,9 @@ def parse_header(doc: str, task_ids: list[str], asset_keys: list[str], node_name
             if not m:
                 continue
             mode = m.group(1)
-            ticks = re.findall(r"`([^`]+)`", ln)
-            for t in ticks:
-                if t != tid and (r := resolve(t)):
+            after, before = ln.split(m.group(0), 1)[1], ln.split(m.group(0), 1)[0]
+            for t in re.findall(r"`([^`]+)`", after) + [x for x in re.findall(r"`([^`]+)`", before) if x != tid]:     # after the mode word first, and there an asset named like the task counts (`x: replaced by asset `x``); before it, the task's own backticked name does not
+                if r := resolve(t):
                     asset = r
                     break
             if asset is None:
@@ -399,6 +400,9 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         if at == "skipped" and rs == "success" and tm.get("mode") in ("folded", "merged") and accept_folded_skips and route_kind == "rewrite":
             accepted.append({"task": tid, "asset": asset, "airflow": at, "route": rs, "why": f"folded into `{asset}` (branch not taken or skipped by a short circuit): Dagster has no state for code that is not run; accepted when the decision record declares it"})
             continue
+        if route_kind == "converter" and tm.get("mode") == "folded" and rs in ("failed", "upstream_failed", "skipped") and at != rs:
+            accepted.append({"task": tid, "asset": asset, "airflow": at, "route": rs, "why": f"a step folded into `{asset}` as plain Python has no state of its own: the asset's outcome is the leaf's, compared on the leaf task"})
+            continue
         cmp_rows.append({"task": tid, "asset": asset, "mode": tm.get("mode") or "mapped", "airflow": at, "route": rs})
         if at != rs and not (at in ("skipped", "upstream_failed") and rs in ("skipped", "upstream_failed")):
             bad.append({"task": tid, "asset": asset, "airflow": at, "route": rs})
@@ -420,6 +424,9 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
     vals, vdiff, vskip = [], [], []
     for tid in sorted(tasks_spec):
         tm = taskmap.get(tid, {})
+        if tm.get("mode") == "folded" and route_kind == "converter":
+            vskip.append(f"{tid}: folded into another asset (product granularity), no value of its own")
+            continue
         if tm.get("mode") != "replaced" and route_kind == "rewrite":
             if tm.get("mode") in ("folded", "merged"):
                 vskip.append(f"{tid}: {tm['mode']} into another asset, no value of its own")
@@ -435,6 +442,9 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
             continue
         if a2 and ax != ax2:
             vskip.append(f"{tid}: value differs between the baseline's two runs (nondeterministic)")
+            continue
+        if isinstance(ax, str) and re.match(r'^"?[\w.]+@version=\d+\(', ax):
+            vskip.append(f"{tid}: Airflow's XCom record is a serializer-encoded object ({ax[:40].strip(chr(34))}...), not comparable as JSON")
             continue
         if rv is None or rv == "null":
             (vdiff if tid in consumed else vskip).append({"task": tid, "airflow": str(ax)[:120], "route": "no value", "consumed": tid in consumed} if tid in consumed else f"{tid}: route returns no value and nothing consumes Airflow's")

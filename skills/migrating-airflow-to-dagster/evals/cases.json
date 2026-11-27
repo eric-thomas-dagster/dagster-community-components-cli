@@ -14,11 +14,11 @@
    "forbid": []
   },
   {
-   "name": "clean_python_dag_product",
+   "name": "clean_python_dag_task",
    "ir": "clean_python_dag.ir.json",
    "flags": [
     "--granularity",
-    "product"
+    "task"
    ],
    "criteria": [
     "converted",

@@ -255,6 +255,17 @@ def test_consumed_value_difference_is_behavioural_unconsumed_is_not():
     assert r["rollup"]["verdict"] == "different"                                            # b reads a
 
 
+def test_a_serializer_encoded_xcom_object_is_not_compared_as_json():
+    enc = '"pandas.core.frame.DataFrame@version=1(5041523115041520)"'
+    tasks = {"a": {"state": "success", "xcom": {"return_value": enc}}, "b": {"state": "success", "xcom": {}}}
+    tm = {"a": {"mode": "replaced", "asset": "d/a"}, "b": {"mode": "replaced", "asset": "d/b"}}
+    st = {"jobs": ["d"], "schedules": [], "sensors": [], "assets": {"d/a": {"deps": [], "retry": [], "pool": []}, "d/b": {"deps": ["d/a"], "retry": [], "pool": []}}}
+    rt = route(assets={"d/a": {"state": "success", "value": '"   a  b\\n0  1  3"'}, "d/b": {"state": "success", "value": None}}, structure=st)
+    r = B.compare(SPEC, af(tasks=tasks), af(tasks=tasks), rt, tm, "rewrite")
+    v = r["dimensions"]["values"]
+    assert v["verdict"] == B.NOT and "serializer-encoded" in v["reason"]
+
+
 def test_baseline_failed_and_matches_baseline_failure_are_separate_verdicts():
     tasks = {"a": {"state": "failed", "xcom": {}}, "b": {"state": "upstream_failed", "xcom": {}}}
     tm = {"a": {"mode": "replaced", "asset": "d/a"}, "b": {"mode": "replaced", "asset": "d/b"}}
@@ -275,6 +286,16 @@ def test_header_accounting_resolves_assets_and_modes():
     assert m["a"] == {"mode": "replaced", "asset": "d/alpha"}
     assert m["b"] == {"mode": "folded", "asset": "d/alpha"}
     assert m["c"]["mode"] == "dropped" and m["x"] == {"mode": None, "asset": None}
+
+
+def test_header_accounting_takes_an_asset_named_like_the_task_and_not_its_sibling_in_the_same_node():
+    doc = ("branch_true: replaced by asset `branch_true` (optional output of multi_asset `branch_on_monday`)\n"
+           "branch_false: replaced by asset `branch_false` (optional output of multi_asset `branch_on_monday`)\n"
+           "`other`: replaced by asset `d/alpha`\n")
+    keys = ["branch_true", "branch_false", "d/alpha"]
+    node = {"branch_true": "branch_on_monday", "branch_false": "branch_on_monday", "d/alpha": "alpha"}
+    m = B.parse_header(doc, ["branch_true", "branch_false", "other"], keys, node)
+    assert m["branch_true"]["asset"] == "branch_true" and m["branch_false"]["asset"] == "branch_false" and m["other"]["asset"] == "d/alpha"
 
 
 # ---- end to end, against real Airflow ------------------------------------------------------------------------------------------------------
@@ -473,3 +494,76 @@ def test_converter_route_loads_the_projects_definitions_modules_for_resources(tm
     assert r["error"] is None, r
     assert r["state"] == "success" and r["assets"]["needs_conn"]["state"] == "success" and r["assets"]["needs_conn"]["value"] == '"ok"'
     assert set(r["assets"]) == {"needs_conn"} and "resources" in r["load"] and "sibling" not in r["load"]
+
+
+def _run_converter_module(tmp_path, body, dag_id="d"):
+    import subprocess
+    src = tmp_path / "src"
+    defs = src / "pkg" / "defs"
+    defs.mkdir(parents=True)
+    (src / "pkg" / "__init__.py").write_text("")
+    (defs / "__init__.py").write_text("")
+    (defs / f"{dag_id}.py").write_text(body)
+    cfg = {"kind": "converter", "dag_id": dag_id, "repo_root": str(tmp_path), "out": str(tmp_path / "out.json"), "timeout_s": 60, "converter": {"src": str(src), "pkg": "pkg"},
+           "sandbox": {"root": str(tmp_path / "sb"), "connections": {}, "variables": {}, "sleep_cap": None, "seed": {}}}
+    (tmp_path / "cfg.json").write_text(json.dumps(cfg))
+    subprocess.run([sys.executable, str(SCRIPTS / "parity" / "run_dagster.py"), str(tmp_path / "cfg.json")], check=True, capture_output=True, cwd=tmp_path)
+    return json.loads((tmp_path / "out.json").read_text())
+
+
+GRAPH_FAIL = '''
+import dagster as dg
+
+
+@dg.op
+def first():
+    raise Exception("boom")
+
+
+@dg.op
+def second(x):
+    return x
+
+
+@dg.op
+def sibling():
+    return 1
+
+
+@dg.graph(out={"a": dg.GraphOut(), "b": dg.GraphOut(), "c": dg.GraphOut()})
+def g():
+    x = first()
+    return {"a": x, "b": second(x), "c": sibling()}
+
+
+grp = dg.AssetsDefinition.from_graph(g, keys_by_output_name={k: dg.AssetKey(k) for k in "abc"}, internal_asset_deps={"a": set(), "b": {dg.AssetKey("a")}, "c": set()})
+'''
+
+
+def test_states_come_from_step_events_so_one_failure_in_a_graph_asset_is_not_attributed_to_every_output(tmp_path):
+    r = _run_converter_module(tmp_path, GRAPH_FAIL)
+    st = {k: v["state"] for k, v in r["assets"].items()}
+    assert st == {"a": "failed", "b": "upstream_failed", "c": "success"}, st
+
+
+OPTIONAL_OUT = '''
+import dagster as dg
+
+
+@dg.multi_asset(specs=[dg.AssetSpec("taken", skippable=True), dg.AssetSpec("not_taken", skippable=True)])
+def m():
+    yield dg.MaterializeResult(asset_key="taken")
+'''
+
+
+def test_an_output_not_yielded_by_a_step_that_succeeded_is_skipped(tmp_path):
+    r = _run_converter_module(tmp_path, OPTIONAL_OUT)
+    st = {k: v["state"] for k, v in r["assets"].items()}
+    assert st == {"taken": "success", "not_taken": "skipped"}, st
+
+
+def test_converter_taskmap_maps_folded_steps_and_marks_glue_dropped():
+    import eval_behavior as EB
+    tm = EB.converter_taskmap({"task_keys": {"a": "d/b", "b": "d/b"}, "folded": {"a": "b"}, "glue": ["start"]})
+    assert tm == {"a": {"mode": "folded", "asset": "d/b"}, "b": {"mode": "replaced", "asset": "d/b"}, "start": {"mode": "dropped", "asset": None}}
+

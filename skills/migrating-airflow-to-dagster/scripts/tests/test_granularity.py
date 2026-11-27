@@ -47,8 +47,8 @@ def run_assets(p, modname):
 
 
 def test_a_step_feeding_one_task_is_folded_and_the_leaf_value_is_unchanged(tmp_path):
-    pt, rt = conv(tmp_path, chain(), "t")
-    pp, rp = conv(tmp_path, chain(), "p", "--granularity", "product")
+    pt, rt = conv(tmp_path, chain(), "t", "--granularity", "task")
+    pp, rp = conv(tmp_path, chain(), "p")
     assert sorted(rt["task_keys"]) == ["double", "numbers"] and len(rt["keys"]) == 2
     assert rp["keys"] == [["d1", "double"]] and rp["folded"] == {"numbers": "double"}
     assert rp["task_keys"] == {"double": "d1/double", "numbers": "d1/double"}            # every Airflow task still maps to something
@@ -89,9 +89,11 @@ def test_generated_tests_pass_for_the_product_form(tmp_path):
     assert res.returncode == 0 and "5 passed" in res.stdout, res.stdout + res.stderr
 
 
-def test_the_default_is_still_task_granularity(tmp_path):
+def test_the_default_is_product_and_task_is_the_opt_in_fallback(tmp_path):
     p, r = conv(tmp_path, chain(), "p")
-    assert r["granularity"] is None and r["folded"] == {} and len(r["keys"]) == 2
+    assert r["granularity"]["mode"] == "product" and r["folded"] == {"numbers": "double"} and len(r["keys"]) == 1
+    p2, r2 = conv(tmp_path, chain(), "q", "--granularity", "task")
+    assert r2["granularity"] is None and r2["folded"] == {} and len(r2["keys"]) == 2
 
 
 def test_manifest_targets_and_parity_follow_the_folded_steps(tmp_path):
@@ -112,3 +114,13 @@ def test_manifest_targets_and_parity_follow_the_folded_steps(tmp_path):
     d = {"state": "success", "tasks": {"numbers": t("success", "[3, 6, 9]"), "double": t("success", "[3, 6, 9]")}}
     assert compare.dag_issues(a, d, {"task_keys": r["task_keys"], "folded": r["folded"]}) == []            # outcomes match; the folded step has no value of its own to compare
     assert compare.dag_issues(a, d, {"task_keys": r["task_keys"]}) != []
+
+
+def test_an_empty_operator_with_outlets_is_an_asset_not_glue(tmp_path):
+    from test_convert_ir import task as _task
+    tasks = [_task("producer", "EmptyOperator", outlets=["s3://dataset/example.csv"]), _task("wait", "BashOperator", template_fields={"bash_command": "sleep 1"})]
+    p, r = conv(tmp_path, tasks, "p")
+    assert sorted(r["task_keys"]) == ["producer", "wait"] and r["glue"] == []
+    assert r["granularity"]["decisions"]["producer"]["role"] == "product"
+    p2, r2 = conv(tmp_path, [_task("start", "EmptyOperator"), tasks[1]], "q")
+    assert r2["glue"] == ["start"] and "start" not in r2["task_keys"]

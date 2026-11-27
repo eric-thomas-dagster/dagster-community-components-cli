@@ -207,19 +207,66 @@ try:
                     while err is not None and getattr(err, "cause", None) is not None:          # the root cause, not Dagster's wrapper
                         err = err.cause
                     fails[e.step_key] = f"{err.cls_name}: {(err.message or '').strip().splitlines()[-1][:300] if err.message else ''}" if err else "failed"
-            def step_of(a, key):
-                nm = a.node_def.name
-                return [s for s in fails if s == nm or s.startswith(nm + ".")]
+            # per-STEP states from the step events (not the run's overall state): which step produced each asset, whether that step failed, succeeded without yielding the output
+            # (an optional output not yielded: skipped), was skipped, or never ran because something upstream of it failed (upstream_failed)
+            started, succeeded, skipped_steps = set(), set(), set()
+            for e in ev:
+                if e.step_key:
+                    if e.event_type_value == "STEP_START":
+                        started.add(e.step_key)
+                    elif e.event_type_value == "STEP_SUCCESS":
+                        succeeded.add(e.step_key)
+                    elif e.event_type_value == "STEP_SKIPPED":
+                        skipped_steps.add(e.step_key)
+
+            def in_node(step, graph_name, node):
+                base = f"{graph_name}.{node}"
+                return step == base or step.startswith(base + ".") or step.startswith(base + "[")
+
+            def producer(a, k):
+                """(node name inside the graph or None, the graph's closure of upstream node names) for the asset key k."""
+                gd = a.node_def
+                if getattr(gd, "node_defs", None) is None:
+                    return None, set()
+                out_name = next((o for o, kk in a.keys_by_output_name.items() if kk == dg.AssetKey.from_user_string(k)), None)
+                node = next((m.maps_from.node_name for m in gd.output_mappings if m.graph_output_name == out_name), None)
+                anc, stack = set(), [node] if node else []
+                try:
+                    while stack:
+                        n = stack.pop()
+                        for ups in gd.dependency_structure.input_to_upstream_outputs_for_node(n).values():
+                            for oh in ups:
+                                if oh.node_name not in anc:
+                                    anc.add(oh.node_name)
+                                    stack.append(oh.node_name)
+                except Exception:
+                    pass
+                return node, anc
+
             for k, a in sk.items():
-                steps = step_of(a, k)
-                if steps:
-                    st = "failed"
-                    res["assets"][k] = {"state": st, "errors": [fails[s] for s in steps]}
+                nm = a.node_def.name
+                node, anc = producer(a, k)
+                if node:
+                    own = [s for s in fails if in_node(s, nm, node)]
+                    up_failed = any(in_node(s, nm, n) for s in fails for n in anc)
+                    ran = any(in_node(s, nm, node) for s in started)
+                    done = any(in_node(s, nm, node) for s in succeeded)
+                else:
+                    own = [s for s in fails if s == nm or s.startswith(nm + ".")]
+                    up_failed = False
+                    ran = nm in started
+                    done = nm in succeeded
+                if own:
+                    res["assets"][k] = {"state": "failed", "errors": [fails[s] for s in own]}
                 elif k in mat:
                     ms = meta_state.get(k)
                     res["assets"][k] = {"state": ms if ms in ("skipped", "failed", "upstream_failed") else "success", "errors": []}
+                elif up_failed:
+                    res["assets"][k] = {"state": "upstream_failed", "errors": []}
+                elif done or any(s in skipped_steps for s in ([nm] if not node else [x for x in skipped_steps if in_node(x, nm, node)])):
+                    res["assets"][k] = {"state": "skipped", "errors": [], "step": "ran without yielding this output" if done else "step skipped"}
                 else:
-                    res["assets"][k] = {"state": "not_run", "errors": []}
+                    res["assets"][k] = {"state": "not_run", "errors": []}      # resolved by the comparison from the asset graph: upstream_failed behind a failed asset, else skipped
                 try:
                     v = r.asset_value(dg.AssetKey.from_user_string(k))
                     res["assets"][k]["value"] = None if (isinstance(v, type) and v.__name__ == "NoValueSentinel") else json.dumps(v, sort_keys=True, default=repr)   # a MaterializeResult without a value is no value

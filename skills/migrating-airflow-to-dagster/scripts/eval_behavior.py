@@ -80,7 +80,9 @@ def rewrite_taskmap(project: Path, spec: dict[str, Any], route: dict[str, Any]) 
 
 def converter_taskmap(rep: dict[str, Any]) -> dict[str, dict[str, Any]]:
     folded = rep.get("folded") or {}
-    return {tid: {"mode": "folded" if tid in folded else "replaced", "asset": key} for tid, key in (rep.get("task_keys") or {}).items()}
+    out = {tid: {"mode": "folded" if tid in folded else "replaced", "asset": key} for tid, key in (rep.get("task_keys") or {}).items()}
+    out.update({tid: {"mode": "dropped", "asset": None} for tid in rep.get("glue") or [] if tid not in out})        # an EmptyOperator that only joins dependencies is not an asset
+    return out
 
 
 def seed_for(dag_path: Path, root: Path) -> dict[str, str]:

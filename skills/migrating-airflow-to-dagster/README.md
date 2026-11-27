@@ -42,7 +42,7 @@ python3 scripts/accept_rewrite.py --spec rewrite/<dag>.spec.json --project . --m
 python3 scripts/cutover.py manifest.json report.json --ir ir.json --parity-state parity_state --out-dir cutover
 ```
 
-Create the target project with `uvx create-dagster project <name> --uv-sync` first (the skill relies on `dagster-expert` for the Dagster side). `convert_ir.py --help` lists the options: `--caveats {off,raise,skip}`, `--catchup {defer,ignore}`, `--mapping {graph,partitions}`, `--output {python,components}`, `--dataset-keys {path,script-orchestrator}`, `--granularity {task,product}`, `--partition-start`, `--return-all`, `--dbt-dir` (where the dbt projects of Cosmos DAGs are expected, default `dbt`).
+Create the target project with `uvx create-dagster project <name> --uv-sync` first (the skill relies on `dagster-expert` for the Dagster side). `convert_ir.py --help` lists the options: `--caveats {off,raise,skip}`, `--catchup {defer,ignore}`, `--mapping {graph,partitions}`, `--output {python,components}`, `--dataset-keys {path,script-orchestrator}`, `--granularity {product,task}` (product is the default; task is the one-asset-per-task fallback), `--partition-start`, `--return-all`, `--dbt-dir` (where the dbt projects of Cosmos DAGs are expected, default `dbt`).
 
 ## What gets converted
 

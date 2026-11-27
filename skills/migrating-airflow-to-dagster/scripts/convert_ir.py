@@ -70,8 +70,8 @@ SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "executio
 JINJA_VARS = SUPPORTED_CTX | {"macros", "var"}
 USER_MACROS: set[str] = set()     # the DAG's `user_defined_macros` names (set per DAG): a template may use them
 CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date"}, "dag": {"dag_id"}, "task": {"task_id"},
-             "ti": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"},
-             "task_instance": {"dag_id", "task_id", "run_id", "try_number", "xcom_pull", "xcom_push"}}
+             "ti": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push"},
+             "task_instance": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push"}}
 SUPPORTED_MACROS = {"ds_add", "ds_format", "ds_format_locale", "datetime", "timedelta", "json", "yaml", "time", "uuid", "random", "dateutil"}
 SHIM_IMPORTS = {(m, "WeekDay") for m in ("airflow.providers.standard.utils.weekday", "airflow.utils.weekday")} | {("airflow.sdk", "LoopDecision"), ("airflow.models", "Variable"), ("airflow.sdk", "Variable"), ("airflow.models.variable", "Variable"),
                 ("airflow.operators.python", "get_current_context"), ("airflow.sdk", "get_current_context"),
@@ -122,7 +122,7 @@ PARTITIONS: dict[str, dict] = {}   # asset key -> its time partitioning, from th
 AF_MAJOR = 2             # the Airflow major version of the IR being converted (set from the IR): Airflow 3 parses a shell task's output as JSON
 MAP_MODE = "graph"       # --mapping graph (dynamic outputs in one graph asset) | partitions (leaf mapped tasks as dynamic/static partitions)
 DBT_DIR = "dbt"          # --dbt-dir: where the dbt projects of converted Cosmos DAGs are expected, inside the package
-GRANULARITY = "task"      # --granularity task (one asset per task, faithful) | product (steps folded into the asset they feed; see the report's `granularity`)
+GRANULARITY = "product"   # --granularity product (default: an asset is a data product; steps folded into the asset they feed, see the report's `granularity`) | task (fallback: one asset per task, faithful)
 RETURN_ALL = False        # set by --return-all: keep every Python return value so a parity run can compare them
 
 
@@ -211,6 +211,45 @@ class ModuleIndex:
 
 def _loads(node: ast.AST) -> set[str]:
     return {n.id for n in ast.walk(node) if isinstance(n, ast.Name) and isinstance(n.ctx, ast.Load)} - set(dir(builtins))
+
+
+def repo_local_module_file(source_file: str, mod: str) -> Path | None:
+    """A module imported under the `airflow.` namespace that is a file of the PROJECT being converted (Airflow's own example DAGs keep `airflow/example_dags/libs/helper.py` beside the DAGs),
+    not the installed Airflow package: found by walking up from the DAG file."""
+    rel = Path(*mod.split("."))
+    here = Path(source_file).resolve().parent if source_file else None
+    for r in ([here, *here.parents] if here else []):
+        for cand in (r / rel.with_suffix(".py"), r / rel / "__init__.py"):
+            if cand.exists() and "site-packages" not in cand.parts:
+                return cand
+    return None
+
+
+def inline_local_helper(modfile: Path, name: str, out: dict[int, str], counter: list[int], seen: set[tuple[str, str]], where: str) -> None:
+    """Copy the definition of `name` from a repo-local module (and what it uses, from that module) into `out`, dependencies first. Anything that is not plain Python stays a loud deferral."""
+    if (str(modfile), name) in seen:
+        return
+    seen.add((str(modfile), name))
+    idx2 = ModuleIndex(str(modfile))
+    hit = idx2.defs.get(name)
+    if hit is None:
+        raise Defer(f"{name!r} is not defined in the repo-local module {modfile.name} (used by {where})")
+    kind, node = hit
+    seg = idx2.seg(node)
+    if kind == "import":
+        mod = getattr(node, "module", None) or ""
+        if mod.split(".")[0] == "airflow" or re.search(r"\bairflow\b", seg):
+            raise Defer(f"{name!r} (from {modfile.name}) depends on Airflow")
+        counter[0] += 1
+        out[counter[0]] = seg
+        return
+    if re.search(r"\bairflow\b", seg):
+        raise Defer(f"{name!r} (from the repo-local module {modfile.name}) depends on Airflow")
+    for dep in sorted((_free_names(node) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else _loads(node)) - {name}):
+        if dep in idx2.defs:
+            inline_local_helper(modfile, dep, out, counter, seen, name)
+    counter[0] += 1
+    out[counter[0]] = seg
 
 
 def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None = None, meta: dict[str, Any] | None = None) -> tuple[str, list[str]]:
@@ -356,6 +395,8 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     idx = ModuleIndex(info["file"])
     needed: dict[int, str] = {}
     seen: set[str] = set()
+    local_counter = [0]
+    file_used = [False]
 
     def need(names: set[str], where: str) -> None:
         for name in sorted(names):
@@ -363,6 +404,9 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
                 continue
             seen.add(name)
             if name == "af_loop":                                # provided by the generated runtime (a converted task-group loop)
+                continue
+            if name == "__file__":                               # the DAG file's own path: a shim constant (overridable by env), not the converted module's path
+                file_used[0] = True
                 continue
             hit = idx.defs.get(name)
             if hit is None:
@@ -377,7 +421,16 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
                         needed[node.lineno] = f"{al.asname} = {al.name}"
                     continue
                 if mod.split(".")[0] == "airflow":
-                    raise Defer(f"callable depends on an Airflow import ({mod})")
+                    lf = repo_local_module_file(info["file"], mod) if al is not None else None
+                    if lf is None:
+                        raise Defer(f"callable depends on an Airflow import ({mod})")
+                    loc: dict[int, str] = {}                      # the project's own helper that happens to live under the `airflow.` namespace: copied in as plain Python
+                    inline_local_helper(lf, al.name, loc, local_counter, set(), info["name"])
+                    needed.update({-10_000_000 + k: v for k, v in loc.items()})
+                    if al.asname and al.asname != al.name:
+                        needed[-10_000_000 + local_counter[0] + 1] = f"{al.asname} = {al.name}"
+                        local_counter[0] += 1
+                    continue
                 needed[node.lineno] = idx.seg(node)
                 continue
             if re.fullmatch(r"\s*\w+\s*=\s*\w+\.getLogger\(\s*['\"]airflow\.task['\"]\s*\)\s*", idx.seg(node)):     # `t_log = logging.getLogger("airflow.task")`: only a logger name, no Airflow code
@@ -418,7 +471,12 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
             if m and node.end_lineno == node.lineno:
                 lines[row] = lines[row][:m.start()] + lines[row][node.end_col_offset:]
     start = next(i for i, l in enumerate(lines) if re.match(r"(async\s+)?def\s", l))
-    return "\n".join(lines[start:]), [needed[k] for k in sorted(needed)]
+    code_text = "\n".join(lines[start:])
+    if file_used[0]:
+        code_text = re.sub(r"\b__file__\b", "_AF_DAG_FILE", code_text)
+        needed[-20_000_000] = (f"import os\n\n_AF_DAG_FILE = os.environ.get('AIRFLOW_DAG_FILE', {str(info['file'])!r})   # the original DAG file's path: set AIRFLOW_DAG_FILE where that file lives in "
+                               "your deployment (`__file__` of the converted module would be a different file)")
+    return code_text, [needed[k] for k in sorted(needed)]
 
 
 # --------------------------------------------------------------------------------------------------------------------
@@ -1717,15 +1775,17 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     if has_cosmos and (gplan or ppart or triggers):
         raise Defer("Cosmos dbt tasks in a DAG with dynamic mapping, branching, partitions or an asset trigger (not converted yet)")
 
-    elided = set() if gplan else ELIDED       # in the graph form an EmptyOperator stays a step: its trigger rule is what joins skipped branches
+    # in the graph form an EmptyOperator stays a step: its trigger rule is what joins skipped branches. An EmptyOperator that declares outlets or inlets is NOT glue: the
+    # outlet is the dataset it publishes, so it stays an asset (returning None) and carries the asset key
+    elided = set() if gplan else {tid for tid, t0 in tasks.items() if t0["type"] in ELIDED and not (t0["outlets"] or t0["inlets"])}
 
     def eff_up(tid: str) -> list[str]:
         out: list[str] = []
         for u in tasks[tid]["upstream"]:
-            out += eff_up(u) if tasks[u]["type"] in elided else [u]
+            out += eff_up(u) if u in elided else [u]
         return list(dict.fromkeys(out))
 
-    real = [t for t in dag["tasks"] if t["type"] not in elided]
+    real = [t for t in dag["tasks"] if t["task_id"] not in elided]
     if not real and not cosmos_clusters:
         raise Defer("only EmptyOperators: nothing to run")
     notes: list[str] = [catchup_note] if catchup_note else []
@@ -1783,7 +1843,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
     cosmos_out: list[dict[str, Any]] = []
     cosmos_keys: list[list[str]] = []
     for c in cosmos_clusters:
-        up = [keyparts[x] for u in c["ext_up_tasks"] for x in (eff_up(u) if tasks[u]["type"] in elided else [u]) if x in keyparts] + c["ext_up_keys"]
+        up = [keyparts[x] for u in c["ext_up_tasks"] for x in (eff_up(u) if u in elided else [u]) if x in keyparts] + c["ext_up_keys"]
         up = [list(k) for k in dict.fromkeys(tuple(k) for k in up)]
         cosmos_files[f"defs/{c['dir']}/defs.yaml"] = K.component_yaml(c, up)
         cosmos_files.update(c["profile"]["generated"])
@@ -2257,6 +2317,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                      "re-run on their own (the asset is the unit), and an empty list skips the mapped step and gives the next step an empty list.")
 
     # ---- product granularity: which tasks are data products, which are steps folded into the asset they feed, which are glue ------------------------------------
+    elided_ids = set(elided)
     fold_into: dict[str, str] = {}
     gran_decisions: dict[str, dict[str, Any]] = {}
     if GRANULARITY == "product":
@@ -2267,13 +2328,13 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                     cons[u].append(t["task_id"])
         foldable = PY_TASKS - ISOLATED
         for t in dag["tasks"]:
-            if t["type"] in ELIDED and t["task_id"] not in cons:
+            if t["task_id"] in elided_ids and t["task_id"] not in cons:
                 gran_decisions[t["task_id"]] = {"role": "glue", "reason": f"{t['type']} only joins dependencies (or has no effect once schedules do not backfill): not an asset, its edges are rewired"}
         stop = bool(gplan or pplan or ppart or triggers or rt_producer or cosmos_clusters)
         for t in real:
             tid, ty = t["task_id"], t["type"]
             why = None
-            if ty in ELIDED:
+            if tid in elided_ids:
                 gran_decisions[tid] = {"role": "glue", "reason": "an EmptyOperator only joins dependencies: elided"}
                 continue
             if stop:
@@ -2729,7 +2790,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
                  "task_keys": {**{t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}, **{f: "/".join(keyparts[c]) for f, c in fold_into.items()}},
-                 "folded": dict(sorted(fold_into.items())), "granularity": ({"mode": "product", "decisions": dict(sorted(gran_decisions.items()))} if GRANULARITY == "product" else None), "test_info": test_info, "asset_checks": check_list}
+                 "folded": dict(sorted(fold_into.items())), "glue": sorted(elided), "granularity": ({"mode": "product", "decisions": dict(sorted(gran_decisions.items()))} if GRANULARITY == "product" else None), "test_info": test_info, "asset_checks": check_list}
 
 
 RUNTIME = '''"""Helpers used by the converted DAGs. Each mirrors what the Airflow operator or hook does."""
@@ -2774,6 +2835,7 @@ import contextvars
 import datetime as _dt
 import inspect
 import json
+import re
 import types
 
 _MISSING = object()
@@ -2787,10 +2849,19 @@ class _TaskInstance:
         self.dag_id, self.task_id, self.run_id, self.try_number, self._up = dag_id, task_id, run_id, try_number, upstream
         self._ctx, self._keys = context, keys or {}
         self._rv = _MISSING
+        self.map_index = -1                                  # Airflow's value for a task that is not mapped; a mapped op sets its index (see af_context)
 
     def xcom_pull(self, task_ids=None, dag_id=None, key="return_value", include_prior_dates=False, map_indexes=None, default=None):
-        if dag_id not in (None, self.dag_id) or include_prior_dates or map_indexes is not None or task_ids is None:
-            raise NotImplementedError("xcom_pull is mirrored only for named tasks in this DAG, in this run")
+        if map_indexes is not None or task_ids is None:
+            raise NotImplementedError("xcom_pull with map_indexes or without task_ids is not mirrored: read the mapped op's collected output (a graph asset's list), or name the task")
+        if dag_id not in (None, self.dag_id) or include_prior_dates:
+            # another DAG's value, or a PRIOR run's: in Dagster that is the latest materialization of the asset that task became. A value pushed under a key is metadata on it;
+            # the DAG's own return value cannot be read this way (load that asset as an input instead), so it stays loud.
+            ids = [task_ids] if isinstance(task_ids, str) else list(task_ids)
+            if key == "return_value":
+                raise NotImplementedError("xcom_pull of another DAG's (or a prior run's) return value: declare that asset as an input (deps / AssetIn) or use context.instance to load it; only values pushed under a key (asset metadata) are mirrored")
+            vals = [self._pull_latest(dag_id or self.dag_id, i, key, default) for i in ids]
+            return vals[0] if isinstance(task_ids, str) else vals
         ids = [task_ids] if isinstance(task_ids, str) else list(task_ids)
         if key != "return_value":                            # a value another task pushed under a key: read from its materialization metadata
             vals = [self._pull_key(i, key, default) for i in ids]
@@ -2801,6 +2872,15 @@ class _TaskInstance:
                 self._warn(i)
             vals.append(self._up.get(i, default))
         return vals[0] if isinstance(task_ids, str) else vals
+
+    def _pull_latest(self, dag_id, task_id, key, default):
+        """the metadata `key` on the latest materialization (any run) of the asset (dag_id, task_id) became (default key path: [dag_id, task_id]); None when it was never materialized, as Airflow returns None."""
+        asset_key = (self._keys.get(task_id) if dag_id == self.dag_id else None) or [dag_id, task_id]
+        rec = self._ctx.instance.get_latest_materialization_event(dg.AssetKey(asset_key)) if self._ctx is not None else None
+        mat = rec.asset_materialization if rec is not None else None
+        if mat is not None and key in mat.metadata:
+            return mat.metadata[key].value
+        return default
 
     def _warn(self, task_id):
         if getattr(self._ctx, "log", None) is not None:
@@ -2875,6 +2955,12 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
     conf = json.loads(tags.get("airflow/conf", "{}"))
     run_id = run.run_id if run is not None else context.run_id        # context.run_id is deprecated in current Dagster
     ti = _TaskInstance(dag_id, task_id, run_id, getattr(context, "retry_number", 0) + 1, upstream, context, keys)
+    try:                                                 # a dynamically mapped op: the mapping key is `i<index>` (see the fan-out op), which is Airflow's map_index
+        mk = context.get_mapping_key() if hasattr(context, "get_mapping_key") else None
+        if mk and re.fullmatch(r"i\d+", mk):
+            ti.map_index = int(mk[1:])
+    except Exception:                                    # noqa: BLE001  an asset context has no mapping key
+        pass
     pkey = pdate = None                                  # the Dagster partition of this run (the key is Dagster's format, the date the window start)
     try:
         if context.has_partition_key:
@@ -4015,9 +4101,10 @@ def main(argv: list[str] | None = None) -> int:
                          "a schedule component, post-processing where needed) for each DAG whose every task has a component form; the others stay Python")
     ap.add_argument("--dbt-dir", default="dbt", help="where the dbt projects of converted Cosmos DAGs are expected, relative to the package (default dbt): the converter "
                     "writes components that point at <package>/<dbt-dir>/<project name>; it does not copy the projects")
-    ap.add_argument("--granularity", choices=["task", "product"], default="task",
-                    help="task (default): one asset per Airflow task, the faithful form. product: a step whose value feeds only one downstream task, with no outlets and no restart need of its own, "
-                         "is folded into that task's asset as plain Python; EmptyOperators are glue; the report's `granularity` section lists the decision and reason for every task")
+    ap.add_argument("--granularity", choices=["task", "product"], default="product",
+                    help="product (default): an asset is a data product. A step whose value feeds only one downstream task, with no outlets and no restart need of its own, "
+                         "is folded into that task's asset as plain Python; EmptyOperators are glue; the report's `granularity` section lists the decision and reason for every task. "
+                         "task (fallback): one asset per Airflow task, the faithful form")
     ap.add_argument("--partition-start", default="2025-01-01", help="where time-partitioned assets begin (Airflow's partitions have no start date)")
     ap.add_argument("--return-all", action="store_true", help="return every Python task's value (stored by the IO manager), for parity runs")
     a = ap.parse_args(argv)

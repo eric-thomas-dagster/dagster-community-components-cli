@@ -40,6 +40,7 @@ def dag(tasks, kind="cron_trigger", **tt):
 def strict_by_default(monkeypatch):
     """In-process conversions defer unsupported tasks (the strict mode); the caveat tests run the CLI, whose default is a marked stub."""
     monkeypatch.setattr(C, "CAVEATS", "off")
+    monkeypatch.setattr(C, "GRANULARITY", "task")      # the default is product (an asset is a data product); these tests assert the per-task form, which is the opt-in fallback
 
 
 def convert(d):
@@ -163,7 +164,7 @@ def test_generated_project_loads_in_dagster(tmp_path):
                                                   task("b", "PythonOperator", up=["a"], callable=fn("numbers"), op_args=[], op_kwargs={})])]}
     (tmp_path / "ir.json").write_text(json.dumps(ir))
     defs = tmp_path / "pkg" / "defs"
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(defs),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(defs),
                     "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
     (tmp_path / "pkg" / "__init__.py").write_text("")
     sys.path.insert(0, str(tmp_path))
@@ -274,7 +275,7 @@ def test_report_ranks_operators_with_integration_hints(tmp_path):
     ir = {"airflow_version": "x", "dags": [dag([task("a", "BashOperator", template_fields={"bash_command": "true"}),
                                                   task("b", "KubernetesPodOperator"), task("c", "GlueJobOperator")], kind="manual")]}
     (tmp_path / "ir.json").write_text(json.dumps(ir))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
                     "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
     ops = json.loads((tmp_path / "r.json").read_text())["operators"]
     assert ops["BashOperator"]["mapped_by_converter"] and ops["BashOperator"]["registry"] == ["shell_command_asset"]
@@ -436,7 +437,7 @@ def test_generated_context_dag_loads_and_runs_in_dagster(tmp_path):
              task("c", callable=fn("wants_ds"), op_args=[], op_kwargs={})], kind="manual")
     d["dag_id"] = "dctx"
     (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": [d]}))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_ctx" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_ctx" / "defs"),
                     "--report", str(tmp_path / "r.json"), "--return-all"], check=True, capture_output=True)
     (tmp_path / "pkg_ctx" / "__init__.py").write_text("")
     sys.path.insert(0, str(tmp_path))
@@ -462,7 +463,7 @@ def test_mapping_over_a_producers_list_runs_one_partition_per_item(tmp_path):
     ir = {"airflow_version": "x", "dags": [_mapped_ir({"kind": "xcom", "wrapper": "PlainXComArg", "task_id": "p", "key": "return_value"})]}
     (tmp_path / "ir.json").write_text(json.dumps(ir))
     defs = tmp_path / "pkg_map" / "defs"
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(defs),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(defs),
                     "--report", str(tmp_path / "r.json"), "--mapping", "partitions"], check=True, capture_output=True)
     assert json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]["status"] == "converted"
     (tmp_path / "pkg_map" / "__init__.py").write_text("")
@@ -492,7 +493,7 @@ def test_literal_mapping_runs_each_static_partition(tmp_path):
     dg = pytest.importorskip("dagster")
     ir = {"airflow_version": "x", "dags": [_mapped_ir({"kind": "literal", "value": ["a", 2, {"k": 1}]})]}
     (tmp_path / "ir.json").write_text(json.dumps(ir))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_lit" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_lit" / "defs"),
                     "--report", str(tmp_path / "r.json"), "--mapping", "partitions"], check=True, capture_output=True)
     (tmp_path / "pkg_lit" / "__init__.py").write_text("")
     sys.path.insert(0, str(tmp_path))
@@ -530,7 +531,7 @@ def test_unsupported_mapping_shapes_defer_with_a_reason(mut, why, partitions_mod
 
 def _convert_and_load(tmp_path, ir, pkg, *extra):
     (tmp_path / "ir.json").write_text(json.dumps(ir))
-    r = subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / pkg / "defs"),
+    r = subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / pkg / "defs"),
                         "--report", str(tmp_path / "r.json"), *extra], check=True, capture_output=True)
     rep = json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]
     (tmp_path / pkg / "__init__.py").write_text("")
@@ -691,13 +692,13 @@ def test_components_output_writes_yaml_for_dags_whose_tasks_all_have_components(
     ir = {"airflow_version": "x", "dags": [dag([task("a", "BashOperator", template_fields={"bash_command": "echo hi"}, retries=2),
                                                   task("b", "BashOperator", up=["a"], template_fields={"bash_command": "echo {{ ds }}"})], kind="once")]}
     (tmp_path / "ir.json").write_text(json.dumps(ir))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
                     "--report", str(tmp_path / "r.json"), "--output", "components"], check=True, capture_output=True)
     rep = json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]
     assert rep["output"] == "python"                                 # b is templated: no component form, the whole DAG stays Python
     ir["dags"][0]["tasks"][1]["template_fields"]["bash_command"] = "echo bye"
     (tmp_path / "ir.json").write_text(json.dumps(ir))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg" / "defs"),
                     "--report", str(tmp_path / "r.json"), "--output", "components"], check=True, capture_output=True)
     rep = json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]
     text = (tmp_path / "pkg" / "defs" / "d1" / "defs.yaml").read_text()
@@ -956,7 +957,7 @@ def test_trigger_dag_run_launches_the_other_converted_dag_and_fails_with_it(tmp_
     parent = dag([_py("first", "step_b"), task("fire", "TriggerDagRunOperator", up=["first"], template_fields={"conf": {"k": 1}},
                                                 args={"trigger_dag_id": "child", "wait_for_completion": True})], kind="once")
     (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": [parent, child]}))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_trig" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_trig" / "defs"),
                     "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
     rep = json.loads((tmp_path / "r.json").read_text())["dags"]
     assert rep["d1"]["status"] == "converted" and rep["child"]["status"] == "converted", rep
@@ -1026,7 +1027,7 @@ def test_partitioned_producers_and_a_consumer_aligned_by_start_of_hour(tmp_path)
     dags = [_cron_partition_dag("pa", "ta", "0 * * * *", a), _cron_partition_dag("pb", "tb", "15 * * * *", b), _cron_partition_dag("pc", "tc", "30 * * * *", c),
             _partitioned_consumer("cons", [a, b, c], "StartOfHourMapper")]
     (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": dags}))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_part" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_part" / "defs"),
                     "--report", str(tmp_path / "r.json"), "--partition-start", "2026-01-01"], check=True, capture_output=True)
     rep = json.loads((tmp_path / "r.json").read_text())["dags"]
     assert {k: v["status"] for k, v in rep.items()} == {"pa": "converted", "pb": "converted", "pc": "converted", "cons": "converted"}, rep
@@ -1099,7 +1100,7 @@ def test_rollup_waits_for_the_whole_window_and_fan_out_requests_every_day(tmp_pa
     dags = [_cron_partition_dag("ph", "th", "0 * * * *", hourly), _cron_partition_dag("pw", "tw", "0 0 * * 1", weekly),
             _rollup_consumer("daily_roll", hourly, "DayWindow", ("WaitForAll", {})), _fan_out_consumer("fan", weekly, "forward")]
     (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": dags}))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_win" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_win" / "defs"),
                     "--report", str(tmp_path / "r.json"), "--partition-start", "2026-01-05"], check=True, capture_output=True)
     rep = json.loads((tmp_path / "r.json").read_text())["dags"]
     assert {k: v["status"] for k, v in rep.items()} == {"ph": "converted", "pw": "converted", "daily_roll": "converted", "fan": "converted"}, rep
@@ -1199,7 +1200,7 @@ def test_an_external_task_sensor_becomes_a_dependency_on_the_awaited_tasks_asset
     dg = pytest.importorskip("dagster")
     parent, child = _ext_sensor_dags({})
     (tmp_path / "ir.json").write_text(json.dumps({"airflow_version": "x", "dags": [parent, child]}))
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_ext" / "defs"),
+    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), "--granularity", "task", str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pkg_ext" / "defs"),
                     "--report", str(tmp_path / "r.json")], check=True, capture_output=True)
     rep = json.loads((tmp_path / "r.json").read_text())["dags"]
     assert rep["child"]["status"] == "converted" and rep["child"]["schedule"] is None, rep["child"]

@@ -115,18 +115,18 @@ The group becomes assets only when Cosmos's own rendering is faithful to dbt's g
 
 ## Choosing granularity: task or product
 
-`convert_ir.py --granularity task` (the default) writes one asset per Airflow task: the faithful form, with every task's outcome and value comparable to Airflow's. `--granularity product` aims at one asset per **data product**, with the steps that only help to produce it inside that asset. The decision is deterministic, made from the IR (outlets, inlets, operator type, retries and the other settings, downstream consumers), and written per task, with the reason, to `report.json` under `granularity.decisions`.
+`convert_ir.py --granularity product` (the default) aims at one asset per **data product** (an asset is a data product; tasks inside it are ops or plain Python). `--granularity task` is the fallback: one asset per Airflow task, the faithful form, with every task's outcome and value comparable to Airflow's. Product granularity, with the steps that only help to produce it inside that asset. The decision is deterministic, made from the IR (outlets, inlets, operator type, retries and the other settings, downstream consumers), and written per task, with the reason, to `report.json` under `granularity.decisions`.
 
 | Role | Rule (first match wins) | Becomes |
 |---|---|---|
-| glue | `EmptyOperator` and the other no-effect types | not an asset: elided, its edges are rewired |
+| glue | `EmptyOperator` and the other no-effect types, **unless** they declare outlets or inlets (an `EmptyOperator` that publishes a dataset is its own asset, returning None, carrying the asset key) | not an asset: elided, its edges are rewired; `report.json` lists them under `glue` |
 | product | the task has outlets or inlets (its output is persisted under an asset key) | its own asset |
 | product | an external or special step: S3, Snowflake, provider operators, sensors, triggers, branches, mapped tasks, a stub | its own asset |
 | product | no downstream task consumes it (a leaf), or two or more do (a fan-out) | its own asset |
 | product | it has its own retries, timeout, pool, callback, SLA or trigger rule, or uses the Airflow context, XCom pulls by task id, async code or skip logic | its own asset: **its own restart point** |
 | step | a Python or Bash task whose value feeds exactly one downstream Python or Bash task and none of the above applies | **plain Python inside that consumer's asset** (a chain folds into its final consumer) |
 
-Not applied (the DAG converts at task granularity, and the report says why): graph-form DAGs (branching, mapping, setup/teardown), partitioned DAGs, asset-triggered DAGs, runtime-partitioned DAGs and Cosmos DAGs.
+Not applied (the DAG converts at task granularity even by default, and the report says why): graph-form DAGs (branching, mapping, setup/teardown), partitioned DAGs, asset-triggered DAGs, runtime-partitioned DAGs and Cosmos DAGs.
 
 **Restart behavior.** A plain-Python step restarts **from the beginning of the asset**: if the consumer fails, or retries, the folded steps run again with it; they have no run record or retry of their own, and Airflow's per-task duration and retry history have no equivalent. A step with `retries`, a timeout or a pool is never folded, so it keeps its own retry policy and restart point. A failed op in a graph-form asset (the form used for branching and mapping) retries and restarts as an op, as before. The third form the design allows, ops inside a per-product `@graph_multi_asset` for steps that each deserve a restart point, is **not generated**: `convert_ir.py` keeps such a step as its own asset instead.
 
@@ -134,7 +134,7 @@ Not applied (the DAG converts at task granularity, and the report says why): gra
 
 Asset keys change under product granularity (a folded step has none). `report.json` maps every Airflow task to a key anyway (`task_keys`: a folded step maps to its consumer's asset, and `folded` lists them); `apply_conversion.py` writes a folded step's unit target as `{assets: [consumer key], folded_into: ...}` and expands the consumer's dependencies through it; the parity comparison checks a folded step's outcome only (it has no value of its own). Generated tests and checks follow the product form.
 
-**Default.** Task granularity stays the default; product is opt-in. **Measured:** on the 11 quick DAGs of the release-matrix suite (Airflow 2.10.5 against Dagster, the repo's parity harness) both granularities gave 10 identical outcomes and the same 1 difference (a timestamp); 3 of the 11 had a step folded. The corpus was not re-run and only 3 folds were exercised, so product is not the default. A before/after pair is in `examples/granularity/`.
+**Default.** Product is the default; `--granularity task` is the fallback (use it when you need every task as its own asset: per-task outcomes and values to compare, or per-task restart). **Measured:** the stage-2a comparison below in `reference/converter-triage.md` ran the converter at product granularity (v4); an earlier measurement on the 11 quick DAGs of the release-matrix suite gave 10 identical outcomes at both granularities and the same 1 difference (a timestamp), with 3 of the 11 folding a step. A before/after pair is in `examples/granularity/`.
 
 ## Generated tests and structural asset checks
 

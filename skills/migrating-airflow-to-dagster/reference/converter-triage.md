@@ -61,3 +61,31 @@ The `dependencies` dimension, which differed on 17 DAGs, now differs on none. Th
 
 - `scripts/tests/test_converter_triage.py`: executed tests (installed Dagster, the real emitted code) for the edge declaration through task groups, branches and mapped tasks; an ordering invariant over every converted stage-1 DAG; exit 99 (default and custom code, downstream skipped, run succeeds, other codes fail); macros and `var`; task params; stub retries; `xcom_push` of a return value; `run_if` / `skip_if` (lambda, named, nested helper); `user_defined_macros`; the `airflow.task` logger; `@task.bash` template rendering; `babel` in the requirements; the IR extractor on real Airflow 2.10 (mapped classic callable, task params, mapped groups).
 - Old test expectations that encoded the bug or the gap were updated, and say so in the test: the pool test looked for `@dg.graph_multi_asset`; one test expected `var.value.x` to defer; one expected `xcom_push("return_value")` to raise; one expected `macros.ds_format_locale` to defer.
+
+## Stage 2a: classes fixed, and the v3 to v4 re-measurement
+
+Source: `eval_behavior.py batch --routes converter` on the 60-DAG stage-2a sample (57 evaluated, 3 `baseline-failed`), real Airflow 2.11 / 3.4 against `convert_ir.py --return-all` on Dagster 1.13. **Stage 2a was the evaluation sample for the converter's v3; reading its `different` rows to fix v4 makes it TRAINING data for the converter now.** The v4 numbers below are therefore not a generalisation estimate; a fresh sample is needed for that.
+
+| Change (general rule, tested on synthetic code in `scripts/tests/test_converter_stage2a.py`, `test_granularity.py`, `test_eval_harness.py`) | Class |
+|---|---|
+| Product granularity is the default (`--granularity task` is the fallback); the harness maps folded steps (`mode: folded`), skips their values and accepts their state when the leaf asset fails | design principle: an asset is a data product |
+| An `EmptyOperator` that declares outlets or inlets is an asset (returning None), not glue; glue tasks are listed in `report.json` under `glue` and the harness marks them dropped | elided EmptyOperator outlets |
+| `xcom_pull` of another DAG or of a prior run: a pushed key reads the latest materialization's metadata (None if never materialized, as Airflow); another DAG's return value stays a LOUD error naming the Dagster equivalent | cross-DAG xcom_pull |
+| `ti.map_index` (`-1` unmapped; the index from the dynamic mapping key `i<n>`) | ti.map_index |
+| A helper the project keeps under the `airflow.` namespace (found by walking up from the DAG file) is inlined as plain Python, with what it uses; a real Airflow import still defers | repo-local helper under `airflow.*` |
+| `__file__` becomes a constant `_AF_DAG_FILE`, default the original DAG path, overridable with `AIRFLOW_DAG_FILE` | `__file__` shim |
+| Harness: per-STEP states from step events (producing op of each graph-asset output, failed / succeeded-without-yielding = skipped / never ran behind a failed step = upstream_failed). Before, one failing op marked every output of its graph asset `failed` | failed vs upstream_failed attribution, unyielded outputs |
+| Harness: an Airflow serde-encoded value (`pandas.core.frame.DataFrame@version=1(hex)`) is not compared as text and the report says why | DataFrame XCom stringification |
+
+| verdict (converter, 57 evaluated) | v3 | v4 |
+|---|---|---|
+| equivalent (strict) | 29 (51%) | 34 (60%) |
+| equivalent-with-differences | 8 | 8 |
+| matches-baseline-failure | 3 | 6 |
+| different | 15 | 7 |
+| no-output | 2 | 2 |
+| equivalent in either form (incl. matching a by-design failure) | 40 (70%) | 48 (84%) |
+
+Movers (all `different` in v3): example_local_kubernetes_executor, example_time_delta_sensor_async, pandas_xcom, my_astronauts_dag, example_dataset_producer_with_and_condition became `equivalent`; toy_custom_names_dynamic_tasks_taskflow, toy_custom_names_dynamic_tasks_traditional_operators and toy_dynamic_task_default_index became `matches-baseline-failure` (they were a harness attribution error: the downstream mapped task is `upstream_failed` in both). Caution on the matches-baseline-failure gain: three of the 8 movers come from the harness change, not the converter, so the converter-only gain is smaller than the headline.
+
+Not done: mapped task groups, helpers closing over DAG-function locals, `ObjectStoragePath` arguments, user-defined mapped operators and operators with non-plain constructor arguments, registry-component mapping for provider operators, and the direct Airflow API calls (`Connection`, hooks). `example_dataset_producer` (the elided-outlet task now an asset that fails with `'NoneType' has no attribute 'startswith'`) and `example_task_state_store_mapped` (`process_table` still `upstream_failed`) remain `different`.

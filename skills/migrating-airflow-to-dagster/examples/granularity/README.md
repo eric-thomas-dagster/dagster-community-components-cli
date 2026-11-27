@@ -1,8 +1,8 @@
 # Worked example: task granularity versus product granularity
 
-`s_basic.task.py` and `s_basic.product.py` are the converter's output for the same Airflow DAG (`examples/airflow_release_matrix/suite/s_basic.py`: a Bash task `a` that echoes, then a Python task `b`), made with `--granularity task` and `--granularity product`.
+`s_basic.task.py` and `s_basic.product.py` are the converter's output for the same Airflow DAG (`examples/airflow_release_matrix/suite/s_basic.py`: a Bash task `a` that echoes, then a Python task `b`), made with `--granularity task` and the default (`--granularity product`).
 
-| | task (default) | product (opt-in) |
+| | task (fallback, `--granularity task`) | product (default) |
 |---|---|---|
 | assets | 2 (`s_basic/a`, `s_basic/b`) | 1 (`s_basic/b`) |
 | job selection | both keys | `s_basic/b` |
