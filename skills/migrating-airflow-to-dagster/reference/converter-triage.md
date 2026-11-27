@@ -131,3 +131,31 @@ Stage 2a is training data for the converter (it was read to fix v4 and v5). Each
 | Airflow metadata / session calls | `callable depends on an Airflow import (airflow.models)` | still a stub, now naming the call and the Dagster equivalent (`context.instance.get_runs`, `get_run_records`, asset value / `get_latest_materialization_event`, `context.instance` for a session) | always |
 
 Not done in pass 3: `isinstance` checks on `ObjectStoragePath`; mapped task groups inside a DAG that needs the failure-aware form (`fail_aware`), or whose members branch; a `LoopDecision` / `loop` group; provider hooks beyond `S3Hook`; a mapped group nested in a mapped group (Airflow itself rejects it).
+
+
+## Stage 2a, pass 4: operators map to resources, not to asset components (`--output components`)
+
+Direction: an operator or hook that calls a service is a Dagster resource used inside an asset; asset components are for operators whose job is a data product or a long-running job. The mapping is data in `scripts/registry_map.py`. Registry release verified: `dagster-community-components` 0.10.193 (installed in a scratch venv; the interpreter that runs the other tests still has 0.10.188, so `scripts/tests/test_registry_resources.py` loads 0.10.193 from `EVAL_REGISTRY_193` and skips without it). RUN = loaded by dagster's component loader and executed (HTTP against a local server, other clients against a recording fake or stand-in binary); READ = `schema.json`, `README.md`, `component.py` read only.
+
+Audit of what `--output components` did before this pass, and the verdict:
+
+| Operator | Component before | Shape | Fields used | Verdict | Checked |
+|---|---|---|---|---|---|
+| `BashOperator` | `shell_command_asset` | asset | command, env_vars, cwd, skip_on_exit_code, timeout_seconds, retry_policy_* | keep asset component (runs a command that produces files) | RUN on 0.10.193 |
+| `PythonOperator`, `@task` | `python_callable_asset` | asset | callable_path, args, kwargs, retry_policy_* | keep (the user's callable is the asset) | RUN on 0.10.193 |
+| `BashSensor`, `TimeSensor` | `wait_until_asset` | asset | condition, command, retry_exit_code, time_of_day, timezone, poll_seconds, timeout_seconds | keep (holds a step open, no service call) | RUN on 0.10.193 |
+| schedule | `cron_schedule` | schedule | cron_expression, job_name, asset_keys | keep | RUN on 0.10.193 |
+| `DockerOperator` | `docker_container_asset` | asset (long-running job) | image, command, env_vars, network | keep | READ and the document validated (a daemon is needed to run it) |
+| S3 list, copy, delete, create object, upload | `s3_list_keys_asset`, `s3_copy_object_asset`, `s3_delete_objects_asset`, `s3_create_object_asset`, `s3_upload_file_asset` | resource-shaped (S3 API calls) | bucket, key, `resource_key` | move to resource + plain Python (`S3Resource`, the existing helpers, inside a step) | READ; the S3 calls are RUN by the Python-route tests |
+| `SQLExecuteQueryOperator` (not Snowflake) and the database-specific operators | `sql_asset` | resource-shaped | connection_env, sql_statements, parameters | move to plain Python in a step: the registry database resources (`postgres_resource` ...) need host, database and user, which the IR does not carry. This also lifts the old limits (autocommit with several statements, positional parameters, `split_statements` now convert) | RUN (SQLite) |
+| `LambdaInvokeFunctionOperator` | `lambda_invoke_asset` | resource-shaped | function_name, region_name, payload | plain Python step with the runtime's `lambda_invoke` (no registry Lambda resource) | READ |
+| `SSHOperator` | `ssh_asset` | resource-shaped | host/user/password env vars, commands | plain Python step on `SSHResource` from `resources.py` (no registry ssh resource; `sftp_resource` is file transfer) | READ |
+| `BigQueryInsertJobOperator` | `bigquery_query_asset` | resource-shaped | query, project_id, location | plain Python step on `BigQueryResource` (`bigquery_ddl_resource` has no query-job call, only datasets, tables and value checks) | READ |
+| `HttpOperator`, `SimpleHttpOperator` | none (Python only) | resource-shaped | | new: `http_resource` (0.10.193 `request()`) + plain call | RUN |
+| `DatabricksRunNowOperator` | none | resource-shaped | | new: `databricks_jobs_resource.run_now_and_wait` | RUN (fake SDK client) |
+| `SparkSubmitOperator` | none | resource-shaped | | new: `spark_submit_resource.submit` | RUN (stand-in binary) |
+| `S3CreateBucketOperator`, `S3DeleteBucketOperator`, `GCSCreateBucketOperator`, `GCSDeleteBucketOperator` | none | resource-shaped | | new: `s3_bucket_resource`, `gcs_bucket_resource` (`ensure_bucket`, `delete_bucket`) | RUN (fake clients) |
+
+What changed: the nine asset components for service calls are gone from `convert_ir.py`; a service-calling task is an asset in `defs/<dag>_steps.py` (`required_resource_keys`, `deps` on other keys, retry policy, plain call); registry resources are written once to `defs/registry_resources/defs.yaml`; `report.json` adds `resource_types` and `registry_resources` next to `component_types`; `converted_requirements.txt` carries `dagster-community-components>=0.10.193` and what each resource imports. `http_resource`'s base URL is `{{ env.<CONN>_BASE_URL }}` (checked: the loader resolves it); its credentials are not written because an unset variable named in a resource field fails the run, so the caveat tells the user to add them. Not changed: the default Python output, which already called services with plain Python on `resources.py` resources and the env shims.
+
+Resources of 0.10.193 that were read and loaded in a scratch project but have no operator mapping yet: `emr_resource`, `dataproc_resource`, `pubsub_resource`, `bigquery_ddl_resource`, `athena_resource`, `redshift_data_api_resource`, `dbt_command_resource` (the Python route stubs those operators and names the resource in the hint). Announced and not verified: none.

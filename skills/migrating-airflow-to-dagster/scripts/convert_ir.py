@@ -51,6 +51,7 @@ import gen_tests as G
 import pattern_emit as PE
 import provider_ops as P
 import provider_ops_more
+import registry_map as RM
 
 provider_ops_more.register()          # more provider operators: Slack API, S3 key sensor, GCS, SSH, Docker, Lambda, BigQuery query jobs, Spark submit
 
@@ -1322,9 +1323,10 @@ def sla_wrap(body: str, t: dict[str, Any], key: str) -> str:
     return f"    try:\n{inner}\n    finally:\n        af_sla_check(context, {float(t['sla_s'])!r}, {key!r})"
 
 
-REGISTRY_FORM_OPS = {"LambdaInvokeFunctionOperator", "SSHOperator", "DockerOperator", "BigQueryInsertJobOperator"}      # registry components: lambda_invoke_asset, ssh_asset, docker_container_asset, bigquery_query_asset
-COMPONENT_TASKS = {"BashOperator", "EmptyOperator", "DummyOperator", "S3CopyObjectOperator", "S3DeleteObjectsOperator", "S3ListOperator",
-                   "LocalFilesystemToS3Operator", "S3CreateObjectOperator"} | {"PythonOperator", "_PythonDecoratedOperator"} | {"SqlQuery", "BashSensor", "TimeSensor"} | REGISTRY_FORM_OPS
+COMPONENT_TASKS = {"BashOperator", "EmptyOperator", "DummyOperator", "DockerOperator"} | {"PythonOperator", "_PythonDecoratedOperator"} | {"BashSensor", "TimeSensor"}
+# Service-calling operators are NOT asset components here: each is an asset in `defs/<dag>_steps.py` that calls a resource in plain Python (see registry_map.py).
+STEP_TASKS = (S3_OPS | PROV_STEPS | {"SqlQuery"}) - {"DockerOperator"}
+REG_RESOURCES: dict[str, tuple[str, dict[str, Any]]] = {}      # resource key -> (registry component type, attributes), written once to defs/registry_resources/defs.yaml
 
 
 def _plain(v: Any) -> bool:
@@ -1343,14 +1345,14 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
 
     Returns ({relative path: content}, summary overrides). One component per task in a `defs.yaml` (documents separated by `---`), a schedule
     component for the cron, and a module with the copied callables for Python tasks."""
-    if summary.get("mapping") or summary.get("partitions") or summary.get("triggers") or summary.get("pools") or summary.get("max_active_runs") \
-            or summary.get("run_timeout_s") or any(c.get("task") not in {t_["task_id"] for t_ in dag["tasks"] if t_["type"] in REGISTRY_FORM_OPS} for c in summary.get("caveats") or []) or summary.get("uses_context") or summary.get("snowflake_resources") \
-            or any(k not in ("sql", "ssh", "bigquery") for k in (summary.get("provider_connections") or {}).values()):
-        return None
     dag = normalise_provider_tasks(dag)
+    own = {t_["task_id"] for t_ in dag["tasks"] if t_["type"] in STEP_TASKS | {"DockerOperator"}}      # tasks whose Python-route caveats are replaced or carried below
+    if summary.get("mapping") or summary.get("partitions") or summary.get("triggers") or summary.get("pools") or summary.get("max_active_runs") \
+            or summary.get("run_timeout_s") or any(c.get("task") not in own for c in summary.get("caveats") or []) or summary.get("uses_context") or summary.get("snowflake_resources"):
+        return None
     tasks = {t["task_id"]: t for t in dag["tasks"]}
     dag_id, name = dag["dag_id"], safe(dag["dag_id"])
-    if any(t["type"] not in COMPONENT_TASKS or t.get("is_mapped") or t["trigger_rule"] != "all_success" or t["outlets"] or t["inlets"] or t.get("sla_s")
+    if any(t["type"] not in COMPONENT_TASKS | STEP_TASKS or t.get("is_mapped") or t["trigger_rule"] != "all_success" or t["outlets"] or t["inlets"] or t.get("sla_s")
            or t.get("is_setup") or t.get("is_teardown") or t.get("callback_fns") or t.get("callbacks") or t.get("pool")
            or (t.get("sensor") or {}).get("soft_fail")
            for t in tasks.values()):
@@ -1372,6 +1374,13 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     docs: list[str] = []
     callables: list[str] = ["from ..runtime import *  # noqa: F401,F403", ""]
     support: dict[str, int] = {}
+    reg_res: dict[str, tuple[str, dict[str, Any]]] = {}
+    step_fns: list[str] = []
+    step_caveats: list[dict[str, Any]] = []
+    step_reqs: set[str] = set()
+    step_resources: set[str] = set()
+    step_conns: dict[str, str] = {}
+    uses_os = False
 
     def doc(typ: str, attrs: dict[str, Any]) -> None:
         docs.append(f"type: dagster_community_components.{typ}\nattributes:\n" + "\n".join(f"  {k}: {json.dumps(v)}" for k, v in attrs.items() if v is not None))
@@ -1410,82 +1419,56 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
             attrs.update(asset_key=aname[tid], callable_path=f"{pkg}.callables.{name}:{fn}", args=t.get("op_args") or None, kwargs=t.get("op_kwargs") or None,
                          timeout_seconds=None)
             doc("PythonCallableAssetComponent", attrs)
-        elif ty in S3_FIELDS:
-            if not _plain(list(tf.values())):
-                return None
-            conn = tf.get("aws_conn_id") or "aws_default"
-            attrs["resource_key"] = conn
-            if ty == "S3ListOperator":
-                if tf.get("apply_wildcard"):
-                    return None
-                attrs.update(bucket=tf.get("bucket"), prefix=tf.get("prefix") or None, delimiter=tf.get("delimiter") or None)
-                doc("S3ListKeysAssetComponent", attrs)
-            elif ty == "S3CopyObjectOperator":
-                if any(tf.get(k) for k in ("acl_policy", "meta_data_directive", "kms_key_id", "kms_encryption_type", "source_version_id")):
-                    return None
-                if tf.get("source_bucket_name") or tf.get("dest_bucket_name"):
-                    attrs.update(source_bucket=tf.get("source_bucket_name"), source_key=tf.get("source_bucket_key"), dest_bucket=tf.get("dest_bucket_name"), dest_key=tf.get("dest_bucket_key"))
-                else:
-                    attrs.update(source_s3_url=tf.get("source_bucket_key"), dest_s3_url=tf.get("dest_bucket_key"))
-                doc("S3CopyObjectAssetComponent", attrs)
-            elif ty == "S3DeleteObjectsOperator":
-                if tf.get("prefix") or tf.get("from_datetime") or tf.get("to_datetime") or not isinstance(tf.get("keys"), (list, str)):
-                    return None
-                attrs.update(bucket=tf.get("bucket"), keys=[tf["keys"]] if isinstance(tf["keys"], str) else tf["keys"])
-                doc("S3DeleteObjectsAssetComponent", attrs)
-            elif ty == "S3CreateObjectOperator":
-                if tf.get("compression") or tf.get("encrypt") or tf.get("acl_policy") or not isinstance(tf.get("data"), str) or tf.get("encoding"):
-                    return None
-                key = tf.get("s3_key")
-                if tf.get("s3_bucket"):
-                    attrs.update(bucket=tf["s3_bucket"], key=key)
-                else:
-                    attrs.update(dest_s3_url=key)
-                attrs.update(data=tf["data"], replace=bool(tf.get("replace")))
-                doc("S3CreateObjectAssetComponent", attrs)
-            else:
-                if tf.get("gzip") or tf.get("encrypt") or tf.get("acl_policy"):
-                    return None
-                attrs.update(local_path=tf.get("filename"), bucket=tf.get("dest_bucket"), key=tf.get("dest_key"), replace=bool(tf.get("replace")))
-                doc("S3UploadFileAssetComponent", attrs)
-        elif ty == "SqlQuery":                                   # sql_asset reads a SQLAlchemy URL from the environment (connection_env), as the Python form does
+        elif ty in STEP_TASKS:                                    # a service call: an asset in defs/<dag>_steps.py that calls a resource in plain Python
             a_ = P._a(t)
-            sql = P.sql_text(t)
-            stmts = [sql] if isinstance(sql, str) else sql
-            if P.handler_for(t).check(t)[0] or not isinstance(stmts, list) or not _plain([stmts, a_.get("parameters")]) or a_.get("split_statements") \
-                    or isinstance(a_.get("parameters"), list) or (a_.get("autocommit") and len(stmts) > 1):
-                return None                                      # (the component runs everything in one transaction, returns no rows and does not split)
-            attrs.pop("asset_name")
-            attrs.update(asset_key=aname[tid], connection_env=f"{P.envname(P.sql_conn(t))}_URL", sql_statements=stmts, parameters=a_.get("parameters") or None)
-            doc("SqlAssetComponent", attrs)
-        elif ty in ("LambdaInvokeFunctionOperator", "SSHOperator", "DockerOperator", "BigQueryInsertJobOperator"):    # registry components: lambda_invoke_asset, ssh_asset, docker_container_asset, bigquery_query_asset
+            if t.get("execution_timeout_s") or not _plain([a_, tf]):
+                return None
+            ex_ = lambda v: expr(v, {}, None)
+            try:
+                plan = RM.plan_for(t, ex_)
+                if plan is not None:
+                    reg_res[plan.resource_key] = (plan.resource_type, plan.attrs)
+                    step_reqs.update(plan.requirements)
+                    step_caveats += [{"task": tid, "kind": "degraded", "reason": f"registry resource {RM.RESOURCE_TYPE_IDS[plan.resource_type]}: {c}"} for c in plan.caveats]
+                    step_caveats.append({"task": tid, "kind": "degraded", "reason": f"registry resource {RM.RESOURCE_TYPE_IDS[plan.resource_type]} was run against a recording fake, not a live service: check it against your environment"})
+                    stmt, keys_, kind_ = plan.body, {plan.resource_key}, RM.RESOURCE_TYPE_IDS[plan.resource_type].split("_resource")[0]
+                    if plan.needs_os:
+                        uses_os = True
+                elif ty in S3_OPS:
+                    stmt, conn_ = s3_call(t, {}, None)
+                    step_resources.add(conn_)
+                    step_reqs.add("dagster-aws")
+                    stmt = f"client = getattr(context.resources, {conn_!r})\n" + (stmt if stmt.startswith("return") else stmt)
+                    keys_, kind_ = {conn_}, "s3"
+                else:
+                    if P.handler_for(t).check(t)[0]:
+                        return None
+                    pv = P.handler_for(t).build(t, ex_)
+                    if pv.conn:
+                        step_conns[pv.conn] = pv.kind
+                    step_reqs.update(P.REQUIREMENTS.get(pv.kind, []))
+                    stmt, keys_, kind_ = pv.stmt, ({pv.conn} if pv.resource else set()), pv.kinds_tag
+                    step_caveats += [c for c in summary.get("caveats") or [] if c.get("task") == tid]
+            except Defer:
+                return None
+            stmt = stmt[len("return "):] if stmt.startswith("return ") else stmt
+            retry = ""
+            if t["retries"]:
+                retry = (f", retry_policy=dg.RetryPolicy(max_retries={int(t['retries'])}, delay={int(t['retry_delay_s'] or 300)}, "
+                         f"backoff=dg.Backoff.{'EXPONENTIAL' if t.get('retry_exponential_backoff') else 'LINEAR'})")
+            step_fns.append(f"@dg.asset(key=dg.AssetKey({aname[tid]!r}), group_name={name!r}, deps=[{', '.join(f'dg.AssetKey({u!r})' for u in ups)}], "
+                            f"required_resource_keys={('{' + ', '.join(repr(k) for k in sorted(keys_)) + '}') if keys_ else 'set()'}, kinds={{{kind_!r}}}{retry})\n"
+                            f"def {safe(aname[tid])}(context: dg.AssetExecutionContext):\n" + "".join(f"    {ln}\n" for ln in stmt.split("\n")) + "    return None\n")
+        elif ty == "DockerOperator":                              # registry component docker_container_asset: a container run to completion is a job, not a service call
             a_ = P._a(t)
             if P.handler_for(t).check(t)[0] or not _plain(a_):
                 return None
-            if ty == "LambdaInvokeFunctionOperator":
-                if not a_.get("region_name") or isinstance(a_.get("payload"), str):
-                    return None                                  # the component requires a region and takes a JSON object
-                attrs.update(function_name=a_["function_name"], region_name=a_["region_name"], payload=a_.get("payload") or None, invocation_type=a_.get("invocation_type") or None,
-                             qualifier=a_.get("qualifier") or None, include_logs=True if a_.get("log_type") == "Tail" else None, fail_on_function_error=True)
-                doc("LambdaInvokeAssetComponent", attrs)
-            elif ty == "SSHOperator":
-                if not isinstance(a_.get("command"), str):
-                    return None
-                c_ = P.envname(a_.get("ssh_conn_id") or "ssh_default")
-                attrs.update(host_env_var=f"{c_}_HOST", username_env_var=f"{c_}_USER", password_env_var=f"{c_}_PASSWORD", commands=[a_["command"]],
-                             timeout_seconds=int(a_["cmd_timeout"]) if a_.get("cmd_timeout") else None, fail_on_non_zero=True)
-                doc("SSHAssetComponent", attrs)
-            elif ty == "DockerOperator":
-                import shlex
-                if any(a_.get(k) for k in ("user", "working_dir", "entrypoint", "tty", "force_pull", "auto_remove")) or not isinstance(a_.get("image"), str):
-                    return None
-                cmd_ = a_.get("command")
-                attrs.update(image=a_["image"], command=(shlex.split(cmd_) if isinstance(cmd_, str) else cmd_) or None, env_vars=a_.get("environment") or None, network=a_.get("network_mode") or None)
-                doc("DockerContainerAssetComponent", attrs)
-            else:
-                q_ = (a_.get("configuration") or {}).get("query") or {}
-                attrs.update(query=q_.get("query"), use_legacy_sql=bool(q_.get("useLegacySql", True)), project_id=a_.get("project_id") or None, location=a_.get("location") or None)
-                doc("BigQueryQueryAssetComponent", attrs)
+            import shlex
+            if any(a_.get(k) for k in ("user", "working_dir", "entrypoint", "tty", "force_pull", "auto_remove")) or not isinstance(a_.get("image"), str):
+                return None
+            cmd_ = a_.get("command")
+            attrs.update(image=a_["image"], command=(shlex.split(cmd_) if isinstance(cmd_, str) else cmd_) or None, env_vars=a_.get("environment") or None, network=a_.get("network_mode") or None)
+            doc("DockerContainerAssetComponent", attrs)
         elif ty in ("BashSensor", "TimeSensor"):                 # wait_until_asset
             sn = t.get("sensor") or {}
             attrs.update(poll_seconds=sn.get("poke_interval"), timeout_seconds=sn.get("timeout"))
@@ -1510,16 +1493,32 @@ def component_files(dag: dict[str, Any], summary: dict[str, Any], pkg: str) -> t
     if summary.get("schedule"):
         doc("CronScheduleComponent", {"schedule_name": f"{name}_schedule", "job_name": name, "cron_expression": summary["schedule"],
                                       "asset_keys": [aname[t["task_id"]] for t in real], "execution_timezone": summary.get("timezone") or "UTC"})
-    files = {f"defs/{name}/defs.yaml": "\n---\n".join(docs) + "\n"}
+    for k_, (typ_, at_) in reg_res.items():
+        if k_ in REG_RESOURCES and REG_RESOURCES[k_] != (typ_, at_):
+            return None                                           # the same resource key with different settings in another DAG: keep this DAG as Python
+    files = {f"defs/{name}/defs.yaml": "\n---\n".join(docs) + "\n"} if docs else {}
     if len(callables) > 2:
         files[f"callables/{name}.py"] = "\n".join([callables[0], "", *[s_ for s_, _ in sorted(support.items(), key=lambda kv: kv[1])], "", *callables[1:]])
-    tiers = {"LambdaInvokeFunctionOperator": ("lambda_invoke_asset", "code"), "SSHOperator": ("ssh_asset", "code"), "DockerOperator": ("docker_container_asset", "live"),
-             "BigQueryInsertJobOperator": ("bigquery_query_asset", "live")}            # validation.level in the dagster-community-components 0.10.188 manifest
-    comp_caveats = [{"task": t["task_id"], "kind": "degraded", "reason": f"registry component {tiers[t['type']][0]} has validation tier `{tiers[t['type']][1]}` (`code` = code-reviewed, not run against a live system): "
-                     "check it against your environment"} for t in real if t["type"] in tiers and tiers[t["type"]][1] != "live"]
+    if step_fns:
+        files[f"defs/{name}_steps.py"] = ('"""Service-calling tasks: each is an asset that calls a resource in plain Python (the resources are in defs/registry_resources/defs.yaml and resources.py)."""\n'
+                                           + ("import os\n" if uses_os else "") + "import dagster as dg\n\nfrom ..runtime import *  # noqa: F401,F403\n\n\n" + "\n\n".join(step_fns))
+    REG_RESOURCES.update(reg_res)
+    prov_reqs_all = set()
+    for t_ in tasks.values():
+        h_ = P.handler_for(t_)
+        if h_ is not None and t_["type"] in PROV_STEPS:
+            try:
+                prov_reqs_all.update(P.REQUIREMENTS.get(h_.build(t_, lambda v: "None").kind, []))
+            except Exception:
+                pass
+    reqs = (set(summary.get("requirements") or []) - prov_reqs_all - {"dagster-aws"}) | step_reqs | ({RM.DCC_REQUIREMENT} if (reg_res or docs) else set())
+    reqs.discard("dagster-community-components")
+    comp_caveats = [c for c in step_caveats if c["task"] in tasks]
     overrides = {"caveats": comp_caveats, "keys": [[aname[t["task_id"]]] for t in real], "task_keys": {t["task_id"]: aname[t["task_id"]] for t in real}, "output": "components",
-                 "external": [], "notes": [*summary.get("notes", []), "registry components: one per task (asset keys are `<dag>__<task>`, single-part); "
-                 "retries and timeouts are component settings" + ("; the DAG has no schedule so no job is defined" if not summary.get("schedule") else "")]}
+                 "external": [], "resources": sorted(step_resources), "provider_connections": step_conns, "requirements": sorted(reqs),
+                 "resource_types": sorted({typ_ for typ_, _ in reg_res.values()}), "registry_resources": sorted(reg_res),
+                 "notes": [*summary.get("notes", []), "registry components: asset keys are `<dag>__<task>`, single-part; shell, Python, container and wait tasks are asset components (retries and timeouts are component settings); "
+                 "service-calling tasks are assets in defs/<dag>_steps.py that call a resource in plain Python" + ("; the DAG has no schedule so no job is defined" if not summary.get("schedule") else "")]}
     return files, overrides
 
 
@@ -4459,6 +4458,7 @@ def af_depends_on_past(context):
 
 
 def main(argv: list[str] | None = None) -> int:
+    REG_RESOURCES.clear()
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("ir", type=Path)
     ap.add_argument("--out-dir", type=Path, required=True, help="the project's defs directory (src/<pkg>/defs)")
@@ -4542,7 +4542,7 @@ def main(argv: list[str] | None = None) -> int:
                     dest.write_text(text)
                     if rel.startswith("callables/"):
                         (dest.parent / "__init__.py").touch()
-                summary = {**summary, **over, "converted_with_component": True, "component_types": sorted({ln.split('dagster_community_components.')[1] for t_ in files.values() for ln in t_.splitlines() if ln.startswith('type: dagster_community_components.')})}
+                summary = {"resource_types": [], "registry_resources": [], **summary, **over, "converted_with_component": True, "component_types": sorted({ln.split('dagster_community_components.')[1] for t_ in files.values() for ln in t_.splitlines() if ln.startswith('type: dagster_community_components.')})}
             else:
                 (a.out_dir / f"{name}.py").write_text(code)
                 summary = {**summary, "output": "python"}
@@ -4567,6 +4567,11 @@ def main(argv: list[str] | None = None) -> int:
             report["dags"][dag["dag_id"]] = {"status": "deferred", "reason": f"generated code did not compile: {e.msg}"}
         except Exception as e:                       # a converter bug must show up as a named deferral, never a crash or a silent skip
             report["dags"][dag["dag_id"]] = {"status": "deferred", "reason": f"CONVERTER ERROR {type(e).__name__}: {e}"}
+    if REG_RESOURCES:                                # one file for every registry resource, so two DAGs that use one connection do not register its key twice
+        d_ = a.out_dir / "registry_resources"
+        d_.mkdir(parents=True, exist_ok=True)
+        (d_ / "defs.yaml").write_text("\n---\n".join(f"type: dagster_community_components.{typ_}\nattributes:\n  resource_key: {json.dumps(k_)}\n" + "".join(f"  {ak}: {json.dumps(av)}\n" for ak, av in at_.items())
+                                                      for k_, (typ_, at_) in sorted(REG_RESOURCES.items())))
     owned = {"/".join(k) for v in report["dags"].values() if v["status"] == "converted" for k in [*v["keys"], *v.get("catalog_keys", [])]}
     ext = sorted(e for e in external if e not in owned)
     lib_res = {c: k for c, k in prov_conns.items() if k in P.RESOURCE_KINDS}

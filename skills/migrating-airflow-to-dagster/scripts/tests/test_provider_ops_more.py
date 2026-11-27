@@ -339,25 +339,4 @@ def test_bucket_create_and_delete_for_s3_and_gcs(tmp_path):
     assert ("gcscreate", "gb", "EU", None) in rec.calls and ("gcsdel", "gb", True) in rec.calls
 
 
-def test_registry_component_forms_for_lambda_ssh_docker_and_bigquery_validate_against_the_real_classes(tmp_path):
-    dcc = pytest.importorskip("dagster_community_components")
-    yaml = pytest.importorskip("yaml")
-    tasks = [task("lam", "LambdaInvokeFunctionOperator", args={"function_name": "f", "payload": {"n": 1}, "region_name": "us-east-1", "qualifier": "PROD", "log_type": "Tail", "aws_conn_id": "aws_default"}, template_fields={}, callable_args={}),
-             task("sh", "SSHOperator", up=["lam"], args={"ssh_conn_id": "ssh_default", "command": "ls /data", "cmd_timeout": 60}, template_fields={}, callable_args={}),
-             task("dk", "DockerOperator", up=["sh"], args={"image": "busybox:1", "command": "echo hi", "environment": {"A": "1"}, "network_mode": "host"}, template_fields={}, callable_args={}),
-             task("bq", "BigQueryInsertJobOperator", up=["dk"], args={"configuration": {"query": {"query": "select 1", "useLegacySql": False}}, "location": "EU", "project_id": "p", "gcp_conn_id": "google_cloud_default"},
-                  template_fields={}, callable_args={})]
-    ir = {"airflow_version": "2.10.5", "dags": [dag(tasks, kind="once")]}
-    (tmp_path / "ir.json").write_text(json.dumps(ir))
-    import subprocess
-    subprocess.run([sys.executable, str(HERE.parent / "convert_ir.py"), str(tmp_path / "ir.json"), "--out-dir", str(tmp_path / "pk" / "defs"), "--report", str(tmp_path / "r.json"), "--output", "components"], check=True, capture_output=True)
-    rep = json.loads((tmp_path / "r.json").read_text())["dags"]["d1"]
-    assert rep["output"] == "components", rep.get("reason") or rep
-    docs = [d for d in yaml.safe_load_all((tmp_path / "pk" / "defs" / "d1" / "defs.yaml").read_text()) if d]
-    types_ = [d["type"].split(".")[-1] for d in docs]
-    assert types_ == ["LambdaInvokeAssetComponent", "SSHAssetComponent", "DockerContainerAssetComponent", "BigQueryQueryAssetComponent", "CronScheduleComponent"]
-    assert {c["task"] for c in rep["caveats"]} == {"lam", "sh"} and all("validation tier `code`" in c["reason"] for c in rep["caveats"])          # the unvalidated components say so; docker and bigquery are tier live
-    for d in docs[:4]:
-        getattr(dcc, d["type"].split(".")[-1]).model().model_validate(d["attributes"])          # a wrong or invented field name is rejected by the registry's own class
-    ssh = docs[1]["attributes"]
-    assert ssh["host_env_var"] == "SSH_DEFAULT_HOST" and ssh["commands"] == ["ls /data"] and docs[2]["attributes"]["command"] == ["echo", "hi"]
+# the Lambda, SSH, Docker and BigQuery component forms were replaced by resource-first steps: see test_registry_resources.py

@@ -542,6 +542,26 @@ def http_run(context, conn_id, method, endpoint, data=None, headers=None, option
     return response.text
 
 
+def http_resource_call(resource, method, endpoint, data=None, headers=None, options=None):
+    """HttpOperator.execute through the registry's http_resource (`resource.request`): the connection's base URL and auth live in the resource.
+    A GET sends the data as a query string and other methods as a form body (the resource's `request` has no `params`); the body text is returned."""
+    import urllib.parse
+    options = options or {}
+    method = method.upper()
+    path, body, hdrs = endpoint or "", None, dict(headers or {})
+    if method == "GET":
+        if data:
+            path += ("&" if "?" in path else "?") + (urllib.parse.urlencode(data) if isinstance(data, (dict, list)) else str(data))
+    elif method != "HEAD" and data is not None:
+        if isinstance(data, (dict, list)):
+            body = urllib.parse.urlencode(data)
+            hdrs.setdefault("Content-Type", "application/x-www-form-urlencoded")
+        else:
+            body = data
+    result = resource.request(method, path, headers=hdrs or None, body=body, timeout_seconds=options.get("timeout"), raise_on_failure=options.get("check_response", True))
+    return result.body
+
+
 def http_poke(conn_id, method, endpoint, params, headers, options, allowed_codes):
     """HttpSensor.poke without a response_check: true once the request succeeds; the allowed error codes (404 by default) mean not yet."""
     try:

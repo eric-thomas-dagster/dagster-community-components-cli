@@ -501,29 +501,48 @@ def test_sql_and_wait_steps_become_registry_components_that_validate_and_run(tmp
     assert rep["connections"]["warehouse_pg"]["read_by"] == "the step, when it runs"
     text = (tmp_path / "pkg_comp1" / "defs" / "d1" / "defs.yaml").read_text()
     for needle in ("WaitUntilAssetComponent", 'condition: "shell_exit_zero"', "retry_exit_code: 3", 'condition: "time_of_day"', 'time_of_day: "00:00"', 'timezone: "America/Chicago"',   # 06:00 UTC is midnight in the DAG's zone
-                   
-                   "SqlAssetComponent", 'connection_env: "WAREHOUSE_PG_URL"', "retry_policy_max_retries: 2"):
+                   ):
         assert needle in text, needle
+    assert "SqlAssetComponent" not in text                      # a SQL call is a resource-style step in plain Python, not an asset component
+    steps = (tmp_path / "pkg_comp1" / "defs" / "d1_steps.py").read_text()
+    assert "sql_run(context, 'warehouse_pg'" in steps and "dg.RetryPolicy(max_retries=2" in steps and "deps=[dg.AssetKey('d1__clock')]" in steps
     built = _component_defs(text)
-    assets = [a for typ, defs in built if not typ.endswith("CronScheduleComponent") for a in defs.assets]
-    assert len(assets) == 3
-    assert dg.materialize(assets).success
+    sys.path.insert(0, str(tmp_path))
+    try:
+        import importlib
+        step_mod = importlib.import_module("pkg_comp1.defs.d1_steps")
+        assets = [a for typ, defs in built if not typ.endswith("CronScheduleComponent") for a in defs.assets] + [step_mod.d1__ins]
+        assert len(assets) == 3
+        assert dg.materialize(assets).success
+    finally:
+        sys.path.remove(str(tmp_path))
     assert sqlite3.connect(db).execute("select d from t").fetchall() == [("x",)]
 
 
 @pytest.mark.parametrize("mut,why", [
-    (lambda t: t["args"].update(autocommit=True) or t["template_fields"].update(sql=["select 1", "select 2"]), "autocommit with several statements"),
-    (lambda t: t["args"].update(parameters=["a"]) or t["template_fields"].update(parameters=["a"]), "positional parameters"),
     (lambda t: t["template_fields"].update(sql=["select '{{ ds }}'"]), "a template"),
-    (lambda t: t["args"].update(split_statements=True), "split_statements"),
 ])
-def test_a_sql_task_the_component_cannot_carry_keeps_the_dag_as_python(tmp_path, mut, why):
+def test_a_sql_task_the_step_cannot_carry_keeps_the_dag_as_python(tmp_path, mut, why):
     t = op("q", "SQLExecuteQueryOperator", args={"conn_id": "c", "autocommit": False}, tf={"sql": ["select 1"], "conn_id": "c", "database": None, "hook_params": {}},
            callable_args={"handler": "x.fetch_all_handler"})
     mut(t)
     rep = _components_output(tmp_path, ir_of(t), "pkg_comp2")
     assert rep["dags"]["d1"]["status"] == "converted" and rep["dags"]["d1"]["output"] == "python", why
     assert not (tmp_path / "pkg_comp2" / "defs" / "d1" / "defs.yaml").exists()
+
+
+@pytest.mark.parametrize("mut,why", [
+    (lambda t: t["args"].update(autocommit=True) or t["template_fields"].update(sql=["select 1", "select 2"]), "autocommit with several statements"),
+    (lambda t: t["args"].update(parameters=["a"]) or t["template_fields"].update(parameters=["a"]), "positional parameters"),
+    (lambda t: t["args"].update(split_statements=True), "split_statements"),
+])
+def test_sql_options_the_old_component_could_not_carry_are_carried_by_the_step(tmp_path, mut, why):
+    t = op("q", "SQLExecuteQueryOperator", args={"conn_id": "c", "autocommit": False}, tf={"sql": ["select 1"], "conn_id": "c", "database": None, "hook_params": {}},
+           callable_args={"handler": "x.fetch_all_handler"})
+    mut(t)
+    rep = _components_output(tmp_path, ir_of(t), "pkg_comp4")
+    assert rep["dags"]["d1"]["output"] == "components", why
+    assert "sql_run(" in (tmp_path / "pkg_comp4" / "defs" / "d1_steps.py").read_text()
 
 
 def test_a_bash_sensor_without_retry_exit_code_stays_python(tmp_path):

@@ -32,13 +32,29 @@ Human-in-the-loop operators inside a run (pause, wait for a person's choice, con
 - `automation_condition` presets on `shell_command_asset` and `snowflake_stored_procedure_call_asset`.
 - Timeouts abandon the thread at the deadline and the work continues; say so in each README that offers one.
 
+## Resource-first: what the converter now emits, and what the resources still lack (checked against 0.10.193)
+
+Service-calling operators are resources used inside an asset (`--output components`, see `conversion.md`), so nothing here asks for an asset component per operator. Read from `schema.json` and `component.py` of 0.10.193; each resource named in the first column was run in a scratch project.
+
+| Resource | Used for | What is missing (the converter works around it in plain Python, or leaves the DAG as Python) |
+|---|---|---|
+| `http_resource` | `HttpOperator` | `request()` has no `params` (a GET's query string is appended to the path by the converter); the credential fields (`auth_header_env_var`, `auth_*_env_var`) name environment variables that must exist, and an unset one fails the run at start, so a connection that may or may not have a login cannot be configured both ways (an optional-variable form, such as `auth_username_env_var` that is ignored when unset, would let the converter write them); `HttpSensor` semantics (a status in an allow-list means "not yet") need a `poke()` that returns instead of raising |
+| `databricks_jobs_resource` | `DatabricksRunNowOperator` | one-off `runs/submit` from a JSON body (`DatabricksSubmitRunOperator`), `job_name` lookup, `jar_params` and `spark_submit_params`, a poll interval; `repair_run` |
+| `spark_submit_resource` | `SparkSubmitOperator` | `exclude_packages`, `repositories`, `files`, `archives`, `driver_class_path`, `executor_cores`, `verbose`, `properties_file`; the master from the Airflow connection (the converter reads `<CONN>_MASTER`) |
+| `gcs_bucket_resource` | `GCSCreateBucketOperator`, `GCSDeleteBucketOperator` | a `project` argument on `ensure_bucket`; there is no GCS object resource (upload, download, list, delete, exists), so those GCS operators stay on `dagster-gcp` `GCSResource` |
+| `s3_bucket_resource` | bucket create, delete | none found for the operators |
+| `smtp_resource` | `EmailOperator` | not emitted yet: `username` and `password_env_var` are required, so a connection without a login cannot be configured; there is a `send_email` method, so the converter can map it once those two are optional |
+| `slack_resource` | `SlackAPIPostOperator` | not emitted yet: it registers a token and has no `chat_postMessage` helper, so `dagster-slack` `SlackResource` stays in `resources.py`; the incoming-webhook operator has no registry resource |
+| `emr_resource`, `dataproc_resource`, `pubsub_resource`, `bigquery_ddl_resource`, `athena_resource`, `redshift_data_api_resource`, `dbt_command_resource` | no operator mapping written yet | read and loaded in a project; the operators (`EmrAddStepsOperator`, `DataprocSubmitJobOperator`, `PubSubPublishMessageOperator`, `BigQueryCreateEmptyTableOperator` and the delete operators, `AthenaOperator`, `RedshiftDataOperator`, Cosmos dbt command steps) are stubs that name the resource |
+| none exists | SSH command execution, Lambda invoke, SQL by URL | there is no `ssh` resource (`sftp_resource` is file transfer) and no Lambda resource; the registry database resources need host, database and user fields, which the IR does not carry (a form that takes a SQLAlchemy URL from an environment variable would map every SQL operator) |
+
 ## Operators the converter calls a library for because no component fits
 
 Checked against `dagster-community-components` 0.10.186 (each component's `schema.json` and `README.md`). The converter now translates these operators itself (see `reference/conversion.md`, "Provider operators"); a component with the fields below would let `--output components` write YAML for them instead of generated Python.
 
 | Airflow operator | Closest component | What is missing |
 |---|---|---|
-| `HttpOperator`, `SimpleHttpOperator` | `http_external_asset`, `http_webhook_job`, `http_resource` | A one-request asset: method, endpoint joined to the resource's base URL, query parameters (GET) or body, headers, the status that counts as success (Airflow fails on any error status unless `check_response` is false), the response body returned as the asset's value. `http_external_asset` requires a trigger, a status poll and a run id; `http_webhook_job` is a job and returns nothing |
+| `HttpOperator`, `SimpleHttpOperator` | `http_resource` (0.10.193) | Superseded by the resource-first table below: the converter emits `http_resource` and calls `request()`. No asset-shaped ask |
 | `HttpSensor` | `http_poll_sensor` | A condition for `wait_until_asset` (for example `http_ok`: url, method, headers, status codes that mean "not yet", default 404). `http_poll_sensor` starts a run when a response changes; it does not hold a step open |
 | `KubernetesPodOperator` | `k8s_job_asset` | `args` (separate from `command`), `labels`, `node_selector`, `tolerations`, `affinity`, `env_from` (config maps and secrets), `kubeconfig_file`, `kube_context` and `load_incluster_config` (it runs only with in-cluster config), a Job name that is unique per asset (it uses the first 32 characters of the run id, so two pod steps in one run collide), `delete_failed_k8s_jobs` and a TTL for finished Jobs |
 | `SQLExecuteQueryOperator` and the database-specific SQL operators | `sql_asset` | Returning the rows of the last statement (Airflow pushes them to XCom), per-statement commit (`autocommit`), splitting a script into statements, positional (list) parameters. The component's `connection_env` already matches what the converter reads (`<CONN>_URL`) |
@@ -46,7 +62,7 @@ Checked against `dagster-community-components` 0.10.186 (each component's `schem
 | `SlackWebhookOperator` | `slack_notification_job`, `slack_message_send` | The same webhook post as a step: `slack_notification_job` is a job and `slack_message_send` needs an upstream DataFrame |
 | `DbtCloudRunJobOperator` | `dbt_cloud_trigger_job` | An asset form (a step in a DAG, with `deps`) of what the job does; the job is not a step. Confirm that its resource does not switch off the dbt Cloud job's schedule: `DbtCloudClientResource` does by default (`disable_schedule_on_trigger=True`), the operator never does |
 | `AirbyteTriggerSyncOperator`, `FivetranOperator` | `airbyte_sync_trigger_job`, `fivetran_sync_trigger_job` | An asset form that waits for the sync (the Fivetran job has no wait), and returns the job id |
-| `DatabricksRunNowOperator`, `DatabricksSubmitRunOperator` | `databricks_asset_bundle` | A component that runs an existing job by id or submits a one-off run from a JSON body and waits for it |
+| `DatabricksRunNowOperator`, `DatabricksSubmitRunOperator` | `databricks_jobs_resource` (0.10.193) | Run-now is emitted on the resource; the gaps for the rest are in the resource-first table below |
 | `wait_until_asset` as the target of sensors | `wait_until_asset` | `SFTPSensor`, `S3KeySensor`, `GCSObjectExistenceSensor` and the other file sensors need `sftp_file_exists`, `s3_key_exists`, `gcs_object_exists` conditions (the `*_monitor` sensors start runs; they do not hold a step). A skip on timeout that also skips what follows (`soft_fail`) |
 
 ## Operators not converted yet that have a component or library
