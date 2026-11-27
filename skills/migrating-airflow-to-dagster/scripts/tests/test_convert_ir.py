@@ -110,7 +110,7 @@ def test_s3_operators_map_to_runtime_helpers():
 @pytest.mark.parametrize("mut,why", [
     (lambda d: d["tasks"][0].update(trigger_rule="custom_rule"), "trigger_rule custom_rule"),
     (lambda d: d["tasks"][0].update(is_mapped=True), "dynamic task mapping"),
-    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ conn.my_conn.host }}"}), "does not provide"),
+    (lambda d: d["tasks"][0].update(template_fields={"bash_command": "echo {{ not_a_context_name.my_conn.host }}"}), "does not provide"),      # `conn` is rebuilt by the runtime since pass 6
     (lambda d: d["tasks"][0].update(type="DataprocSubmitJobOperator"), "operator DataprocSubmitJobOperator"),
     (lambda d: d["timetable"].update(kind="asset_triggered", assets=["a", "b"], asset_logic="mixed"), "mixes AND and OR"),
     (lambda d: d["timetable"].update(kind="other"), "schedule type"),
@@ -210,7 +210,7 @@ def test_sql_on_a_non_snowflake_connection_is_a_generic_sql_step_and_unsupported
     q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select 1", "conn_id": "postgres_default"})
     code, s = convert(dag([q], kind="manual"))
     assert "sql_run(context, 'postgres_default', ['select 1']" in code and s["provider_connections"] == {"postgres_default": "sql"}
-    q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select '{{ conn.x.host }}'", "conn_id": "snowflake_default"})
+    q = task("q", "SQLExecuteQueryOperator", template_fields={"sql": "select '{{ not_a_context_name.x.host }}'", "conn_id": "snowflake_default"})
     with pytest.raises(C.Defer, match="does not provide"):
         convert(dag([q], kind="manual"))
 
@@ -731,7 +731,7 @@ def test_task_group_loop_runs_the_body_until_the_condition_holds(tmp_path):
     fgate = task("f.gate", "LoopGateOperator", up=["f.inc"], group="f", loop={"group": "f", "max_iterations": 4, "until": None})
     after = task("after", "PythonOperator", up=["g.gate"], callable=fn("three"), op_args=[], op_kwargs={})
     rep, mod = _convert_and_load(tmp_path, {"airflow_version": "x", "dags": [dag([body, gate, fixed, fgate, after], kind="once")]}, "pkg_loop", "--return-all")
-    assert not rep.get("caveats") and sorted(rep["task_keys"]) == ["after", "f", "g"]
+    assert not rep.get("caveats") and sorted(set(rep["task_keys"]) - set(rep["loop_members"])) == ["after", "f", "g"]      # the loop's inner task ids are reported too (pass 6), mapped to the loop's step
     res = dg.materialize([mod.t_g, mod.t_f, mod.t_after])
     assert res.success and res.asset_value(dg.AssetKey(["d1", "g"])) == 2 and res.asset_value(dg.AssetKey(["d1", "f"])) == 4
 

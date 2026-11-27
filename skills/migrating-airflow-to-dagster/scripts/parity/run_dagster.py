@@ -169,6 +169,17 @@ try:
     signal.signal(signal.SIGALRM, alarm)
     signal.alarm(int(cfg.get("timeout_s", 300)))
     kwargs = {"raise_on_error": False}
+    HARNESS_KEY = "harness_partition"
+
+    def pick_partition(pdef, inst):
+        """The partition key to run: the last of a static or time-window set. A dynamic set is empty on a fresh instance (and listing its keys needs an instance), so one key is registered first; a multi-partition set
+        takes one key per dimension, the same way. `dag.test()` has no partition key, so the comparison reads this key as `None` in printed lines (behavior_compare.printed_lines)."""
+        for d in ([x.partitions_def for x in pdef.partitions_defs] if hasattr(pdef, "partitions_defs") else [pdef]):
+            if type(d).__name__ == "DynamicPartitionsDefinition" and not inst.get_dynamic_partitions(d.name):
+                inst.add_dynamic_partitions(d.name, [HARNESS_KEY])
+        ks = pdef.get_partition_keys(dynamic_partitions_store=inst)
+        return ks[-1] if ks else None
+
     with dg.DagsterInstance.ephemeral() as inst:
         try:
             job = None
@@ -178,9 +189,10 @@ try:
                 res["notes"].append(f"executed the job `{cfg['dag_id']}`")
                 pk = {}
                 if job.partitions_def is not None:
-                    keys = job.partitions_def.get_partition_keys()
-                    pk = {"partition_key": keys[-1]} if keys else {}
+                    k_ = pick_partition(job.partitions_def, inst)
+                    pk = {"partition_key": k_} if k_ else {}
                     res["notes"].append(f"the job is partitioned: ran partition {pk.get('partition_key')}")
+                res["partition_key"] = pk.get("partition_key")
                 r = job.execute_in_process(instance=inst, **pk, **kwargs)
             else:
                 if cfg["kind"] == "rewrite":
@@ -188,9 +200,10 @@ try:
                 pk = {}
                 pds = [a.partitions_def for a in assets if a.partitions_def is not None]
                 if pds:
-                    ks = pds[0].get_partition_keys()
-                    pk = {"partition_key": ks[-1]} if ks else {}
+                    k_ = pick_partition(pds[0], inst)
+                    pk = {"partition_key": k_} if k_ else {}
                     res["notes"].append(f"assets are partitioned: ran partition {pk.get('partition_key')}")
+                res["partition_key"] = pk.get("partition_key")
                 r = dg.materialize(assets + checks, instance=inst, resources=resources or None, **pk, **kwargs)
             res["state"] = "success" if r.success else "failed"
             ev = r.all_events

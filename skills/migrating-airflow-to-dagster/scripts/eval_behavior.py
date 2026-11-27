@@ -80,7 +80,7 @@ def rewrite_taskmap(project: Path, spec: dict[str, Any], route: dict[str, Any]) 
 
 
 def converter_taskmap(rep: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    folded = rep.get("folded") or {}
+    folded = {**(rep.get("folded") or {}), **{m: "loop" for m in (rep.get("loop_members") or {})}}      # a task-group loop's inner tasks (`group.task`, `group.__loop_gate`) run inside the loop's one step: folded
     out = {tid: {"mode": "folded" if tid in folded else "replaced", "asset": key} for tid, key in (rep.get("task_keys") or {}).items()}
     out.update({tid: {"mode": "dropped", "asset": None} for tid in rep.get("glue") or [] if tid not in out})        # an EmptyOperator that only joins dependencies is not an asset
     return out
@@ -192,6 +192,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
         lg = out_dir / f"{label}.log"
         if lg.exists() and a_.get("state") is not None:
             a_["stdout_lines"] = B.printed_lines(lg.read_text(errors="replace"))
+            a_["run_epoch"] = lg.stat().st_mtime                                  # when the Airflow run finished: the value comparison tells a wall-clock string of that run from a real difference
             raw = json.loads((out_dir / f"{label}.json").read_text()) if (out_dir / f"{label}.json").exists() else {}
             if raw:
                 (out_dir / f"{label}.json").write_text(json.dumps({**raw, "stdout_lines": a_["stdout_lines"]}, indent=1, default=str))
@@ -203,7 +204,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
         r = load(route)
         rl = out_dir / f"{route}.log"
         if rl.exists() and r.get("state") is not None:
-            r["stdout_lines"] = B.printed_lines(rl.read_text(errors="replace"))
+            r["stdout_lines"] = B.printed_lines(rl.read_text(errors="replace"), r.get("partition_key"))
         if route == "converter":
             tm = converter_taskmap(rep or {})
         else:

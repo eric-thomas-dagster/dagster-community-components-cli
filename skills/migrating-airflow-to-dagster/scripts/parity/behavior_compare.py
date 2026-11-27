@@ -35,7 +35,9 @@ ENV_ERRORS = re.compile(
     r"Max retries exceeded|gaierror|NoCredentialsError|EndpointConnectionError|isn't defined|conn_id .* (?:not found|is not defined)|AirflowNotFoundException|Variable \S+ does not exist|"
     r"KeyError: 'AIRFLOW_VAR|command not found|No such file or directory: '(?:docker|ssh|spark|kubectl|dbt|java|node|aws|gcloud)|Cannot connect to the Docker|ConfigException|could not translate host|"
     r"UnknownHostException|TimeoutExpired|ReadTimeout|ConnectTimeout|ProxyError|SSLError|Errno 111|Errno 61|No interpreter found|No matching distribution|Could not find a version that satisfies|"
-    r"Cannot connect to host|nodename nor servname|unable to open database file|extension.*threw an exception|returned non-zero exit status 2|FileNotFoundError|Failed to download|Network is unreachable|Temporary failure|pip.*(?:returned non-zero|failed)|uv.*error:|Failed to fetch|Could not resolve", re.I)
+    r"Cannot connect to host|nodename nor servname|unable to open database file|extension.*threw an exception|returned non-zero exit status 2|FileNotFoundError|Failed to download|Network is unreachable|Temporary failure|pip.*(?:returned non-zero|failed)|uv.*error:|Failed to fetch|Could not resolve|"
+    r"ASSET_NOT_FOUND|Asset with name \S+ not found|InProcessSupervisorComms' object has no attribute 'asend'", re.I)    # the last two are `dag.test()` limits: an @asset DAG whose inlet asset no other DAG registered in the sandbox's metadata database, and an async task's `aget` / `aset` (dag.test's in-process supervisor has no `asend`)
+DEFERRAL_LIMIT = re.compile(r"execute_complete\(\) missing \d+ required|NotImplementedError")
 
 
 NONDET_SRC = re.compile(r"\brandom\.\w+|\bchoice\(|\brandint\(|\.minute\b|\.second\b|\.microsecond\b|datetime\.now\(|datetime\.utcnow\(|\bpendulum\.now\(|\btime\.time\(|\buuid\d?\(|\bnow\(\)")
@@ -68,6 +70,46 @@ def descendants(spec: dict[str, Any], roots: set[str]) -> set[str]:
                 seen.add(d)
                 todo.append(d)
     return seen
+
+
+WALLCLOCK = [
+    (re.compile(r"\b\d{4}-\d\d-\d\d[T ]\d\d:\d\d:\d\d(?:\.\d+)?"), ("%Y-%m-%dT%H:%M:%S", "%Y-%m-%d %H:%M:%S")),
+    (re.compile(r"\b[A-Z][a-z]{2} [A-Z][a-z]{2} +\d{1,2} \d\d:\d\d:\d\d(?: [A-Z]{2,5})? \d{4}"), ("%a %b %d %H:%M:%S %Z %Y", "%a %b %d %H:%M:%S %Y")),
+]
+
+
+def _timestamps(text: str) -> list[tuple[Any, str, Any]]:
+    """[(span, matched text, datetime or None)] for each wall-clock timestamp in a string: ISO `2026-11-27 14:25:28`, and the `date` command's `Fri Nov 27 14:25:28 UTC 2026`."""
+    from datetime import datetime
+    out = []
+    for rx, fmts in WALLCLOCK:
+        for m in rx.finditer(text):
+            t, dt = m.group(0), None
+            for f in fmts:
+                try:
+                    dt = datetime.strptime(re.sub(r"\.\d+$", "", t), f)
+                    break
+                except ValueError:
+                    continue
+            out.append((m.span(), t, dt))
+    return out
+
+
+def wallclock_only_difference(base: str, route: str, run_epoch: float | None = None, window_s: float = 36 * 3600) -> str | None:
+    """Why two value strings that differ are NOT a difference: they are equal once their wall-clock timestamps (the time the task ran) are masked, and the baseline's timestamps are consistent with the time of the Airflow run
+    (within `window_s`, which covers any time zone; unchecked when the run time is unknown). Two Airflow runs in the same second look deterministic, but a route run later can never print the same second."""
+    tb, tr = _timestamps(base), _timestamps(route)
+    if not tb or len(tb) != len(tr):
+        return None
+    mask = lambda t, ts: "".join(c for i, c in enumerate(t) if not any(a <= i < b for (a, b), _, _ in ts))      # noqa: E731
+    if mask(base, tb) != mask(route, tr):
+        return None
+    if run_epoch is not None:
+        from datetime import timezone
+        for _, _, dt in tb:
+            if dt is None or abs(dt.replace(tzinfo=timezone.utc).timestamp() - run_epoch) > window_s:
+                return None
+    return f"the value differs only in a wall-clock timestamp ({tb[0][1]}) that is the time the task ran: not comparable between two runs"
 
 
 def dim(verdict: str, reason: str | None = None, evidence: Any = None, **extra: Any) -> dict[str, Any]:
@@ -103,12 +145,17 @@ def mask_volatile(line: str) -> str:
     return line.strip()
 
 
-def printed_lines(text: str) -> list[str]:
+def printed_lines(text: str, partition_key: str | None = None) -> list[str]:
     """What a process printed: the lines that are not log records (no timestamp or level prefix), not warnings or tracebacks, with volatile tokens masked. Both Airflow's `dag.test()` and Dagster's `execute_in_process`
-    leave a task's `print()` on the process's standard output as plain lines; framework logging has a timestamp or level prefix and is dropped."""
+    leave a task's `print()` on the process's standard output as plain lines; framework logging has a timestamp or level prefix and is dropped.
+    `partition_key`: the key the harness ran a partitioned route with. Airflow's `dag.test()` has no partition key (`dag_run.partition_key` prints `None`), so a route line that shows the key is read as `None`
+    BEFORE masking: the rest of the line is still compared, only the key itself is not."""
     out = []
     in_tb = False
-    for raw in ANSI.sub("", text or "").splitlines():
+    text = ANSI.sub("", text or "")
+    if partition_key:
+        text = text.replace(str(partition_key), "None")
+    for raw in text.splitlines():
         if raw.startswith("Traceback"):
             in_tb = True
             continue
@@ -145,7 +192,7 @@ def compare_stdout(a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[st
     have = Counter(rt)
     missing = [ln for ln, n in need.items() if have[ln] < n]
     extra = sorted(set(have) - set(Counter(base)))
-    ev = {**({"missing_in_route": [ln[:160] for ln in missing[:8]]} if missing else {}), **({"extra_in_route": [ln[:120] for ln in extra[:5]]} if extra else {}), **({"unstable_in_baseline": [ln[:80] for ln in unstable[:5]]} if unstable else {})}
+    ev = {**({"partition_key_read_as_None": route["partition_key"]} if route.get("partition_key") else {}), **({"missing_in_route": [ln[:160] for ln in missing[:8]]} if missing else {}), **({"extra_in_route": [ln[:120] for ln in extra[:5]]} if extra else {}), **({"unstable_in_baseline": [ln[:80] for ln in unstable[:5]]} if unstable else {})}
     n = sum(need.values())
     if missing:
         return dim(DIFFER, evidence=ev, compared=n)
@@ -166,6 +213,9 @@ def baseline_class(a1: dict[str, Any], a2: dict[str, Any] | None, spec: dict[str
     venv = [t["task_id"] for t in (spec or {}).get("tasks", []) if re.search(r"Virtualenv|ExternalPython", t.get("operator") or "") and norm_state((a1.get("tasks") or {}).get(t["task_id"], {}).get("state")) == "failed"]
     if venv and not ENV_ERRORS.search(text):
         return "baseline-failed", f"the baseline failed on a virtualenv / external-interpreter task ({', '.join(venv[:3])}): building the environment needs pip and a network, or an interpreter path, that the sandbox does not have (the Airflow run recorded no error text)"
+    deferred = [t["task_id"] for t in (spec or {}).get("tasks", []) if (t.get("arguments") or {}).get("deferrable") is True]
+    if deferred and DEFERRAL_LIMIT.search(text):
+        return "baseline-failed", f"the baseline failed in `dag.test()` on a deferrable task ({', '.join(deferred[:3])}, deferrable=True): dag.test() has no triggerer to hand the wait to and does not give `execute_complete` the kwargs the deferral carries (or never runs a `start_from_trigger` operator's `execute`), so Airflow's own harness fails here whatever the DAG's code does"
     m = ENV_ERRORS.search(text)
     if m:
         return "baseline-failed", f"the baseline failed for an environmental reason ({m.group(0)[:60]}): {text.strip().splitlines()[-1][:200] if text.strip() else ''}"
@@ -404,6 +454,11 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         if route_kind == "converter" and tm.get("mode") == "folded" and rs in ("failed", "upstream_failed", "skipped") and at != rs:
             accepted.append({"task": tid, "asset": asset, "airflow": at, "route": rs, "why": f"a step folded into `{asset}` as plain Python has no state of its own: the asset's outcome is the leaf's, compared on the leaf task"})
             continue
+        if route_kind == "converter" and tm.get("mode") != "folded" and rs == "failed" and at == "upstream_failed":
+            failed_members = sorted(m for m, mm in taskmap.items() if mm.get("mode") == "folded" and mm.get("asset") == asset and norm_state(a_tasks.get(m, {}).get("state")) == "failed" and m not in nd_tasks)
+            if failed_members:                                           # the asset's step ran the folded chain and its leaf failed: Airflow never started this (final) task, its state there is upstream_failed
+                accepted.append({"task": tid, "asset": asset, "airflow": at, "route": rs, "why": f"the folded step(s) {', '.join(failed_members)} failed inside `{asset}`, so the asset failed before this task's own code ran: Airflow's state for it is upstream_failed (translated, not a difference)"})
+                continue
         cmp_rows.append({"task": tid, "asset": asset, "mode": tm.get("mode") or "mapped", "airflow": at, "route": rs})
         if at != rs and not (at in ("skipped", "upstream_failed") and rs in ("skipped", "upstream_failed")):
             bad.append({"task": tid, "asset": asset, "airflow": at, "route": rs})
@@ -444,6 +499,10 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         if a2 and ax != ax2:
             vskip.append(f"{tid}: value differs between the baseline's two runs (nondeterministic)")
             continue
+        earlier = [(r.get("tasks") or {}).get(tid, {}).get("xcom", {}).get("return_value") for r in (extra_runs or []) if (r.get("tasks") or {}).get(tid)]
+        if any(e is not None and e != ax for e in earlier):          # two runs in the same second agree; an EARLIER baseline run of the same DAG shows the value is not stable
+            vskip.append(f"{tid}: value differs from an earlier baseline run of the same DAG (nondeterministic)")
+            continue
         if isinstance(ax, str) and re.match(r'^"?[\w.]+@version=\d+\(', ax):
             vskip.append(f"{tid}: Airflow's XCom record is a serializer-encoded object ({ax[:40].strip(chr(34))}...), not comparable as JSON")
             continue
@@ -459,6 +518,10 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
                 same = json.loads(rv) == [json.loads(x) for x in ax]
             except Exception:
                 pass
+        if not same and isinstance(ax, str) and isinstance(rv, str) and (why := wallclock_only_difference(ax, rv, a1.get("run_epoch"))):
+            vskip.append(f"{tid}: {why}")
+            vals.pop()
+            continue
         if not same:
             vdiff.append({"task": tid, "airflow": str(a_cmp)[:160], "route": str(r_cmp)[:160], "consumed": tid in consumed})
     if vdiff:

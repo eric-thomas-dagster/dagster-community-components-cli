@@ -551,6 +551,10 @@ def _task_ir(task: Any) -> dict[str, Any]:
     try:
         own = set(inspect.signature(type(task).__init__).parameters) - _BASE_PARAMS - {"self", "args", "kwargs"}
         t["args"] = {n: _jsonable(getattr(task, n)) for n in sorted(own) if hasattr(task, n) and not callable(getattr(task, n, None))}
+        if t["operator_class"]:                              # a user-defined operator whose own __init__ names a parameter that the instance keeps under another name (`deferrable=` stored as `_defer`) or that Airflow's
+            given = getattr(task, "_BaseOperator__init_kwargs", None) or {}          # BaseOperator also has: the class reads it, so the value the DAG passed is kept
+            explicit = set(inspect.signature(type(task).__init__).parameters) - {"self", "args", "kwargs", "task_id", "dag", "task_group"}
+            t["args"].update({n: _jsonable(given[n]) for n in sorted(explicit) if n in given and not callable(given[n]) and n not in t["args"]})
         # constructor arguments that hold a function (response_check=, response_filter=, a SQL handler, ...): `args` leaves them out, so name them here
         # and the converter can refuse an operator whose behavior depends on one instead of silently dropping it
         t["callable_args"] = {n: f"{getattr(getattr(task, n), '__module__', '')}.{getattr(getattr(task, n), '__qualname__', type(getattr(task, n)).__name__)}"
@@ -577,6 +581,17 @@ def _task_ir(task: Any) -> dict[str, Any]:
                 if r and os.path.isfile(cand):
                     files[f] = Path(cand).read_text()
                     break
+    def read_template(val: str) -> str | None:
+        for r in roots:
+            cand = os.path.join(r, val)
+            if r and os.path.isfile(cand):
+                return Path(cand).read_text()
+        return None
+    for f, val in t["template_fields"].items():                  # a templated container argument (`op_kwargs`, `op_args`): a string in it that names a template file is read and rendered too
+        if exts and isinstance(val, dict) and f == "op_kwargs":
+            files.update({f"{f}.{k}": c for k, v in val.items() if isinstance(v, str) and v.endswith(exts) and (c := read_template(v)) is not None})
+        elif exts and isinstance(val, list) and f == "op_args":
+            files.update({f"{f}.{i}": c for i, v in enumerate(val) if isinstance(v, str) and v.endswith(exts) and (c := read_template(v)) is not None})
     if files:
         t["template_files"] = files
     fn = getattr(task, "python_callable", None) or (getattr(task, "partial_kwargs", None) or {}).get("python_callable")      # a mapped classic PythonOperator keeps it in partial_kwargs

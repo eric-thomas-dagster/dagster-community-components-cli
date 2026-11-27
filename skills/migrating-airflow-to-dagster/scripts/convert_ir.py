@@ -67,10 +67,11 @@ SUPPORTED_CTX = {"ds", "ds_nodash", "ts", "ts_nodash", "logical_date", "executio
                  "run_id", "params", "dag", "task", "ti", "task_instance", "dag_run", "conf", "outlet_events", "inlet_events",
                  "next_ds", "next_ds_nodash", "next_execution_date", "prev_ds", "prev_ds_nodash", "prev_execution_date",     # Airflow 2 macros
                  "tomorrow_ds", "tomorrow_ds_nodash", "yesterday_ds", "yesterday_ds_nodash", "ts_nodash_with_tz",
-                 "prev_data_interval_start_success", "prev_data_interval_end_success", "task_instance_key_str", "task_state_store", "asset_state_store"}
+                 "prev_data_interval_start_success", "prev_data_interval_end_success", "task_instance_key_str", "task_state_store", "asset_state_store",
+                 "context", "var", "conn"}                                                                              # `context`: the context dict itself, `var` / `conn`: Variables and Connections from the environment
 JINJA_VARS = SUPPORTED_CTX | {"macros", "var"}
 USER_MACROS: set[str] = set()     # the DAG's `user_defined_macros` names (set per DAG): a template may use them
-CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date", "state"}, "dag": {"dag_id"}, "task": {"task_id"},
+CTX_ATTRS = {"dag_run": {"run_id", "conf", "logical_date", "execution_date", "dag_id", "partition_key", "partition_date", "state"}, "dag": {"dag_id"}, "task": {"task_id", "dag_id", "render_template"},
              "ti": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push", "state"},
              "task_instance": {"dag_id", "task_id", "run_id", "try_number", "map_index", "xcom_pull", "xcom_push", "state"}}
 SUPPORTED_MACROS = {"ds_add", "ds_format", "ds_format_locale", "datetime", "timedelta", "json", "yaml", "time", "uuid", "random", "dateutil"}
@@ -85,7 +86,9 @@ SHIM_IMPORTS = {(m, "WeekDay") for m in ("airflow.providers.standard.utils.weekd
     {(m, n) for m in ("airflow", "airflow.sdk", "airflow.datasets", "airflow.assets", "airflow.sdk.definitions.asset", "airflow.datasets.metadata") for n in ("Asset", "Dataset", "Metadata", "AssetAlias", "DatasetAlias")} | \
     {("airflow.utils.decorators", "apply_defaults")} | {(m, "Context") for m in ("airflow.utils.context", "airflow.sdk", "airflow.sdk.definitions.context")} | \
     {(m, n) for m in ("airflow.exceptions", "airflow.sdk.exceptions", "airflow.sdk") for n in ("AirflowException", "AirflowSkipException", "AirflowFailException")} | \
-    {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")}
+    {(m, "PokeReturnValue") for m in ("airflow.sensors.base", "airflow.sdk", "airflow.sdk.bases.sensor")} | \
+    {("airflow.sdk.execution_time.context", "NEVER_EXPIRE"), ("airflow.configuration", "conf"), ("asgiref.sync", "sync_to_async")} | \
+    {(m, n) for m in ("airflow.triggers.base", "airflow.sdk.triggers.base", "airflow.sdk") for n in ("BaseTrigger", "TriggerEvent", "StartTriggerArgs")}
 ELIDED = {"EmptyOperator", "DummyOperator", "LatestOnlyOperator", "ExternalTaskMarker"}      # nothing to run; LatestOnly and ExternalTaskMarker have no effect once schedules do not backfill
 ISOLATED = {"PythonVirtualenvOperator", "_PythonVirtualenvDecoratedOperator", "ExternalPythonOperator", "_PythonExternalDecoratedOperator"}   # a callable run in its own interpreter
 PY_TASKS = {"PythonOperator", "_PythonDecoratedOperator", "DecoratedOperator", "_AssetMainOperator"} | ISOLATED      # _AssetMainOperator: an Airflow 3 @asset function
@@ -181,6 +184,39 @@ def _free_names(fn: ast.FunctionDef) -> set[str]:
     return used - local - set(dir(builtins))
 
 
+def _annotation_names(node: ast.AST) -> set[str]:
+    """Names used in the argument and return annotations of a definition (and, for a class, of its methods): a copy without `from __future__ import annotations` evaluates them when it is defined."""
+    out: set[str] = set()
+    for a in ast.walk(node):
+        anns = [a.annotation] if isinstance(a, ast.arg) and a.annotation is not None else ([a.returns] if isinstance(a, (ast.FunctionDef, ast.AsyncFunctionDef)) and a.returns is not None else [])
+        for ann in anns:
+            out |= {n.id for n in ast.walk(ann) if isinstance(n, ast.Name)}
+    return out
+
+
+def _deps_of(node: ast.AST) -> set[str]:
+    """The module-level names a copied definition needs: a function's free names, or for a class the free names of each method (parameters and locals are not dependencies), its class-level statements,
+    decorators and bases, minus the names the class defines itself."""
+    if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+        return _free_names(node)
+    if not isinstance(node, ast.ClassDef):
+        return _loads(node)
+    free: set[str] = set()
+    own: set[str] = set()
+    for st in node.body:
+        if isinstance(st, (ast.FunctionDef, ast.AsyncFunctionDef)):
+            own.add(st.name)
+            free |= _free_names(st)
+            for d in st.decorator_list:
+                free |= _loads(d)
+        else:
+            free |= _loads(st)
+            own |= {t.id for a in ast.walk(st) if isinstance(a, ast.Assign) for t in a.targets if isinstance(t, ast.Name)}
+    for b in [*node.bases, *node.decorator_list]:
+        free |= _loads(b)
+    return free - own - {node.name}
+
+
 _PLAIN_CALLS = {"dict", "list", "set", "tuple", "str", "int", "float", "bool", "len", "range", "sorted", "min", "max", "sum", "frozenset", "reversed", "abs", "round"}
 
 
@@ -217,7 +253,7 @@ class ModuleIndex:
         for top in self.tree.body:
             body = top.body if isinstance(top, (ast.FunctionDef, ast.With)) else []
             for node in body:
-                if isinstance(node, ast.FunctionDef) and not node.decorator_list and node.name not in self.defs:
+                if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) and not node.decorator_list and node.name not in self.defs:
                     self.defs[node.name] = ("def", node)
             # a helper that closes over the DAG function's locals: the locals it reads are copied in too when they are plain values (constants, containers, f-strings,
             # arithmetic over other such names; no call except a builtin). A local that holds a task's output, an Airflow object or any other call stays unresolved: loud.
@@ -231,6 +267,21 @@ class ModuleIndex:
         if getattr(node, "col_offset", 0):                     # a nested definition: restore the first line's indent so the block dedents
             text = textwrap.dedent(" " * node.col_offset + text)
         return text
+
+
+def mentions_airflow(text: str) -> bool:
+    """Whether code refers to the `airflow` package: a name `airflow`, an import of `airflow...`, or a string that is itself a dotted `airflow.x` path. The word inside an ordinary string (a bucket or host name such as
+    `aws_default@airflow-tutorial-data`, a message) is not a reference."""
+    try:
+        tree = ast.parse(textwrap.dedent(text))
+    except SyntaxError:
+        return bool(re.search(r"\bairflow\b", text))
+    for n in ast.walk(tree):
+        if (isinstance(n, ast.Name) and n.id == "airflow") or (isinstance(n, ast.ImportFrom) and (n.module or "").split(".")[0] == "airflow") \
+                or (isinstance(n, ast.Import) and any(a.name.split(".")[0] == "airflow" for a in n.names)) \
+                or (isinstance(n, ast.Constant) and isinstance(n.value, str) and re.fullmatch(r"airflow(\.\w+)+", n.value)):
+            return True
+    return False
 
 
 def _loads(node: ast.AST) -> set[str]:
@@ -281,12 +332,12 @@ def inline_local_helper(modfile: Path, name: str, out: dict[int, str], counter: 
     seg = idx2.seg(node)
     if kind == "import":
         mod = getattr(node, "module", None) or ""
-        if mod.split(".")[0] == "airflow" or re.search(r"\bairflow\b", seg):
+        if mod.split(".")[0] == "airflow" or mentions_airflow(seg):
             raise Defer(f"{name!r} (from {modfile.name}) depends on Airflow")
         counter[0] += 1
         out[counter[0]] = seg
         return
-    if re.search(r"\bairflow\b", seg):
+    if mentions_airflow(seg):
         raise Defer(f"{name!r} (from the repo-local module {modfile.name}) depends on Airflow")
     for dep in sorted((_free_names(node) if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)) else _loads(node)) - {name}):
         if dep in idx2.defs:
@@ -307,16 +358,19 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
         raise Defer(f"operator class source does not parse: {e.msg}") from e
     cls = next((n for n in tree.body if isinstance(n, ast.ClassDef)), None)
     methods = {m.name: m for m in (cls.body if cls else []) if isinstance(m, ast.FunctionDef)}
-    if cls is None or entry not in methods:
-        raise Defer(f"operator class without a {entry} method")
+    starts_from_trigger = entry == "execute" and cls is not None and any(isinstance(st, ast.Assign) and any(isinstance(t, ast.Name) and t.id == "start_trigger_args" for t in st.targets) for st in cls.body)
+    if cls is None or (entry not in methods and not starts_from_trigger):
+        raise Defer(f"operator class without a {entry} method" + (" (and no `start_trigger_args`: Airflow itself raises NotImplementedError when it runs the task)" if entry == "execute" else ""))
     inner_shims = [n for n in ast.walk(cls) if isinstance(n, ast.ImportFrom) and n.module and all((n.module, a.name) in SHIM_IMPORTS for a in n.names)]
     for n in inner_shims:
         shims.update(a.name for a in n.names)
     body_text = ast.unparse(ast.Module(body=[*cls.body], type_ignores=[]))
     for n in inner_shims:
         body_text = body_text.replace(ast.unparse(n), "")
-    if re.search(r"\bairflow\b|\bset_xcom\b|\bxcom_push\b", body_text):
+    if mentions_airflow(body_text):
         raise Defer("operator class uses the Airflow API (a direct airflow reference)")
+    if re.search(r"\bself\.(?:xcom_push|xcom_pull)\b|\bset_xcom\b", body_text):                 # `context["ti"].xcom_push(...)` is rebuilt; the BaseOperator's own methods are not
+        raise Defer("operator class calls self.xcom_push / self.xcom_pull (use context['ti'].xcom_push / xcom_pull, which the runtime rebuilds)")
     meta["skips"] = "AirflowSkipException" in info["source"]
     idx = ModuleIndex(info["file"])
     class_level = {t.id for st in cls.body if isinstance(st, ast.Assign) for t in st.targets if isinstance(t, ast.Name)} | set(methods)
@@ -346,10 +400,11 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
                     raise Defer(f"operator class depends on an Airflow import ({mod}.{al.name if al is not None else ''})" + airflow_api_hint(al.name if al is not None else mod, al.name if al is not None else mod))
                 needed[node.lineno] = idx.seg(node)
                 continue
-            if re.search(r"\bairflow\b", idx.seg(node)):
+            if mentions_airflow(idx.seg(node)):
                 raise Defer(f"{name!r} (used by the operator class) depends on Airflow")
             needed[node.lineno] = idx.seg(node)
-            need(_free_names(node) if isinstance(node, ast.FunctionDef) else _loads(node), name)
+            need(_deps_of(node), name)
+            need({n_ for n_ in _annotation_names(node) if n_ in idx.defs and not (idx.defs[n_][0] == "import" and (getattr(idx.defs[n_][1], "module", None) or "").split(".")[0] == "airflow" and (getattr(idx.defs[n_][1], "module", None), n_) not in SHIM_IMPORTS)}, name)
 
     free = set()
     for m in methods.values():
@@ -371,6 +426,10 @@ def resolve_operator_class(info: dict[str, Any] | None, shims: set[str] | None =
         lines[n.lineno - 1:n.end_lineno] = [indent + "pass"] + [""] * (n.end_lineno - n.lineno)
     start = next(i for i, l in enumerate(lines) if re.match(r"class\s", l))
     body_src = "\n".join(lines[start:])
+    for m_ in set(re.findall(r"trigger_cls\s*=\s*['\"][\w.]*?(\w+)['\"]", body_src)):          # `StartTriggerArgs(trigger_cls="pkg.mod.MyTrigger")`: the class defined in the operator's module is used directly
+        if idx.defs.get(m_, ("", None))[0] == "def" and isinstance(idx.defs[m_][1], ast.ClassDef):
+            need({m_}, cls.name)
+            body_src = re.sub(r"(trigger_cls\s*=\s*)['\"][\w.]*?" + m_ + r"['\"]", r"\1" + m_, body_src)
     typing_used = sorted(n for n in ("Any", "Callable", "Dict", "Iterable", "List", "Mapping", "Optional", "Sequence", "Set", "Tuple", "Union")
                          if re.search(rf"\b{n}\b", body_src) and not any(re.search(rf"\b{n}\b", v) for v in needed.values()))
     if typing_used:                                              # annotations in the class body name typing classes the original module imported
@@ -412,7 +471,7 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
     body_text = ast.unparse(ast.Module(body=[*fn.body], type_ignores=[]))
     for n in inner_shims:
         body_text = body_text.replace(ast.unparse(n), "")
-    if re.search(r"\bairflow\b|\bset_xcom\b", body_text):
+    if mentions_airflow(body_text) or re.search(r"\bset_xcom\b", body_text):
         raise Defer("callable uses the Airflow API (a direct airflow reference)" + airflow_api_hint("\n".join(ln for ln in body_text.splitlines() if "airflow" in ln)))
     for n in (m for stmt in [*fn.body, *fn.args.defaults, *[d for d in fn.args.kw_defaults if d is not None]] for m in ast.walk(stmt)):    # the body, not the decorators (`@task.sensor` is not the `task` context object)
         obj = n.value if isinstance(n, ast.Attribute) else None
@@ -487,10 +546,14 @@ def resolve_callable(info: dict[str, Any] | None, shims: set[str] | None = None,
                 needed[node.lineno] = idx.seg(node)
                 need(_loads(node), name)
                 continue
-            if re.search(r"\bairflow\b", idx.seg(node)):
+            if mentions_airflow(idx.seg(node)):
                 raise Defer(f"{name!r} (used by the callable) depends on Airflow")
-            needed[node.lineno] = idx.seg(node)
-            need(_free_names(node) if isinstance(node, ast.FunctionDef) else _loads(node), name)
+            seg_ = idx.seg(node)
+            if re.match(rf"\s*{re.escape(name)}\s*=\s*ObjectStoragePath\(", seg_):          # a module-level `base = ObjectStoragePath("s3://conn@bucket/")`: built on first use, so an unset connection fails the task that uses it, not the import of the module
+                seg_ = seg_.replace("ObjectStoragePath(", "af_lazy_path(", 1)
+            needed[node.lineno] = seg_
+            need(_deps_of(node), name)
+            need({n_ for n_ in _annotation_names(node) if n_ in idx.defs and not (idx.defs[n_][0] == "import" and (getattr(idx.defs[n_][1], "module", None) or "").split(".")[0] == "airflow" and (getattr(idx.defs[n_][1], "module", None), n_) not in SHIM_IMPORTS)}, name)
 
     need(_free_names(fn), info["name"])
     need(cond_names, info["name"])
@@ -546,6 +609,18 @@ def _walk_values(v: Any):
     elif isinstance(v, list):
         for x in v:
             yield from _walk_values(x)
+
+
+def asset_fn_kwargs(t: dict[str, Any], kws: dict[str, str]) -> None:
+    """An Airflow 3 `@asset` function receives its own asset as `self` and, as a parameter named after it, each asset it reads (an inlet): both are handed over as the runtime's `Asset` objects."""
+    params = (t.get("callable") or {}).get("params") or []
+    if "self" in params and t.get("outlet_assets"):
+        kws["self"] = "Asset(name=%r, uri=%r)" % (t["outlet_assets"][0].get("name"), t["outlet_assets"][0].get("uri"))
+    if t["type"] == "_AssetMainOperator":
+        inl = {x for x in (t.get("inlets") or []) if isinstance(x, str)}
+        for pn in params:
+            if pn not in kws and pn not in ("self", "context") and pn in inl:
+                kws[pn] = f"Asset(name={pn!r})"
 
 
 def unplain_ctor_args(t: dict[str, Any]) -> list[str]:
@@ -1589,6 +1664,7 @@ def expand_loops(dag: dict[str, Any]) -> dict[str, Any]:
         ext_up = sorted({u for t in body for u in t["upstream"] if u not in ids})
         synth = {**gate, "task_id": grp, "type": "PythonOperator", "group": None, "loop": None, "is_mapped": False, "expand": None,
                  "callable": {"name": f"loop_{safe(grp)}", "module": body[0]["callable"].get("module"), "file": body[0]["callable"].get("file"), "source": outer, "params": []},
+                 "loop_members": sorted(ids | {gate["task_id"]}),
                  "op_args": [], "op_kwargs": {}, "template_fields": {}, "upstream": ext_up, "retries": gate.get("retries") or 0, "outlets": [], "inlets": []}
         rename = {gate["task_id"]: grp, **{i: grp for i in ids}}
         out = []
@@ -1604,6 +1680,18 @@ def expand_loops(dag: dict[str, Any]) -> dict[str, Any]:
     return {**dag, "tasks": tasks}
 
 
+def loop_members_report(dag: dict[str, Any], keyparts: dict[str, Any], fold_into: dict[str, str]) -> dict[str, str]:
+    """Airflow's own task ids inside a converted task-group loop (`group.task`, `group.__loop_gate`) -> the asset key of the loop's step, so a comparison can account for them. They have no step of their own."""
+    out: dict[str, str] = {}
+    for t in dag["tasks"]:
+        grp = t["task_id"]
+        for m in t.get("loop_members") or []:
+            target = fold_into.get(grp, grp)                  # a loop folded into the step that consumes it: that step's asset
+            if target in keyparts:
+                out[m] = "/".join(keyparts[target])
+    return out
+
+
 def normalise_provider_tasks(dag: dict[str, Any]) -> dict[str, Any]:
     """Give provider operators that share a handler one type: SimpleHttpOperator is HttpOperator, and SQL operators on a connection that is not Snowflake
     (SQLExecuteQueryOperator, PostgresOperator, MySqlOperator, ...) are `SqlQuery`. The type the DAG used stays in `orig_type` for messages."""
@@ -1611,6 +1699,16 @@ def normalise_provider_tasks(dag: dict[str, Any]) -> dict[str, Any]:
     for t in dag["tasks"]:
         ty = t["type"]
         new = None
+        tfiles = {k: v for k, v in (t.get("template_files") or {}).items() if k.startswith(("op_kwargs.", "op_args."))}
+        if tfiles and ty in PY_TASKS:                       # `templates_exts`: a callable argument naming a template file receives the file's text (rendered like any template string)
+            kw, ar = dict(t.get("op_kwargs") or {}), list(t.get("op_args") or [])
+            for k, c in tfiles.items():
+                kind, name = k.split(".", 1)
+                if kind == "op_kwargs":
+                    kw[name] = c
+                else:
+                    ar[int(name)] = c
+            t = {**t, "op_kwargs": kw, "op_args": ar, "template_fields": {**t["template_fields"], "op_kwargs": kw, "op_args": ar}}
         if ty in P.ALIASES:
             new = P.ALIASES[ty]
         elif ty in P.SQL_OPS and not (ty == "SQLExecuteQueryOperator" and "snowflake" in P.sql_conn({**t, "type": ty}).lower()):
@@ -2371,8 +2469,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                         kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
                         if isinstance((t.get("template_fields") or {}).get("templates_dict"), dict) and ("templates_dict" in str((t.get("callable") or {}).get("params", "")) or "templates_dict" in str((t.get("callable") or {}).get("source", ""))):
                             kws["templates_dict"] = expr(t["template_fields"]["templates_dict"], params, ctxn)      # rendered templates handed to the callable
-                        if "self" in ((t.get("callable") or {}).get("params") or []) and t.get("outlet_assets"):          # an @asset function receives its own asset
-                            kws["self"] = "Asset(name=%r, uri=%r)" % (t["outlet_assets"][0].get("name"), t["outlet_assets"][0].get("uri"))
+                        asset_fn_kwargs(t, kws)
                         inner = (f"call_with_context({pyname}, [{', '.join(pos)}], {{{', '.join(f'{k!r}: {v}' for k, v in kws.items())}}}, ctx)"
                                  if meta.get("needs_ctx") else f"{pyname}(" + ", ".join(pos + [f"{k}={v}" for k, v in kws.items()]) + ")")
                     except Defer as e:
@@ -2773,8 +2870,7 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                 kws = {k: expr(v, params, ctxn) for k, v in (t.get("op_kwargs") or {}).items()}
                 if isinstance((t.get("template_fields") or {}).get("templates_dict"), dict) and ("templates_dict" in str((t.get("callable") or {}).get("params", "")) or "templates_dict" in str((t.get("callable") or {}).get("source", ""))):
                     kws["templates_dict"] = expr(t["template_fields"]["templates_dict"], params, ctxn)      # rendered templates handed to the callable
-                if "self" in ((t.get("callable") or {}).get("params") or []) and t.get("outlet_assets"):          # an @asset function receives its own asset
-                    kws["self"] = "Asset(name=%r, uri=%r)" % (t["outlet_assets"][0].get("name"), t["outlet_assets"][0].get("uri"))
+                asset_fn_kwargs(t, kws)
             except Defer as e:
                 if CAVEATS == "off":
                     raise
@@ -3087,7 +3183,8 @@ def convert_dag(dag: dict[str, Any], note: str, produced: dict[str, str]) -> tup
                  "cosmos_sinks": {m: ["/".join(k) for k in c["sink_keys"]] for c in cosmos_clusters for m in c["members"]},
                  "uses_context": uses_ctx, "run_timeout_s": run_timeout, "partitions": (({"role": ppart["role"], **ppart["info"]}) if ppart else None), "mapping": ({"kind": pplan["kind"], "mapped": sorted(pplan["args"]), "producer": pplan.get("producer")} if pplan else
                              ({"kind": "graph", "mapped": sorted(gplan["mapped"])} if gplan else None)), "max_active_runs": max_runs, "max_active_tasks": max_tasks, "pools": pool_limits,
-                 "task_keys": {**{t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}, **{f: "/".join(keyparts[c]) for f, c in fold_into.items()}},
+                 "task_keys": {**{t["task_id"]: "/".join(keyparts[t["task_id"]]) for t in real}, **{f: "/".join(keyparts[c]) for f, c in fold_into.items()}, **loop_members_report(dag, keyparts, fold_into)},
+                 "loop_members": loop_members_report(dag, keyparts, fold_into),
                  "folded": dict(sorted(fold_into.items())), "glue": sorted(elided), "granularity": ({"mode": "product", "decisions": dict(sorted(gran_decisions.items()))} if GRANULARITY == "product" else None), "test_info": test_info, "asset_checks": check_list}
 
 
@@ -3178,7 +3275,8 @@ class _TaskInstance:
         rec = self._ctx.instance.get_latest_materialization_event(dg.AssetKey(asset_key)) if self._ctx is not None else None
         mat = rec.asset_materialization if rec is not None else None
         if mat is not None and key in mat.metadata:
-            return mat.metadata[key].value
+            ordered = mat.metadata.get(key + _ORDER_SUFFIX)
+            return json.loads(ordered.value) if ordered is not None else mat.metadata[key].value
         return default
 
     def _warn(self, task_id):
@@ -3195,7 +3293,8 @@ class _TaskInstance:
             dg.EventRecordsFilter(event_type=dg.DagsterEventType.ASSET_MATERIALIZATION, asset_key=dg.AssetKey(asset_key)), limit=50, ascending=False)
         for r in records:
             if r.event_log_entry.run_id == self.run_id and key in r.asset_materialization.metadata:
-                return r.asset_materialization.metadata[key].value
+                ordered = r.asset_materialization.metadata.get(key + _ORDER_SUFFIX)
+                return json.loads(ordered.value) if ordered is not None else r.asset_materialization.metadata[key].value
         return default
 
     def xcom_push(self, key, value=None, **_):
@@ -3208,7 +3307,20 @@ class _TaskInstance:
         except TypeError as e:
             raise dg.Failure(description=f"xcom_push of {key!r}: the value is not JSON-serializable ({e})") from e
         meta = dg.MetadataValue.json(value) if isinstance(value, (dict, list)) else value
-        self._ctx.add_output_metadata({key: meta})
+        out = {key: meta}
+        if _has_dict(value):                                 # Dagster stores a JSON metadata value with its keys sorted: the pushed order is kept in a text copy that a pull reads back
+            out[key + _ORDER_SUFFIX] = dg.MetadataValue.text(json.dumps(value))
+        self._ctx.add_output_metadata(out)
+
+
+NEVER_EXPIRE = _dt.timedelta.max      # Airflow 3.4's retention sentinel for the task / asset state stores: the shim keeps state until it is deleted whatever the retention
+
+
+_ORDER_SUFFIX = "::order"
+
+
+def _has_dict(value):
+    return isinstance(value, dict) or (isinstance(value, (list, tuple)) and any(_has_dict(x) for x in value))
 
 
 class _TaskStateStore:
@@ -3236,7 +3348,8 @@ class _TaskStateStore:
     def get(self, key, default=None):
         return self._load().get(key, default)
 
-    def set(self, key, value):
+    def set(self, key, value, retention=None):
+        """`retention` (a timedelta or NEVER_EXPIRE) is accepted and not applied: the file stays until it is deleted (the state of one run id is not read by any other run)."""
         json.dumps(value)                                  # Airflow stores JSON: a value that is not JSON fails there too
         data = self._load()
         data[key] = value
@@ -3249,6 +3362,18 @@ class _TaskStateStore:
 
     def clear(self):
         self._save({})
+
+    async def aget(self, key, default=None):               # the async forms of an `async def` task (Airflow 3.4): the same file, no real I/O wait
+        return self.get(key, default)
+
+    async def aset(self, key, value, retention=None):
+        self.set(key, value, retention)
+
+    async def adelete(self, key):
+        self.delete(key)
+
+    async def aclear(self):
+        self.clear()
 
 
 class BaseNotifier:
@@ -3311,6 +3436,23 @@ def _iso(x):
     return _IsoDatetime(x.year, x.month, x.day, x.hour, x.minute, x.second, x.microsecond, x.tzinfo) if AF_ISO_DT and isinstance(x, _dt.datetime) else x
 
 
+class _TaskShim:
+    """The `task` of the Airflow context: its ids, and `render_template(content, context)`, which renders a string (or each string in a list, tuple, set or dict) with the runtime's Jinja environment."""
+
+    def __init__(self, task_id, dag_id):
+        self.task_id, self.dag_id = task_id, dag_id
+
+    def render_template(self, content, context=None, jinja_env=None, seen_oids=None):
+        ctx = context if context is not None else (_AF_CTX.get() or {})
+        if isinstance(content, str):
+            return render(ctx, content) if ("{{" in content or "{%" in content or "{#" in content) else content
+        if isinstance(content, (list, tuple, set)):
+            return type(content)(self.render_template(x, ctx) for x in content)
+        if isinstance(content, dict):
+            return {k: self.render_template(v, ctx) for k, v in content.items()}
+        return content
+
+
 def af_context(context, dag_id, task_id, params, upstream, keys=None):
     """Rebuild the Airflow task context from the Dagster run. The logical date comes from run tags that airflow_schedule sets;
     a run without them (a manual run) uses the current time, as Airflow does for a manual trigger. ds is the UTC date of the
@@ -3365,10 +3507,11 @@ def af_context(context, dag_id, task_id, params, upstream, keys=None):
             "tomorrow_ds": (ld + one).strftime("%Y-%m-%d"), "tomorrow_ds_nodash": (ld + one).strftime("%Y%m%d"),
             "yesterday_ds": (ld - one).strftime("%Y-%m-%d"), "yesterday_ds_nodash": (ld - one).strftime("%Y%m%d"),
             "ts_nodash_with_tz": ld.strftime("%Y%m%dT%H%M%S%z"), "task_instance_key_str": f"{dag_id}__{task_id}__{ld.strftime('%Y%m%d')}", "prev_data_interval_start_success": None, "prev_data_interval_end_success": None,
-            "dag": types.SimpleNamespace(dag_id=dag_id), "task": types.SimpleNamespace(task_id=task_id), "ti": ti, "task_instance": ti,
+            "dag": types.SimpleNamespace(dag_id=dag_id), "task": _TaskShim(task_id, dag_id), "ti": ti, "task_instance": ti,
             "dag_run": types.SimpleNamespace(state="running", run_id=run_id, conf=conf, logical_date=ld, execution_date=ld, dag_id=dag_id, partition_key=pkey, partition_date=pdate),
             "partition_key": pkey, "outlet_events": _OutletEvents(context), "inlet_events": _InletEvents(context),
-            "task_state_store": _TaskStateStore(dag_id, task_id, run_id, ti.map_index), "asset_state_store": _AssetStateStore()}
+            "task_state_store": _TaskStateStore(dag_id, task_id, run_id, ti.map_index), "asset_state_store": _AssetStateStore(),
+            "var": _VarNamespace(), "conn": _ConnNamespace()}
 
 
 def call_with_context(fn, args, kwargs, ctx):
@@ -3376,6 +3519,8 @@ def call_with_context(fn, args, kwargs, ctx):
     parameters it names (and that op_args did not already fill)."""
     sig = inspect.signature(fn)
     merged = {**ctx, **kwargs}
+    if "context" in sig.parameters and "context" not in kwargs:          # a callable that takes the whole context dict (`def f(context)`): the same dict `get_current_context()` returns
+        merged["context"] = ctx
     if any(p.kind is inspect.Parameter.VAR_KEYWORD for p in sig.parameters.values()):
         call_kwargs = merged
     else:
@@ -3875,6 +4020,21 @@ class Connection:
         return f"Connection(conn_id={self.conn_id!r}, conn_type={self.conn_type!r}, host={self.host!r})"        # never prints the password
 
 
+class _ConnNamespace:
+    """`context["conn"].my_conn_id` / `conn.get("my_conn_id")`: the Connection from the environment (loud when its variable is not set)."""
+
+    def __getattr__(self, conn_id):
+        if conn_id.startswith("__"):
+            raise AttributeError(conn_id)
+        return Connection.get(conn_id)
+
+    def get(self, conn_id, default_conn=None):
+        try:
+            return Connection.get(conn_id)
+        except AirflowNotFoundException:
+            return default_conn
+
+
 class BaseHook:
     """`BaseHook.get_connection(conn_id)` from the environment (see Connection). A provider hook subclass is not mirrored: its methods raise instead of guessing."""
 
@@ -3916,6 +4076,48 @@ def ObjectStoragePath(path, conn_id=None, **storage_options):
     except ImportError as e:
         raise ImportError("ObjectStoragePath for " + parts.scheme + ":// needs `pip install universal-pathlib` and the fsspec backend for the scheme (s3fs, gcsfs, adlfs)") from e
     return UPath(uri, **storage_options)
+
+
+class _LazyPath:
+    """A path object built on first use (`af_lazy_path`): every attribute, operator and conversion goes to the real ObjectStoragePath."""
+
+    def __init__(self, args, kwargs):
+        object.__setattr__(self, "_args", (args, kwargs))
+        object.__setattr__(self, "_real", None)
+
+    def _get(self):
+        if self._real is None:
+            a, k = self._args
+            object.__setattr__(self, "_real", ObjectStoragePath(*a, **k))
+        return self._real
+
+    def __getattr__(self, name):
+        return getattr(self._get(), name)
+
+    def __truediv__(self, other):
+        return self._get() / other
+
+    def __rtruediv__(self, other):
+        return other / self._get()
+
+    def __fspath__(self):
+        return os.fspath(self._get())
+
+    def __str__(self):
+        return str(self._get())
+
+    def __repr__(self):
+        return repr(self._get())
+
+    def __eq__(self, other):
+        return self._get() == (other._get() if isinstance(other, _LazyPath) else other)
+
+    def __hash__(self):
+        return hash(self._get())
+
+
+def af_lazy_path(path, conn_id=None, **storage_options):
+    return _LazyPath((path,), {"conn_id": conn_id, **storage_options})
 
 
 class PokeReturnValue:
@@ -4543,6 +4745,95 @@ class BaseOperator:
     def execute(self, context):
         raise NotImplementedError
 
+    def defer(self, *, trigger, method_name, kwargs=None, timeout=None):
+        """A deferrable operator, run to completion in place: the trigger's `run()` (an async generator) is driven until its first event, then `method_name(context, event=<payload>, **kwargs)` runs and its
+        result is the task's result. Airflow hands the wait to a triggerer process and frees the worker; here the step simply waits (a trigger that never yields an event never returns)."""
+        event = _first_trigger_event(trigger)
+        raise _TaskDeferred(getattr(self, method_name)(getattr(self, "_af_ctx", None), event=getattr(event, "payload", event), **(kwargs or {})))
+
+    def _run_start_trigger(self, context):
+        """An operator with `start_from_trigger` and no `execute`: Airflow starts the trigger from `start_trigger_args` without a worker, then calls `next_method`."""
+        a = self.start_trigger_args
+        cls = a.trigger_cls
+        if isinstance(cls, str):
+            raise RuntimeError(f"start_trigger_args names the trigger class {cls!r} as a string and the converter could not find that class next to the operator: copy the class into the module and pass it")
+        event = _first_trigger_event(cls(**(a.trigger_kwargs or {})))
+        return getattr(self, a.next_method)(context, event=getattr(event, "payload", event), **(a.next_kwargs or {}))
+
+
+class _TaskDeferred(Exception):
+    def __init__(self, result):
+        super().__init__("deferred")
+        self.result = result
+
+
+class BaseTrigger:
+    """Airflow's BaseTrigger as a plain class: a subclass's `run()` (an async generator that yields TriggerEvent) is driven by `BaseOperator.defer`."""
+
+    def __init__(self, **kwargs):
+        import logging
+        self.log = logging.getLogger("airflow.triggers." + type(self).__name__)
+
+    def serialize(self):
+        raise NotImplementedError
+
+
+class TriggerEvent:
+    def __init__(self, payload):
+        self.payload = payload
+
+    def __repr__(self):
+        return f"TriggerEvent({self.payload!r})"
+
+
+class StartTriggerArgs:
+    def __init__(self, trigger_cls, trigger_kwargs=None, next_method=None, next_kwargs=None, timeout=None):
+        self.trigger_cls, self.trigger_kwargs, self.next_method, self.next_kwargs, self.timeout = trigger_cls, trigger_kwargs, next_method, next_kwargs, timeout
+
+
+def _first_trigger_event(trigger):
+    import asyncio
+
+    async def first():
+        async for event in trigger.run():
+            return event
+        raise RuntimeError("the trigger finished without yielding an event")
+    return asyncio.run(first())
+
+
+def sync_to_async(fn=None, **_):
+    """asgiref's `sync_to_async` without the thread pool or the package: an async wrapper that calls the function in place."""
+    import functools
+
+    def deco(f):
+        @functools.wraps(f)
+        async def run(*a, **k):
+            return f(*a, **k)
+        return run
+    return deco(fn) if fn is not None else deco
+
+
+class _Conf:
+    """`airflow.configuration.conf` read from the environment: `conf.get("section", "key", fallback=...)` is `AIRFLOW__SECTION__KEY`, else the fallback."""
+
+    def get(self, section, key, fallback=None, **_):
+        return os.environ.get(f"AIRFLOW__{section}__{key}".upper(), fallback)
+
+    def getboolean(self, section, key, fallback=None, **_):
+        v = os.environ.get(f"AIRFLOW__{section}__{key}".upper())
+        return fallback if v is None else v.strip().lower() in ("1", "true", "t", "yes", "y")
+
+    def getint(self, section, key, fallback=None, **_):
+        v = os.environ.get(f"AIRFLOW__{section}__{key}".upper())
+        return fallback if v is None else int(v)
+
+    def getfloat(self, section, key, fallback=None, **_):
+        v = os.environ.get(f"AIRFLOW__{section}__{key}".upper())
+        return fallback if v is None else float(v)
+
+
+conf = _Conf()
+
 
 def apply_defaults(fn):
     return fn
@@ -4566,7 +4857,13 @@ def run_operator(op, ctx):
     for f in getattr(op, "template_fields", ()) or ():
         if hasattr(op, f):
             setattr(op, f, _render_deep(ctx, getattr(op, f)))
-    return op.execute(ctx)
+    op._af_ctx = ctx
+    try:
+        if type(op).execute is BaseOperator.execute and getattr(op, "start_trigger_args", None) is not None:
+            return op._run_start_trigger(ctx)
+        return op.execute(ctx)
+    except _TaskDeferred as d:
+        return d.result
 
 
 def af_data(x):
