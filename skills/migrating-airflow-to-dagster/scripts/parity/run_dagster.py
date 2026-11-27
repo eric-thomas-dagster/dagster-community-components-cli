@@ -49,10 +49,23 @@ def nodes_of(nd):
     return out
 
 
-def retry_of(a):
+def ops_of(a, key):
+    """the ops that belong to ONE asset key: a graph-backed asset holds one op per task (named `<dag>__<task>`, the task named by the output's `airflow_task` metadata), so retries and pools are read from that
+    task's op, not aggregated over the graph. An asset without the metadata (a plain asset, a rewrite) keeps every op of its node."""
+    nodes = nodes_of(a.node_def)
+    md = (getattr(a, "metadata_by_key", None) or {}).get(key) or {}
+    task = md.get("airflow_task")
+    task = getattr(task, "value", task)
+    if len(nodes) == 1 or not task:
+        return nodes
+    want = f"{safe(cfg['dag_id'])}__{safe(str(task))}"
+    return [op for op in nodes if op.name == want]
+
+
+def retry_of(a, key):
     pol = []
     try:
-        for op in nodes_of(a.node_def):
+        for op in ops_of(a, key):
             rp = getattr(op, "retry_policy", None)
             if rp is not None:
                 pol.append({"max_retries": rp.max_retries, "delay_s": rp.delay, "backoff": str(rp.backoff) if rp.backoff else None})
@@ -61,10 +74,10 @@ def retry_of(a):
     return pol
 
 
-def pool_of(a):
+def pool_of(a, key):
     pools = set()
     try:
-        for op in nodes_of(a.node_def):
+        for op in ops_of(a, key):
             p = getattr(op, "pool", None) or (getattr(op, "tags", None) or {}).get("dagster/concurrency_key")
             if p:
                 pools.add(str(p))
@@ -153,12 +166,13 @@ try:
     if not assets:
         raise RuntimeError("no asset was found in the route's output")
     sk = {ident(k): a for a in assets for k in a.keys}
+    key_of = {ident(k): k for a in assets for k in a.keys}
     cron = lambda s: s.cron_schedule if isinstance(s.cron_schedule, str) else list(s.cron_schedule)  # noqa: E731
     res["structure"] = {
         "jobs": sorted(j.name for j in jobs),
         "schedules": [{"name": s.name, "cron": cron(s), "timezone": s.execution_timezone or "UTC", "job": getattr(s, "job_name", None)} for s in schedules],
         "sensors": sorted(s.name for s in sensors),
-        "assets": {k: {"deps": sorted(ident(d) for d in a.asset_deps.get(dg.AssetKey.from_user_string(k), [])), "node": a.node_def.name, "retry": retry_of(a), "pool": pool_of(a), "group": next(iter(a.group_names_by_key.values()), None)} for k, a in sk.items()},
+        "assets": {k: {"deps": sorted(ident(d) for d in a.asset_deps.get(dg.AssetKey.from_user_string(k), [])), "node": a.node_def.name, "retry": retry_of(a, key_of[k]), "pool": pool_of(a, key_of[k]), "group": next(iter(a.group_names_by_key.values()), None)} for k, a in sk.items()},
     }
 
     class TO(Exception):

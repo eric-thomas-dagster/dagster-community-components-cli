@@ -47,13 +47,21 @@ def fresh(path: Path) -> Path:
 CONV_DIR: Path | None = None                                                  # set by --conv-dir: where the converter output is cached (default <work>/conv)
 
 
-def converter_src(work: Path, row: dict[str, Any], conv_dir: Path | None = None) -> tuple[Path, dict[str, Any] | None]:
-    """The converter's output with --return-all (every Python task's value is returned, as the parity runs need), converted once per (repository, Airflow) and cached."""
-    out = (Path(conv_dir) if conv_dir else work / "conv") / f"{row['repo']}.{row['airflow']}.ra"
+def converter_src(work: Path, row: dict[str, Any], conv_dir: Path | None = None, manifest: dict[str, Any] | None = None) -> tuple[Path, dict[str, Any] | None]:
+    """The converter's output with --return-all (every Python task's value is returned, as the parity runs need), converted once per (repository, Airflow) and cached.
+    When two files of the repository define the same dag id, the IR handed to the converter keeps, for each such id, the file the manifest row names (the one Airflow runs): the output then lives in `<repo>.<airflow>.rad`."""
+    irp = work / "irs" / f"{row['repo']}.{row['airflow']}.json"
+    ir = json.loads(irp.read_text()) if irp.exists() else {"dags": []}
+    files = {r["dag_id"]: r["file"] for r in (manifest or {}).get("dags", []) if r["repo"] == row["repo"] and r.get("file")}
+    deduped, dups = C.dedupe_ir(ir, files)
+    out = (Path(conv_dir) if conv_dir else work / "conv") / f"{row['repo']}.{row['airflow']}.{'rad' if dups else 'ra'}"
     rep = out / "report.json"
     if not rep.exists():
         (out / "src" / "pkg" / "defs").mkdir(parents=True, exist_ok=True)
-        subprocess.run([sys.executable, str(C.HERE / "convert_ir.py"), str(work / "irs" / f"{row['repo']}.{row['airflow']}.json"), "--out-dir", str(out / "src" / "pkg" / "defs"), "--report", str(rep), "--return-all"],
+        if dups:
+            irp = out / "ir.deduped.json"
+            irp.write_text(json.dumps(deduped))
+        subprocess.run([sys.executable, str(C.HERE / "convert_ir.py"), str(irp), "--out-dir", str(out / "src" / "pkg" / "defs"), "--report", str(rep), "--return-all"],
                        capture_output=True, text=True, timeout=1800)
     if not rep.exists():
         return out / "src", None
@@ -102,7 +110,7 @@ def run_one(a: argparse.Namespace, entry: dict[str, Any], key: str) -> dict[str,
     conv = None
     stratum = row["converter"]                                              # the manifest's stratum is from when the corpus was built; the converter changes, so it is recomputed from this run's report
     if "converter" in routes:
-        src, rep = converter_src(work, row, CONV_DIR)
+        src, rep = converter_src(work, row, CONV_DIR, manifest)
         if rep is not None:
             stratum = EC.converter_stratum(rep)[0]
         if stratum != "deferred":
@@ -207,6 +215,7 @@ def execute(out_dir: Path, sb: Path, spec: dict[str, Any], dag_id: str, dag_path
             r["stdout_lines"] = B.printed_lines(rl.read_text(errors="replace"), r.get("partition_key"))
         if route == "converter":
             tm = converter_taskmap(rep or {})
+            r["stub_assets"] = sorted({tm[t]["asset"] for t in EC.converter_stratum(rep)[1] if t in tm and tm[t].get("asset")})       # a failing step that is a converter stub is never the DAG's own failure
         else:
             tm, hdr = rewrite_taskmap(project, spec, r)
             r.setdefault("notes", []).append(f"header accounting read from {hdr}")
@@ -231,7 +240,7 @@ def batch(a: argparse.Namespace) -> int:
     todo = [(k, v) for k, v in sorted(index.items()) if not a.only or v["dag_id"] in a.only]
     if "converter" in a.routes:                                               # convert once per repository, before the parallel runs
         for k, v in todo:
-            converter_src(work, C.row_for(manifest, k), CONV_DIR)
+            converter_src(work, C.row_for(manifest, k), CONV_DIR, manifest)
     print(f"comparing {len(todo)} DAG(s) with {a.jobs} at a time ...", flush=True)
 
     def go(item: tuple[str, dict[str, Any]]) -> dict[str, Any]:

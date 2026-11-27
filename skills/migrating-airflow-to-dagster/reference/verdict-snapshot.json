@@ -1,0 +1,4313 @@
+{
+ "counts": {
+  "by_verdict": {
+   "baseline-failed": 10,
+   "different": 3,
+   "equivalent": 200,
+   "equivalent-with-differences": 5,
+   "matches-baseline-failure": 16,
+   "no-output": 6,
+   "stub-matches-failure": 2
+  },
+  "dags": 242,
+  "strict_substantive": 119,
+  "strict_thin": 81,
+  "with_digest": 242
+ },
+ "dags": {
+  "apache_airflow::aggregate_regional_sales": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": true,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "no-output: the converter deferred this DAG",
+   "kind": "n/a",
+   "thin": null,
+   "unobserved": [],
+   "verdict": "no-output"
+  },
+  "apache_airflow::asset1_producer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset2_producer": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline failed for an environmental reason (ASSET_NOT_FOUND): 2026-11-27T17:48:58.238295Z [info     ] Found credentials in environment variables. [botocore.credentials] loc=credentials.py:1263",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "baseline-failed"
+  },
+  "apache_airflow::asset_alias_example_alias_consumer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_alias_example_alias_consumer_with_no_taskflow": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_alias_example_alias_producer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_alias_example_alias_producer_with_no_taskflow": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_consumes_1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_consumes_1_and_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "consuming_2"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_consumes_1_never_scheduled": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "consuming_3"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_consumes_unknown_never_scheduled": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_produces_1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_produces_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_s3_bucket_consumer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_s3_bucket_consumer_with_no_taskflow": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_s3_bucket_producer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_s3_bucket_producer_with_no_taskflow": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_with_extra_by_context": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_with_extra_by_yield": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "asset_with_extra_by_yield"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::asset_with_extra_from_classic_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 2,
+    "deferred": false,
+    "degraded": [
+     "asset_with_extra_from_classic_operator"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::child_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::clean_and_combine_player_stats": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "differs only in: stdout",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "values"
+   ],
+   "verdict": "equivalent-with-differences"
+  },
+  "apache_airflow::compute_player_odds": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::conditional_asset_and_time_based_timetable": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::consume_1_and_2_with_asset_expressions": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "consume_1_and_2_with_asset_expressions"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::consume_1_or_2_with_asset_expressions": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "consume_1_or_2_with_asset_expressions"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::consume_1_or_both_2_and_3_with_asset_expressions": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::consumes_asset_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::daily_inference": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::daily_team_a_rollup": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_asset_state_store_consumer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_asset_state_store_producer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_asset_with_watchers": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_bash_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_bash_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_branch_datetime_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_branch_datetime_operator_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_branch_datetime_operator_3": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_branch_dop_operator_v3": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 3,
+    "deferred": false,
+    "degraded": [
+     "empty_task_1",
+     "empty_task_2",
+     "should_run"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_branch_labels": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_branch_operator": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "environmental (virtualenv-build): the baseline failed on a virtualenv / external-interpreter task (branching_venv): Airflow builds that environment with pip, which needs a package index or a wheelhouse for numpy~=1.26.0 (and, for a pinned old version, an interpreter it supports), or an interpreter path, that the offline sandbox does not have; the route runs the same task in-process, so nothing was compared",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "baseline-failed"
+  },
+  "apache_airflow::example_branch_python_operator_decorator": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "environmental (virtualenv-build): the baseline failed on a virtualenv / external-interpreter task (branching_virtualenv): Airflow builds that environment with pip, which needs a package index or a wheelhouse for numpy~=1.26.0 (and, for a pinned old version, an interpreter it supports), or an interpreter path, that the offline sandbox does not have; the route runs the same task in-process, so nothing was compared",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "baseline-failed"
+  },
+  "apache_airflow::example_complex": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_dag_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_display_name": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_dynamic_task_mapping": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_dynamic_task_mapping_with_no_taskflow_operators": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_failed_dag": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "matches-baseline-failure"
+  },
+  "apache_airflow::example_kubernetes_executor": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline failed for an environmental reason (FileNotFoundError): 2026-11-27T17:50:13.055167Z [info     ] Found credentials in environment variables. [botocore.credentials] loc=credentials.py:1263",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "baseline-failed"
+  },
+  "apache_airflow::example_local_kubernetes_executor": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_measurement_correction_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_measurement_correction_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_nested_branch_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_params_trigger_ui": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_passing_params_via_test_command": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "matches-baseline-failure"
+  },
+  "apache_airflow::example_retry_policy": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_sensor_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_setup_teardown": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_setup_teardown_taskflow": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_short_circuit_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_short_circuit_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_simplest_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_skip_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_task_group": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_task_group_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_task_group_mapping": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_task_mapping_second_order": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_task_state_store": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_task_state_store_async": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline failed for an environmental reason (InProcessSupervisorComms' object has no attribute 'asend'): 2026-11-27T17:50:45.419256Z [info     ] Found credentials in environment variables. [botocore.credentials] loc=credentials.py:1263",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "baseline-failed"
+  },
+  "apache_airflow::example_task_state_store_mapped": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_time_delta_sensor_async": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_trigger_target_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_weekday_branch_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_xcom": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_xcom_args": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::example_xcom_args_with_operators": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::fixed_task_loop": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::ingest_region_stats": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::ingest_regional_sales": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::ingest_team_a_player_stats": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::latest_only": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::latest_only_with_trigger": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::live_region_player_stats": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::mapped_task_loop": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::monthly_team_a_rollup": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::multi_region_player_stats": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::partial_override_loop": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::player_odds_quality_check_wont_ever_to_trigger": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": true,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "no-output: the converter deferred this DAG",
+   "kind": "n/a",
+   "thin": null,
+   "unobserved": [],
+   "verdict": "no-output"
+  },
+  "apache_airflow::read_asset_event": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::read_asset_event_from_classic": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "matches-baseline-failure"
+  },
+  "apache_airflow::refine_estimate": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::regional_stats_breakdown": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": true,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "no-output: the converter deferred this DAG",
+   "kind": "n/a",
+   "thin": null,
+   "unobserved": [],
+   "verdict": "no-output"
+  },
+  "apache_airflow::scatter_live_region_to_segments": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": true,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "no-output: the converter deferred this DAG",
+   "kind": "n/a",
+   "thin": null,
+   "unobserved": [],
+   "verdict": "no-output"
+  },
+  "apache_airflow::segment_region_stats_early_rollup": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": true,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "no-output: the converter deferred this DAG",
+   "kind": "n/a",
+   "thin": null,
+   "unobserved": [],
+   "verdict": "no-output"
+  },
+  "apache_airflow::segment_region_stats_rollup": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": true,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "no-output: the converter deferred this DAG",
+   "kind": "n/a",
+   "thin": null,
+   "unobserved": [],
+   "verdict": "no-output"
+  },
+  "apache_airflow::summarize_live_region_stats": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::team_analytics_producer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::team_b_player_stats": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::team_c_player_stats": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::team_ml_consumer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::trailing_week_inference": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::train_weekly_model": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::tutorial": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::tutorial_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::tutorial_objectstorage": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "matches-baseline-failure"
+  },
+  "apache_airflow::tutorial_taskflow_api": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "apache_airflow::tutorial_taskflow_templates": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::UI_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::attach_extra_info": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::babel_format": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::basic_dataset_schedule_downstream": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::basic_dataset_schedule_upstream_1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::basic_dataset_schedule_upstream_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::dag_test_example": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::datasetalias_deferrable": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline failed in `dag.test()` on a deferrable task (t1, deferrable=True): dag.test() has no triggerer to hand the wait to and does not give `execute_complete` the kwargs the deferral carries (or never runs a `start_from_trigger` operator's `execute`), so Airflow's own harness fails here whatever the DAG's code does",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "baseline-failed"
+  },
+  "astronomer_2-10-example-dags::direct_deferrable": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline failed in `dag.test()` on a deferrable task (never_meet_a_worker, deferrable=True): dag.test() has no triggerer to hand the wait to and does not give `execute_complete` the kwargs the deferral carries (or never runs a `start_from_trigger` operator's `execute`), so Airflow's own harness fails here whatever the DAG's code does",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "baseline-failed"
+  },
+  "astronomer_2-10-example-dags::downstream_on_alias": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "(dag)"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::downstream_on_alias_dtm": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "(dag)"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::downstream_on_alias_dtm_bucket_4": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::downstream_on_dataset_A": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::fetch_extra_info": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 3,
+    "deferred": false,
+    "degraded": [],
+    "stubs": [
+     "get_extra_inlet_bash_callable",
+     "get_extra_triggering_run_bash_callable",
+     "get_extra_triggering_run_bash_jinja"
+    ]
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way; BUT the route's failing step is a loud converter stub, not converted code (Failure: dagster._core.definitions.events.Failure: AIRFLOW-CAVEAT: bash_command is not a string (a callable or another o): not a success",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "stub-matches-failure"
+  },
+  "astronomer_2-10-example-dags::run_if_skip_if_example": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::task_group_branching": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::tdro_downstream": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::upstream_produce_dataset_A": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::xcom_concat_taskflow": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-10-example-dags::xcom_concat_traditional": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-4-example-dags::2_3_example_toy_dag_mapping_xcoms": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-4-example-dags::2_4_example_toy_dag_map_function": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-4-example-dags::2_4_example_toy_dag_mapping_multiple_parameters": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-4-example-dags::dataset_downstream_1_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-4-example-dags::dataset_upstream1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-4-example-dags::dataset_upstream2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-4-example-dags::datasets_ml_example_publish": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-5-example-dags::downstream_datasets_taskflow_toy": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-5-example-dags::pythonsensor_example": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-5-example-dags::second_downstream_toy": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-5-example-dags::sensor_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-5-example-dags::task_group_mapping_and_pulling_usecase": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-5-example-dags::task_group_mapping_toy": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-5-example-dags::upstream_datasets_taskflow_toy": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-6-example-dags::UI_features_toy": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-6-example-dags::callbacks_overview": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "(dag)"
+    ],
+    "stubs": []
+   },
+   "detail": "differs only in: stdout",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent-with-differences"
+  },
+  "astronomer_2-6-example-dags::continuous_toy": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "(dag)"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-6-example-dags::downstream_trigger_dagrun": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-6-example-dags::json_yaml_macros_toy": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-6-example-dags::load_file_to_S3": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-6-example-dags::max_active_tis_per_dagrun": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "return_n"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-6-example-dags::pandas_xcom": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-6-example-dags::retry_example": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-6-example-dags::trigger_with_params": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::helper_dag_wait_30_seconds": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::setup_teardown_csv_NO_setup_teardown": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::setup_teardown_csv_decorators": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::setup_teardown_csv_methods": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::toy_chain_linear_task_group": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::toy_chain_linear_vs_chain_complex": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::toy_chain_linear_vs_chain_simple": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::toy_cross_downstream": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::toy_setup_teardown_nesting": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::toy_setup_teardown_simple": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-7-example-dags::toy_setup_teardown_task_group_and_failures": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-8-example-dags::consumer_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-8-example-dags::deltalake_example": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "behaviour differs in: outcome, tasks, failure",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "different"
+  },
+  "astronomer_2-8-example-dags::docs_example_dag": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-8-example-dags::literal_wrapper_example": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-8-example-dags::new_branching_decorators_example": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "environmental (virtualenv-build): the baseline failed on a virtualenv / external-interpreter task (branching_virtualenv): Airflow builds that environment with pip, which needs a package index or a wheelhouse for numpy~=1.24.4 (and, for a pinned old version, an interpreter it supports), or an interpreter path, that the offline sandbox does not have; the route runs the same task in-process, so nothing was compared",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "baseline-failed"
+  },
+  "astronomer_2-8-example-dags::pool_example": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-8-example-dags::producer_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-8-example-dags::trigger_with_params": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-8-example-dags::xcom_tab_example": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::complex_dag_structure_rainbow": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::downstream1_on_any": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::downstream2_one_in_each_group": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::toy_auto_pause": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "(dag)"
+    ],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-9-example-dags::toy_custom_names_dynamic_tasks_taskflow": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-9-example-dags::toy_custom_names_dynamic_tasks_traditional_operators": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-9-example-dags::toy_custom_operator_push_multiple_xcom": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::toy_downstream3_dataset_and_time_schedule": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::toy_dynamic_task_default_index": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_2-9-example-dags::toy_task_duration_page": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::toy_taskflow_bash": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::toy_xcom_big_vs_small": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::upstream1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::upstream2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::upstream3": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_2-9-example-dags::upstream4": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_airflow-data-quality-demo::simple_redshift_1": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [],
+    "stubs": [
+     "validate_etag"
+    ]
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_airflow-testing-ebook-companion::my_dag_task_flow": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [],
+    "stubs": [
+     "print_info"
+    ]
+   },
+   "detail": "behaviour differs in: outcome, tasks",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "values"
+   ],
+   "verdict": "different"
+  },
+  "astronomer_airflow-testing-ebook-companion::my_dag_traditional": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_airflow-testing-ebook-companion::test_fridge_api_connection_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_airflow-testing-ebook-companion::test_policies_dag": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "matches-baseline-failure"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::child_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_astronauts": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_bash_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_bash_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_branch_datetime_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_branch_datetime_operator_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_branch_datetime_operator_3": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_branch_operator": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "environmental (virtualenv-build): the baseline failed on a virtualenv / external-interpreter task (branching_venv): Airflow builds that environment with pip, which needs a package index or a wheelhouse for numpy~=1.26.0 (and, for a pinned old version, an interpreter it supports), or an interpreter path, that the offline sandbox does not have; the route runs the same task in-process, so nothing was compared",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "baseline-failed"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_branch_python_operator_decorator": {
+   "baseline": "baseline-failed",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "environmental (virtualenv-build): the baseline failed on a virtualenv / external-interpreter task (branching_virtualenv): Airflow builds that environment with pip, which needs a package index or a wheelhouse for numpy~=1.26.0 (and, for a pinned old version, an interpreter it supports), or an interpreter path, that the offline sandbox does not have; the route runs the same task in-process, so nothing was compared",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "baseline-failed"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_python_decorator": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "differs only in: stdout",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent-with-differences"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_python_operator": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "differs only in: stdout",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent-with-differences"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_sensor_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_short_circuit_decorator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_short_circuit_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::example_weekday_branch_operator": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_astro-ide-example-dags-airflow3::latest_only": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_backfill-dag-demo::tutorial": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_ded-ultimate-guide-to-dags::launch_readiness_report": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_ded-ultimate-guide-to-dags::launch_window_history": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "(dag)"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_ded-ultimate-guide-to-dags::planet_conditions": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 1,
+    "deferred": false,
+    "degraded": [
+     "(dag)"
+    ],
+    "stubs": []
+   },
+   "detail": "behaviour differs in: outcome, tasks, values",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite"
+   ],
+   "verdict": "different"
+  },
+  "astronomer_ded-ultimate-guide-to-dags::top_level_code": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_dynamic-dags-tutorial::dag_file_1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_dynamic-dags-tutorial::dag_file_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_dynamic-dags-tutorial::loop_hello_world_1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_dynamic-dags-tutorial::loop_hello_world_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_dynamic-dags-tutorial::loop_hello_world_3": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_dynamic-dags-tutorial::variable_hello_world_1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_dynamic-dags-tutorial::variable_hello_world_2": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_get-started-with-airflow-2-tutorial::my_astronauts_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_gsd-airflow-basics::example_asset_consumer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_gsd-airflow-basics::example_astronauts": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_gsd-airflow-basics::example_basic": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_gsd-airflow-basics::example_complex": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 3,
+    "deferred": false,
+    "degraded": [
+     "crew_roster.get_astronauts",
+     "decommission.decommission_iss_mission",
+     "mission_control.establish_comms"
+    ],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_practical-guide-to-apache-airflow-3::raw_zen_quotes": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_practical-guide-to-apache-airflow-3::selected_quotes": {
+   "baseline": "by-design-failure",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "the baseline fails and the error is not environmental: the DAG's own code fails; the route fails the same way; BUT the route's failing step is a loud converter stub, not converted code (NotImplementedError: NotImplementedError: xcom_pull of another DAG's (or a prior run's) return value: declare that asset): not a success",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "stub-matches-failure"
+  },
+  "astronomer_quickstart-etl-with-airflow-videos::example_astronauts": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_reusable_dag_examples::example_astronauts": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "astronomer_sample_open_lineage_dags::example_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "astronomer_sample_open_lineage_dags::openlineage_base_complex_dag": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 2,
+    "deferred": false,
+    "degraded": [
+     "section_1.section_2.task_6",
+     "task_4"
+    ],
+    "stubs": []
+   },
+   "detail": "differs only in: stdout",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent-with-differences"
+  },
+  "matsudan_airflow-dag-examples::example_cron_trigger_timetable": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_dataset_consumer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_dataset_consumer_with_and_condition": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_dataset_consumer_with_or_condition": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_dataset_producer": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_dataset_producer_with_and_condition": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_dataset_producer_with_or_condition": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_dtm_non_taskflow_api": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_task_group1": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_task_group_nest": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches; only the outcome and structure were observable (thin)",
+   "kind": "thin",
+   "thin": true,
+   "unobserved": [
+    "failure",
+    "files",
+    "http",
+    "s3",
+    "smtp",
+    "sqlite",
+    "stdout",
+    "values"
+   ],
+   "verdict": "equivalent"
+  },
+  "matsudan_airflow-dag-examples::example_taskflow_api": {
+   "baseline": "ok",
+   "converter": {
+    "caveats": 0,
+    "deferred": false,
+    "degraded": [],
+    "stubs": []
+   },
+   "detail": "every compared dimension matches",
+   "kind": "substantive",
+   "thin": false,
+   "unobserved": [],
+   "verdict": "equivalent"
+  }
+ },
+ "note": "regression guard: `verdict_snapshot.py check` compares a measurement run against this; regenerate with `save` after a deliberate change",
+ "route": "converter",
+ "schema": 1
+}

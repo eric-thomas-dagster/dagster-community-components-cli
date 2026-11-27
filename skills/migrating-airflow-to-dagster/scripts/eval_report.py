@@ -14,11 +14,16 @@ import argparse
 import collections
 import json
 import math
+import re
 import statistics
+import sys
 from pathlib import Path
 from typing import Any
 
 import eval_common as C
+
+sys.path.insert(0, str(C.HERE / "parity"))
+import behavior_compare as B  # noqa: E402
 
 VERDICTS = ["equivalent", "equivalent-with-differences", "matches-baseline-failure", "stub-matches-failure", "different", "not-comparable", "no-output", "baseline-failed"]
 GOOD_STRICT = {"equivalent"}
@@ -99,6 +104,76 @@ def counts(recs: list[dict[str, Any]], route: str) -> collections.Counter:
 
 def thin(r: dict[str, Any], route: str) -> bool:
     return bool((((r.get("behavior") or {}).get("routes") or {}).get(route) or {}).get("rollup", {}).get("thin"))
+
+
+def route_x(r: dict[str, Any], route: str) -> dict[str, Any]:
+    return ((r.get("behavior") or {}).get("routes") or {}).get(route) or {}
+
+
+def unobserved_of(x: dict[str, Any]) -> dict[str, str]:
+    """what a route's `equivalent` did not look at (from the stored dimensions, so it also works on older results): dimension -> the harness's reason."""
+    dims = x.get("dimensions") or {}
+    return {n: str(dims[n].get("reason") or "not compared") for n in (*B.SUBSTANTIVE, "failure") if n in dims and dims[n].get("verdict") == B.NOT}
+
+
+def short_reason(n: str, why: str) -> str:
+    w = re.sub(r"^(no value to compare: )", "", why)
+    return f"{n} ({w[:70]})" if n in ("values", "stdout") else n
+
+
+def strict_unobserved_lines(recs: list[dict[str, Any]], route: str) -> list[str]:
+    """For the DAGs judged strictly `equivalent`: how many are thin and, per DAG, what was not observable, so that `strict` cannot be read as `values, files, requests and output were compared`."""
+    strict = [r for r in recs if r["behavior"] and not r["baseline_failed"] and r["verdicts"].get(route) == "equivalent"]
+    if not strict:
+        return []
+    thin_rows = [r for r in strict if thin(r, route)]
+    L = [f"### `{route}`: what the {len(strict)} strict `equivalent` DAGs did not observe", "",
+         f"**{len(thin_rows)} of {len(strict)} are thin** (nothing was compared but the outcome, the task states and the structure); {len(strict) - len(thin_rows)} compared at least one value, file, row, request, mail, object or printed line. "
+         "A thin `equivalent` says: it ran, the tasks ended in the same states, the metadata matches. It does not say the data or output matched.", ""]
+    per = collections.Counter(n for r in thin_rows for n in unobserved_of(route_x(r, route)))
+    if per:
+        L += ["Not observable, over the thin DAGs: " + ", ".join(f"{n} {k}" for n, k in sorted(per.items(), key=lambda kv: -kv[1])) + ".", ""]
+    if thin_rows:
+        L += ["| thin strict DAG | not observable |", "|---|---|"]
+        for r in sorted(thin_rows, key=lambda r: r["dag_id"]):
+            u = unobserved_of(route_x(r, route))
+            L.append(f"| `{r['dag_id']}` | {'; '.join(short_reason(n, w) for n, w in u.items()) or 'everything beyond outcome and structure'} |")
+        L.append("")
+    return L
+
+
+def failed_by_design_lines(recs: list[dict[str, Any]], route: str) -> list[str]:
+    """The DAGs whose own code fails in Airflow and whose route fails the same way (`matches-baseline-failure`), kept apart from the successes, with whether the two failures share a cause; and, apart again, the ones where the route's failing step is a converter stub (`stub-matches-failure`: never a success)."""
+    mb = [r for r in recs if r["behavior"] and not r["baseline_failed"] and r["verdicts"].get(route) == "matches-baseline-failure"]
+    st = [r for r in recs if r["behavior"] and not r["baseline_failed"] and r["verdicts"].get(route) == "stub-matches-failure"]
+    if not mb and not st:
+        return []
+    L = [f"### `{route}`", ""]
+    if mb:
+        cause = {r["key"]: (route_x(r, route).get("rollup") or {}).get("cause") or {} for r in mb}
+        n_same = sum(1 for c in cause.values() if c.get("same") is True)
+        n_diff = sum(1 for c in cause.values() if c.get("same") is False)
+        L += [f"**Failed by design in Airflow, the route fails the same way: {len(mb)}.** Neither a success nor a failure of the route: the DAG's own code fails. Failure causes: same {n_same}, different {n_diff} (agreement is coincidental), not told {len(mb) - n_same - n_diff}.", "",
+              "| DAG | thin | cause | Airflow failure | route failure |", "|---|---|---|---|---|"]
+        for r in sorted(mb, key=lambda r: r["dag_id"]):
+            c = cause[r["key"]]
+            tag = {True: "same", False: "different"}.get(c.get("same"), "not told")
+            L.append(f"| `{r['dag_id']}` | {'thin' if thin(r, route) else 'substantive'} | {tag} | {', '.join(c.get('baseline') or []) or '-'} | {', '.join(c.get('route') or []) or '-'} |")
+        L.append("")
+    if st:
+        L += [f"**Stub fails the same way: {len(st)}** (`stub-matches-failure`). The route's failing step is a converter stub or an operation the converter does not mirror, so nothing was converted. Never counted as a success and never in the group above:", ""]
+        L += [f"- `{r['dag_id']}`: {(route_x(r, route).get('rollup') or {}).get('why', '')[:200]}" for r in sorted(st, key=lambda r: r["dag_id"])]
+        L.append("")
+    return L
+
+
+def route_environment_lines(recs: list[dict[str, Any]], route: str) -> list[str]:
+    """Routes that failed on a module their environment does not have: an install is needed, whatever the converter did."""
+    rows = [(r["dag_id"], (route_x(r, route).get("rollup") or {}).get("route_missing_modules")) for r in recs if r["behavior"] and (route_x(r, route).get("rollup") or {}).get("route_missing_modules")]
+    if not rows:
+        return []
+    mods = sorted({m for _, ms in rows for m in ms})
+    return [f"### `{route}`: the route's environment lacks a package", "", f"{len(rows)} DAG(s) failed in the route on a missing module (install: {', '.join(mods)}). Their verdict is not moved by this; re-measure after the install.", ""] + [f"- `{d}`: {', '.join(ms)}" for d, ms in sorted(rows)] + [""]
 
 
 def route_table(recs: list[dict[str, Any]], route: str) -> list[str]:
@@ -492,6 +567,25 @@ def render(a: argparse.Namespace) -> str:
     for r in sorted(bf, key=lambda r: r["dag_id"]):
         A(f"- `{r['dag_id']}` ({r['repo']}): {r['behavior']['baseline']['class'][1][:220]}")
     A("")
+    # failed by design, kept apart
+    A("## Failed by design (not successes)")
+    A("")
+    A("`matches-baseline-failure` is its own group: the DAG's own code fails in Airflow and the route fails the same way. It is shown here, not among the successes, and a route whose failing step is a converter stub is `stub-matches-failure`, a separate group.")
+    A("")
+    for route in ("converter", "rewrite"):
+        for ln in failed_by_design_lines(recs, route):
+            A(ln)
+    A("## What a strict `equivalent` did not observe")
+    A("")
+    for route in ("converter", "rewrite"):
+        for ln in strict_unobserved_lines(recs, route):
+            A(ln)
+    envl = [ln for route in ("converter", "rewrite") for ln in route_environment_lines(recs, route)]
+    if envl:
+        A("## Route environment")
+        A("")
+        for ln in envl:
+            A(ln)
     # dims
     A("## What was compared, and what could not be")
     A("")

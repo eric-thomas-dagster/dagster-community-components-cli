@@ -124,6 +124,10 @@ def convert(ir_path: Path, out_dir: Path) -> dict[str, Any]:
     rep = out_dir / "report.json"
     if not rep.exists():
         (out_dir / "src" / "pkg" / "defs").mkdir(parents=True, exist_ok=True)
+        deduped, dups = C.dedupe_ir(json.loads(ir_path.read_text()))                   # two files with one dag id: convert the first, which is the one the manifest row names
+        if dups:
+            ir_path = out_dir / "ir.deduped.json"
+            ir_path.write_text(json.dumps(deduped))
         sh([sys.executable, str(HERE / "convert_ir.py"), str(ir_path), "--out-dir", str(out_dir / "src" / "pkg" / "defs"), "--report", str(rep)], timeout=1800)
     return json.loads(rep.read_text()) if rep.exists() else {"dags": {}}
 

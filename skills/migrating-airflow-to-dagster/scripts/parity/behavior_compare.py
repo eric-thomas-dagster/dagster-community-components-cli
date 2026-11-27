@@ -37,6 +37,7 @@ ENV_ERRORS = re.compile(
     r"UnknownHostException|TimeoutExpired|ReadTimeout|ConnectTimeout|ProxyError|SSLError|Errno 111|Errno 61|No interpreter found|No matching distribution|Could not find a version that satisfies|"
     r"Cannot connect to host|nodename nor servname|unable to open database file|extension.*threw an exception|returned non-zero exit status 2|FileNotFoundError|Failed to download|Network is unreachable|Temporary failure|pip.*(?:returned non-zero|failed)|uv.*error:|Failed to fetch|Could not resolve|"
     r"ASSET_NOT_FOUND|Asset with name \S+ not found|InProcessSupervisorComms' object has no attribute 'asend'", re.I)    # the last two are `dag.test()` limits: an @asset DAG whose inlet asset no other DAG registered in the sandbox's metadata database, and an async task's `aget` / `aset` (dag.test's in-process supervisor has no `asend`)
+VENV_BUILD = re.compile(r"Unable to create new virtual environment|virtualenv|No matching distribution|Could not find a version that satisfies", re.I)
 DEFERRAL_LIMIT = re.compile(r"execute_complete\(\) missing \d+ required|NotImplementedError")
 
 
@@ -123,8 +124,8 @@ def dim(verdict: str, reason: str | None = None, evidence: Any = None, **extra: 
 
 
 # ---- printed output (stdout) -----------------------------------------------------------------------------------------------------------------------------
-LOGGER_LINE = re.compile(r"^(\[\d{4}-\d\d-\d\d|\d{4}-\d\d-\d\d|(INFO|WARNI|WARNING|DEBUG|ERROR|CRITICAL|TRACE)\b|\s*$)")
-NOISE_LINE = re.compile(r"Warning\b|warnings\.warn|^\s+warn\(|RemovedInAirflow|DeprecationWarning|^Traceback|^\s+File \"|^\w*(Error|Exception)\b|^\$ |^Running command|^Output:|^Command exited")
+LOGGER_LINE = re.compile(r"^(\[\d{4}-\d\d-\d\d|\d{4}-\d\d-\d\d|(INFO|WARNI|WARNING|DEBUG|ERROR|CRITI|CRITICAL|TRACE)\b|\s*$)")
+NOISE_LINE = re.compile(r"During handling of the above exception|The above exception was the direct cause|The above exception was caused by|^Stack Trace:|^\s*[\^~]+\s*$|Warning\b|warnings\.warn|^\s+warn\(|RemovedInAirflow|DeprecationWarning|^Traceback|^\s+File \"|^\w*(Error|Exception)\b|^\$ |^Running command|^Output:|^Command exited")
 ANSI = re.compile(r"\x1b\[[0-9;]*[A-Za-z]")
 MASKS = [
     (re.compile(r"\d{4}-\d\d-\d\d[ T]\d\d:\d\d:\d\d(?:[.,]\d+)?(?:\s?(?:Z|[+-]\d\d:?\d\d|UTC))?"), "<time>"),
@@ -172,6 +173,15 @@ def printed_lines(text: str, partition_key: str | None = None) -> list[str]:
     return out
 
 
+TRUNCATION_MIN = 80
+
+
+def truncated_same(a: str, b: str) -> bool:
+    """two printed lines where the shorter is a prefix of the longer (at least `TRUNCATION_MIN` characters): the same long line cut at different points."""
+    short, long_ = sorted((a, b), key=len)
+    return len(short) >= TRUNCATION_MIN and long_.startswith(short)
+
+
 def compare_stdout(a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[str, Any]) -> dict[str, Any]:
     """The printed lines of the whole run, as multisets (the order and the task a line belongs to are not compared: Airflow's lines carry no reliable task attribution on the Dagster side). Controls against false positives:
     only plain printed lines count, volatile tokens are masked, only lines BOTH of the baseline's runs printed are required, and the route may print MORE than Airflow (its own `$ command` echo, progress lines): extra lines are
@@ -190,7 +200,7 @@ def compare_stdout(a1: dict[str, Any], a2: dict[str, Any] | None, route: dict[st
     if not need:
         return dim(NOT, "the original printed no stable line to compare" + (f" ({len(unstable)} line(s) differ between its two runs)" if unstable else ""))
     have = Counter(rt)
-    missing = [ln for ln, n in need.items() if have[ln] < n]
+    missing = [ln for ln, n in need.items() if have[ln] < n and not any(truncated_same(ln, r) for r in have)]      # a very long line is cut at a different point by each side's log capture: one a prefix of the other is the same line
     extra = sorted(set(have) - set(Counter(base)))
     ev = {**({"partition_key_read_as_None": route["partition_key"]} if route.get("partition_key") else {}), **({"missing_in_route": [ln[:160] for ln in missing[:8]]} if missing else {}), **({"extra_in_route": [ln[:120] for ln in extra[:5]]} if extra else {}), **({"unstable_in_baseline": [ln[:80] for ln in unstable[:5]]} if unstable else {})}
     n = sum(need.values())
@@ -210,9 +220,12 @@ def baseline_class(a1: dict[str, Any], a2: dict[str, Any] | None, spec: dict[str
         if a2 and "success" not in (airflow_overall(a2, spec)[0] if spec else str(a2.get("state", ""))).lower():
             return "unstable", "the baseline succeeded once and failed on its repeat"
         return "ok", "baseline succeeded"
-    venv = [t["task_id"] for t in (spec or {}).get("tasks", []) if re.search(r"Virtualenv|ExternalPython", t.get("operator") or "") and norm_state((a1.get("tasks") or {}).get(t["task_id"], {}).get("state")) == "failed"]
-    if venv and not ENV_ERRORS.search(text):
-        return "baseline-failed", f"the baseline failed on a virtualenv / external-interpreter task ({', '.join(venv[:3])}): building the environment needs pip and a network, or an interpreter path, that the sandbox does not have (the Airflow run recorded no error text)"
+    vtasks = [t for t in (spec or {}).get("tasks", []) if re.search(r"Virtualenv|ExternalPython", t.get("operator") or "") and norm_state((a1.get("tasks") or {}).get(t["task_id"], {}).get("state")) == "failed"]
+    venv = [t["task_id"] for t in vtasks]
+    if venv and (not ENV_ERRORS.search(text) or VENV_BUILD.search(text)):
+        reqs = sorted({str(r) for t in vtasks for r in ((t.get("arguments") or {}).get("requirements") or []) if isinstance(r, str)})
+        return "baseline-failed", (f"environmental (virtualenv-build): the baseline failed on a virtualenv / external-interpreter task ({', '.join(venv[:3])}): Airflow builds that environment with pip, which needs a package index "
+                                   f"or a wheelhouse{(' for ' + ', '.join(reqs[:4])) if reqs else ''} (and, for a pinned old version, an interpreter it supports), or an interpreter path, that the offline sandbox does not have; the route runs the same task in-process, so nothing was compared")
     deferred = [t["task_id"] for t in (spec or {}).get("tasks", []) if (t.get("arguments") or {}).get("deferrable") is True]
     if deferred and DEFERRAL_LIMIT.search(text):
         return "baseline-failed", f"the baseline failed in `dag.test()` on a deferrable task ({', '.join(deferred[:3])}, deferrable=True): dag.test() has no triggerer to hand the wait to and does not give `execute_complete` the kwargs the deferral carries (or never runs a `start_from_trigger` operator's `execute`), so Airflow's own harness fails here whatever the DAG's code does"
@@ -411,7 +424,9 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
         dims["outcome"] = dim(DIFFER, evidence={"airflow": a1.get("state"), "route": why})
         for n in BEHAVIOUR[1:] + METADATA:
             dims[n] = dim(NOT, "the route produced no run")
-        return finish(dims, bclass, breason, spec, route_kind, a1, ran)
+        out = finish(dims, bclass, breason, spec, route_kind, a1, ran)
+        note_missing_modules(out, route, "\n".join(str(e) for e in a1.get("errors", [])))
+        return out
     a_state, a_note = airflow_overall(a1, spec)
     r_state = "success" if route.get("state") == "success" else "failed"
     dims["outcome"] = dim(MATCH if (a_state == "success") == (r_state == "success") else DIFFER, evidence=None if (a_state == "success") == (r_state == "success") else {"airflow": a1.get("state"), route_kind: route.get("state")}, airflow=a_state, route=route.get("state"), **({"airflow_note": a_note} if a_note else {}))
@@ -553,7 +568,12 @@ def compare(spec: dict[str, Any], a1: dict[str, Any], a2: dict[str, Any] | None,
     # --- metadata
     dims.update(metadata_dims(spec, route, taskmap, route_kind))
     out = finish(dims, bclass, breason, spec, route_kind, a1, ran)
-    stub_errs = stub_failures(route)
+    base_text = "\n".join(str(e) for e in a1.get("errors", [])) + "\n" + str(a1.get("error") or "")
+    stub_errs = stub_failures(route, base_text)
+    note_missing_modules(out, route, base_text)
+    if out["rollup"]["verdict"] == "matches-baseline-failure":
+        route_errs = [e for a in (route.get("assets") or {}).values() if a.get("state") == "failed" for e in (a.get("errors") or [])]
+        out["rollup"]["cause"] = failure_cause(a1.get("errors", []), route_errs)
     if out["rollup"]["verdict"] == "matches-baseline-failure" and stub_errs:           # the route "fails the same way" only because a loud stub (AIRFLOW-CAVEAT) fails: nothing was converted
         out["rollup"]["detail"] = "stub-matches-failure"
         out["rollup"]["why"] += f"; BUT the route's failing step is a loud converter stub, not converted code ({stub_errs[0][:120]}): not a success"
@@ -594,10 +614,12 @@ def metadata_dims(spec: dict[str, Any], route: dict[str, Any], taskmap: dict[str
             rbad.append({"task": tid, "airflow": {"retries": retries, "retry_delay_s": t.get("retry_delay_s")}, "route": {"max_retries": got, "delay_s": delay}})
         pool = t.get("pool")
         pool = None if pool in (None, "default_pool") else pool
-        if pool or a.get("pool"):
+        own = re.sub(r"\W", "_", spec["dag_id"]) + "__" + re.sub(r"\W", "_", tid)          # max_active_tis_per_dag becomes a Dagster pool of this name: not an Airflow pool, never a pool difference
+        route_pools = [p for p in a.get("pool", []) if p != own or pool == p]
+        if pool or route_pools:
             prows.append(tid)
-            if (pool and pool not in a.get("pool", [])) or (not pool and a.get("pool")):
-                pbad.append({"task": tid, "airflow": pool, "route": a.get("pool")})
+            if (pool and pool not in route_pools) or (not pool and route_pools):
+                pbad.append({"task": tid, "airflow": pool, "route": route_pools})
     out["retries"] = dim(DIFFER, evidence={"differences": rbad[:10]}) if rbad else (dim(MATCH, compared=len(rrows), evidence={"not_compared": rskip[:5]} if rskip else None) if rrows else dim(NOT, "no task maps one to one to an asset"))
     out["pools"] = dim(DIFFER, evidence={"differences": pbad[:10]}) if pbad else (dim(MATCH, compared=len(prows)) if prows else dim(NOT, "neither the DAG nor the route uses a pool"))
     # dependencies among mapped tasks: Airflow's order against the route's asset graph
@@ -628,17 +650,54 @@ def metadata_dims(spec: dict[str, Any], route: dict[str, Any], taskmap: dict[str
     return out
 
 
-def stub_failures(route: dict[str, Any]) -> list[str]:
-    """Errors of failed assets that are the converter's own loud stubs (`AIRFLOW-CAVEAT`), not the DAG's code failing."""
+def note_missing_modules(out: dict[str, Any], route: dict[str, Any], base_text: str) -> None:
+    """When the route failed on `No module named 'x'` (and the baseline did not), record the module names: the route's environment lacks a package its code imports, which needs an install, not a converter change."""
+    missing = sorted({m for e in [route.get("error")] + [e for a in (route.get("assets") or {}).values() for e in (a.get("errors") or [])] for m in MISSING_MODULE.findall(str(e or ""))})
+    if missing and "No module named" not in base_text:
+        out["rollup"]["route_missing_modules"] = missing
+
+
+def stub_failures(route: dict[str, Any], baseline_text: str = "") -> list[str]:
+    """Errors of failed assets that are the converter's own refusal, not the DAG's code failing: its loud stubs (`AIRFLOW-CAVEAT`) and a `NotImplementedError` the converter's runtime raises for something it does not mirror
+    (unless the baseline fails with a `NotImplementedError` too: then the DAG itself does)."""
     out = []
-    for a in (route.get("assets") or {}).values():
+    own = "NotImplementedError" in (baseline_text or "")
+    stubbed = set(route.get("stub_assets") or [])                           # assets the converter's report lists as holding a stub (the harness records them)
+    for key, a in (route.get("assets") or {}).items():
         if a.get("state") == "failed":
-            out += [e for e in (a.get("errors") or []) if "AIRFLOW-CAVEAT" in str(e)]
+            mine = [e for e in (a.get("errors") or []) if "AIRFLOW-CAVEAT" in str(e) or ("NotImplementedError" in str(e) and not own)]
+            if key in stubbed and not mine:
+                mine = [f"{key}: the failing asset holds a converter stub (listed in the converter's report)"]
+            out += mine
     return out
+
+
+MISSING_MODULE = re.compile(r"No module named '([\w.]+)'")
+GENERIC_FAILURES = {"AirflowException", "AirflowFailException", "Failure", "AirflowTaskTimeout", "RuntimeError", "Exception"}
+EXC_NAME = re.compile(r"^(?:[\w.]*\.)?(\w*(?:Error|Exception|Failure|Timeout))\b[:(]", re.M)
+
+
+def exception_names(errors: list[str]) -> set[str]:
+    """the exception class names a failure's text shows (traceback tails and `Name: message` lines), without the module path."""
+    return {m.group(1) for e in errors for m in EXC_NAME.finditer(str(e))}
+
+
+def failure_cause(baseline_errors: list[str], route_errors: list[str]) -> dict[str, Any]:
+    """Do the baseline and the route fail for the same kind of reason? `same` is True when they share an exception class, False when both name specific classes and share none, None when it cannot be told (no text, or only
+    generic wrappers such as AirflowException / Failure). Informational: the verdict stays `matches-baseline-failure`; a `False` is how a coincidental agreement shows."""
+    b, r = exception_names(baseline_errors), exception_names(route_errors)
+    bs, rs = b - GENERIC_FAILURES, r - GENERIC_FAILURES
+    same = True if (b & r) - GENERIC_FAILURES else (False if bs and rs else None)
+    return {"same": same, "baseline": sorted(b)[:5], "route": sorted(r)[:5]}
 
 
 def finish(dims: dict[str, dict[str, Any]], bclass: str, breason: str, spec: dict[str, Any], route_kind: str, a1: dict[str, Any], ran: bool) -> dict[str, Any]:
     return {"dag_id": spec["dag_id"], "route": route_kind, "baseline": {"class": bclass, "reason": breason, "airflow_state": a1.get("state")}, "dimensions": dims, "rollup": rollup(dims, bclass, breason, ran)}
+
+
+def unobserved(dims: dict[str, dict[str, Any]]) -> dict[str, str]:
+    """What an `equivalent` did not look at: each value / file / row / request / mail / object / printed-line / failure dimension that compared nothing, with the reason the harness gave (a dimension that differs is not listed: it is a difference)."""
+    return {n: str(dims[n].get("reason") or "not compared") for n in (*SUBSTANTIVE, "failure") if n in dims and dims[n]["verdict"] == NOT}
 
 
 def rollup(dims: dict[str, dict[str, Any]], bclass: str, breason: str, ran: bool = True) -> dict[str, Any]:
@@ -648,7 +707,7 @@ def rollup(dims: dict[str, dict[str, Any]], bclass: str, breason: str, ran: bool
     beh = [n for n in differ if n in BEHAVIOUR and not (n == "values" and not dims[n].get("any_consumed"))]
     meta = [n for n in differ if n not in beh]
     info = [n for n in compared if n in SUBSTANTIVE]
-    base = {"differing": differ, "matching": compared, "not_compared": notc, "thin": not info}
+    base = {"differing": differ, "matching": compared, "not_compared": notc, "thin": not info, "unobserved": sorted(unobserved(dims)) if not info else []}
     if bclass == "baseline-failed":
         return {"verdict": "baseline-failed", "why": breason, **base}
     if bclass == "unstable":

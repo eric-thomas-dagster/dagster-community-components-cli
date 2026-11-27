@@ -47,12 +47,31 @@ def dir_names(entries: list[dict[str, Any]]) -> dict[str, str]:
     return {e["key"]: (e["dag_id"] if ids.count(e["dag_id"]) == 1 else f"{e['dag_id']}__{e['repo']}") for e in entries}
 
 
+def pick_ir_dag(dags: list[dict[str, Any]], dag_id: str, file: str | None = None) -> dict[str, Any] | None:
+    """The IR entry for a dag id. Two files can define the same dag id (an `exercises/` copy and its `solutions/` copy): the one whose `file` is the manifest row's wins, so the DAG measured in Airflow is the DAG converted and the one whose spec is shown."""
+    same = [d for d in dags if d["dag_id"] == dag_id]
+    for d in same:
+        if file and d.get("file") == file:
+            return d
+    return same[0] if same else None
+
+
+def dedupe_ir(ir: dict[str, Any], files: dict[str, str] | None = None) -> tuple[dict[str, Any], list[str]]:
+    """The IR with one entry per dag id (the entry in `files[dag_id]`, else the first), plus the dag ids that had several. Unchanged (same object) when no id repeats."""
+    ids = [d["dag_id"] for d in ir.get("dags", [])]
+    dup = sorted({i for i in ids if ids.count(i) > 1})
+    if not dup:
+        return ir, []
+    keep = {i: pick_ir_dag(ir["dags"], i, (files or {}).get(i)) for i in dup}
+    return {**ir, "dags": [d for d in ir["dags"] if d["dag_id"] not in keep or d is keep[d["dag_id"]]]}, dup
+
+
 def ir_dag(work: Path, row: dict[str, Any]) -> tuple[dict[str, Any], str | None]:
     ir = json.loads((work / "irs" / f"{row['repo']}.{row['airflow']}.json").read_text())
-    for d in ir["dags"]:
-        if d["dag_id"] == row["dag_id"]:
-            return d, ir.get("airflow_version")
-    raise KeyError(row["key"])
+    d = pick_ir_dag(ir["dags"], row["dag_id"], row.get("file"))
+    if d is None:
+        raise KeyError(row["key"])
+    return d, ir.get("airflow_version")
 
 
 def scrub(text: str, work: Path) -> str:
@@ -84,6 +103,8 @@ def dag_file(work: Path, manifest: dict[str, Any], row: dict[str, Any]) -> Path:
 
 def local_deps(root: Path, dag_path: Path) -> list[Path]:
     """Repository files the DAG file needs: modules it imports (resolved against the DAG's folder, parents up to the repo root, and the root) and data files named by a string literal, transitively."""
+    root_given = root
+    root, dag_path = root.resolve(), dag_path.resolve()                        # a work directory's `repos` is often a symlink: `resolve()` below must not take a file out from under the root
     seen: dict[Path, None] = {}
     todo = [dag_path]
     bases = [dag_path.parent, *[p for p in dag_path.parents if root in p.parents or p == root]]
@@ -131,7 +152,7 @@ def local_deps(root: Path, dag_path: Path) -> list[Path]:
                     if p.is_file() and root in p.parents and p.stat().st_size < 1_000_000 and ".git" not in p.parts and p not in seen and p != dag_path:
                         seen[p] = None
                         break
-    return sorted(seen)
+    return sorted(root_given / p.relative_to(root) for p in seen)                    # in terms of the root the caller gave
 
 
 def copy_tree_file(root: Path, f: Path, dest_root: Path) -> Path:
